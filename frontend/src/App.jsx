@@ -1,68 +1,128 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
+import React, { useState, createContext, useContext, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom'; // Import Outlet
 import Login from './components/Login';
-import Registration from './components/Registration';
 import Dashboard from './components/Dashboard';
-import Profile from './components/Profile';
+import Sidebar from './components/Sidebar';
 
-function App() {
-  const [token, setToken] = useState(null);
+// Import all new page components
+import AllProducts from './components/Products/AllProducts';
+import CreateProduct from './components/Products/CreateProduct';
+import POS from './components/Sale/POS';
+import AllSales from './components/Sale/AllSales';
+import CreateSale from './components/Sale/CreateSale';
+import SaleReturn from './components/Sale/SaleReturn';
+import AllMaterials from './components/Materials/AllMaterials';
+import AddMaterial from './components/Materials/AddMaterial';
+import ScrapeMaterials from './components/Materials/ScrapeMaterials';
+import RecoverMaterials from './components/Materials/RecoverMaterials';
+import AllProduction from './components/Production/AllProduction';
+import NewProduction from './components/Production/NewProduction';
+import AllPurchase from './components/Purchase/AllPurchase';
+import NewPurchase from './components/Purchase/NewPurchase';
+import AllSupplier from './components/Purchase/AllSupplier';
+import AddSupplier from './components/Purchase/AddSupplier';
+import AllFactory from './components/Factory/AllFactory';
+import AddFactory from './components/Factory/AddFactory';
+import AllStore from './components/Stores/AllStore';
+import AddStore from './components/Stores/AddStore';
+import SaleReport from './components/Report/SaleReport';
+import PurchaseReport from './components/Report/PurchaseReport';
+import ProductionReport from './components/Report/ProductionReport';
+import WastageReport from './components/Report/WastageReport';
+import ScrapeReport from './components/Report/ScrapeReport';
+import AllUser from './components/Users/AllUser';
+import CreateUser from './components/Users/CreateUser';
+import Settings from './components/Settings/Settings';
 
-  useEffect(() => {
-    const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      setToken(storedToken);
-    }
-  }, []);
+const AuthContext = createContext(null);
+
+export const AuthProvider = ({ children }) => {
+  const [token, setToken] = useState(localStorage.getItem('token'));
+
+  const login = (newToken) => {
+    setToken(newToken);
+    localStorage.setItem('token', newToken);
+  };
+
+  const logout = () => {
+    setToken(null);
+    localStorage.removeItem('token');
+  };
 
   return (
-    <Router>
-      <div className="bg-gray-100 min-h-screen">
-        <nav className="bg-white shadow-md">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center">
-                <Link to="/" className="text-xl font-bold text-blue-600">InventoryApp</Link>
-              </div>
-              <div className="flex items-center">
-                <div className="flex items-baseline space-x-4">
-                  {token ? (
-                    <>
-                      <Link to="/dashboard" className="px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-200">Dashboard</Link>
-                      <Link to="/profile" className="px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-200">Profile</Link>
-                    </>
-                  ) : (
-                    <>
-                      <Link to="/login" className="px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-200">Login</Link>
-                      <Link to="/register" className="px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-200">Register</Link>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </nav>
+    <AuthContext.Provider value={{ token, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
 
-        <main>
-          <Routes>
-            <Route path="/login" element={<Login setToken={setToken} />} />
-            <Route path="/register" element={<Registration />} />
-            <Route 
-              path="/dashboard" 
-              element={token ? <Dashboard setToken={setToken} /> : <Navigate to="/login" />}
-            />
-            <Route 
-              path="/profile" 
-              element={token ? <Profile /> : <Navigate to="/login" />}
-            />
-            <Route 
-              path="/" 
-              element={token ? <Navigate to="/dashboard" /> : <Navigate to="/login" />}
-            />
-          </Routes>
-        </main>
+export const useAuth = () => useContext(AuthContext);
+
+const PrivateRoute = () => { // This component will now render an Outlet
+  const { token } = useAuth();
+  return token ? <Outlet /> : <Navigate to="/login" />;
+};
+
+// Layout component for authenticated users
+const AuthenticatedLayout = () => {
+  return (
+    <div style={{ display: 'flex' }}>
+      <Sidebar />
+      <div style={{ flexGrow: 1, padding: '20px' }}>
+        <Outlet /> {/* This is where nested routes will render */}
       </div>
-    </Router>
+    </div>
+  );
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+
+        {/* Protected routes with layout */}
+        <Route element={<PrivateRoute />}>
+          <Route element={<AuthenticatedLayout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            {/* New Routes */}
+            <Route path="/products/all" element={<AllProducts />} />
+            <Route path="/products/create" element={<CreateProduct />} />
+            <Route path="/sale/pos" element={<POS />} />
+            <Route path="/sale/all" element={<AllSales />} />
+            <Route path="/sale/create" element={<CreateSale />} />
+            <Route path="/sale/return" element={<SaleReturn />} />
+            <Route path="/materials/all" element={<AllMaterials />} />
+            <Route path="/materials/add" element={<AddMaterial />} />
+            <Route path="/materials/scrape" element={<ScrapeMaterials />} />
+            <Route path="/materials/recover" element={<RecoverMaterials />} />
+            <Route path="/production/all" element={<AllProduction />} />
+            <Route path="/production/new" element={<NewProduction />} />
+            <Route path="/purchase/all" element={<AllPurchase />} />
+            <Route path="/purchase/new" element={<NewPurchase />} />
+            <Route path="/purchase/all-supplier" element={<AllSupplier />} />
+            <Route path="/purchase/add-supplier" element={<AddSupplier />} />
+            <Route path="/factory/all" element={<AllFactory />} />
+            <Route path="/factory/add" element={<AddFactory />} />
+            <Route path="/stores/all" element={<AllStore />} />
+            <Route path="/stores/add" element={<AddStore />} />
+            <Route path="/report/sale" element={<SaleReport />} />
+            <Route path="/report/purchase" element={<PurchaseReport />} />
+            <Route path="/report/production" element={<ProductionReport />} />
+            <Route path="/report/wastage" element={<WastageReport />} />
+            <Route path="/report/scrape" element={<ScrapeReport />} />
+            <Route path="/users/all" element={<AllUser />} />
+            <Route path="/users/create" element={<CreateUser />} />
+            <Route path="/settings" element={<Settings />} />
+            {/* Default route for authenticated users */}
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          </Route>
+        </Route>
+
+        {/* Fallback for any unmatched routes, redirects to login if not authenticated */}
+        <Route path="*" element={<Navigate to="/login" />} />
+      </Routes>
+    </AuthProvider>
   );
 }
 

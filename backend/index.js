@@ -76,7 +76,7 @@ app.post('/api/login', async (req, res) => {
     const accessToken = jwt.sign({ userId: user.id }, JWT_SECRET);
     res.json({ accessToken });
   } else {
-    res.status(400).json({ error: 'Not Allowed' });
+    res.status(401).json({ error: 'Not Allowed' });
   }
 });
 

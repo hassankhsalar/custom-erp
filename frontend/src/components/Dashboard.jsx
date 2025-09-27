@@ -1,19 +1,18 @@
 import React from 'react';
+import { useAuth } from '../App'; // Adjust path if necessary
 
-const Dashboard = ({ setToken }) => {
-  const handleLogout = () => {
-    setToken(null);
-    localStorage.removeItem('token');
-  };
+const Dashboard = () => {
+  const { token, logout } = useAuth();
 
   return (
-    <div className="flex items-center justify-center h-screen bg-gray-100">
-      <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold text-center">Dashboard</h1>
-        <button onClick={handleLogout} className="w-full px-4 py-2 font-bold text-white bg-red-600 rounded-md hover:bg-red-700">
-          Logout
-        </button>
-      </div>
+    <div className="flex flex-col items-center justify-center h-screen bg-gray-100">
+      <h2 className="text-3xl font-bold mb-4">Welcome to the Dashboard!</h2>
+      <button
+        onClick={logout}
+        className="px-6 py-3 font-bold text-white bg-red-600 rounded-md hover:bg-red-700"
+      >
+        Logout
+      </button>
     </div>
   );
 };
