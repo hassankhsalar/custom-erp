@@ -7,4 +7,6 @@ export const API_ROUTES = {
   ADMIN: `${API_BASE_URL}/admin`,
   DASHBOARD: `${API_BASE_URL}/dashboard`,
   MATERIALS: `${API_BASE_URL}/materials`,
+  PRODUCTS: `${API_BASE_URL}/products`,
+  FACTORIES: `${API_BASE_URL}/factories`,
 };

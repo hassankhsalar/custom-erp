@@ -7,6 +7,7 @@ import Sidebar from './components/Sidebar';
 // Import all new page components
 import AllProducts from './components/Products/AllProducts';
 import CreateProduct from './components/Products/CreateProduct';
+import EditProduct from './components/Products/EditProduct';
 import POS from './components/Sale/POS';
 import AllSales from './components/Sale/AllSales';
 import CreateSale from './components/Sale/CreateSale';
@@ -24,6 +25,7 @@ import AllSupplier from './components/Purchase/AllSupplier';
 import AddSupplier from './components/Purchase/AddSupplier';
 import AllFactory from './components/Factory/AllFactory';
 import AddFactory from './components/Factory/AddFactory';
+import EditFactory from './components/Factory/EditFactory';
 import AllStore from './components/Stores/AllStore';
 import AddStore from './components/Stores/AddStore';
 import SaleReport from './components/Report/SaleReport';
@@ -89,6 +91,7 @@ function App() {
             {/* New Routes */}
             <Route path="/products/all" element={<AllProducts />} />
             <Route path="/products/create" element={<CreateProduct />} />
+            <Route path="/products/edit/:id" element={<EditProduct />} />
             <Route path="/sale/pos" element={<POS />} />
             <Route path="/sale/all" element={<AllSales />} />
             <Route path="/sale/create" element={<CreateSale />} />
@@ -104,8 +107,9 @@ function App() {
             <Route path="/purchase/new" element={<NewPurchase />} />
             <Route path="/purchase/all-supplier" element={<AllSupplier />} />
             <Route path="/purchase/add-supplier" element={<AddSupplier />} />
-            <Route path="/factory/all" element={<AllFactory />} />
-            <Route path="/factory/add" element={<AddFactory />} />
+            <Route path="/factories/all" element={<AllFactory />} />
+            <Route path="/factories/add" element={<AddFactory />} />
+            <Route path="/factories/edit/:id" element={<EditFactory />} />
             <Route path="/stores/all" element={<AllStore />} />
             <Route path="/stores/add" element={<AddStore />} />
             <Route path="/report/sale" element={<SaleReport />} />

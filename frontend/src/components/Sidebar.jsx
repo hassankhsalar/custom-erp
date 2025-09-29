@@ -88,8 +88,8 @@ const Sidebar = () => {
           </div>
           {openMenus.factory && (
             <ul className="pl-6 border-l border-gray-700 mt-1">
-              <li><Link to="/factory/all" className="block py-1 px-2 text-gray-300 hover:text-white">All Factory</Link></li>
-              <li><Link to="/factory/add" className="block py-1 px-2 text-gray-300 hover:text-white">Add Factory</Link></li>
+              <li><Link to="/factories/all" className="block py-1 px-2 text-gray-300 hover:text-white">All Factory</Link></li>
+              <li><Link to="/factories/add" className="block py-1 px-2 text-gray-300 hover:text-white">Add Factory</Link></li>
             </ul>
           )}
         </li>

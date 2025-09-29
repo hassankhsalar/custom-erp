@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useParams, useNavigate } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
 
-const CreateProduct = () => {
-  const [product, setProduct] = useState({
-    name: '',
-    description: '',
-    sale_price: '',
-    wholesale_price: '',
-    cost: '',
-  });
+const EditProduct = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [product, setProduct] = useState(null);
   const [materials, setMaterials] = useState([]);
   const [allMaterials, setAllMaterials] = useState([]);
   const [newMaterial, setNewMaterial] = useState({ material_id: '', material_name: '', material_quantity: '', price: '' });
@@ -18,6 +15,16 @@ const CreateProduct = () => {
   const [editingMaterialIndex, setEditingMaterialIndex] = useState(null);
 
   useEffect(() => {
+    const fetchProduct = async () => {
+      try {
+        const response = await axios.get(`${API_ROUTES.PRODUCTS}/${id}`);
+        setProduct(response.data);
+        setMaterials(response.data.materials.map(m => ({...m, material_name: m.material.name})));
+      } catch (error) {
+        console.error('Error fetching product:', error);
+      }
+    };
+
     const fetchMaterials = async () => {
       try {
         const response = await axios.get(API_ROUTES.MATERIALS);
@@ -26,8 +33,10 @@ const CreateProduct = () => {
         console.error('Error fetching materials:', error);
       }
     };
+
+    fetchProduct();
     fetchMaterials();
-  }, []);
+  }, [id]);
 
   useEffect(() => {
     if (searchTerm) {
@@ -86,33 +95,47 @@ const CreateProduct = () => {
       sale_price: parseFloat(product.sale_price),
       wholesale_price: parseFloat(product.wholesale_price),
       cost: parseFloat(product.cost),
+      stock: parseInt(product.stock),
       materials: materials.map(m => ({...m, material_id: parseInt(m.material_id), material_quantity: parseFloat(m.material_quantity), price: parseFloat(m.price)})),
     };
 
     try {
-      await axios.post(API_ROUTES.PRODUCTS, productData);
-      alert('Product created successfully!');
-      // Clear form
-      setProduct({ name: '', description: '', sale_price: '', wholesale_price: '', cost: '' });
-      setMaterials([]);
+      await axios.put(`${API_ROUTES.PRODUCTS}/${id}`, productData);
+      alert('Product updated successfully!');
+      navigate('/products/all');
     } catch (error) {
-      console.error('Error creating product:', error);
-      alert('Error creating product');
+      console.error('Error updating product:', error);
+      alert('Error updating product');
     }
   };
 
+  if (!product) return <div>Loading...</div>;
+
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Create Product</h1>
+      <h1 className="text-2xl font-bold mb-4">Edit Product</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className='grid grid-cols-2 sm:grid-cols-1 md:grid-cols-2 gap-4'>
-          <input type="text" name="name" value={product.name} onChange={handleProductChange} placeholder="Product Name" className="w-full p-2 border" required />
-          <input type="number" name="sale_price" value={product.sale_price} onChange={handleProductChange} placeholder="Sale Price" className="w-full p-2 border" required />
-          <input type="number" name="wholesale_price" value={product.wholesale_price} onChange={handleProductChange} placeholder="Wholesale Price" className="w-full p-2 border" required />
-          <input type="number" name="cost" value={product.cost} onChange={handleProductChange} placeholder="Cost" className="w-full p-2 border" required />
+        <div className="grid grid-cols-2 md:grid-cols-2 sm:grid-cols-1 gap-4">
+          <div className="flex flex-col">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="name">Product Name</label>
+            <input type="text" name="name" value={product.name} onChange={handleProductChange} placeholder="Product Name" className="w-full p-2 border" required />
+          </div>
+          <div className="flex flex-col">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="sale_price">Sale Price</label>
+            <input type="number" name="sale_price" value={product.sale_price} onChange={handleProductChange} placeholder="Sale Price" className="w-full p-2 border" required />
+          </div>
+          <div className="flex flex-col">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="wholesale_price">Wholesale Price</label>
+            <input type="number" name="wholesale_price" value={product.wholesale_price} onChange={handleProductChange} placeholder="Wholesale Price" className="w-full p-2 border" required />
+          </div>
+          <div className="flex flex-col">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="cost">Cost</label>
+            <input type="number" name="cost" value={product.cost} onChange={handleProductChange} placeholder="Cost" className="w-full p-2 border" required />
+          </div>
         </div>
         <textarea name="description" value={product.description} onChange={handleProductChange} placeholder="Description" className="w-full p-2 border"></textarea>
-        
+        <input type="number" name="stock" value={product.stock} onChange={handleProductChange} placeholder="Stock" className="w-full p-2 border" required />
+
         <div className="border p-4 rounded">
           <h2 className="text-xl font-semibold mb-2">Materials</h2>
           <table className="min-w-full bg-white mb-4">
@@ -131,8 +154,8 @@ const CreateProduct = () => {
                   <td className="border px-4 py-2">{mat.material_quantity}</td>
                   <td className="border px-4 py-2">{mat.price}</td>
                   <td className="border px-4 py-2">
-                    <button type="button" onClick={() => handleEditMaterial(mat, index)} className="bg-yellow-500 text-white p-1 rounded mr-2">Edit</button>
-                    <button type="button" onClick={() => handleDeleteMaterial(index)} className="bg-red-500 text-white p-1 rounded">Delete</button>
+                    <button type="button" onClick={() => handleEditMaterial(mat, index)} className="bg-yellow-500 text-white p-1 px-4 cursor-pointer rounded mr-2">Edit</button>
+                    <button type="button" onClick={() => handleDeleteMaterial(index)} className="bg-red-500 text-white p-1 px-4 cursor-pointer rounded">Delete</button>
                   </td>
                 </tr>
               ))}
@@ -170,10 +193,10 @@ const CreateProduct = () => {
           </div>
         </div>
 
-        <button type="submit" className="bg-green-500 text-white p-2 px-8 cursor-pointer rounded">Create Product</button>
+        <button type="submit" className="bg-green-500 text-white p-2 px-8 cursor-pointer rounded">Update Product</button>
       </form>
     </div>
   );
 };
 
-export default CreateProduct;
+export default EditProduct;

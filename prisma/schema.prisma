@@ -44,4 +44,42 @@ model Material {
   current_stock Float    @default(0)
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
+  ProductMaterial ProductMaterial[]
+}
+
+model Product {
+  id              Int      @id @default(autoincrement())
+  name            String
+  description     String?
+  image           String?
+  sale_price      Float
+  wholesale_price Float
+  cost            Float
+  barcode         String?   @unique
+  category        String?
+  stock           Int       @default(0)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+  materials       ProductMaterial[]
+}
+
+model ProductMaterial {
+  product_id        Int
+  material_id       Int
+  material_quantity Float
+  price             Float
+
+  product  Product  @relation(fields: [product_id], references: [id])
+  material Material @relation(fields: [material_id], references: [id])
+
+  @@id([product_id, material_id])
+}
+
+model Factory {
+  id      Int     @id @default(autoincrement())
+  name    String
+  phone   String?
+  manager String?
+  email   String?
+  address String?
 }

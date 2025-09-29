@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES } from '../../config';
 
-const AddFactory = () => {
+const EditFactory = () => {
   const navigate = useNavigate();
+  const { id } = useParams();
   const [factory, setFactory] = useState({
     name: '',
     phone: '',
@@ -12,6 +13,18 @@ const AddFactory = () => {
     email: '',
     address: '',
   });
+
+  useEffect(() => {
+    const fetchFactory = async () => {
+      try {
+        const response = await axios.get(`${API_ROUTES.FACTORIES}/${id}`);
+        setFactory(response.data);
+      } catch (error) {
+        console.error('Error fetching factory:', error);
+      }
+    };
+    fetchFactory();
+  }, [id]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -24,16 +37,16 @@ const AddFactory = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(API_ROUTES.FACTORIES, factory);
+      await axios.put(`${API_ROUTES.FACTORIES}/${id}`, factory);
       navigate('/factories/all');
     } catch (error) {
-      console.error('Error creating factory:', error);
+      console.error('Error updating factory:', error);
     }
   };
 
   return (
     <div className="container mx-auto p-4">
-      <h2 className="text-2xl font-bold mb-4">Add Factory</h2>
+      <h2 className="text-2xl font-bold mb-4">Edit Factory</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="flex flex-col">
@@ -103,10 +116,10 @@ const AddFactory = () => {
             />
           </div>
         </div>
-        <button type="submit" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Add Factory</button>
+        <button type="submit" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Update Factory</button>
       </form>
     </div>
   );
 };
 
-export default AddFactory;
+export default EditFactory;

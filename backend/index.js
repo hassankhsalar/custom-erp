@@ -116,8 +116,12 @@ app.get('/api/dashboard', authenticateToken, hasPermission('dashboard'), (req, r
 });
 
 const materialRoutes = require('./routes/materialRoutes');
+const productRoutes = require('./routes/productRoutes');
+const factoryRoutes = require('./routes/factoryRoutes');
 
 app.use('/api/materials', materialRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/factories', factoryRoutes);
 
 const port = 3001;
 app.listen(port, () => {
