@@ -31,3 +31,17 @@ enum Role {
   USER
   ADMIN
 }
+
+model Material {
+  id            Int      @id @default(autoincrement())
+  name          String
+  description   String?
+  brand         String?
+  barcode       String?  @unique
+  image         String?
+  unit          String
+  unit_cost     Float
+  current_stock Float    @default(0)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+}

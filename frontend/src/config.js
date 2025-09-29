@@ -6,4 +6,5 @@ export const API_ROUTES = {
   PROFILE: `${API_BASE_URL}/profile`,
   ADMIN: `${API_BASE_URL}/admin`,
   DASHBOARD: `${API_BASE_URL}/dashboard`,
+  MATERIALS: `${API_BASE_URL}/materials`,
 };

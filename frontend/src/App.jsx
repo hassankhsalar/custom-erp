@@ -15,6 +15,7 @@ import AllMaterials from './components/Materials/AllMaterials';
 import AddMaterial from './components/Materials/AddMaterial';
 import ScrapeMaterials from './components/Materials/ScrapeMaterials';
 import RecoverMaterials from './components/Materials/RecoverMaterials';
+import EditMaterial from './components/Materials/EditMaterial';
 import AllProduction from './components/Production/AllProduction';
 import NewProduction from './components/Production/NewProduction';
 import AllPurchase from './components/Purchase/AllPurchase';
@@ -94,6 +95,7 @@ function App() {
             <Route path="/sale/return" element={<SaleReturn />} />
             <Route path="/materials/all" element={<AllMaterials />} />
             <Route path="/materials/add" element={<AddMaterial />} />
+            <Route path="/materials/edit/:id" element={<EditMaterial />} />
             <Route path="/materials/scrape" element={<ScrapeMaterials />} />
             <Route path="/materials/recover" element={<RecoverMaterials />} />
             <Route path="/production/all" element={<AllProduction />} />

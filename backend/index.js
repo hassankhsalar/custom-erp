@@ -115,6 +115,10 @@ app.get('/api/dashboard', authenticateToken, hasPermission('dashboard'), (req, r
   res.json({ message: 'Welcome to the dashboard' });
 });
 
+const materialRoutes = require('./routes/materialRoutes');
+
+app.use('/api/materials', materialRoutes);
+
 const port = 3001;
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
