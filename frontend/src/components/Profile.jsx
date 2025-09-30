@@ -35,11 +35,11 @@ const Profile = () => {
         <div className="space-y-4">
           <div>
             <label className="text-sm font-bold text-gray-600">Email</label>
-            <p className="w-full px-4 py-2 mt-2 border rounded-md bg-gray-50">{profile.email}</p>
+            <p className="w-full px-4 py-2 mt-2 border border-gray-300 rounded-md bg-gray-50">{profile.email}</p>
           </div>
           <div>
             <label className="text-sm font-bold text-gray-600">Name</label>
-            <p className="w-full px-4 py-2 mt-2 border rounded-md bg-gray-50">{profile.name}</p>
+            <p className="w-full px-4 py-2 mt-2 border border-gray-300 rounded-md bg-gray-50">{profile.name}</p>
           </div>
           <form onSubmit={handleUpdate} className="space-y-4">
             <div>
@@ -48,7 +48,7 @@ const Profile = () => {
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="Bio"
-                className="w-full px-4 py-2 mt-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600"
+                className="w-full px-4 py-2 mt-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600"
               ></textarea>
             </div>
             <div>

@@ -28,7 +28,7 @@ const Registration = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Name"
-              className="w-full px-4 py-2 mt-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600"
+              className="w-full px-4 py-2 mt-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600"
             />
           </div>
           <div>
@@ -39,7 +39,7 @@ const Registration = () => {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email"
               required
-              className="w-full px-4 py-2 mt-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600"
+              className="w-full px-4 py-2 mt-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600"
             />
           </div>
           <div>
@@ -50,7 +50,7 @@ const Registration = () => {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
               required
-              className="w-full px-4 py-2 mt-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600"
+              className="w-full px-4 py-2 mt-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600"
             />
           </div>
           <div>

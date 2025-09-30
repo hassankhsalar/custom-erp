@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
 
-const NewProduction = () => {
+const EditProduction = () => {
+  const { id } = useParams();
   const [formData, setFormData] = useState({
     start_date: '',
     estimated_end_date: '',
@@ -20,6 +21,35 @@ const NewProduction = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    const fetchProductionData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_ROUTES.FACTORIES}/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const production = response.data;
+        setFormData({
+          start_date: new Date(production.start_date).toISOString().split('T')[0],
+          estimated_end_date: new Date(production.estimated_end_date).toISOString().split('T')[0],
+          factoryId: production.factoryId,
+          status: production.status,
+          attachments: production.attachments || '',
+          shipping_cost: production.shipping_cost || '',
+          products: [], // Products will be set separately
+        });
+        setSelectedProducts(production.productionProducts.map(pp => ({
+          productId: pp.productId,
+          name: pp.product.name,
+          code: pp.code,
+          quantity: pp.quantity,
+          unit_cost: pp.unit_cost,
+          moved_to_store: pp.moved_to_store,
+        })));
+      } catch (error) {
+        console.error('Error fetching production data:', error);
+      }
+    };
+
     const fetchFactories = async () => {
       try {
         const token = localStorage.getItem('token');
@@ -31,8 +61,10 @@ const NewProduction = () => {
         console.error('Error fetching factories:', error);
       }
     };
+
+    fetchProductionData();
     fetchFactories();
-  }, []);
+  }, [id]);
 
   const handleSearch = async (e) => {
     setSearchTerm(e.target.value);
@@ -98,18 +130,18 @@ const NewProduction = () => {
         ...formData,
         products: selectedProducts,
       };
-      await axios.post(API_ROUTES.FACTORIES, payload, {
+      await axios.put(`${API_ROUTES.FACTORIES}/${id}`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
       navigate('/productions/all');
     } catch (error) {
-      console.error('Error creating production:', error);
+      console.error('Error updating production:', error);
     }
   };
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Create New Production</h1>
+      <h1 className="text-2xl font-bold mb-4">Edit Production</h1>
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
@@ -285,11 +317,11 @@ const NewProduction = () => {
           type="submit"
           className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
         >
-          Create Production
+          Update Production
         </button>
       </form>
     </div>
   );
 };
 
-export default NewProduction;
+export default EditProduction;

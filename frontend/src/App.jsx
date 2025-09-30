@@ -19,6 +19,7 @@ import RecoverMaterials from './components/Materials/RecoverMaterials';
 import EditMaterial from './components/Materials/EditMaterial';
 import AllProduction from './components/Production/AllProduction';
 import NewProduction from './components/Production/NewProduction';
+import EditProduction from './components/Production/EditProduction';
 import AllPurchase from './components/Purchase/AllPurchase';
 import NewPurchase from './components/Purchase/NewPurchase';
 import AllSupplier from './components/Purchase/AllSupplier';
@@ -103,6 +104,7 @@ function App() {
             <Route path="/materials/recover" element={<RecoverMaterials />} />
             <Route path="/production/all" element={<AllProduction />} />
             <Route path="/production/new" element={<NewProduction />} />
+            <Route path="/production/edit/:id" element={<EditProduction />} />
             <Route path="/purchase/all" element={<AllPurchase />} />
             <Route path="/purchase/new" element={<NewPurchase />} />
             <Route path="/purchase/all-supplier" element={<AllSupplier />} />

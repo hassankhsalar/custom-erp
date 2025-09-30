@@ -9,4 +9,7 @@ export const API_ROUTES = {
   MATERIALS: `${API_BASE_URL}/materials`,
   PRODUCTS: `${API_BASE_URL}/products`,
   FACTORIES: `${API_BASE_URL}/factories`,
+  PRODUCTIONS: `${API_BASE_URL}/productions`,
+  SALES: `${API_BASE_URL}/sales`,
+  PURCHASES: `${API_BASE_URL}/purchases`,
 };

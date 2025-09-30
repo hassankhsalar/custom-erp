@@ -89,9 +89,9 @@ const AllProducts = () => {
                           <tbody>
                             {product.materials.map(mat => (
                               <tr key={mat.material_id}>
-                                <td className="border border-gray-300 text-sm p-2">{mat.material.name}</td>
-                                <td className="border border-gray-300 text-sm p-2">Qty: <span>{mat.material_quantity}</span></td>
-                                <td className="border border-gray-300 text-sm p-2"> {mat.price}</td>
+                                <td className="border border-gray-300 border border-gray-300-gray-300 text-sm p-2">{mat.material.name}</td>
+                                <td className="border border-gray-300 border border-gray-300-gray-300 text-sm p-2">Qty: <span>{mat.material_quantity}</span></td>
+                                <td className="border border-gray-300 border border-gray-300-gray-300 text-sm p-2"> {mat.price}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -111,7 +111,7 @@ const AllProducts = () => {
               <li key={page}>
                 <button
                   onClick={() => paginate(page)}
-                  className={`py-2 px-3 leading-tight ${currentPage === page ? 'bg-blue-500 text-white' : 'bg-white text-gray-500'} border border-gray-300 hover:bg-gray-100 hover:text-gray-700`}
+                  className={`py-2 px-3 leading-tight ${currentPage === page ? 'bg-blue-500 text-white' : 'bg-white text-gray-500'} border border-gray-300 border border-gray-300-gray-300 hover:bg-gray-100 hover:text-gray-700`}
                 >
                   {page}
                 </button>

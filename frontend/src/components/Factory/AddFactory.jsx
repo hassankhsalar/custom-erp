@@ -47,7 +47,7 @@ const AddFactory = () => {
               onChange={handleChange}
               placeholder="Name"
               required
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
           <div className="flex flex-col">
@@ -60,7 +60,7 @@ const AddFactory = () => {
               value={factory.phone}
               onChange={handleChange}
               placeholder="Phone"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
           <div className="flex flex-col">
@@ -73,7 +73,7 @@ const AddFactory = () => {
               value={factory.manager}
               onChange={handleChange}
               placeholder="Manager"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
           <div className="flex flex-col">
@@ -86,7 +86,7 @@ const AddFactory = () => {
               value={factory.email}
               onChange={handleChange}
               placeholder="Email"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
           <div className="flex flex-col">
@@ -99,7 +99,7 @@ const AddFactory = () => {
               value={factory.address}
               onChange={handleChange}
               placeholder="Address"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
         </div>

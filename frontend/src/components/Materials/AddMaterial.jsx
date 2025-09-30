@@ -51,7 +51,7 @@ const AddMaterial = () => {
               onChange={handleChange}
               placeholder="Name"
               required
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
           <div className="flex flex-col">
@@ -64,7 +64,7 @@ const AddMaterial = () => {
               value={material.description}
               onChange={handleChange}
               placeholder="Description"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
           <div className="flex flex-col">
@@ -77,7 +77,7 @@ const AddMaterial = () => {
               value={material.brand}
               onChange={handleChange}
               placeholder="Brand"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
           <div className="flex flex-col">
@@ -90,7 +90,7 @@ const AddMaterial = () => {
               value={material.barcode}
               onChange={handleChange}
               placeholder="Barcode"
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
           <div className="flex flex-col">
@@ -104,7 +104,7 @@ const AddMaterial = () => {
               onChange={handleChange}
               placeholder="Unit"
               required
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
           <div className="flex flex-col">
@@ -118,7 +118,7 @@ const AddMaterial = () => {
               onChange={handleChange}
               placeholder="Unit Cost"
               required
-              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
         </div>
