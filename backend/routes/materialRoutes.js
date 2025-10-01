@@ -21,7 +21,7 @@ router.post('/', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const materials = await prisma.material.findMany();
-    res.json(materials);
+    res.json({materials});
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

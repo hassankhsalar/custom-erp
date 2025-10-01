@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
 
-const AddStore = () => {
+const EditStore = () => {
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [store_keeper, setStoreKeeper] = useState('');
@@ -21,11 +21,33 @@ const AddStore = () => {
   const [editingProductIndex, setEditingProductIndex] = useState(null);
   const [editingMaterialIndex, setEditingMaterialIndex] = useState(null);
   const navigate = useNavigate();
+  const { id } = useParams();
 
   useEffect(() => {
-    const fetchProductsAndMaterials = async () => {
+    const fetchStoreData = async () => {
       try {
         const token = localStorage.getItem('token');
+        const storeResponse = await axios.get(`${API_ROUTES.STORES}/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const store = storeResponse.data;
+        setName(store.name);
+        setAddress(store.address);
+        setStoreKeeper(store.store_keeper);
+        setMobile(store.mobile);
+
+        // Populate selected products and materials
+        setSelectedProducts(store.storeProducts.map(sp => ({
+          product_id: sp.productId,
+          product_name: sp.product.name,
+          stock: sp.stock,
+        })));
+        setSelectedMaterials(store.storeMaterials.map(sm => ({
+          material_id: sm.materialId,
+          material_name: sm.material.name,
+          stock: sm.stock,
+        })));
+
         const productsResponse = await axios.get(API_ROUTES.PRODUCTS, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -35,12 +57,13 @@ const AddStore = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
         setAllMaterials(materialsResponse.data.materials);
+
       } catch (error) {
-        console.error('Error fetching products or materials:', error);
+        console.error('Error fetching store data:', error);
       }
     };
-    fetchProductsAndMaterials();
-  }, []);
+    fetchStoreData();
+  }, [id]);
 
   useEffect(() => {
     if (productSearchTerm) {
@@ -136,7 +159,7 @@ const AddStore = () => {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      await axios.post(API_ROUTES.STORES, {
+      await axios.put(`${API_ROUTES.STORES}/${id}`, {
         name,
         address,
         store_keeper,
@@ -148,13 +171,13 @@ const AddStore = () => {
       });
       navigate('/stores/all');
     } catch (error) {
-      console.error('Error creating store:', error);
+      console.error('Error updating store:', error);
     }
   };
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Add New Store</h1>
+      <h1 className="text-2xl font-bold mb-4">Edit Store</h1>
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded shadow-md">
         <div className="mb-4">
           <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="name">
@@ -321,7 +344,7 @@ const AddStore = () => {
             type="submit"
             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
           >
-            Add Store
+            Update Store
           </button>
           <Link to="/stores/all" className="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800">
             Cancel
@@ -332,6 +355,4 @@ const AddStore = () => {
   );
 };
 
-export default AddStore;
-
-
+export default EditStore;

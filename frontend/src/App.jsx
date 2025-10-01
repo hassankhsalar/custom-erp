@@ -29,6 +29,7 @@ import AddFactory from './components/Factory/AddFactory';
 import EditFactory from './components/Factory/EditFactory';
 import AllStore from './components/Stores/AllStore';
 import AddStore from './components/Stores/AddStore';
+import EditStore from './components/Stores/EditStore'; 
 import SaleReport from './components/Report/SaleReport';
 import PurchaseReport from './components/Report/PurchaseReport';
 import ProductionReport from './components/Report/ProductionReport';
@@ -114,6 +115,7 @@ function App() {
             <Route path="/factories/edit/:id" element={<EditFactory />} />
             <Route path="/stores/all" element={<AllStore />} />
             <Route path="/stores/add" element={<AddStore />} />
+            <Route path="/stores/edit/:id" element={<EditStore />} />
             <Route path="/report/sale" element={<SaleReport />} />
             <Route path="/report/purchase" element={<PurchaseReport />} />
             <Route path="/report/production" element={<ProductionReport />} />

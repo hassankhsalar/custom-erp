@@ -28,7 +28,7 @@ const EditProduct = () => {
     const fetchMaterials = async () => {
       try {
         const response = await axios.get(API_ROUTES.MATERIALS);
-        setAllMaterials(response.data);
+        setAllMaterials(response.data.materials);
       } catch (error) {
         console.error('Error fetching materials:', error);
       }

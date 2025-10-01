@@ -45,6 +45,7 @@ model Material {
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
   ProductMaterial ProductMaterial[]
+  storeMaterials StoreMaterial[]
 }
 
 model Product {
@@ -62,6 +63,7 @@ model Product {
   updated_at      DateTime  @updatedAt
   materials       ProductMaterial[]
   productionProducts ProductionProducts[] // Added for relation
+  storeProducts  StoreProduct[]
 }
 
 model ProductMaterial {
@@ -91,6 +93,8 @@ model Production {
   reference          String              @unique
   start_date         DateTime
   estimated_end_date DateTime
+  end_date           DateTime?
+  materials_from     String?  
   factoryId          Int
   factory            Factory             @relation(fields: [factoryId], references: [id])
   status             String              @default("pending") // e.g., "pending", "running", "done"
@@ -99,6 +103,38 @@ model Production {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   productionProducts ProductionProducts[]
+}
+
+model Store {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  address     String?
+  store_keeper String?
+  mobile      String?
+  storeMaterials StoreMaterial[]
+  storeProducts  StoreProduct[]
+}
+
+model StoreMaterial {
+  store_id   Int
+  material_id Int
+  stock      Float
+
+  store    Store    @relation(fields: [store_id], references: [id])
+  material Material @relation(fields: [material_id], references: [id])
+
+  @@id([store_id, material_id])
+}
+
+model StoreProduct {
+  store_id   Int
+  product_id Int
+  stock      Float
+
+  store   Store   @relation(fields: [store_id], references: [id])
+  product Product @relation(fields: [product_id], references: [id])
+
+  @@id([store_id, product_id])
 }
 
 model ProductionProducts {
