@@ -94,7 +94,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 
 // Create a new store
 router.post('/', authenticateToken, async (req, res) => {
-  const { name, address, store_keeper, mobile } = req.body;
+  const { name, address, store_keeper, mobile, storeProducts, storeMaterials } = req.body;
   try {
     const newStore = await prisma.store.create({
       data: {
@@ -102,6 +102,18 @@ router.post('/', authenticateToken, async (req, res) => {
         address,
         store_keeper,
         mobile,
+        storeMaterials: {
+          create: storeMaterials?.map(material => ({
+            material_id: material.material_id,
+            stock: material.stock,
+          })),
+        },
+        storeProducts: {
+          create: storeProducts?.map(product => ({
+            product_id: product.product_id,
+            stock: product.stock,
+          })),
+        },
       },
     });
     res.status(201).json(newStore);
@@ -114,8 +126,16 @@ router.post('/', authenticateToken, async (req, res) => {
 // Update a store
 router.put('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { name, address, store_keeper, mobile } = req.body;
+  const { name, address, store_keeper, mobile, storeProducts, storeMaterials } = req.body;
   try {
+    // First, delete existing store materials and products
+    await prisma.storeMaterial.deleteMany({
+      where: { store_id: parseInt(id) },
+    });
+    await prisma.storeProduct.deleteMany({
+      where: { store_id: parseInt(id) },
+    });
+
     const updatedStore = await prisma.store.update({
       where: { id: parseInt(id) },
       data: {
@@ -123,6 +143,18 @@ router.put('/:id', authenticateToken, async (req, res) => {
         address,
         store_keeper,
         mobile,
+        storeMaterials: {
+          create: storeMaterials?.map(material => ({
+            material_id: material.material_id,
+            stock: material.stock,
+          })),
+        },
+        storeProducts: {
+          create: storeProducts?.map(product => ({
+            product_id: product.product_id,
+            stock: product.stock,
+          })),
+        },
       },
     });
     res.json(updatedStore);

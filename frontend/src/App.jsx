@@ -17,9 +17,9 @@ import AddMaterial from './components/Materials/AddMaterial';
 import ScrapeMaterials from './components/Materials/ScrapeMaterials';
 import RecoverMaterials from './components/Materials/RecoverMaterials';
 import EditMaterial from './components/Materials/EditMaterial';
-import AllProduction from './components/Production/AllProduction';
-import NewProduction from './components/Production/NewProduction';
-import EditProduction from './components/Production/EditProduction';
+import AllProductions from './components/Productions/AllProductions';
+import NewProduction from './components/Productions/NewProduction';
+import EditProduction from './components/Productions/EditProduction';
 import AllPurchase from './components/Purchase/AllPurchase';
 import NewPurchase from './components/Purchase/NewPurchase';
 import AllSupplier from './components/Purchase/AllSupplier';
@@ -103,8 +103,8 @@ function App() {
             <Route path="/materials/edit/:id" element={<EditMaterial />} />
             <Route path="/materials/scrape" element={<ScrapeMaterials />} />
             <Route path="/materials/recover" element={<RecoverMaterials />} />
-            <Route path="/production/all" element={<AllProduction />} />
-            <Route path="/production/new" element={<NewProduction />} />
+            <Route path="/productions/all" element={<AllProductions />} />
+            <Route path="/productions/new" element={<NewProduction />} />
             <Route path="/production/edit/:id" element={<EditProduction />} />
             <Route path="/purchase/all" element={<AllPurchase />} />
             <Route path="/purchase/new" element={<NewPurchase />} />

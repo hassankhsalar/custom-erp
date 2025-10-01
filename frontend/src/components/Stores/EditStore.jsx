@@ -38,12 +38,12 @@ const EditStore = () => {
 
         // Populate selected products and materials
         setSelectedProducts(store.storeProducts.map(sp => ({
-          product_id: sp.productId,
+          product_id: sp.product_id,
           product_name: sp.product.name,
           stock: sp.stock,
         })));
         setSelectedMaterials(store.storeMaterials.map(sm => ({
-          material_id: sm.materialId,
+          material_id: sm.material_id,
           material_name: sm.material.name,
           stock: sm.stock,
         })));
@@ -164,8 +164,8 @@ const EditStore = () => {
         address,
         store_keeper,
         mobile,
-        storeProducts: selectedProducts.map(p => ({ productId: parseInt(p.product_id), stock: parseFloat(p.stock) })),
-        storeMaterials: selectedMaterials.map(m => ({ materialId: parseInt(m.material_id), stock: parseFloat(m.stock) })),
+        storeProducts: selectedProducts.map(p => ({ product_id: parseInt(p.product_id), stock: parseFloat(p.stock) })),
+        storeMaterials: selectedMaterials.map(m => ({ material_id: parseInt(m.material_id), stock: parseFloat(m.stock) })),
       }, {
         headers: { Authorization: `Bearer ${token}` },
       });

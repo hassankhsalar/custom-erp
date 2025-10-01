@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
 
 
-const AllProduction = () => {
+const AllProductions = () => {
   const [productions, setProductions] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -151,4 +151,4 @@ const AllProduction = () => {
   );
 };
 
-export default AllProduction;
+export default AllProductions;

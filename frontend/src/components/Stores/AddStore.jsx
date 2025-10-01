@@ -141,8 +141,8 @@ const AddStore = () => {
         address,
         store_keeper,
         mobile,
-        storeProducts: selectedProducts.map(p => ({ productId: parseInt(p.product_id), stock: parseFloat(p.stock) })),
-        storeMaterials: selectedMaterials.map(m => ({ materialId: parseInt(m.material_id), stock: parseFloat(m.stock) })),
+        storeProducts: selectedProducts.map(p => ({ product_id: parseInt(p.product_id), stock: parseFloat(p.stock) })),
+        storeMaterials: selectedMaterials.map(m => ({ material_id: parseInt(m.material_id), stock: parseFloat(m.stock) })),
       }, {
         headers: { Authorization: `Bearer ${token}` },
       });
