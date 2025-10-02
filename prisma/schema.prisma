@@ -46,6 +46,7 @@ model Material {
   updated_at    DateTime @updatedAt
   ProductMaterial ProductMaterial[]
   storeMaterials StoreMaterial[]
+  productionMaterials ProductionMaterial[]
 }
 
 model Product {
@@ -103,6 +104,7 @@ model Production {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   productionProducts ProductionProducts[]
+  productionMaterials ProductionMaterial[]
 }
 
 model Store {
@@ -113,6 +115,7 @@ model Store {
   mobile      String?
   storeMaterials StoreMaterial[]
   storeProducts  StoreProduct[]
+  productionMaterials ProductionMaterial[]
 }
 
 model StoreMaterial {
@@ -149,4 +152,18 @@ model ProductionProducts {
   moved_to_store Float
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+model ProductionMaterial {
+  id            Int      @id @default(autoincrement())
+  productionId  Int
+  production    Production @relation(fields: [productionId], references: [id])
+  materialId    Int
+  material      Material @relation(fields: [materialId], references: [id])
+  storeId       Int
+  store         Store    @relation(fields: [storeId], references: [id])
+  quantity      Float
+  price         Float
+
+  @@unique([productionId, materialId, storeId])
 }

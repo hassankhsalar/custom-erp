@@ -33,37 +33,81 @@ const generateReference = async () => {
 
 // Create a new production
 router.post('/', authenticateToken, async (req, res) => {
-  const { start_date, estimated_end_date, factoryId, status, attachments, shipping_cost, products } = req.body;
+  const { start_date, estimated_end_date, factoryId, status, attachments, shipping_cost, products, materials } = req.body;
 
   try {
     const reference = await generateReference();
-    const newProduction = await prisma.production.create({
-      data: {
-        reference,
-        start_date: new Date(start_date),
-        estimated_end_date: new Date(estimated_end_date),
-        factoryId: parseInt(factoryId),
-        status,
-        attachments: attachments ? attachments.join(',') : null, // Store as comma-separated string
-        shipping_cost: shipping_cost ? parseFloat(shipping_cost) : null,
-        productionProducts: {
-          create: products.map(p => ({
-            productId: parseInt(p.productId),
-            code: p.code,
-            quantity: parseFloat(p.quantity),
-            unit_cost: parseFloat(p.unit_cost),
-            moved_to_store: parseFloat(p.moved_to_store || 0),
-          })),
+
+    const result = await prisma.$transaction(async (prisma) => {
+      const newProduction = await prisma.production.create({
+        data: {
+          reference,
+          start_date: new Date(start_date),
+          estimated_end_date: new Date(estimated_end_date),
+          factoryId: parseInt(factoryId),
+          status,
+          attachments: attachments ? attachments.join(',') : null,
+          shipping_cost: shipping_cost ? parseFloat(shipping_cost) : null,
+          productionProducts: {
+            create: products.map(p => ({
+              productId: parseInt(p.productId),
+              code: p.code,
+              quantity: parseFloat(p.quantity),
+              unit_cost: parseFloat(p.unit_cost),
+              moved_to_store: parseFloat(p.moved_to_store || 0),
+            })),
+          },
+          productionMaterials: {
+            create: materials.map(m => ({
+              materialId: parseInt(m.materialId),
+              storeId: parseInt(m.storeId),
+              quantity: parseFloat(m.quantity),
+              price: parseFloat(m.price),
+            })),
+          },
         },
-      },
-      include: {
-        productionProducts: true,
-      },
+        include: {
+          productionProducts: true,
+          productionMaterials: true,
+        },
+      });
+
+      for (const material of materials) {
+        const storeMaterial = await prisma.storeMaterial.findUnique({
+          where: {
+            store_id_material_id: {
+              store_id: parseInt(material.storeId),
+              material_id: parseInt(material.materialId),
+            }
+          }
+        });
+
+        if (!storeMaterial || storeMaterial.stock < parseFloat(material.quantity)) {
+          throw new Error(`Not enough stock for material ${material.materialId} in store ${material.storeId}`);
+        }
+
+        await prisma.storeMaterial.update({
+          where: {
+            store_id_material_id: {
+              store_id: parseInt(material.storeId),
+              material_id: parseInt(material.materialId),
+            }
+          },
+          data: {
+            stock: {
+              decrement: parseFloat(material.quantity),
+            },
+          },
+        });
+      }
+
+      return newProduction;
     });
-    res.status(201).json(newProduction);
+
+    res.status(201).json(result);
   } catch (error) {
     console.error('Error creating production:', error);
-    res.status(500).json({ error: 'Failed to create production' });
+    res.status(500).json({ error: `Failed to create production: ${error.message}` });
   }
 });
 
@@ -117,6 +161,12 @@ router.get('/:id', authenticateToken, async (req, res) => {
             product: true,
           },
         },
+        productionMaterials: {
+          include: {
+            material: true,
+            store: true,
+          }
+        }
       },
     });
 
@@ -133,41 +183,108 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Update a production
 router.put('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { start_date, estimated_end_date, factoryId, status, attachments, shipping_cost, products } = req.body;
+  const { start_date, estimated_end_date, factoryId, status, attachments, shipping_cost, products, materials } = req.body;
 
   try {
-    // First, delete existing production products for this production
-    await prisma.productionProducts.deleteMany({
-      where: { productionId: parseInt(id) },
+    const result = await prisma.$transaction(async (prisma) => {
+      // Get the old production to find the old materials
+      const oldProduction = await prisma.production.findUnique({
+        where: { id: parseInt(id) },
+        include: { productionMaterials: true },
+      });
+
+      // Restore stock for old materials
+      if (oldProduction && oldProduction.productionMaterials) {
+        for (const material of oldProduction.productionMaterials) {
+          await prisma.storeMaterial.updateMany({
+            where: {
+              store_id: material.storeId,
+              material_id: material.materialId,
+            },
+            data: {
+              stock: {
+                increment: material.quantity,
+              },
+            },
+          });
+        }
+      }
+
+      // Delete old production products and materials
+      await prisma.productionProducts.deleteMany({ where: { productionId: parseInt(id) } });
+      await prisma.productionMaterial.deleteMany({ where: { productionId: parseInt(id) } });
+
+      // Decrement stock for new materials and check for availability
+      for (const material of materials) {
+        const storeMaterial = await prisma.storeMaterial.findUnique({
+          where: {
+            store_id_material_id: {
+              store_id: parseInt(material.storeId),
+              material_id: parseInt(material.materialId),
+            }
+          }
+        });
+
+        if (!storeMaterial || storeMaterial.stock < parseFloat(material.quantity)) {
+          throw new Error(`Not enough stock for material ${material.materialId} in store ${material.storeId}`);
+        }
+
+        await prisma.storeMaterial.update({
+          where: {
+            store_id_material_id: {
+              store_id: parseInt(material.storeId),
+              material_id: parseInt(material.materialId),
+            }
+          },
+          data: {
+            stock: {
+              decrement: parseFloat(material.quantity),
+            },
+          },
+        });
+      }
+
+      // Update the production
+      const updatedProduction = await prisma.production.update({
+        where: { id: parseInt(id) },
+        data: {
+          start_date: new Date(start_date),
+          estimated_end_date: new Date(estimated_end_date),
+          factoryId: parseInt(factoryId),
+          status,
+          attachments: attachments ? attachments.join(',') : null,
+          shipping_cost: shipping_cost ? parseFloat(shipping_cost) : null,
+          productionProducts: {
+            create: products.map(p => ({
+              productId: parseInt(p.productId),
+              code: p.code,
+              quantity: parseFloat(p.quantity),
+              unit_cost: parseFloat(p.unit_cost),
+              moved_to_store: parseFloat(p.moved_to_store || 0),
+            })),
+          },
+          productionMaterials: {
+            create: materials.map(m => ({
+              materialId: parseInt(m.materialId),
+              storeId: parseInt(m.storeId),
+              quantity: parseFloat(m.quantity),
+              price: parseFloat(m.price),
+            })),
+          },
+        },
+        include: {
+          productionProducts: true,
+          productionMaterials: true,
+        },
+      });
+
+      return updatedProduction;
     });
 
-    const updatedProduction = await prisma.production.update({
-      where: { id: parseInt(id) },
-      data: {
-        start_date: new Date(start_date),
-        estimated_end_date: new Date(estimated_end_date),
-        factoryId: parseInt(factoryId),
-        status,
-        attachments: attachments ? attachments.join(',') : null,
-        shipping_cost: shipping_cost ? parseFloat(shipping_cost) : null,
-        productionProducts: {
-          create: products.map(p => ({
-            productId: parseInt(p.productId),
-            code: p.code,
-            quantity: parseFloat(p.quantity),
-            unit_cost: parseFloat(p.unit_cost),
-            moved_to_store: parseFloat(p.moved_to_store || 0),
-          })),
-        },
-      },
-      include: {
-        productionProducts: true,
-      },
-    });
-    res.json(updatedProduction);
+    res.json(result);
   } catch (error) {
     console.error('Error updating production:', error);
-    res.status(500).json({ error: 'Failed to update production' });
+    res.status(500).json({ error: `Failed to update production: ${error.message}` });
   }
 });
 

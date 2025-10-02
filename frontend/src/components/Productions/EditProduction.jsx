@@ -12,22 +12,35 @@ const EditProduction = () => {
     status: 'pending',
     attachments: '',
     shipping_cost: '',
-    products: [],
   });
-  const [factories, setFactores] = useState([]);
+  const [factories, setFactories] = useState([]);
+  const [stores, setStores] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedProducts, setSelectedProducts] = useState([]);
+  const [selectedMaterials, setSelectedMaterials] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchProductionData = async () => {
+    const fetchInitialData = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get(`${API_ROUTES.PRODUCTIONS}/${id}`, {
+
+        const factoryResponse = await axios.get(API_ROUTES.FACTORIES, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        const production = response.data;
+        setFactories(factoryResponse.data);
+
+        const storeResponse = await axios.get(API_ROUTES.STORES, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setStores(storeResponse.data.stores);
+
+        const productionResponse = await axios.get(`${API_ROUTES.PRODUCTIONS}/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const production = productionResponse.data;
+
         setFormData({
           start_date: new Date(production.start_date).toISOString().split('T')[0],
           estimated_end_date: new Date(production.estimated_end_date).toISOString().split('T')[0],
@@ -35,40 +48,84 @@ const EditProduction = () => {
           status: production.status,
           attachments: production.attachments || '',
           shipping_cost: production.shipping_cost || '',
-          products: [], // Products will be set separately
         });
-        setSelectedProducts(production.productionProducts.map(pp => ({
+
+        const products = production.productionProducts.map(pp => ({
+          ...pp.product,
           productId: pp.productId,
-          name: pp.product.name,
           code: pp.code,
           quantity: pp.quantity,
           unit_cost: pp.unit_cost,
           moved_to_store: pp.moved_to_store,
-        })));
+        }));
+        setSelectedProducts(products)
+
+        const materials = production.productionMaterials.map(pm => ({
+            materialId: pm.materialId,
+            name: pm.material.name,
+            quantity: pm.quantity,
+            price: pm.price,
+            storeId: pm.storeId,
+        }));
+        setSelectedMaterials(materials);
+
       } catch (error) {
-        console.error('Error fetching production data:', error);
+        console.error('Error fetching initial data:', error);
       }
     };
 
-    const fetchFactories = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await axios.get(API_ROUTES.FACTORIES, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setFactores(response.data);
-      } catch (error) {
-        console.error('Error fetching factories:', error);
-      }
-    };
-
-    fetchProductionData();
-    fetchFactories();
+    fetchInitialData();
   }, [id]);
+
+  useEffect(() => {
+    const materialsMap = new Map();
+    selectedProducts.forEach(p => {
+      const productQuantity = p.quantity;
+      if (p.materials) {
+        p.materials.forEach(materialItem => {
+          const { material, material_quantity } = materialItem;
+          if (materialsMap.has(material.id)) {
+            const existing = materialsMap.get(material.id);
+            existing.quantity += material_quantity * productQuantity;
+          } else {
+            materialsMap.set(material.id, {
+              materialId: material.id,
+              name: material.name,
+              quantity: material_quantity * productQuantity,
+              price: material.unit_cost,
+              storeId: stores.length > 0 ? stores[0].id : '',
+            });
+          }
+        });
+      }
+    });
+
+    const newMaterials = Array.from(materialsMap.values());
+
+    setSelectedMaterials(prevMaterials => {
+        const updatedMaterials = newMaterials.map(newMat => {
+        const existingMat = prevMaterials.find(prevMat => prevMat.materialId === newMat.materialId);
+        if (existingMat) {
+          return {
+            ...newMat,
+            quantity: newMat.quantity,
+            price: existingMat.price,
+            storeId: existingMat.storeId,
+          };
+        }
+        return newMat;
+      });
+
+      // Keep materials that might have been added manually or do not exist in new calc
+      const manuallyAdded = prevMaterials.filter(pm => !materialsMap.has(pm.materialId));
+      return [...updatedMaterials, ...manuallyAdded];
+    });
+  }, [selectedProducts, stores]);
+
 
   const handleSearch = async (e) => {
     setSearchTerm(e.target.value);
-    if (e.target.value.length > 2) { // Search only if more than 2 characters
+    if (e.target.value.length > 2) {
       try {
         const token = localStorage.getItem('token');
         const response = await axios.get(`${API_ROUTES.PRODUCTS}?search=${e.target.value}`, {
@@ -85,33 +142,36 @@ const EditProduction = () => {
 
   const addProductToProduction = (product) => {
     setSelectedProducts(prev => {
-      // Check if product already exists in selectedProducts
-      if (prev.find(p => p.productId === product.id)) {
+      if (prev.find(p => p.id === product.id)) {
         return prev;
       }
-      return [...prev, {
-        productId: product.id,
-        name: product.name,
-        code: product.barcode || '',
-        quantity: 1,
-        unit_cost: product.cost,
-        moved_to_store: 0,
-      }];
+      return [...prev, { ...product, quantity: 1, unit_cost: product.cost, moved_to_store: 0 }];
     });
     setSearchTerm('');
     setSearchResults([]);
   };
 
   const handleProductChange = (index, field, value) => {
-    setSelectedProducts(prev =>
+    const updatedProducts = selectedProducts.map((item, i) =>
+      i === index ? { ...item, [field]: value } : item
+    );
+    setSelectedProducts(updatedProducts);
+  };
+
+  const removeProductFromProduction = (index) => {
+    setSelectedProducts(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleMaterialChange = (index, field, value) => {
+    setSelectedMaterials(prev =>
       prev.map((item, i) =>
         i === index ? { ...item, [field]: value } : item
       )
     );
   };
 
-  const removeProductFromProduction = (index) => {
-    setSelectedProducts(prev => prev.filter((_, i) => i !== index));
+  const removeMaterialFromProduction = (index) => {
+    setSelectedMaterials(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleChange = (e) => {
@@ -128,13 +188,21 @@ const EditProduction = () => {
       const token = localStorage.getItem('token');
       const payload = {
         ...formData,
-        products: selectedProducts,
+        products: selectedProducts.map(p => ({
+          productId: p.id || p.productId,
+          code: p.barcode || p.code || '',
+          quantity: p.quantity,
+          unit_cost: p.unit_cost,
+          moved_to_store: p.moved_to_store,
+        })),
+        materials: selectedMaterials,
       };
       await axios.put(`${API_ROUTES.PRODUCTIONS}/${id}`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
       navigate('/productions/all');
     } catch (error) {
+      alert('Error updating production: ' + error.response.data.error);
       console.error('Error updating production:', error);
     }
   };
@@ -143,6 +211,7 @@ const EditProduction = () => {
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Edit Production</h1>
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md">
+        {/* Form fields */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="start_date">Start Date</label>
@@ -195,7 +264,8 @@ const EditProduction = () => {
             >
               <option value="pending">Pending</option>
               <option value="running">Running</option>
-              <option value="done">Done</option>
+              <option value="production_done">Production Done</option>
+              <option value="transfer_done">Transfer Done</option>
             </select>
           </div>
           <div>
@@ -224,6 +294,7 @@ const EditProduction = () => {
           </div>
         </div>
 
+        {/* Product Search */}
         <div className="mb-4">
           <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="product_search">Search Products</label>
           <input
@@ -249,6 +320,7 @@ const EditProduction = () => {
           )}
         </div>
 
+        {/* Selected Products */}
         <h2 className="text-xl font-bold mb-2">Selected Products</h2>
         {selectedProducts.length > 0 ? (
           <div className="overflow-x-auto mb-4">
@@ -265,16 +337,16 @@ const EditProduction = () => {
               </thead>
               <tbody>
                 {selectedProducts.map((product, index) => (
-                  <tr key={product.productId}>
+                  <tr key={product.id || product.productId}>
                     <td className="border border-gray-300 px-4 py-2">{product.name}</td>
-                    <td className="border border-gray-300 px-4 py-2">{product.code}</td>
+                    <td className="border border-gray-300 px-4 py-2">{product.barcode || product.code}</td>
                     <td className="border border-gray-300 px-4 py-2">
                       <input
                         type="number"
                         value={product.quantity}
                         onChange={(e) => handleProductChange(index, 'quantity', e.target.value)}
                         className="w-24 shadow appearance-none border border-gray-300 rounded py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                        step="0.01"
+                        step="1"
                       />
                     </td>
                     <td className="border border-gray-300 px-4 py-2">
@@ -311,6 +383,71 @@ const EditProduction = () => {
           </div>
         ) : (
           <p>No products added to this production yet.</p>
+        )}
+
+        {/* Selected Materials */}
+        <h2 className="text-xl font-bold mb-2">Selected Materials</h2>
+        {selectedMaterials.length > 0 ? (
+          <div className="overflow-x-auto mb-4">
+            <table className="min-w-full bg-white">
+              <thead>
+                <tr>
+                  <th className="px-4 py-2 border border-gray-300">Material Name</th>
+                  <th className="px-4 py-2 border border-gray-300">Quantity</th>
+                  <th className="px-4 py-2 border border-gray-300">Price</th>
+                  <th className="px-4 py-2 border border-gray-300">Store</th>
+                  <th className="px-4 py-2 border border-gray-300">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedMaterials.map((material, index) => (
+                  <tr key={material.materialId}>
+                    <td className="border border-gray-300 px-4 py-2">{material.name}</td>
+                    <td className="border border-gray-300 px-4 py-2">
+                      <input
+                        type="number"
+                        value={material.quantity}
+                        onChange={(e) => handleMaterialChange(index, 'quantity', e.target.value)}
+                        className="w-24 shadow appearance-none border border-gray-300 rounded py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                        step="0.01"
+                      />
+                    </td>
+                    <td className="border border-gray-300 px-4 py-2">
+                      <input
+                        type="number"
+                        value={material.price}
+                        onChange={(e) => handleMaterialChange(index, 'price', e.target.value)}
+                        className="w-24 shadow appearance-none border border-gray-300 rounded py-1 px-2 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                        step="0.01"
+                      />
+                    </td>
+                    <td className="border border-gray-300 px-4 py-2">
+                      <select
+                        value={material.storeId}
+                        onChange={(e) => handleMaterialChange(index, 'storeId', e.target.value)}
+                        className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                      >
+                        {stores.map(store => (
+                          <option key={store.id} value={store.id}>{store.name}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="border border-gray-300 px-4 py-2">
+                      <button
+                        type="button"
+                        onClick={() => removeMaterialFromProduction(index)}
+                        className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded focus:outline-none focus:shadow-outline"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p>No materials required for the selected products.</p>
         )}
 
         <button
