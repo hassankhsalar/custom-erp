@@ -32,7 +32,7 @@ const AllProductions = () => {
     if (window.confirm('Are you sure you want to delete this production?')) {
       try {
         const token = localStorage.getItem('token');
-        await axios.delete(`${API_ROUTES.FACTORIES}/${id}`, {
+        await axios.delete(`${API_ROUTES.PRODUCTIONS}/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         fetchProductions(currentPage); // Refresh the list
@@ -59,7 +59,7 @@ const AllProductions = () => {
             <tr>
               <th className="px-4 py-2 border border-gray-300">Reference</th>
               <th className="px-4 py-2 border border-gray-300">Start Date</th>
-              <th className="px-4 py-2 border border-gray-300">Estimated End Date</th>
+              <th className="px-4 py-2 border border-gray-300">End Date</th>
               <th className="px-4 py-2 border border-gray-300">Factory</th>
               <th className="px-4 py-2 border border-gray-300">Status</th>
               <th className="px-4 py-2 border border-gray-300">Actions</th>
@@ -147,6 +147,7 @@ const AllProductions = () => {
           Next
         </button>
       </div>
+      
     </div>
   );
 };

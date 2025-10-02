@@ -24,7 +24,7 @@ const EditProduction = () => {
     const fetchProductionData = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get(`${API_ROUTES.FACTORIES}/${id}`, {
+        const response = await axios.get(`${API_ROUTES.PRODUCTIONS}/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const production = response.data;
@@ -130,7 +130,7 @@ const EditProduction = () => {
         ...formData,
         products: selectedProducts,
       };
-      await axios.put(`${API_ROUTES.FACTORIES}/${id}`, payload, {
+      await axios.put(`${API_ROUTES.PRODUCTIONS}/${id}`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
       navigate('/productions/all');

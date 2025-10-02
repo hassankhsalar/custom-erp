@@ -105,7 +105,7 @@ function App() {
             <Route path="/materials/recover" element={<RecoverMaterials />} />
             <Route path="/productions/all" element={<AllProductions />} />
             <Route path="/productions/new" element={<NewProduction />} />
-            <Route path="/production/edit/:id" element={<EditProduction />} />
+            <Route path="/productions/edit/:id" element={<EditProduction />} />
             <Route path="/purchase/all" element={<AllPurchase />} />
             <Route path="/purchase/new" element={<NewPurchase />} />
             <Route path="/purchase/all-supplier" element={<AllSupplier />} />

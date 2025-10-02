@@ -98,11 +98,12 @@ const NewProduction = () => {
         ...formData,
         products: selectedProducts,
       };
-      await axios.post(API_ROUTES.FACTORIES, payload, {
+      await axios.post(API_ROUTES.PRODUCTIONS, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
       navigate('/productions/all');
     } catch (error) {
+      alert('Error creating production');
       console.error('Error creating production:', error);
     }
   };
