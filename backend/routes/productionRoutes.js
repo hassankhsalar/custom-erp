@@ -128,6 +128,11 @@ router.get('/', authenticateToken, async (req, res) => {
             product: true,
           },
         },
+        productionMaterials: {
+          include: {
+            material: true,
+          }
+        }
       },
       orderBy: {
         createdAt: 'desc',
@@ -164,6 +169,12 @@ router.get('/:id', authenticateToken, async (req, res) => {
         productionMaterials: {
           include: {
             material: true,
+            store: true,
+          }
+        },
+        factoryToStoreTransfers: {
+          include: {
+            product: true,
             store: true,
           }
         }
@@ -303,6 +314,139 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error deleting production:', error);
     res.status(500).json({ error: 'Failed to delete production' });
+  }
+});
+
+// Change production status
+router.put('/:id/status', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { status, products, materials, transfers } = req.body;
+
+  try {
+    const result = await prisma.$transaction(async (prisma) => {
+      // Update production status
+      const updatedProduction = await prisma.production.update({
+        where: { id: parseInt(id) },
+        data: { status },
+      });
+
+      if (status === 'production_done') {
+        // Update products with received and scrap quantities
+        for (const p of products) {
+          await prisma.productionProducts.update({
+            where: { id: p.id },
+            data: {
+              received: parseFloat(p.received),
+              scrap: parseFloat(p.scrap),
+              unit_cost: parseFloat(p.unit_cost),
+            },
+          });
+        }
+        // Update materials with scrap quantities
+        for (const m of materials) {
+          await prisma.productionMaterial.update({
+            where: { id: m.id },
+            data: {
+              scrap: parseFloat(m.scrap),
+            },
+          });
+        }
+      }
+
+      return updatedProduction;
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error(`Error updating status for production ${id}:`, error);
+    res.status(500).json({ error: `Failed to update status: ${error.message}` });
+  }
+});
+
+// Transfer products to store
+router.post('/:id/transfer', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { transfers } = req.body;
+
+  try {
+    const result = await prisma.$transaction(async (prisma) => {
+      // Handle product transfers
+      for (const transfer of transfers) {
+        // Create transfer record
+        await prisma.factoryToStoreTransfer.create({
+          data: {
+            productionId: parseInt(id),
+            productId: parseInt(transfer.productId),
+            storeId: parseInt(transfer.storeId),
+            quantity: parseFloat(transfer.quantity),
+          },
+        });
+
+        // Update moved_to_store in productionProducts
+        await prisma.productionProducts.update({
+          where: { id: parseInt(transfer.productionProductId) },
+          data: {
+            moved_to_store: {
+              increment: parseFloat(transfer.quantity),
+            },
+          },
+        });
+
+        // Update product stock in store
+        const storeProduct = await prisma.storeProduct.findUnique({
+            where: {
+                store_id_product_id: {
+                    store_id: parseInt(transfer.storeId),
+                    product_id: parseInt(transfer.productId),
+                }
+            }
+        });
+
+        if (storeProduct) {
+            await prisma.storeProduct.update({
+                where: {
+                    store_id_product_id: {
+                        store_id: parseInt(transfer.storeId),
+                        product_id: parseInt(transfer.productId),
+                    }
+                },
+                data: {
+                    stock: {
+                        increment: parseFloat(transfer.quantity),
+                    },
+                },
+            });
+        } else {
+            await prisma.storeProduct.create({
+                data: {
+                    store_id: parseInt(transfer.storeId),
+                    product_id: parseInt(transfer.productId),
+                    stock: parseFloat(transfer.quantity),
+                }
+            });
+        }
+      }
+
+      // Check if all products are transferred and update production status
+      const productionProducts = await prisma.productionProducts.findMany({
+        where: { productionId: parseInt(id) },
+      });
+
+      const allTransferred = productionProducts.every(p => p.moved_to_store >= p.received);
+      const newStatus = allTransferred ? 'transfer_done' : 'partial_transfer';
+
+      const updatedProduction = await prisma.production.update({
+        where: { id: parseInt(id) },
+        data: { status: newStatus },
+      });
+
+      return updatedProduction;
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error(`Error transferring products for production ${id}:`, error);
+    res.status(500).json({ error: `Failed to transfer products: ${error.message}` });
   }
 });
 

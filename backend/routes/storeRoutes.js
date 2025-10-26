@@ -26,11 +26,11 @@ router.get('/', authenticateToken, async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
+  const pagination = req.query.pagination !== 'false';
 
   try {
     const stores = await prisma.store.findMany({
-      skip,
-      take: limit,
+      ...(pagination && { skip, take: limit }),
       include: {
         storeProducts: {
           include: {
@@ -52,9 +52,11 @@ router.get('/', authenticateToken, async (req, res) => {
 
     res.json({
       stores,
-      currentPage: page,
-      totalPages: Math.ceil(totalStores / limit),
-      totalItems: totalStores,
+      ...(pagination && { 
+        currentPage: page,
+        totalPages: Math.ceil(totalStores / limit),
+        totalItems: totalStores,
+      }),
     });
   } catch (error) {
     console.error('Error fetching stores:', error);
