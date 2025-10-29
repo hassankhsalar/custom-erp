@@ -119,6 +119,7 @@ model Store {
   storeProducts  StoreProduct[]
   productionMaterials ProductionMaterial[]
   factoryToStoreTransfers FactoryToStoreTransfer[]
+  purchases       Purchase[]
 }
 
 model StoreMaterial {
@@ -202,9 +203,11 @@ model Purchase {
   materialId   Int
   material     Material  @relation(fields: [materialId], references: [id], name: "MaterialPurchases")
   supplierId   Int
+  storeId     Int?
   supplier     Supplier  @relation(fields: [supplierId], references: [id], name: "SupplierPurchases")
   quantity     Float
   unitPrice    Float
   totalPrice   Float
   createdAt    DateTime  @default(now())
+  store       Store?     @relation(fields: [storeId], references: [id])
 }

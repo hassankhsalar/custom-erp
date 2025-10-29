@@ -6,15 +6,17 @@ const router = express.Router();
 // ➕ Add Purchase
 router.post("/", async (req, res) => {
   try {
-    const { materialId, supplierId, quantity, unitPrice } = req.body;
-    if (!materialId || !supplierId || !quantity || !unitPrice)
+    const { materialId, supplierId, quantity, unitPrice, storeId } = req.body;
+    if (!materialId || !supplierId || !quantity || !unitPrice || !storeId)
       return res.status(400).json({ error: "All fields are required" });
 
     const totalPrice = quantity * unitPrice;
 
     const purchase = await prisma.purchase.create({
-      data: { materialId, supplierId, quantity, unitPrice, totalPrice },
-      include: { supplier: true, material: true },
+      data: { materialId, supplierId, quantity, unitPrice, totalPrice,
+        storeId: storeId || null,  },
+      include: { supplier: true, material: true,
+        store: true, },
     });
 
     // Optional: update material stock
@@ -36,6 +38,7 @@ router.get("/", async (req, res) => {
       include: {
         material: { select: { name: true } },
         supplier: { select: { name: true } },
+        store: { select: { name: true } },
       },
       orderBy: { id: "desc" },
     });

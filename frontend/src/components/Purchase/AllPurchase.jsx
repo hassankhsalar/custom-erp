@@ -20,6 +20,7 @@ export default function AllPurchase() {
     };
     fetchPurchases();
   }, []);
+  console.log(purchases);
 
   if (loading)
     return <p style={{ textAlign: "center", marginTop: "2rem" }}>Loading purchases...</p>;
@@ -49,6 +50,7 @@ export default function AllPurchase() {
                 <th style={th}>Unit Price</th>
                 <th style={th}>Total Price</th>
                 <th style={th}>Date</th>
+                <th style={th}>Store location</th>
               </tr>
             </thead>
             <tbody>
@@ -63,6 +65,7 @@ export default function AllPurchase() {
                   <td style={td}>
                     {new Date(p.createdAt).toLocaleDateString()}
                   </td>
+                  <td style={td}>{p.store?.name || "-"}</td>
                 </tr>
               ))}
             </tbody>
