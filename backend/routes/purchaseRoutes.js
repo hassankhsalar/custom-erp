@@ -19,11 +19,46 @@ router.post("/", async (req, res) => {
         store: true, },
     });
 
-    // Optional: update material stock
+    //  Check if the store already has this material
+    const existingStoreMaterial = await prisma.storeMaterial.findUnique({
+      where: {
+        store_id_material_id: {
+          store_id: storeId,
+          material_id: materialId,
+        },
+      },
+    });
+
+    if (existingStoreMaterial) {
+      //  Update stock for that store
+      await prisma.storeMaterial.update({
+        where: {
+          store_id_material_id: {
+            store_id: storeId,
+            material_id: materialId,
+          },
+        },
+        data: {
+          stock: { increment: quantity },
+        },
+      });
+    } else {
+      // Create a new record if it doesn't exist
+      await prisma.storeMaterial.create({
+        data: {
+          store_id: storeId,
+          material_id: materialId,
+          stock: quantity,
+        },
+      });
+    }
+
+    //  Optionally update total material stock
     await prisma.material.update({
       where: { id: materialId },
       data: { current_stock: { increment: quantity } },
     });
+
 
     res.status(201).json(purchase);
   } catch (err) {

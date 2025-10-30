@@ -22,7 +22,7 @@ model User {
 }
 
 model Profile {
-  id   Int    @id @default(autoincrement())
+  id   Int     @id @default(autoincrement())
   bio  String?
   user User?
 }
@@ -33,39 +33,39 @@ enum Role {
 }
 
 model Material {
-  id            Int      @id @default(autoincrement())
-  name          String
-  description   String?
-  brand         String?
-  barcode       String?  @unique
-  image         String?
-  unit          String
-  unit_cost     Float
-  current_stock Float    @default(0)
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
-  ProductMaterial ProductMaterial[]
-  storeMaterials StoreMaterial[]
+  id                  Int                  @id @default(autoincrement())
+  name                String
+  description         String?
+  brand               String?
+  barcode             String?              @unique
+  image               String?
+  unit                String
+  unit_cost           Float
+  current_stock       Float                @default(0)
+  created_at          DateTime             @default(now())
+  updated_at          DateTime             @updatedAt
+  ProductMaterial     ProductMaterial[]
+  storeMaterials      StoreMaterial[]
   productionMaterials ProductionMaterial[]
-  purchases           Purchase[]             @relation("MaterialPurchases")
+  purchases           Purchase[]           @relation("MaterialPurchases")
 }
 
 model Product {
-  id              Int      @id @default(autoincrement())
-  name            String
-  description     String?
-  image           String?
-  sale_price      Float
-  wholesale_price Float
-  cost            Float
-  barcode         String?   @unique
-  category        String?
-  stock           Int       @default(0)
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
-  materials       ProductMaterial[]
-  productionProducts ProductionProducts[] // Added for relation
-  storeProducts  StoreProduct[]
+  id                      Int                      @id @default(autoincrement())
+  name                    String
+  description             String?
+  image                   String?
+  sale_price              Float
+  wholesale_price         Float
+  cost                    Float
+  barcode                 String?                  @unique
+  category                String?
+  stock                   Int                      @default(0)
+  created_at              DateTime                 @default(now())
+  updated_at              DateTime                 @updatedAt
+  materials               ProductMaterial[]
+  productionProducts      ProductionProducts[] // Added for relation
+  storeProducts           StoreProduct[]
   factoryToStoreTransfers FactoryToStoreTransfer[]
 }
 
@@ -82,50 +82,50 @@ model ProductMaterial {
 }
 
 model Factory {
-  id      Int     @id @default(autoincrement())
-  name    String
-  phone   String?
-  manager String?
-  email   String?
-  address String?
+  id          Int          @id @default(autoincrement())
+  name        String
+  phone       String?
+  manager     String?
+  email       String?
+  address     String?
   productions Production[] // Added for relation
 }
 
 model Production {
-  id                 Int                 @id @default(autoincrement()) // Changed to Int
-  reference          String              @unique
-  start_date         DateTime
-  estimated_end_date DateTime
-  end_date           DateTime?
-  factoryId          Int
-  factory            Factory             @relation(fields: [factoryId], references: [id])
-  status             String              @default("pending") // e.g., "pending", "running", "done"
-  attachments        String?             // Changed to String?
-  shipping_cost      Float?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  productionProducts ProductionProducts[]
-  productionMaterials ProductionMaterial[]
+  id                      Int                      @id @default(autoincrement()) // Changed to Int
+  reference               String                   @unique
+  start_date              DateTime
+  estimated_end_date      DateTime
+  end_date                DateTime?
+  factoryId               Int
+  factory                 Factory                  @relation(fields: [factoryId], references: [id])
+  status                  String                   @default("pending") // e.g., "pending", "running", "done"
+  attachments             String? // Changed to String?
+  shipping_cost           Float?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  productionProducts      ProductionProducts[]
+  productionMaterials     ProductionMaterial[]
   factoryToStoreTransfers FactoryToStoreTransfer[]
 }
 
 model Store {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  address     String?
-  store_keeper String?
-  mobile      String?
-  storeMaterials StoreMaterial[]
-  storeProducts  StoreProduct[]
-  productionMaterials ProductionMaterial[]
+  id                      Int                      @id @default(autoincrement())
+  name                    String                   @unique
+  address                 String?
+  store_keeper            String?
+  mobile                  String?
+  storeMaterials          StoreMaterial[]
+  storeProducts           StoreProduct[]
+  productionMaterials     ProductionMaterial[]
   factoryToStoreTransfers FactoryToStoreTransfer[]
-  purchases       Purchase[]
+  purchases               Purchase[]
 }
 
 model StoreMaterial {
-  store_id   Int
+  store_id    Int
   material_id Int
-  stock      Float
+  stock       Float
 
   store    Store    @relation(fields: [store_id], references: [id])
   material Material @relation(fields: [material_id], references: [id])
@@ -145,69 +145,68 @@ model StoreProduct {
 }
 
 model ProductionProducts {
-  id           Int       @id @default(autoincrement()) // Changed to Int
-  productionId Int       // Changed to Int
-  production   Production @relation(fields: [productionId], references: [id])
-  productId    Int
-  product      Product   @relation(fields: [productId], references: [id])
-  code         String
-  quantity     Float
-  unit_cost    Float
+  id             Int        @id @default(autoincrement()) // Changed to Int
+  productionId   Int // Changed to Int
+  production     Production @relation(fields: [productionId], references: [id])
+  productId      Int
+  product        Product    @relation(fields: [productId], references: [id])
+  code           String
+  quantity       Float
+  unit_cost      Float
   moved_to_store Float
-  received     Float     @default(0)
-  scrap        Float     @default(0)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  received       Float      @default(0)
+  scrap          Float      @default(0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 }
 
 model ProductionMaterial {
-  id            Int      @id @default(autoincrement())
-  productionId  Int
-  production    Production @relation(fields: [productionId], references: [id])
-  materialId    Int
-  material      Material @relation(fields: [materialId], references: [id])
-  storeId       Int
-  store         Store    @relation(fields: [storeId], references: [id])
-  quantity      Float
-  price         Float
-  scrap         Float    @default(0)
+  id           Int        @id @default(autoincrement())
+  productionId Int
+  production   Production @relation(fields: [productionId], references: [id])
+  materialId   Int
+  material     Material   @relation(fields: [materialId], references: [id])
+  storeId      Int
+  store        Store      @relation(fields: [storeId], references: [id])
+  quantity     Float
+  price        Float
+  scrap        Float      @default(0)
 
   @@unique([productionId, materialId, storeId])
 }
 
 model FactoryToStoreTransfer {
-  id           Int      @id @default(autoincrement())
+  id           Int        @id @default(autoincrement())
   productId    Int
-  product      Product  @relation(fields: [productId], references: [id])
+  product      Product    @relation(fields: [productId], references: [id])
   productionId Int
   production   Production @relation(fields: [productionId], references: [id])
   storeId      Int
-  store        Store    @relation(fields: [storeId], references: [id])
+  store        Store      @relation(fields: [storeId], references: [id])
   quantity     Float
-  createdAt    DateTime @default(now())
+  createdAt    DateTime   @default(now())
 }
 
-
 model Supplier {
-  id        Int      @id @default(autoincrement())
+  id        Int        @id @default(autoincrement())
   name      String
   mobile    String?
   address   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
   purchases Purchase[] @relation("SupplierPurchases")
 }
 
 model Purchase {
-  id           Int      @id @default(autoincrement())
-  materialId   Int
-  material     Material  @relation(fields: [materialId], references: [id], name: "MaterialPurchases")
-  supplierId   Int
-  storeId     Int?
-  supplier     Supplier  @relation(fields: [supplierId], references: [id], name: "SupplierPurchases")
-  quantity     Float
-  unitPrice    Float
-  totalPrice   Float
-  createdAt    DateTime  @default(now())
-  store       Store?     @relation(fields: [storeId], references: [id])
+  id         Int      @id @default(autoincrement())
+  materialId Int
+  material   Material @relation(fields: [materialId], references: [id], name: "MaterialPurchases")
+  supplierId Int
+  storeId    Int?
+  supplier   Supplier @relation(fields: [supplierId], references: [id], name: "SupplierPurchases")
+  quantity   Float
+  unitPrice  Float
+  totalPrice Float
+  createdAt  DateTime @default(now())
+  store      Store?   @relation(fields: [storeId], references: [id])
 }
