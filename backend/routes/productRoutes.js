@@ -131,4 +131,36 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+///////////////////////////////
+
+router.get('/store/:storeId', async (req, res) => {
+  try {
+    const storeId = parseInt(req.params.storeId);
+
+    const products = await prisma.product.findMany({
+      include: {
+        storeProducts: {
+          where: { store_id: storeId },
+          select: { stock: true },
+        },
+      },
+    });
+
+    // attach stock dynamically
+    const formatted = products.map((p) => ({
+      id: p.id,
+      name: p.name,
+      sale_price: p.sale_price,
+      wholesale_price: p.wholesale_price,
+      image: p.image,
+      stock: p.storeProducts.length > 0 ? p.storeProducts[0].stock : 0,
+    }));
+
+    res.json(formatted);
+  } catch (error) {
+    console.error("❌ Error fetching products for store:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

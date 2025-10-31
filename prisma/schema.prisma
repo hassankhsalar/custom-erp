@@ -64,9 +64,11 @@ model Product {
   created_at              DateTime                 @default(now())
   updated_at              DateTime                 @updatedAt
   materials               ProductMaterial[]
-  productionProducts      ProductionProducts[] // Added for relation
+  productionProducts      ProductionProducts[]
   storeProducts           StoreProduct[]
   factoryToStoreTransfers FactoryToStoreTransfer[]
+  saleItem                SaleItem[]
+  saleReturItem           SaleReturnItem[]
 }
 
 model ProductMaterial {
@@ -120,12 +122,14 @@ model Store {
   productionMaterials     ProductionMaterial[]
   factoryToStoreTransfers FactoryToStoreTransfer[]
   purchases               Purchase[]
+  sales                   Sale[]
+  saleReturns             SaleReturn[]
 }
 
 model StoreMaterial {
   store_id    Int
   material_id Int
-  stock       Float
+  stock       Float @default(0)
 
   store    Store    @relation(fields: [store_id], references: [id])
   material Material @relation(fields: [material_id], references: [id])
@@ -136,7 +140,7 @@ model StoreMaterial {
 model StoreProduct {
   store_id   Int
   product_id Int
-  stock      Float
+  stock      Float @default(0)
 
   store   Store   @relation(fields: [store_id], references: [id])
   product Product @relation(fields: [product_id], references: [id])
@@ -209,4 +213,53 @@ model Purchase {
   totalPrice Float
   createdAt  DateTime @default(now())
   store      Store?   @relation(fields: [storeId], references: [id])
+}
+
+model Sale {
+  id          Int          @id @default(autoincrement())
+  reference   String       @unique
+  storeId     Int
+  store       Store        @relation(fields: [storeId], references: [id])
+  customer    String?
+  totalAmount Float
+  discount    Float        @default(0)
+  grandTotal  Float
+  paymentType String       @default("cash") // e.g. cash, card, mobile
+  createdAt   DateTime     @default(now())
+  saleItems   SaleItem[]
+  saleReturns SaleReturn[]
+}
+
+model SaleItem {
+  id         Int     @id @default(autoincrement())
+  saleId     Int
+  sale       Sale    @relation(fields: [saleId], references: [id])
+  productId  Int
+  product    Product @relation(fields: [productId], references: [id])
+  quantity   Float
+  unitPrice  Float
+  totalPrice Float
+}
+
+model SaleReturn {
+  id          Int              @id @default(autoincrement())
+  saleId      Int
+  sale        Sale             @relation(fields: [saleId], references: [id])
+  storeId     Int
+  store       Store            @relation(fields: [storeId], references: [id])
+  reference   String           @unique
+  totalAmount Float
+  createdAt   DateTime         @default(now())
+  returnItems SaleReturnItem[]
+}
+
+model SaleReturnItem {
+  id           Int        @id @default(autoincrement())
+  saleReturnId Int
+  saleReturn   SaleReturn @relation(fields: [saleReturnId], references: [id])
+  productId    Int
+  product      Product    @relation(fields: [productId], references: [id])
+  quantity     Float
+  unitPrice    Float
+  totalPrice   Float
 }
