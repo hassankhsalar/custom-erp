@@ -102,7 +102,7 @@ useEffect(() => {
           {items.map((item, idx) => (
             <div key={idx} className="grid grid-cols-4 gap-3 items-center">
               <select
-                className="border p-2 rounded"
+                className="border w-40 p-2 rounded"
                 value={item.productId}
                 onChange={(e) => handleChangeItem(idx, "productId", parseInt(e.target.value))}
               >
@@ -115,8 +115,8 @@ useEffect(() => {
               <input
                 type="number"
                 min="1"
-                className="border p-2 rounded"
-                placeholder="Qty"
+                className="border w-35 ml-2 p-2 rounded"
+                placeholder="Quantity"
                 value={item.quantity}
                 onChange={(e) => handleChangeItem(idx, "quantity", e.target.value)}
               />
