@@ -38,15 +38,28 @@ useEffect(() => {
     .catch(() => setProducts([]));
 }, [storeId]);
 
+console.log(products);
+
   const handleAddItem = () => {
     setItems([...items, { productId: "", quantity: 1, unitPrice: 0 }]);
   };
 
   const handleChangeItem = (index, field, value) => {
-    const updated = [...items];
-    updated[index][field] = field === "quantity" || field === "unitPrice" ? parseFloat(value) : value;
-    setItems(updated);
-  };
+  const updated = [...items];
+
+  if (field === "productId") {
+    const selectedProduct = products.find((p) => p.id === parseInt(value));
+
+    updated[index].productId = parseInt(value);
+    updated[index].unitPrice = selectedProduct ? selectedProduct.sale_price || 0 : 0;
+  } else if (field === "quantity" || field === "unitPrice") {
+    updated[index][field] = parseFloat(value) || 0;
+  } else {
+    updated[index][field] = value;
+  }
+
+  setItems(updated);
+};
 
   const handleSubmit = async (e) => {
     e.preventDefault();
