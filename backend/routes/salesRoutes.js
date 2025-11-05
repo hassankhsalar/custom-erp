@@ -17,7 +17,7 @@ router.post("/", async (req, res) => {
     // Create sale
     const sale = await prisma.sale.create({
       data: {
-        reference: `SALE-${Date.now()}`,
+        reference: `BSP-${Date.now()}${Math.floor(Math.random() * (10 ** 3))}`,
         storeId,
         customer,
         totalAmount,
