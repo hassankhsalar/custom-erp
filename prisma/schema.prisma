@@ -47,7 +47,7 @@ model Material {
   ProductMaterial     ProductMaterial[]
   storeMaterials      StoreMaterial[]
   productionMaterials ProductionMaterial[]
-  purchases           Purchase[]           @relation("MaterialPurchases")
+  purchaseItems PurchaseItem[]
 }
 
 model Product {
@@ -203,16 +203,28 @@ model Supplier {
 
 model Purchase {
   id         Int      @id @default(autoincrement())
-  materialId Int
-  material   Material @relation(fields: [materialId], references: [id], name: "MaterialPurchases")
+  reference   String?       @unique
   supplierId Int
   storeId    Int?
   supplier   Supplier @relation(fields: [supplierId], references: [id], name: "SupplierPurchases")
+  createdAt  DateTime @default(now())
+  store      Store?   @relation(fields: [storeId], references: [id])
+  grandTotal  Float
+  purchaseItems PurchaseItem[]
+}
+
+model PurchaseItem {
+  id         Int      @id @default(autoincrement())
+  purchaseId Int
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  materialId Int
+  material   Material @relation(fields: [materialId], references: [id])
   quantity   Float
   unitPrice  Float
   totalPrice Float
   createdAt  DateTime @default(now())
-  store      Store?   @relation(fields: [storeId], references: [id])
+
+  @@unique([purchaseId, materialId])
 }
 
 model Sale {
