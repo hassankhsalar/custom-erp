@@ -13,4 +13,9 @@ export const API_ROUTES = {
   STORES: `${API_BASE_URL}/stores`,
   SALES: `${API_BASE_URL}/sales`,
   PURCHASES: `${API_BASE_URL}/purchases`,
+
+  SHOPS: `${API_BASE_URL}/shops`,
+  SHOPS_ALL: `${API_BASE_URL}/shops`,
+  SHOP_BY_ID: (id) => `${API_BASE_URL}/shops/${id}`,
+  SHOP_STOCK: (id) => `${API_BASE_URL}/shops/${id}/stock`,
 };

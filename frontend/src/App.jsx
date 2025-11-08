@@ -38,6 +38,8 @@ import ScrapeReport from './components/Report/ScrapeReport';
 import AllUser from './components/Users/AllUser';
 import CreateUser from './components/Users/CreateUser';
 import Settings from './components/Settings/Settings';
+import AddShop from './components/Shop/AddShop';
+import AllShop from './components/Shop/AllShop';
 
 const AuthContext = createContext(null);
 
@@ -116,6 +118,9 @@ function App() {
             <Route path="/stores/all" element={<AllStore />} />
             <Route path="/stores/add" element={<AddStore />} />
             <Route path="/stores/edit/:id" element={<EditStore />} />
+            
+            <Route path="/shop/add" element={<AddShop />} />
+            <Route path="/shop/all" element={<AllShop />} />
             <Route path="/report/sale" element={<SaleReport />} />
             <Route path="/report/purchase" element={<PurchaseReport />} />
             <Route path="/report/production" element={<ProductionReport />} />
