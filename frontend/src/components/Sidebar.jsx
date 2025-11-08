@@ -38,6 +38,7 @@ const Sidebar = () => {
               <li><Link to="/sale/all" className="block py-1 px-2 text-gray-300 hover:text-white">All Sales</Link></li>
               <li><Link to="/sale/create" className="block py-1 px-2 text-gray-300 hover:text-white">Create Sale</Link></li>
               <li><Link to="/sale/return" className="block py-1 px-2 text-gray-300 hover:text-white">Sale Return</Link></li>
+              <li><Link to="/sale/allreturns" className="block py-1 px-2 text-gray-300 hover:text-white">All Sale Returns</Link></li>
             </ul>
           )}
         </li>

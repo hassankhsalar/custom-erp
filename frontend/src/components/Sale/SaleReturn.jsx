@@ -20,7 +20,7 @@ export default function SaleReturn() {
   const fetchSales = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:3001/api/sales", {
+      const res = await fetch("http://localhost:3001/api/shop-sales", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -28,7 +28,10 @@ export default function SaleReturn() {
       
       if (!res.ok) throw new Error("Failed to fetch sales");
       const data = await res.json();
-      setSales(data);
+      
+      // Filter only shop sales (sales with shopId)
+      const shopSales = data.filter(sale => sale.shopId !== null);
+      setSales(shopSales);
     } catch (err) {
       setError("Failed to load sales: " + err.message);
     }
@@ -43,7 +46,7 @@ export default function SaleReturn() {
     const query = searchQuery.toLowerCase().trim();
     const filtered = sales.filter(sale => 
       sale.reference?.toLowerCase().includes(query) ||
-      sale.store?.name?.toLowerCase().includes(query) ||
+      sale.shop?.name?.toLowerCase().includes(query) ||
       sale.customer?.toLowerCase().includes(query) ||
       sale.paymentType?.toLowerCase().includes(query) ||
       sale.grandTotal?.toString().includes(query) ||
@@ -139,7 +142,7 @@ export default function SaleReturn() {
 
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:3001/api/sales/return", {
+      const res = await fetch("http://localhost:3001/api/shop-sales/return", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -151,15 +154,16 @@ export default function SaleReturn() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.message || "Failed to process return");
+        throw new Error(data.error || "Failed to process return");
       }
 
       // Show success message with details
-      alert(`✅ ${data.message}\nReference: ${data.return.reference}\nAmount: $${data.return.totalAmount.toFixed(2)}`);
+      alert(`✅ ${data.message}\nReference: ${data.return.reference}\nAmount: $${data.return.totalAmount.toFixed(2)}\nShop: ${data.return.shop.name}`);
       
       // Reset form
       setSelectedSale(null);
       setItems([]);
+      setSearchQuery("");
       
       // Refresh sales list to reflect changes
       fetchSales();
@@ -177,8 +181,8 @@ export default function SaleReturn() {
   return (
     <div className="max-w-6xl mx-auto p-6">
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">🔙 Sale Return</h2>
-        <p className="text-gray-600 mb-6">Process returns for previous sales</p>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2">🔙 Shop Sale Return</h2>
+        <p className="text-gray-600 mb-6">Process returns for previous shop sales</p>
 
         {/* Error Display */}
         {error && (
@@ -191,7 +195,7 @@ export default function SaleReturn() {
         <div className="mb-6">
           <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
             <div className="w-full sm:w-auto">
-              <h3 className="text-lg font-medium text-gray-700 mb-2">Recent Sales</h3>
+              <h3 className="text-lg font-medium text-gray-700 mb-2">Recent Shop Sales</h3>
             </div>
             <div className="relative w-full sm:w-80">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -201,7 +205,7 @@ export default function SaleReturn() {
               </div>
               <input
                 type="text"
-                placeholder="Search by reference, store, customer, amount..."
+                placeholder="Search by reference, shop, customer, amount..."
                 value={searchQuery}
                 onChange={handleSearchChange}
                 className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -222,7 +226,7 @@ export default function SaleReturn() {
           {/* Search Results Info */}
           {searchQuery && (
             <div className="mt-2 text-sm text-gray-600">
-              Found {filteredSales.length} sale(s) matching "{searchQuery}"
+              Found {filteredSales.length} shop sale(s) matching "{searchQuery}"
               <button
                 onClick={clearSearch}
                 className="ml-2 text-blue-600 hover:text-blue-800 underline"
@@ -240,7 +244,7 @@ export default function SaleReturn() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="text-left p-3 font-medium text-gray-700">Reference</th>
-                  <th className="text-left p-3 font-medium text-gray-700">Store</th>
+                  <th className="text-left p-3 font-medium text-gray-700">Shop</th>
                   <th className="text-left p-3 font-medium text-gray-700">Customer</th>
                   <th className="text-left p-3 font-medium text-gray-700">Total</th>
                   <th className="text-left p-3 font-medium text-gray-700">Date</th>
@@ -259,9 +263,11 @@ export default function SaleReturn() {
                     <td className="p-3">
                       <span className="font-medium">{sale.reference}</span>
                     </td>
-                    <td className="p-3">{sale.store?.name || 'N/A'}</td>
+                    <td className="p-3">
+                      {sale.shop?.name || 'N/A'}
+                    </td>
                     <td className="p-3">{sale.customer || "Walk-in"}</td>
-                    <td className="p-3 font-medium">${sale.grandTotal.toFixed(2)}</td>
+                    <td className="p-3 font-medium">${sale.grandTotal?.toFixed(2)}</td>
                     <td className="p-3">{new Date(sale.createdAt).toLocaleDateString()}</td>
                     <td className="p-3">
                       <span className="bg-gray-100 px-2 py-1 rounded text-sm">
@@ -292,7 +298,7 @@ export default function SaleReturn() {
               <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <p className="mt-2">No sales found</p>
+              <p className="mt-2">No shop sales found</p>
             </div>
           )}
           
@@ -301,7 +307,7 @@ export default function SaleReturn() {
               <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              <p className="mt-2">No sales found matching "{searchQuery}"</p>
+              <p className="mt-2">No shop sales found matching "{searchQuery}"</p>
               <button
                 onClick={clearSearch}
                 className="mt-2 text-blue-600 hover:text-blue-800 underline"
@@ -328,13 +334,13 @@ export default function SaleReturn() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               <div>
-                <span className="font-medium">Store:</span> {selectedSale.store?.name}
+                <span className="font-medium">Shop:</span> {selectedSale.shop?.name}
               </div>
               <div>
                 <span className="font-medium">Customer:</span> {selectedSale.customer || "Walk-in"}
               </div>
               <div>
-                <span className="font-medium">Original Total:</span> ${selectedSale.grandTotal.toFixed(2)}
+                <span className="font-medium">Original Total:</span> ${selectedSale.grandTotal?.toFixed(2)}
               </div>
               <div>
                 <span className="font-medium">Date:</span> {new Date(selectedSale.createdAt).toLocaleString()}
@@ -343,7 +349,7 @@ export default function SaleReturn() {
                 <span className="font-medium">Payment Type:</span> {selectedSale.paymentType}
               </div>
               <div>
-                <span className="font-medium">Items:</span> {selectedSale.saleItems.length}
+                <span className="font-medium">Items:</span> {selectedSale.saleItems?.length || 0}
               </div>
             </div>
           </div>
@@ -459,7 +465,7 @@ export default function SaleReturn() {
             {totalItems > 0 && (
               <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-yellow-700 text-sm">
                 ⚠️ This action will return {totalItems} item(s) and refund ${totalAmount.toFixed(2)}. 
-                Stock levels will be updated automatically.
+                Stock will be restored to {selectedSale.shop?.name} automatically.
               </div>
             )}
           </div>
@@ -469,7 +475,7 @@ export default function SaleReturn() {
         {!selectedSale && sales.length > 0 && (
           <div className="text-center py-12 text-gray-500">
             <div className="text-6xl mb-4">🛒</div>
-            <p className="text-lg">Select a sale from the table to process a return</p>
+            <p className="text-lg">Select a shop sale from the table to process a return</p>
           </div>
         )}
       </div>

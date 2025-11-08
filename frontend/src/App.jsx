@@ -40,6 +40,7 @@ import CreateUser from './components/Users/CreateUser';
 import Settings from './components/Settings/Settings';
 import AddShop from './components/Shop/AddShop';
 import AllShop from './components/Shop/AllShop';
+import AllReturns from './components/Sale/AllReturns';
 
 const AuthContext = createContext(null);
 
@@ -100,6 +101,7 @@ function App() {
             <Route path="/sale/all" element={<AllSales />} />
             <Route path="/sale/create" element={<CreateSale />} />
             <Route path="/sale/return" element={<SaleReturn />} />
+            <Route path="/sale/allreturns" element={<AllReturns />} />
             <Route path="/materials/all" element={<AllMaterials />} />
             <Route path="/materials/add" element={<AddMaterial />} />
             <Route path="/materials/edit/:id" element={<EditMaterial />} />

@@ -6,7 +6,7 @@ export default function AllSales() {
   useEffect(() => {
    
       const token = localStorage.getItem("token");
-    fetch("http://localhost:3001/api/sales", {
+    fetch("http://localhost:3001/api/shop-sales", {
       headers: {
         Authorization: `Bearer ${token}`,
       },

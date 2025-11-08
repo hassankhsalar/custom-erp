@@ -244,6 +244,9 @@ model Sale {
   createdAt   DateTime     @default(now())
   saleItems   SaleItem[]
   saleReturns SaleReturn[]
+
+  
+  @@index([shopId])
 }
 
 model SaleItem {

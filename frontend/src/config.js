@@ -18,4 +18,10 @@ export const API_ROUTES = {
   SHOPS_ALL: `${API_BASE_URL}/shops`,
   SHOP_BY_ID: (id) => `${API_BASE_URL}/shops/${id}`,
   SHOP_STOCK: (id) => `${API_BASE_URL}/shops/${id}/stock`,
+
+  // Shop POS routes
+  SHOP_SALES: `${API_BASE_URL}/shop-sales`,
+  SHOP_SALES_SHOPS: `${API_BASE_URL}/shop-sales/shops`,
+  SHOP_SALES_PRODUCTS: (shopId) => `${API_BASE_URL}/shop-sales/products/shop/${shopId}`,
+  SHOP_SALES_BY_ID: (id) => `${API_BASE_URL}/shop-sales/${id}`,
 };
