@@ -329,7 +329,8 @@ export default function ShopPOS() {
                   )}
                 </div>
 
-                <div>
+                <div className="h-full">
+                  <label className="text-xs" htmlFor="quantity">Quantity</label>
                   <input
                     type="number"
                     min="1"
@@ -350,7 +351,8 @@ export default function ShopPOS() {
                   )}
                 </div>
 
-                <div>
+                <div className="h-full">
+                  <label className="text-xs" htmlFor="Unit Price">Unit Price</label>
                   <input
                     type="number"
                     min="0"
