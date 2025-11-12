@@ -9,7 +9,7 @@ const NewProduction = () => {
     estimated_end_date: '',
     factoryId: '',
     status: 'pending',
-    attachments: '',
+    //attachments: '',
     shipping_cost: '',
   });
   const [factories, setFactories] = useState([]);
@@ -225,7 +225,7 @@ const NewProduction = () => {
               <option value="transfer_done">Transfer Done</option>
             </select>
           </div>
-          <div>
+          {/* <div>
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="attachments">Attachments (comma separated URLs)</label>
             <input
               type="text"
@@ -236,7 +236,7 @@ const NewProduction = () => {
               className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               placeholder="e.g., url1,url2,url3"
             />
-          </div>
+          </div> */}
           <div>
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="shipping_cost">Shipping Cost</label>
             <input
