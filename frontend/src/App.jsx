@@ -41,6 +41,9 @@ import Settings from './components/Settings/Settings';
 import AddShop from './components/Shop/AddShop';
 import AllShop from './components/Shop/AllShop';
 import AllReturns from './components/Sale/AllReturns';
+import StoreDetails from './components/Stores/StoreDetails';
+import StoreToShopTransfer from './components/Stores/StoreToShopTransfer';
+import TransferManagement from './components/Stores/TransferManagement';
 
 const AuthContext = createContext(null);
 
@@ -120,7 +123,8 @@ function App() {
             <Route path="/stores/all" element={<AllStore />} />
             <Route path="/stores/add" element={<AddStore />} />
             <Route path="/stores/edit/:id" element={<EditStore />} />
-            
+            <Route path="/stores/details/:id" element={<StoreDetails />} />
+            <Route path="/stores/transfer/:id" element={<StoreToShopTransfer />} />
             <Route path="/shop/add" element={<AddShop />} />
             <Route path="/shop/all" element={<AllShop />} />
             <Route path="/report/sale" element={<SaleReport />} />
@@ -131,6 +135,7 @@ function App() {
             <Route path="/users/all" element={<AllUser />} />
             <Route path="/users/create" element={<CreateUser />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/transfers" element={<TransferManagement />} />
             {/* Default route for authenticated users */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>

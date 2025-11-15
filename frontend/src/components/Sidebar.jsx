@@ -115,6 +115,7 @@ const Sidebar = () => {
             <ul className="pl-6 border-l border-gray-700 mt-1">
               <li><Link to="/stores/all" className="block py-1 px-2 text-gray-300 hover:text-white">All Store</Link></li>
               <li><Link to="/stores/add" className="block py-1 px-2 text-gray-300 hover:text-white">Add Store</Link></li>
+              <li><Link to="/transfers" className="block py-1 px-2 text-gray-300 hover:text-white">Manage Transfer</Link></li>
             </ul>
           )}
         </li>

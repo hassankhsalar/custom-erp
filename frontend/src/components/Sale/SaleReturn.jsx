@@ -247,6 +247,7 @@ export default function SaleReturn() {
                   <th className="text-left p-3 font-medium text-gray-700">Shop</th>
                   <th className="text-left p-3 font-medium text-gray-700">Customer</th>
                   <th className="text-left p-3 font-medium text-gray-700">Total</th>
+                  <th className="text-left p-3 font-medium text-gray-700">Discount</th>
                   <th className="text-left p-3 font-medium text-gray-700">Date</th>
                   <th className="text-left p-3 font-medium text-gray-700">Items</th>
                   <th className="text-left p-3 font-medium text-gray-700">Actions</th>
@@ -268,6 +269,7 @@ export default function SaleReturn() {
                     </td>
                     <td className="p-3">{sale.customer || "Walk-in"}</td>
                     <td className="p-3 font-medium">${sale.grandTotal?.toFixed(2)}</td>
+                    <td className="p-3 font-medium">${sale.discount}</td>
                     <td className="p-3">{new Date(sale.createdAt).toLocaleDateString()}</td>
                     <td className="p-3">
                       <span className="bg-gray-100 px-2 py-1 rounded text-sm">
@@ -385,6 +387,7 @@ export default function SaleReturn() {
                     <th className="text-left p-3 font-medium text-gray-700">Unit Price</th>
                     <th className="text-left p-3 font-medium text-gray-700">Sold Qty</th>
                     <th className="text-left p-3 font-medium text-gray-700">Return Qty</th>
+                    <th className="text-left p-3 font-medium text-gray-700">Discount</th>
                     <th className="text-left p-3 font-medium text-gray-700">Return Total</th>
                   </tr>
                 </thead>
@@ -415,8 +418,11 @@ export default function SaleReturn() {
                           Max: {item.maxReturnable}
                         </div>
                       </td>
+                      <td className="p-3">
+                        <span className="bg-gray-100 px-2 py-1 rounded">${selectedSale.discount}</span>
+                      </td>
                       <td className="p-3 font-medium">
-                        ${(item.returnedQuantity * item.unitPrice).toFixed(2)}
+                        ${item.returnedQuantity * item.unitPrice.toFixed(2)}
                       </td>
                     </tr>
                   ))}
@@ -432,8 +438,8 @@ export default function SaleReturn() {
                   <p className="text-2xl font-bold text-blue-700">{totalItems}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Return Amount</p>
-                  <p className="text-2xl font-bold text-green-600">${totalAmount.toFixed(2)}</p>
+                  <p className="text-xs text-gray-600">Return Amount W/O discount</p>
+                  <p className="text-2xl font-bold text-green-600">${(totalAmount - selectedSale.discount).toFixed(2)}</p>
                 </div>
                 <div className="flex items-center">
                   <button
@@ -454,7 +460,7 @@ export default function SaleReturn() {
                         Processing...
                       </span>
                     ) : (
-                      `Process Return ($${totalAmount.toFixed(2)})`
+                      `Process Return ($${(totalAmount - selectedSale.discount).toFixed(2)})`
                     )}
                   </button>
                 </div>
@@ -464,7 +470,7 @@ export default function SaleReturn() {
             {/* Warning Message */}
             {totalItems > 0 && (
               <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-yellow-700 text-sm">
-                ⚠️ This action will return {totalItems} item(s) and refund ${totalAmount.toFixed(2)}. 
+                ⚠️ This action will return {totalItems} item(s) and refund ${(totalAmount - selectedSale.discount).toFixed(2)}. 
                 Stock will be restored to {selectedSale.shop?.name} automatically.
               </div>
             )}
