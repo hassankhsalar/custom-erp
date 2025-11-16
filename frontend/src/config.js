@@ -29,4 +29,7 @@ export const API_ROUTES = {
 STORE_TO_SHOP_TRANSFERS: `${API_BASE_URL}/store-to-shop-transfers`,
   STORE_TO_SHOP_TRANSFERS_SHOPS: `${API_BASE_URL}/store-to-shop-transfers/shops`,
   STORE_TO_SHOP_TRANSFER_STATUS: (id) => `${API_BASE_URL}/store-to-shop-transfers/${id}/status`,
+
+  
+  DASHBOARD2: 'http://localhost:3001/api/dash-board',
 };

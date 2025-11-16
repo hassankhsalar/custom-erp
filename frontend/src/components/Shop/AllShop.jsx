@@ -46,7 +46,7 @@ const AllShop = () => {
           <Store className="mr-2" />
           All Shops
         </h1>
-        <Link to="/shops/add" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+        <Link to="/shop/add" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
           Add New Shop
         </Link>
       </div>
