@@ -32,4 +32,8 @@ STORE_TO_SHOP_TRANSFERS: `${API_BASE_URL}/store-to-shop-transfers`,
 
   
   DASHBOARD2: 'http://localhost:3001/api/dash-board',
+
+
+  //user routes
+  USERS: 'http://localhost:3001/api/users',
 };

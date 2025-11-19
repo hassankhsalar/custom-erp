@@ -30,6 +30,7 @@ model Profile {
 enum Role {
   USER
   ADMIN
+  USER_ASSOCIATE
 }
 
 model Material {
