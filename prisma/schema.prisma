@@ -16,9 +16,12 @@ model User {
   name        String?
   password    String
   role        Role     @default(USER)
-  permissions Json?    @default("{}")
+  permissions Json?    //@default("{}")
+  assignedLocations Json?   // Array of location assignments with permissions
   profile     Profile? @relation(fields: [profileId], references: [id])
   profileId   Int?     @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model Profile {
@@ -30,7 +33,6 @@ model Profile {
 enum Role {
   USER
   ADMIN
-  USER_ASSOCIATE
 }
 
 model Material {
