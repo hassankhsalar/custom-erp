@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useEffect } from 'react';
 
 const Sidebar = () => {
   const [openMenus, setOpenMenus] = useState({});
+  const { currentUser, loading, error } = useCurrentUser();
+  const [userPermissions, setUserPermissions] = useState({});
 
   const toggleMenu = (menuName) => {
     setOpenMenus(prev => ({
@@ -10,6 +14,8 @@ const Sidebar = () => {
       [menuName]: !prev[menuName]
     }));
   };
+
+  console.log(currentUser);
 
   return (
     <div className="w-64 bg-black text-white p-5 min-h-screen shadow-lg"> {/* Black background, white text, padding, min-height, shadow */}

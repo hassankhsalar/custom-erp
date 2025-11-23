@@ -14,6 +14,7 @@ const Login = () => {
     e.preventDefault();
     try {
       const res = await axios.post(API_ROUTES.LOGIN, { email, password });
+      localStorage.setItem('userEmail', email);
       login(res.data.accessToken);
       navigate('/dashboard');
     } catch (error) {
