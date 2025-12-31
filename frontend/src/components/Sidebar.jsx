@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useEffect } from 'react';
 
 const Sidebar = () => {
   const [openMenus, setOpenMenus] = useState({});
+  const { currentUser, loading, error } = useCurrentUser();
+  const [userPermissions, setUserPermissions] = useState({});
 
   const toggleMenu = (menuName) => {
     setOpenMenus(prev => ({
@@ -10,6 +14,8 @@ const Sidebar = () => {
       [menuName]: !prev[menuName]
     }));
   };
+
+  console.log(currentUser);
 
   return (
     <div className="w-64 bg-black text-white p-5 min-h-screen shadow-lg"> {/* Black background, white text, padding, min-height, shadow */}
@@ -38,6 +44,19 @@ const Sidebar = () => {
               <li><Link to="/sale/all" className="block py-1 px-2 text-gray-300 hover:text-white">All Sales</Link></li>
               <li><Link to="/sale/create" className="block py-1 px-2 text-gray-300 hover:text-white">Create Sale</Link></li>
               <li><Link to="/sale/return" className="block py-1 px-2 text-gray-300 hover:text-white">Sale Return</Link></li>
+              <li><Link to="/sale/allreturns" className="block py-1 px-2 text-gray-300 hover:text-white">All Sale Returns</Link></li>
+            </ul>
+          )}
+        </li>
+
+        <li>
+          <div onClick={() => toggleMenu('shop')} className="flex justify-between items-center py-2 px-3 bg-gray-800 cursor-pointer rounded-md hover:bg-gray-700 mt-2">
+            Shop
+          </div>
+          {openMenus.shop && (
+            <ul className="pl-6 border-l border-gray-700 mt-1">
+              <li><Link to="/shop/add" className="block py-1 px-2 text-gray-300 hover:text-white">Add Shop</Link></li>
+              <li><Link to="/shop/all" className="block py-1 px-2 text-gray-300 hover:text-white">All Shop</Link></li>
             </ul>
           )}
         </li>
@@ -102,6 +121,7 @@ const Sidebar = () => {
             <ul className="pl-6 border-l border-gray-700 mt-1">
               <li><Link to="/stores/all" className="block py-1 px-2 text-gray-300 hover:text-white">All Store</Link></li>
               <li><Link to="/stores/add" className="block py-1 px-2 text-gray-300 hover:text-white">Add Store</Link></li>
+              <li><Link to="/transfers" className="block py-1 px-2 text-gray-300 hover:text-white">Manage Transfer</Link></li>
             </ul>
           )}
         </li>

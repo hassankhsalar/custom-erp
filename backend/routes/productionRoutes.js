@@ -33,8 +33,8 @@ const generateReference = async () => {
 
 // Create a new production
 router.post('/', authenticateToken, async (req, res) => {
-  const { start_date, estimated_end_date, factoryId, status, attachments, shipping_cost, products, materials } = req.body;
-
+  const { start_date, estimated_end_date, factoryId, status, shipping_cost, products, materials } = req.body;
+//, attachments removed
   try {
     const reference = await generateReference();
 
@@ -46,7 +46,7 @@ router.post('/', authenticateToken, async (req, res) => {
           estimated_end_date: new Date(estimated_end_date),
           factoryId: parseInt(factoryId),
           status,
-          attachments: attachments ? attachments.join(',') : null,
+          //attachments: attachments ? attachments.join(',') : null, 
           shipping_cost: shipping_cost ? parseFloat(shipping_cost) : null,
           productionProducts: {
             create: products.map(p => ({
@@ -194,8 +194,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Update a production
 router.put('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { start_date, estimated_end_date, factoryId, status, attachments, shipping_cost, products, materials } = req.body;
-
+  const { start_date, estimated_end_date, factoryId, status, shipping_cost, products, materials } = req.body;
+//, attachments
   try {
     const result = await prisma.$transaction(async (prisma) => {
       // Get the old production to find the old materials
@@ -263,7 +263,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
           estimated_end_date: new Date(estimated_end_date),
           factoryId: parseInt(factoryId),
           status,
-          attachments: attachments ? attachments.join(',') : null,
+          //attachments: attachments ? attachments.join(',') : null,
           shipping_cost: shipping_cost ? parseFloat(shipping_cost) : null,
           productionProducts: {
             create: products.map(p => ({

@@ -101,6 +101,10 @@ const CreateProduct = () => {
     }
   };
 
+  const selectedMaterial = allMaterials.find(
+  (m) => m.id === parseInt(newMaterial.material_id)
+);
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Create Product</h1>
@@ -163,7 +167,9 @@ const CreateProduct = () => {
           </div>
           <div className="flex items-center space-x-2 mt-2">
             <input type="number" value={newMaterial.material_quantity} onChange={(e) => setNewMaterial({ ...newMaterial, material_quantity: e.target.value })} placeholder="Quantity" className="p-2 border border-gray-300" />
-            <input type="number" value={newMaterial.price} onChange={(e) => setNewMaterial({ ...newMaterial, price: e.target.value })} placeholder="Price" className="p-2 border border-gray-300" />
+            
+            <input type="number" value={newMaterial.price} onChange={(e) => setNewMaterial({ ...newMaterial, price: e.target.value })} placeholder={selectedMaterial?.unit_cost || "Price"} className="p-2 border border-gray-300" />
+
             <button type="button" onClick={handleAddOrUpdateMaterial} className="bg-blue-500 text-white p-2 px-8 cursor-pointer rounded">
               {editingMaterialIndex !== null ? 'Update Material' : 'Add Material'}
             </button>

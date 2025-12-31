@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
 import StoreProductsModal from './StoreProductsModal';
 import StoreMaterialsModal from './StoreMaterialsModal';
+import { FilePenLine, Trash } from 'lucide-react';
 
 const AllStore = () => {
   const [stores, setStores] = useState([]);
@@ -109,18 +110,24 @@ const AllStore = () => {
                     View ({store.storeMaterials?.length})
                   </button>
                 </td>
-                <td className="border border-gray-300 px-4 py-2">
+                <td className="border border-gray-300 px-4 py-2 text-xs flex">
                   <Link
                     to={`/stores/edit/${store.id}`}
                     className="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded mr-2"
                   >
-                    Edit
+                    <FilePenLine size={14} />
+                  </Link>
+                  <Link
+                    to={`/stores/details/${store.id}`}
+                    className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded mr-2"
+                  >
+                    Details
                   </Link>
                   <button
                     onClick={() => handleDelete(store.id)}
                     className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded"
                   >
-                    Delete
+                    <Trash size={14} />
                   </button>
                 </td>
               </tr>

@@ -10,7 +10,7 @@ const EditProduction = () => {
     estimated_end_date: '',
     factoryId: '',
     status: 'pending',
-    attachments: '',
+    //attachments: '',
     shipping_cost: '',
   });
   const [factories, setFactories] = useState([]);
@@ -46,7 +46,7 @@ const EditProduction = () => {
           estimated_end_date: new Date(production.estimated_end_date).toISOString().split('T')[0],
           factoryId: production.factoryId,
           status: production.status,
-          attachments: production.attachments || '',
+          //attachments: production.attachments || '',
           shipping_cost: production.shipping_cost || '',
         });
 
@@ -268,7 +268,7 @@ const EditProduction = () => {
               <option value="transfer_done">Transfer Done</option>
             </select>
           </div>
-          <div>
+          {/* <div>
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="attachments">Attachments (comma separated URLs)</label>
             <input
               type="text"
@@ -279,7 +279,7 @@ const EditProduction = () => {
               className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               placeholder="e.g., url1,url2,url3"
             />
-          </div>
+          </div> */}
           <div>
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="shipping_cost">Shipping Cost</label>
             <input
