@@ -1,11 +1,8 @@
 import React from 'react';
+import TransferList from './TransferList';
 
 const ShopToStore = () => {
-  return (
-    <div>
-      <h1 className="text-2xl font-bold mb-4">Shop to store</h1>
-    </div>
-  );
+  return <TransferList fromType="shop" toType="store" title="Shop to Store Transfers" />;
 };
 
 export default ShopToStore;

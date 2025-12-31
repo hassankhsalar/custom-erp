@@ -32,15 +32,23 @@ router.post('/', async (req, res) => {
 
 // Get all products with pagination
 router.get('/', async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
+  const { page = 1, limit = 10, search } = req.query;
   const skip = (page - 1) * limit;
   const take = parseInt(limit);
+  const where = {};
+
+  if (search) {
+    where.name = {
+      contains: search,
+    };
+  }
 
   try {
     const [products, totalCount] = await prisma.$transaction([
       prisma.product.findMany({
         skip,
         take,
+        where,
         include: {
           materials: {
             include: {
@@ -49,7 +57,7 @@ router.get('/', async (req, res) => {
           },
         },
       }),
-      prisma.product.count(),
+      prisma.product.count({ where }),
     ]);
     res.json({ products, totalCount });
   } catch (error) {
