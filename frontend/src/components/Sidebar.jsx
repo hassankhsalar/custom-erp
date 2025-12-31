@@ -21,19 +21,7 @@ const Sidebar = () => {
     <div className="w-64 bg-black text-white p-5 min-h-screen shadow-lg"> {/* Black background, white text, padding, min-height, shadow */}
       <ul>
         <li><Link to="/dashboard" className="block py-2 px-3 rounded-md hover:bg-gray-700">Dashboard</Link></li> {/* Block link, padding, rounded, hover effect */}
-
-        <li>
-          <div onClick={() => toggleMenu('products')} className="flex justify-between items-center py-2 px-3 bg-gray-800 cursor-pointer rounded-md hover:bg-gray-700 mt-2"> {/* Flex, justify, items, padding, background, cursor, rounded, hover, margin-top */}
-            Products
-          </div>
-          {openMenus.products && (
-            <ul className="pl-6 border-l border-gray-700 mt-1"> {/* Left padding, left border, margin-top */}
-              <li><Link to="/products/all" className="block py-1 px-2 text-gray-300 hover:text-white">All Products</Link></li> {/* Block link, padding, text color, hover text color */}
-              <li><Link to="/products/create" className="block py-1 px-2 text-gray-300 hover:text-white">Create Product</Link></li>
-            </ul>
-          )}
-        </li>
-
+        
         <li>
           <div onClick={() => toggleMenu('sale')} className="flex justify-between items-center py-2 px-3 bg-gray-800 cursor-pointer rounded-md hover:bg-gray-700 mt-2">
             Sale
@@ -45,32 +33,6 @@ const Sidebar = () => {
               <li><Link to="/sale/create" className="block py-1 px-2 text-gray-300 hover:text-white">Create Sale</Link></li>
               <li><Link to="/sale/return" className="block py-1 px-2 text-gray-300 hover:text-white">Sale Return</Link></li>
               <li><Link to="/sale/allreturns" className="block py-1 px-2 text-gray-300 hover:text-white">All Sale Returns</Link></li>
-            </ul>
-          )}
-        </li>
-
-        <li>
-          <div onClick={() => toggleMenu('shop')} className="flex justify-between items-center py-2 px-3 bg-gray-800 cursor-pointer rounded-md hover:bg-gray-700 mt-2">
-            Shop
-          </div>
-          {openMenus.shop && (
-            <ul className="pl-6 border-l border-gray-700 mt-1">
-              <li><Link to="/shop/add" className="block py-1 px-2 text-gray-300 hover:text-white">Add Shop</Link></li>
-              <li><Link to="/shop/all" className="block py-1 px-2 text-gray-300 hover:text-white">All Shop</Link></li>
-            </ul>
-          )}
-        </li>
-
-        <li>
-          <div onClick={() => toggleMenu('materials')} className="flex justify-between items-center py-2 px-3 bg-gray-800 cursor-pointer rounded-md hover:bg-gray-700 mt-2">
-            Materials
-          </div>
-          {openMenus.materials && (
-            <ul className="pl-6 border-l border-gray-700 mt-1">
-              <li><Link to="/materials/all" className="block py-1 px-2 text-gray-300 hover:text-white">All Materials</Link></li>
-              <li><Link to="/materials/add" className="block py-1 px-2 text-gray-300 hover:text-white">Add Material</Link></li>
-              <li><Link to="/materials/scrape" className="block py-1 px-2 text-gray-300 hover:text-white">Scrape Materials</Link></li>
-              <li><Link to="/materials/recover" className="block py-1 px-2 text-gray-300 hover:text-white">Recover Materials</Link></li>
             </ul>
           )}
         </li>
@@ -101,6 +63,33 @@ const Sidebar = () => {
           )}
         </li>
 
+
+        <li>
+          <div onClick={() => toggleMenu('products')} className="flex justify-between items-center py-2 px-3 bg-gray-800 cursor-pointer rounded-md hover:bg-gray-700 mt-2"> {/* Flex, justify, items, padding, background, cursor, rounded, hover, margin-top */}
+            Products
+          </div>
+          {openMenus.products && (
+            <ul className="pl-6 border-l border-gray-700 mt-1"> {/* Left padding, left border, margin-top */}
+              <li><Link to="/products/all" className="block py-1 px-2 text-gray-300 hover:text-white">All Products</Link></li> {/* Block link, padding, text color, hover text color */}
+              <li><Link to="/products/create" className="block py-1 px-2 text-gray-300 hover:text-white">Create Product</Link></li>
+            </ul>
+          )}
+        </li>
+
+        <li>
+          <div onClick={() => toggleMenu('materials')} className="flex justify-between items-center py-2 px-3 bg-gray-800 cursor-pointer rounded-md hover:bg-gray-700 mt-2">
+            Materials
+          </div>
+          {openMenus.materials && (
+            <ul className="pl-6 border-l border-gray-700 mt-1">
+              <li><Link to="/materials/all" className="block py-1 px-2 text-gray-300 hover:text-white">All Materials</Link></li>
+              <li><Link to="/materials/add" className="block py-1 px-2 text-gray-300 hover:text-white">Add Material</Link></li>
+              <li><Link to="/materials/scrape" className="block py-1 px-2 text-gray-300 hover:text-white">Scrape Materials</Link></li>
+              <li><Link to="/materials/recover" className="block py-1 px-2 text-gray-300 hover:text-white">Recover Materials</Link></li>
+            </ul>
+          )}
+        </li>
+
         <li>
           <div onClick={() => toggleMenu('factory')} className="flex justify-between items-center py-2 px-3 bg-gray-800 cursor-pointer rounded-md hover:bg-gray-700 mt-2">
             Factory
@@ -122,6 +111,18 @@ const Sidebar = () => {
               <li><Link to="/stores/all" className="block py-1 px-2 text-gray-300 hover:text-white">All Store</Link></li>
               <li><Link to="/stores/add" className="block py-1 px-2 text-gray-300 hover:text-white">Add Store</Link></li>
               <li><Link to="/transfers" className="block py-1 px-2 text-gray-300 hover:text-white">Manage Transfer</Link></li>
+            </ul>
+          )}
+        </li>
+
+        <li>
+          <div onClick={() => toggleMenu('shop')} className="flex justify-between items-center py-2 px-3 bg-gray-800 cursor-pointer rounded-md hover:bg-gray-700 mt-2">
+            Shop
+          </div>
+          {openMenus.shop && (
+            <ul className="pl-6 border-l border-gray-700 mt-1">
+              <li><Link to="/shop/add" className="block py-1 px-2 text-gray-300 hover:text-white">Add Shop</Link></li>
+              <li><Link to="/shop/all" className="block py-1 px-2 text-gray-300 hover:text-white">All Shop</Link></li>
             </ul>
           )}
         </li>
