@@ -32,23 +32,21 @@ router.post("/", async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Create user with empty permissions and assignedLocations
+    // Create user with empty permissions
     const user = await prisma.user.create({
       data: {
         email,
         name,
         password: hashedPassword,
         role,
-        permissions: {}, // Empty object by default
-        assignedLocations: [] // Empty array by default
+        permissions: {} // Empty object by default
       },
       select: {
         id: true,
         email: true,
         name: true,
         role: true,
-        permissions: true,
-        assignedLocations: true,
+        permissions: true
       }
     });
 
@@ -67,7 +65,7 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, role, permissions, assignedLocations } = req.body;
+    const { name, email, role, permissions } = req.body;
 
     // Validate required fields
     if (!name || !email) {
@@ -92,33 +90,35 @@ router.put("/:id", async (req, res) => {
       return res.status(400).json({ error: "Invalid role" });
     }
 
-    // Validate assignedLocations structure if provided
-    if (assignedLocations && Array.isArray(assignedLocations)) {
-      for (const location of assignedLocations) {
-        if (!location.type || !location.id || !location.name) {
-          return res.status(400).json({ 
-            error: "Each location assignment must have type, id, and name" 
-          });
-        }
+    // Validate permissions structure if provided
+    if (permissions && typeof permissions === 'object') {
+      // Validate locations array structure
+      if (permissions.locations && Array.isArray(permissions.locations)) {
+        for (const location of permissions.locations) {
+          if (!location.type || !location.id || !location.name) {
+            return res.status(400).json({ 
+              error: "Each location must have type, id, and name" 
+            });
+          }
 
-        if (!['factory', 'store', 'shop'].includes(location.type)) {
-          return res.status(400).json({ 
-            error: "Location type must be factory, store, or shop" 
-          });
-        }
+          if (!['factory', 'store', 'shop'].includes(location.type)) {
+            return res.status(400).json({ 
+              error: "Location type must be factory, store, or shop" 
+            });
+          }
 
-        // Validate that permissions object exists and has correct structure
-        if (!location.permissions || typeof location.permissions !== 'object') {
-          return res.status(400).json({ 
-            error: "Each location must have permissions object" 
-          });
-        }
+          if (!location.permissions || typeof location.permissions !== 'object') {
+            return res.status(400).json({ 
+              error: "Each location must have permissions object" 
+            });
+          }
 
-        // Ensure all CRUD permissions are boolean
-        const validPermissions = ['create', 'read', 'update', 'delete'];
-        for (const perm of validPermissions) {
-          if (typeof location.permissions[perm] !== 'boolean') {
-            location.permissions[perm] = false;
+          // Ensure all CRUD permissions are boolean
+          const validPermissions = ['create', 'read', 'update', 'delete'];
+          for (const perm of validPermissions) {
+            if (typeof location.permissions[perm] !== 'boolean') {
+              location.permissions[perm] = false;
+            }
           }
         }
       }
@@ -131,8 +131,7 @@ router.put("/:id", async (req, res) => {
         name,
         email,
         role,
-        permissions: permissions || {},
-        assignedLocations: assignedLocations || []
+        permissions: permissions || { locations: [] }
       },
       select: {
         id: true,
@@ -140,7 +139,6 @@ router.put("/:id", async (req, res) => {
         name: true,
         role: true,
         permissions: true,
-        assignedLocations: true,
         profile: {
           select: {
             id: true,
@@ -176,7 +174,6 @@ router.get("/", async (req, res) => {
         name: true,
         role: true,
         permissions: true,
-        assignedLocations: true,
         profile: {
           select: {
             id: true,
@@ -194,7 +191,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-
 // Get user by ID
 router.get("/:id", async (req, res) => {
   try {
@@ -208,7 +204,6 @@ router.get("/:id", async (req, res) => {
         name: true,
         role: true,
         permissions: true,
-        assignedLocations: true,
         profile: {
           select: {
             id: true,
@@ -268,16 +263,16 @@ router.get("/location/:type/:id", async (req, res) => {
         name: true,
         role: true,
         permissions: true,
-        assignedLocations: true,
       }
     });
 
-    // Filter users who have this location in their assignedLocations
+    // Filter users who have this location in their permissions
     const users = allUsers.filter(user => {
-      if (!user.assignedLocations || !Array.isArray(user.assignedLocations)) {
+      if (!user.permissions || typeof user.permissions !== 'object') {
         return false;
       }
-      return user.assignedLocations.some(location => 
+      
+      return Object.values(user.permissions).some(location => 
         location.type === type && location.id === locationId
       );
     });
@@ -288,52 +283,38 @@ router.get("/location/:type/:id", async (req, res) => {
   }
 });
 
-// Update specific location permissions for a user
-router.patch("/:id/location-permissions", async (req, res) => {
+
+// Get user by email
+router.get("/email/:email", async (req, res) => {
   try {
-    const { id } = req.params;
-    const { locationType, locationId, permissions } = req.body;
+    const { email } = req.params;
 
     const user = await prisma.user.findUnique({
-      where: { id: parseInt(id) },
-      select: { assignedLocations: true }
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    const updatedLocations = user.assignedLocations.map(location => {
-      if (location.type === locationType && location.id === parseInt(locationId)) {
-        return {
-          ...location,
-          permissions: permissions
-        };
-      }
-      return location;
-    });
-
-    const updatedUser = await prisma.user.update({
-      where: { id: parseInt(id) },
-      data: { assignedLocations: updatedLocations },
+      where: { email },
       select: {
         id: true,
         email: true,
         name: true,
         role: true,
         permissions: true,
-        assignedLocations: true,
+        profile: {
+          select: {
+            id: true,
+            bio: true
+          }
+        },
+        createdAt: true,
+        updatedAt: true
       }
     });
 
-    res.json({
-      message: "Location permissions updated successfully",
-      user: updatedUser
-    });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
 
+    res.json(user);
   } catch (err) {
-    console.error("Update location permissions error:", err);
-    res.status(500).json({ error: "Failed to update location permissions: " + err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 

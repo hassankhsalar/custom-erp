@@ -16,8 +16,9 @@ const AllUser = () => {
     name: '',
     email: '',
     role: 'USER',
-    permissions: {},
-    assignedLocations: [] // Changed from single location to array
+    permissions: {
+      locations: [] // Structured under 'locations' array
+    }
   });
   const [updateLoading, setUpdateLoading] = useState(false);
 
@@ -63,8 +64,7 @@ const AllUser = () => {
       name: user.name || '',
       email: user.email || '',
       role: user.role || 'USER',
-      permissions: user.permissions || {},
-      assignedLocations: user.assignedLocations || [] // Initialize with existing locations
+      permissions: user.permissions || { locations: [] }
     });
     setEditModalOpen(true);
   };
@@ -76,8 +76,7 @@ const AllUser = () => {
       name: '',
       email: '',
       role: 'USER',
-      permissions: {},
-      assignedLocations: []
+      permissions: { locations: [] }
     });
   };
 
@@ -89,39 +88,45 @@ const AllUser = () => {
     }));
   };
 
-  // Add new location assignment
-  const addLocationAssignment = () => {
+  // Add new location permission
+  const addLocationPermission = () => {
     setEditForm(prev => ({
       ...prev,
-      assignedLocations: [
-        ...prev.assignedLocations,
-        {
-          type: 'factory', // default type
-          id: null,
-          name: '',
-          permissions: {
-            create: false,
-            read: false,
-            update: false,
-            delete: false
+      permissions: {
+        ...prev.permissions,
+        locations: [
+          ...(prev.permissions.locations || []),
+          {
+            type: 'factory',
+            id: null,
+            name: '',
+            permissions: {
+              create: false,
+              read: false,
+              update: false,
+              delete: false
+            }
           }
-        }
-      ]
+        ]
+      }
     }));
   };
 
-  // Remove location assignment
-  const removeLocationAssignment = (index) => {
+  // Remove location permission
+  const removeLocationPermission = (index) => {
     setEditForm(prev => ({
       ...prev,
-      assignedLocations: prev.assignedLocations.filter((_, i) => i !== index)
+      permissions: {
+        ...prev.permissions,
+        locations: (prev.permissions.locations || []).filter((_, i) => i !== index)
+      }
     }));
   };
 
   // Handle location type and ID change
   const handleLocationChange = (index, field, value) => {
     setEditForm(prev => {
-      const updatedLocations = [...prev.assignedLocations];
+      const updatedLocations = [...(prev.permissions.locations || [])];
       
       if (field === 'type') {
         updatedLocations[index] = {
@@ -154,26 +159,32 @@ const AllUser = () => {
       
       return {
         ...prev,
-        assignedLocations: updatedLocations
+        permissions: {
+          ...prev.permissions,
+          locations: updatedLocations
+        }
       };
     });
   };
 
   // Handle permission change for specific location
-  const handleLocationPermissionChange = (locationIndex, permission, checked) => {
+  const handleLocationPermissionChange = (index, permission, checked) => {
     setEditForm(prev => {
-      const updatedLocations = [...prev.assignedLocations];
-      updatedLocations[locationIndex] = {
-        ...updatedLocations[locationIndex],
+      const updatedLocations = [...(prev.permissions.locations || [])];
+      updatedLocations[index] = {
+        ...updatedLocations[index],
         permissions: {
-          ...updatedLocations[locationIndex].permissions,
+          ...updatedLocations[index].permissions,
           [permission]: checked
         }
       };
       
       return {
         ...prev,
-        assignedLocations: updatedLocations
+        permissions: {
+          ...prev.permissions,
+          locations: updatedLocations
+        }
       };
     });
   };
@@ -253,6 +264,11 @@ const AllUser = () => {
     }
   };
 
+  // Get location permissions from the permissions object
+  const getLocationPermissions = (permissions) => {
+    return permissions?.locations || [];
+  };
+
   if (loading) return <div className="container mx-auto p-6">Loading users...</div>;
 
   return (
@@ -283,53 +299,57 @@ const AllUser = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {users.map((user) => (
-              <tr key={user.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4">
-                  <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">{user.email}</td>
-                <td className="px-6 py-4">
-                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                    user.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' :
-                    'bg-green-100 text-green-800'
-                  }`}>
-                    {user.role}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  {user.assignedLocations?.length > 0 ? (
-                    <div className="space-y-1">
-                      {user.assignedLocations.map((location, index) => (
-                        <div key={index} className="flex items-center">
-                          {getLocationIcon(location.type)}
-                          <span className="ml-1">{location.name}</span>
-                          <span className="ml-2 text-xs text-gray-400">
-                            ({Object.keys(location.permissions || {}).filter(p => location.permissions[p]).join(', ')})
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-gray-400">Not assigned</span>
-                  )}
-                </td>
-                <td className="px-6 py-4 text-sm font-medium">
-                  <button 
-                    onClick={() => openEditModal(user)}
-                    className="text-blue-600 hover:text-blue-900 mr-3"
-                  >
-                    <Edit size={16} />
-                  </button>
-                  <button 
-                    onClick={() => handleDeleteUser(user.id)}
-                    className="text-red-600 hover:text-red-900"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {users.map((user) => {
+              const locationPermissions = getLocationPermissions(user.permissions);
+              
+              return (
+                <tr key={user.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4">
+                    <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">{user.email}</td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      user.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' :
+                      'bg-green-100 text-green-800'
+                    }`}>
+                      {user.role}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {locationPermissions.length > 0 ? (
+                      <div className="space-y-1">
+                        {locationPermissions.map((location, index) => (
+                          <div key={index} className="flex items-center">
+                            {getLocationIcon(location.type)}
+                            <span className="ml-1">{location.name}</span>
+                            <span className="ml-2 text-xs text-gray-400">
+                              ({Object.keys(location.permissions || {}).filter(p => location.permissions[p]).join(', ')})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">Not assigned</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-sm font-medium">
+                    <button 
+                      onClick={() => openEditModal(user)}
+                      className="text-blue-600 hover:text-blue-900 mr-3"
+                    >
+                      <Edit size={16} />
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteUser(user.id)}
+                      className="text-red-600 hover:text-red-900"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -391,16 +411,16 @@ const AllUser = () => {
                   </div>
                 </div>
 
-                {/* Location Assignments */}
+                {/* Location Permissions */}
                 <div className="border rounded-lg p-4 bg-gray-50">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-semibold flex items-center">
                       <Building className="mr-2" />
-                      Location Assignments
+                      Location Permissions
                     </h3>
                     <button
                       type="button"
-                      onClick={addLocationAssignment}
+                      onClick={addLocationPermission}
                       className="bg-blue-500 hover:bg-blue-700 text-white px-3 py-1 rounded flex items-center text-sm"
                     >
                       <Plus size={16} className="mr-1" />
@@ -408,17 +428,17 @@ const AllUser = () => {
                     </button>
                   </div>
                   
-                  {editForm.assignedLocations.length === 0 ? (
-                    <p className="text-gray-500 text-center py-4">No locations assigned</p>
+                  {(!editForm.permissions.locations || editForm.permissions.locations.length === 0) ? (
+                    <p className="text-gray-500 text-center py-4">No location permissions assigned</p>
                   ) : (
                     <div className="space-y-4">
-                      {editForm.assignedLocations.map((location, index) => (
+                      {editForm.permissions.locations.map((location, index) => (
                         <div key={index} className="border rounded p-4 bg-white">
                           <div className="flex justify-between items-start mb-3">
-                            <h4 className="font-medium">Location Assignment #{index + 1}</h4>
+                            <h4 className="font-medium">Location Permission #{index + 1}</h4>
                             <button
                               type="button"
-                              onClick={() => removeLocationAssignment(index)}
+                              onClick={() => removeLocationPermission(index)}
                               className="text-red-500 hover:text-red-700"
                             >
                               <Minus size={16} />
