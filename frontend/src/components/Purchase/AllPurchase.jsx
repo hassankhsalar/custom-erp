@@ -23,7 +23,11 @@ export default function AllPurchase() {
   console.log(purchases);
 
   if (loading)
-    return <p style={{ textAlign: "center", marginTop: "2rem" }}>Loading purchases...</p>;
+    return (
+      <p style={{ textAlign: "center", marginTop: "2rem" }}>
+        Loading purchases...
+      </p>
+    );
 
   if (error)
     return (
@@ -33,52 +37,134 @@ export default function AllPurchase() {
     );
 
   return (
-    <div style={container}>
-      <h2 style={title}>All Purchases</h2>
+    <section>
+      <div style={container}>
+        <h2 style={title}>All Purchases</h2>
 
-      {purchases.length === 0 ? (
-        <p style={{ textAlign: "center", color: "#666" }}>No purchases found.</p>
-      ) : (
-        <div style={{ overflowX: "auto" }}>
-          <table style={table}>
-            <thead style={thead}>
-              <tr>
-                <th style={th}>#</th>
-                <th style={th}>Material</th>
-                <th style={th}>Supplier</th>
-                <th style={th}>Quantity</th>
-                <th style={th}>Unit Price</th>
-                <th style={th}>Total Price</th>
-                <th style={th}>Date</th>
-                <th style={th}>Store location</th>
-              </tr>
-            </thead>
-            <tbody>
-              {purchases.map((p, i) => (
-                <tr key={p.id} style={i % 2 ? rowAlt : row}>
-                  <td style={td}>{i + 1}</td>
-                  <td style={td}>{p.material?.name || "-"}</td>
-                  <td style={td}>{p.supplier?.name || "-"}</td>
-                  <td style={td}>{p.quantity}</td>
-                  <td style={td}>{p.unitPrice.toFixed(2)}</td>
-                  <td style={td}>{p.totalPrice.toFixed(2)}</td>
-                  <td style={td}>
-                    {new Date(p.createdAt).toLocaleDateString()}
-                  </td>
-                  <td style={td}>{p.store?.name || "-"}</td>
+        {purchases.length === 0 ? (
+          <p style={{ textAlign: "center", color: "#666" }}>
+            No purchases found.
+          </p>
+        ) : (
+          purchases.map((purchase) => (
+            <div key={purchase.id} style={purchaseCard}>
+              {/* Purchase Header */}
+              <div style={purchaseHeader}>
+                <div style={purchaseInfo}>
+                  <strong>Reference: {purchase.reference}</strong>
+                  <span>Supplier: {purchase.supplier?.name || "-"}</span>
+                  <span>Store: {purchase.store?.name || "-"}</span>
+                  <span>
+                    Date: {new Date(purchase.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                <div style={grandTotal}>
+                  Grand Total: ${purchase.grandTotal?.toFixed(2) || "0.00"}
+                </div>
+              </div>
+
+              {/* Purchase Items Table */}
+              <div style={{ overflowX: "auto", marginTop: "1rem" }}>
+                <table style={table}>
+                  <thead style={thead}>
+                    <tr>
+                      <th style={th}>#</th>
+                      <th style={th}>Material</th>
+                      <th style={th}>Quantity</th>
+                      <th style={th}>Unit Price</th>
+                      <th style={th}>Total Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {purchase.purchaseItems?.map((item, index) => (
+                      <tr key={item.id} style={index % 2 ? rowAlt : row}>
+                        <td style={td}>{index + 1}</td>
+                        <td style={td}>{item.material?.name || "-"}</td>
+                        <td style={td}>
+                          {item.quantity} {item.material?.unit || ""}
+                        </td>
+                        <td style={td}>
+                          ${item.unitPrice?.toFixed(2) || "0.00"}
+                        </td>
+                        <td style={td}>
+                          ${item.totalPrice?.toFixed(2) || "0.00"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Summary */}
+              <div style={summary}>
+                Total Items: {purchase.purchaseItems?.length || 0}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+      <div style={container}>
+        <h2 style={title}>All Purchase Items</h2>
+
+        {purchases.length === 0 ? (
+          <p style={{ textAlign: "center", color: "#666" }}>
+            No purchases found.
+          </p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={table}>
+              <thead style={thead}>
+                <tr>
+                  <th style={th}>#</th>
+                  <th style={th}>Purchase Ref</th>
+                  <th style={th}>Material</th>
+                  <th style={th}>Supplier</th>
+                  <th style={th}>Quantity</th>
+                  <th style={th}>Unit Price</th>
+                  <th style={th}>Total Price</th>
+                  <th style={th}>Date</th>
+                  <th style={th}>Store</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+              </thead>
+              <tbody>
+                {purchases.flatMap((purchase, purchaseIndex) =>
+                  purchase.purchaseItems?.map((item, itemIndex) => (
+                    <tr
+                      key={`${purchase.id}-${item.id}`}
+                      style={(purchaseIndex + itemIndex) % 2 ? rowAlt : row}
+                    >
+                      <td style={td}>{purchaseIndex * 10 + itemIndex + 1}</td>
+                      <td style={td}>{purchase.reference}</td>
+                      <td style={td}>{item.material?.name || "-"}</td>
+                      <td style={td}>{purchase.supplier?.name || "-"}</td>
+                      <td style={td}>
+                        {item.quantity} {item.material?.unit || ""}
+                      </td>
+                      <td style={td}>
+                        ${item.unitPrice?.toFixed(2) || "0.00"}
+                      </td>
+                      <td style={td}>
+                        ${item.totalPrice?.toFixed(2) || "0.00"}
+                      </td>
+                      <td style={td}>
+                        {new Date(purchase.createdAt).toLocaleDateString()}
+                      </td>
+                      <td style={td}>{purchase.store?.name || "-"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
-// --- Styles ---
+// --- Updated Styles ---
 const container = {
-  maxWidth: "900px",
+  maxWidth: "1000px",
   margin: "2rem auto",
   background: "#fff",
   padding: "1.5rem",
@@ -89,7 +175,39 @@ const container = {
 const title = {
   textAlign: "center",
   fontSize: "1.5rem",
+  marginBottom: "1.5rem",
+};
+
+const purchaseCard = {
+  border: "1px solid #e2e8f0",
+  borderRadius: "8px",
+  padding: "1rem",
+  marginBottom: "1.5rem",
+  background: "#f8fafc",
+};
+
+const purchaseHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  paddingBottom: "0.5rem",
+  borderBottom: "1px solid #e2e8f0",
   marginBottom: "1rem",
+};
+
+const purchaseInfo = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.25rem",
+};
+
+const grandTotal = {
+  fontSize: "1.1rem",
+  fontWeight: "bold",
+  color: "#059669",
+  background: "#d1fae5",
+  padding: "0.5rem 1rem",
+  borderRadius: "6px",
 };
 
 const table = {
@@ -99,19 +217,39 @@ const table = {
 };
 
 const thead = {
-  background: "#f5f5f5",
+  background: "#e2e8f0",
   textAlign: "left",
 };
 
 const th = {
-  border: "1px solid #ddd",
-  padding: "8px",
+  border: "1px solid #cbd5e0",
+  padding: "8px 12px",
+  fontWeight: "600",
 };
 
 const td = {
-  border: "1px solid #ddd",
-  padding: "8px",
+  border: "1px solid #cbd5e0",
+  padding: "8px 12px",
 };
 
-const row = { background: "#fff" };
-const rowAlt = { background: "#fafafa" };
+const row = {
+  background: "#fff",
+  "&:hover": {
+    background: "#f7fafc",
+  },
+};
+
+const rowAlt = {
+  background: "#f7fafc",
+  "&:hover": {
+    background: "#edf2f7",
+  },
+};
+
+const summary = {
+  textAlign: "right",
+  marginTop: "0.5rem",
+  fontSize: "0.9rem",
+  color: "#4a5568",
+  fontWeight: "500",
+};

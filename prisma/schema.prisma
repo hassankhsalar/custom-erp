@@ -16,9 +16,12 @@ model User {
   name        String?
   password    String
   role        Role     @default(USER)
-  permissions Json?    @default("{}")
+  permissions Json?    //@default("{}")
+  assignedLocations Json?   // Array of location assignments with permissions
   profile     Profile? @relation(fields: [profileId], references: [id])
   profileId   Int?     @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model Profile {
@@ -47,7 +50,9 @@ model Material {
   ProductMaterial     ProductMaterial[]
   storeMaterials      StoreMaterial[]
   productionMaterials ProductionMaterial[]
-  purchases           Purchase[]           @relation("MaterialPurchases")
+  purchaseItems       PurchaseItem[]
+  shopMaterial        ShopMaterial[]
+  storeToShopTransferItem StoreToShopTransferItem[]
 }
 
 model Product {
@@ -68,7 +73,9 @@ model Product {
   storeProducts           StoreProduct[]
   factoryToStoreTransfers FactoryToStoreTransfer[]
   saleItem                SaleItem[]
-  saleReturItem           SaleReturnItem[]
+  saleReturnItem           SaleReturnItem[]
+  shopProduct             ShopProduct[]
+  storeToShopTransferItem StoreToShopTransferItem[]
 }
 
 model ProductMaterial {
@@ -122,8 +129,9 @@ model Store {
   productionMaterials     ProductionMaterial[]
   factoryToStoreTransfers FactoryToStoreTransfer[]
   purchases               Purchase[]
-  sales                   Sale[]
-  saleReturns             SaleReturn[]
+  storeToShopTransfer     StoreToShopTransfer[]
+  //sales                   Sale[]
+  //saleReturns             SaleReturn[]
 }
 
 model StoreMaterial {
@@ -203,23 +211,37 @@ model Supplier {
 
 model Purchase {
   id         Int      @id @default(autoincrement())
-  materialId Int
-  material   Material @relation(fields: [materialId], references: [id], name: "MaterialPurchases")
+  reference   String?       @unique
   supplierId Int
   storeId    Int?
   supplier   Supplier @relation(fields: [supplierId], references: [id], name: "SupplierPurchases")
+  createdAt  DateTime @default(now())
+  store      Store?   @relation(fields: [storeId], references: [id])
+  grandTotal  Float
+  purchaseItems PurchaseItem[]
+}
+
+model PurchaseItem {
+  id         Int      @id @default(autoincrement())
+  purchaseId Int
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  materialId Int
+  material   Material @relation(fields: [materialId], references: [id])
   quantity   Float
   unitPrice  Float
   totalPrice Float
   createdAt  DateTime @default(now())
-  store      Store?   @relation(fields: [storeId], references: [id])
+
+  @@unique([purchaseId, materialId])
 }
 
 model Sale {
   id          Int          @id @default(autoincrement())
   reference   String       @unique
-  storeId     Int
-  store       Store        @relation(fields: [storeId], references: [id])
+  //storeId     Int?
+  shopId      Int?
+  //store       Store?        @relation(fields: [storeId], references: [id])
+  shop        Shop?        @relation(fields: [shopId], references: [id])
   customer    String?
   totalAmount Float
   discount    Float        @default(0)
@@ -228,6 +250,9 @@ model Sale {
   createdAt   DateTime     @default(now())
   saleItems   SaleItem[]
   saleReturns SaleReturn[]
+
+  
+  @@index([shopId])
 }
 
 model SaleItem {
@@ -245,8 +270,10 @@ model SaleReturn {
   id          Int              @id @default(autoincrement())
   saleId      Int
   sale        Sale             @relation(fields: [saleId], references: [id])
-  storeId     Int
-  store       Store            @relation(fields: [storeId], references: [id])
+  //storeId     Int?
+  shopId      Int?
+  shop        Shop?            @relation(fields: [shopId], references: [id])
+  //store       Store?            @relation(fields: [storeId], references: [id])
   reference   String           @unique
   totalAmount Float
   createdAt   DateTime         @default(now())
@@ -262,4 +289,75 @@ model SaleReturnItem {
   quantity     Float
   unitPrice    Float
   totalPrice   Float
+}
+
+model Shop {
+  id          Int           @id @default(autoincrement())
+  name        String        @unique
+  address     String?
+  shop_keeper String?
+  mobile      String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Relations
+  shopProducts  ShopProduct[]
+  shopMaterials ShopMaterial[]
+  sales         Sale[]
+  saleReturns   SaleReturn[]
+  storeToShopTransfer StoreToShopTransfer[]
+}
+
+model ShopProduct {
+  shop_id    Int
+  product_id Int
+  stock      Float @default(0)
+
+  shop    Shop    @relation(fields: [shop_id], references: [id])
+  product Product @relation(fields: [product_id], references: [id])
+
+  @@id([shop_id, product_id])
+}
+
+model ShopMaterial {
+  shop_id     Int
+  material_id Int
+  stock       Float @default(0)
+
+  shop     Shop     @relation(fields: [shop_id], references: [id])
+  material Material @relation(fields: [material_id], references: [id])
+
+  @@id([shop_id, material_id])
+}
+
+
+model StoreToShopTransfer {
+  id          Int       @id @default(autoincrement())
+  reference   String    @unique
+  storeId     Int
+  shopId      Int
+  store       Store     @relation(fields: [storeId], references: [id])
+  shop        Shop      @relation(fields: [shopId], references: [id])
+  status      String    @default("pending") // pending, being_shipped, transferred
+  totalItems  Int
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  transferItems StoreToShopTransferItem[]
+}
+
+model StoreToShopTransferItem {
+  id          Int                 @id @default(autoincrement())
+  transferId  Int
+  transfer    StoreToShopTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  productId   Int?
+  materialId  Int?
+  product     Product?            @relation(fields: [productId], references: [id])
+  material    Material?           @relation(fields: [materialId], references: [id])
+  quantity    Float
+  type        String              // "product" or "material"
+  
+  @@index([transferId])
+  @@index([productId])
+  @@index([materialId])
 }

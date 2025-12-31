@@ -1,42 +1,44 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_ROUTES } from "../../config";
 
-export default function POS() {
-  const [stores, setStores] = useState([]);
+export default function ShopPOS() {
+  const [shops, setShops] = useState([]);
   const [products, setProducts] = useState([]);
-  const [storeId, setStoreId] = useState("");
+  const [shopId, setShopId] = useState("");
   const [items, setItems] = useState([]);
   const [discount, setDiscount] = useState(0);
   const [customer, setCustomer] = useState("");
   const [paymentType, setPaymentType] = useState("cash");
+  const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
 
-  // ✅ Fetch all stores
+  // ✅ Fetch all shops
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) {
-      navigate("/login"); // Redirect if no token
+      navigate("/login");
       return;
     }
 
-    fetch("http://localhost:3001/api/stores", {
+    fetch(API_ROUTES.SHOP_SALES_SHOPS, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch stores");
+        if (!res.ok) throw new Error("Failed to fetch shops");
         return res.json();
       })
-      .then((data) => setStores(Array.isArray(data) ? data : data.stores || []))
+      .then((data) => setShops(Array.isArray(data) ? data : []))
       .catch((err) => {
-        console.error("Error fetching stores:", err);
-        setStores([]);
+        console.error("Error fetching shops:", err);
+        setShops([]);
       });
   }, [navigate]);
 
-  // ✅ Fetch products for a selected store
+  // ✅ Fetch products for a selected shop
   useEffect(() => {
-    if (!storeId) {
+    if (!shopId) {
       setProducts([]);
       return;
     }
@@ -44,7 +46,7 @@ export default function POS() {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    fetch(`http://localhost:3001/api/products/store/${storeId}`, {
+    fetch(API_ROUTES.SHOP_SALES_PRODUCTS(shopId), {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {
@@ -56,7 +58,7 @@ export default function POS() {
         console.error("Error fetching products:", err);
         setProducts([]);
       });
-  }, [storeId]);
+  }, [shopId]);
 
   // ✅ Add new blank sale item
   const handleAddItem = () => {
@@ -66,7 +68,7 @@ export default function POS() {
         productId: "",
         quantity: 1,
         unitPrice: 0,
-        searchQuery: "", // Added to track search input separately
+        searchQuery: "",
         filteredProducts: [],
         showSuggestions: false,
       },
@@ -117,7 +119,7 @@ export default function POS() {
     const updated = [...items];
     updated[index].productId = product.id;
     updated[index].unitPrice = product.sale_price || 0;
-    updated[index].searchQuery = product.name; // Set the search query to product name
+    updated[index].searchQuery = product.name;
     updated[index].showSuggestions = false;
     updated[index].filteredProducts = [];
     setItems(updated);
@@ -134,8 +136,8 @@ export default function POS() {
 
   // ✅ Validate form before submission
   const validateForm = () => {
-    if (!storeId) {
-      alert("⚠️ Please select a store.");
+    if (!shopId) {
+      alert("⚠️ Please select a shop.");
       return false;
     }
     
@@ -144,14 +146,12 @@ export default function POS() {
       return false;
     }
 
-    // Check if all items have valid product selections
     const invalidItems = items.filter(item => !item.productId);
     if (invalidItems.length > 0) {
       alert("⚠️ Please select a product for all items.");
       return false;
     }
 
-    // Check for negative values
     if (discount < 0) {
       alert("⚠️ Discount cannot be negative.");
       return false;
@@ -161,6 +161,15 @@ export default function POS() {
     if (itemsWithInvalidQuantities.length > 0) {
       alert("⚠️ Quantity must be greater than 0 for all items.");
       return false;
+    }
+
+    // Check stock availability
+    for (const item of items) {
+      const product = products.find(p => p.id === item.productId);
+      if (product && product.stock < item.quantity) {
+        alert(`⚠️ Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`);
+        return false;
+      }
     }
 
     return true;
@@ -175,7 +184,7 @@ export default function POS() {
     }
 
     const payload = {
-      storeId: parseInt(storeId),
+      shopId: parseInt(shopId),
       customer: customer.trim() || null,
       paymentType,
       discount: Math.max(0, parseFloat(discount) || 0),
@@ -193,8 +202,10 @@ export default function POS() {
       return;
     }
 
+    setLoading(true);
+
     try {
-      const res = await fetch("http://localhost:3001/api/sales", {
+      const res = await fetch(API_ROUTES.SHOP_SALES, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -203,20 +214,25 @@ export default function POS() {
         body: JSON.stringify(payload),
       });
 
+      const data = await res.json();
+
       if (res.ok) {
-        alert("✅ Sale added successfully!");
+        alert("✅ Shop sale completed successfully!");
         setItems([]);
         setDiscount(0);
         setCustomer("");
         setPaymentType("cash");
-        navigate("/sale/pos");
+        setShopId("");
+        // Optionally navigate to sales list or receipt
+        // navigate("/shop-sales/all");
       } else {
-        const error = await res.json();
-        alert("❌ Error: " + (error.message || "Something went wrong"));
+        alert("❌ Error: " + (data.error || "Something went wrong"));
       }
     } catch (error) {
       console.error("Submission error:", error);
       alert("❌ Network error. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -225,21 +241,24 @@ export default function POS() {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <h2 className="text-2xl font-bold mb-4">🧾 New Sale (POS)</h2>
+      <h2 className="text-2xl font-bold mb-4">🏪 Shop POS System</h2>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Store + Customer */}
+        {/* Shop + Customer */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Store *</label>
+            <label className="block text-sm font-medium mb-1">Shop *</label>
             <select
               className="border p-2 rounded w-full"
-              value={storeId}
-              onChange={(e) => setStoreId(e.target.value)}
+              value={shopId}
+              onChange={(e) => {
+                setShopId(e.target.value);
+                setItems([]); // Clear items when shop changes
+              }}
               required
             >
-              <option value="">Select Store</option>
-              {stores.map((s) => (
+              <option value="">Select Shop</option>
+              {shops.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
@@ -268,90 +287,104 @@ export default function POS() {
             </span>
           </div>
           
-          {items.map((item, idx) => (
-            <div
-              key={idx}
-              className="grid grid-cols-1 md:grid-cols-5 gap-3 items-center relative p-3 border rounded bg-white"
-            >
-              {/* 🔍 Search Input */}
-              <div className="md:col-span-2 relative">
-                <input
-                  type="text"
-                  className="border p-2 rounded w-full"
-                  placeholder="Search Product"
-                  value={item.searchQuery || ""}
-                  onChange={(e) => handleSearchProduct(idx, e.target.value)}
-                  onBlur={() => handleBlur(idx)}
-                  required
-                />
-                {item.showSuggestions && (
-                  <ul className="absolute z-10 bg-white border w-full max-h-40 overflow-y-auto shadow-lg rounded mt-1">
-                    {item.filteredProducts.length > 0 ? (
-                      item.filteredProducts.map((p) => (
-                        <li
-                          key={p.id}
-                          onClick={() => handleSelectProduct(idx, p)}
-                          className="p-2 hover:bg-gray-100 cursor-pointer border-b"
-                        >
-                          <div className="font-medium">{p.name}</div>
-                          <div className="text-sm text-gray-600">
-                            Stock: {p.stock} | Price: ${p.sale_price || 0}
-                          </div>
-                        </li>
-                      ))
-                    ) : (
-                      <li className="p-2 text-gray-500">No products found</li>
-                    )}
-                  </ul>
-                )}
-              </div>
+          {items.map((item, idx) => {
+            const selectedProduct = products.find(p => p.id === item.productId);
+            const availableStock = selectedProduct ? selectedProduct.stock : 0;
+            
+            return (
+              <div
+                key={idx}
+                className="grid grid-cols-1 md:grid-cols-5 gap-3 items-center relative p-3 border rounded bg-white"
+              >
+                {/* 🔍 Search Input */}
+                <div className="md:col-span-2 relative">
+                  <input
+                    type="text"
+                    className="border p-2 rounded w-full"
+                    placeholder="Search Product"
+                    value={item.searchQuery || ""}
+                    onChange={(e) => handleSearchProduct(idx, e.target.value)}
+                    onBlur={() => handleBlur(idx)}
+                    required
+                  />
+                  {item.showSuggestions && (
+                    <ul className="absolute z-10 bg-white border w-full max-h-40 overflow-y-auto shadow-lg rounded mt-1">
+                      {item.filteredProducts.length > 0 ? (
+                        item.filteredProducts.map((p) => (
+                          <li
+                            key={p.id}
+                            onClick={() => handleSelectProduct(idx, p)}
+                            className="p-2 hover:bg-gray-100 cursor-pointer border-b"
+                          >
+                            <div className="font-medium">{p.name}</div>
+                            <div className="text-sm text-gray-600">
+                              Stock: {p.stock} | Price: ${p.sale_price || 0}
+                            </div>
+                          </li>
+                        ))
+                      ) : (
+                        <li className="p-2 text-gray-500">No products found</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
 
-              <div>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  className="border p-2 rounded w-full"
-                  placeholder="Quantity"
-                  value={item.quantity}
-                  onChange={(e) =>
-                    handleChangeItem(idx, "quantity", e.target.value)
-                  }
-                  required
-                />
-              </div>
+                <div className="h-full">
+                  <label className="text-xs" htmlFor="quantity">Quantity</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    max={availableStock}
+                    className="border p-2 rounded w-full"
+                    placeholder="Quantity"
+                    value={item.quantity}
+                    onChange={(e) =>
+                      handleChangeItem(idx, "quantity", e.target.value)
+                    }
+                    required
+                  />
+                  {selectedProduct && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Available: {availableStock}
+                    </div>
+                  )}
+                </div>
 
-              <div>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  className="border p-2 rounded w-full bg-gray-100"
-                  placeholder="Unit Price"
-                  value={item.unitPrice}
-                  readOnly
-                />
-              </div>
+                <div className="h-full">
+                  <label className="text-xs" htmlFor="Unit Price">Unit Price</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="border p-2 rounded w-full bg-gray-100"
+                    placeholder="Unit Price"
+                    value={item.unitPrice}
+                    readOnly
+                  />
+                </div>
 
-              <div className="flex items-center gap-2">
-                <p className="text-right font-semibold flex-1">
-                  ${(item.quantity * item.unitPrice).toFixed(2)}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveItem(idx)}
-                  className="bg-red-500 text-white p-1 rounded hover:bg-red-600 text-sm"
-                >
-                  ✕
-                </button>
+                <div className="flex items-center gap-2">
+                  <p className="text-right font-semibold flex-1">
+                    ${(item.quantity * item.unitPrice).toFixed(2)}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveItem(idx)}
+                    className="bg-red-500 text-white p-1 rounded hover:bg-red-600 text-sm"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           <button
             type="button"
             onClick={handleAddItem}
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center gap-2"
+            disabled={!shopId}
           >
             ➕ Add Item
           </button>
@@ -402,10 +435,10 @@ export default function POS() {
         <div className="flex gap-4">
           <button
             type="submit"
-            className="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 flex items-center gap-2"
-            disabled={items.length === 0 || !storeId}
+            className="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 flex items-center gap-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            disabled={items.length === 0 || !shopId || loading}
           >
-            💾 Save Sale
+            {loading ? "🔄 Processing..." : "💾 Complete Sale"}
           </button>
           
           <button
@@ -416,6 +449,7 @@ export default function POS() {
               setCustomer("");
             }}
             className="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600"
+            disabled={loading}
           >
             🔄 Clear
           </button>

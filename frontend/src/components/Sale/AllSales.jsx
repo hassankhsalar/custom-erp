@@ -6,7 +6,7 @@ export default function AllSales() {
   useEffect(() => {
    
       const token = localStorage.getItem("token");
-    fetch("http://localhost:3001/api/sales", {
+    fetch("http://localhost:3001/api/shop-sales", {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -26,7 +26,7 @@ export default function AllSales() {
         <thead className="bg-gray-100">
           <tr>
             <th className="p-2 border">Reference</th>
-            <th className="p-2 border">Store</th>
+            <th className="p-2 border">Shop</th>
             <th className="p-2 border">Customer</th>
             <th className="p-2 border">Total</th>
             <th className="p-2 border">Discount</th>
@@ -39,7 +39,7 @@ export default function AllSales() {
           {sales.map((s) => (
             <tr key={s.id} className="hover:bg-gray-50">
               <td className="p-2 border">{s.reference}</td>
-              <td className="p-2 border">{s.store?.name}</td>
+              <td className="p-2 border">{s.shop?.name}</td>
               <td className="p-2 border">{s.customer || "-"}</td>
               <td className="p-2 border">{s.totalAmount.toFixed(2)}</td>
               <td className="p-2 border">{s.discount.toFixed(2)}</td>

@@ -4,84 +4,164 @@ export default function NewPurchase() {
   const [materials, setMaterials] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [stores, setStores] = useState([]);
+  const [purchaseItems, setPurchaseItems] = useState([
+    { materialId: "", quantity: "", unitPrice: "", total: 0 }
+  ]);
   const [form, setForm] = useState({
-    materialId: "",
     supplierId: "",
     storeId: "",
-    quantity: "",
-    unitPrice: "",
-    totalPrice: 0,
+    grandTotal: 0,
+    reference: `PUR-${Date.now()}`
   });
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetch("http://localhost:3001/api/materials")
-      .then((res) => res.json())
-      .then((data) => setMaterials(data.materials || []))
-      .catch(() => setMaterials([]));
-
-    fetch("http://localhost:3001/api/suppliers")
-      .then((res) => res.json())
-      .then(setSuppliers)
-      .catch(() => setSuppliers([]));
-
-
-    const token = localStorage.getItem("token");
-    fetch("http://localhost:3001/api/stores", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Unauthorized");
-        return res.json();
-      })
-      .then((data) => setStores(Array.isArray(data) ? data : data.stores || []))
-      .catch(() => setStores([]));
+    fetchMaterials();
+    fetchSuppliers();
+    fetchStores();
   }, []);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    const updated = { ...form, [name]: value };
-
-    // Auto-calculate totalPrice
-    if (name === "quantity" || name === "unitPrice") {
-      const q = parseFloat(updated.quantity) || 0;
-      const u = parseFloat(updated.unitPrice) || 0;
-      updated.totalPrice = q * u;
+  const fetchMaterials = async () => {
+    try {
+      const res = await fetch("http://localhost:3001/api/materials");
+      const data = await res.json();
+      setMaterials(data.materials || []);
+    } catch (error) {
+      console.error("Failed to fetch materials:", error);
+      setMaterials([]);
     }
+  };
 
-    setForm(updated);
+  const fetchSuppliers = async () => {
+    try {
+      const res = await fetch("http://localhost:3001/api/suppliers");
+      const data = await res.json();
+      setSuppliers(data || []);
+    } catch (error) {
+      console.error("Failed to fetch suppliers:", error);
+      setSuppliers([]);
+    }
+  };
+
+  const fetchStores = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("http://localhost:3001/api/stores", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) throw new Error("Unauthorized");
+      const data = await res.json();
+      setStores(Array.isArray(data) ? data : data.stores || []);
+    } catch (error) {
+      console.error("Failed to fetch stores:", error);
+      setStores([]);
+    }
+  };
+
+  // Update grand total whenever purchase items change
+  useEffect(() => {
+    const grandTotal = purchaseItems.reduce((sum, item) => sum + item.total, 0);
+    setForm(prev => ({ ...prev, grandTotal }));
+  }, [purchaseItems]);
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleItemChange = (index, field, value) => {
+    const updatedItems = [...purchaseItems];
+    
+    updatedItems[index][field] = value;
+    
+    // Auto-calculate total when quantity or unitPrice changes
+    if (field === 'quantity' || field === 'unitPrice') {
+      const quantity = parseFloat(updatedItems[index].quantity) || 0;
+      const unitPrice = parseFloat(updatedItems[index].unitPrice) || 0;
+      updatedItems[index].total = quantity * unitPrice;
+    }
+    
+    setPurchaseItems(updatedItems);
+  };
+
+  const addItem = () => {
+    setPurchaseItems([
+      ...purchaseItems,
+      { materialId: "", quantity: "", unitPrice: "", total: 0 }
+    ]);
+  };
+
+  const removeItem = (index) => {
+    if (purchaseItems.length > 1) {
+      const updatedItems = purchaseItems.filter((_, i) => i !== index);
+      setPurchaseItems(updatedItems);
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setMessage("");
+    
+    // Validate form
+    if (!form.supplierId || !form.storeId) {
+      setMessage("❌ Please select supplier and store");
+      setLoading(false);
+      return;
+    }
+
+    // Validate items
+    const validItems = purchaseItems.filter(item => 
+      item.materialId && item.quantity && item.unitPrice && 
+      parseFloat(item.quantity) > 0 && parseFloat(item.unitPrice) > 0
+    );
+
+    if (validItems.length === 0) {
+      setMessage("❌ Please add at least one valid material with quantity and unit price");
+      setLoading(false);
+      return;
+    }
+
     try {
+      const payload = {
+        supplierId: parseInt(form.supplierId),
+        storeId: parseInt(form.storeId),
+        grandTotal: form.grandTotal,
+        reference: form.reference,
+        items: validItems.map(item => ({
+          materialId: parseInt(item.materialId),
+          quantity: parseFloat(item.quantity),
+          unitPrice: parseFloat(item.unitPrice)
+        }))
+      };
+
       const res = await fetch("http://localhost:3001/api/purchases", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          materialId: parseInt(form.materialId),
-          supplierId: parseInt(form.supplierId),
-          quantity: parseFloat(form.quantity),
-          unitPrice: parseFloat(form.unitPrice),
-          storeId: parseInt(form.storeId),
-        }),
+        body: JSON.stringify(payload),
       });
+      
       const data = await res.json();
       if (res.ok) {
         setMessage("✅ Purchase added successfully!");
+        // Reset form
         setForm({
-          materialId: "",
           supplierId: "",
           storeId: "",
-          quantity: "",
-          unitPrice: "",
-          totalPrice: 0,
+          grandTotal: 0,
+          reference: `PUR-${Date.now()}`
         });
-      } else setMessage(`❌ ${data.error}`);
-    } catch {
-      setMessage("❌ Failed to add purchase");
+        setPurchaseItems([{ materialId: "", quantity: "", unitPrice: "", total: 0 }]);
+      } else {
+        setMessage(`❌ ${data.error || data.message || "Failed to add purchase"}`);
+      }
+    } catch (error) {
+      setMessage("❌ Failed to add purchase: " + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -89,113 +169,281 @@ export default function NewPurchase() {
     <div style={container}>
       <h2 style={title}>New Purchase</h2>
       <form onSubmit={handleSubmit} style={formBox}>
-        <div style={row}>
-          <label>Material:</label>
-          <select
-            name="materialId"
-            value={form.materialId}
-            onChange={handleChange}
-            required
-          >
-            <option value="">-- Select Material --</option>
-            {materials.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
+        {/* Supplier and Store Selection */}
+        <div style={gridRow}>
+          <div style={row}>
+            <label>Supplier:</label>
+            <select
+              name="supplierId"
+              value={form.supplierId}
+              onChange={handleFormChange}
+              required
+            >
+              <option value="">-- Select Supplier --</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={row}>
+            <label>Deliver to:</label>
+            <select
+              name="storeId"
+              value={form.storeId}
+              onChange={handleFormChange}
+              required
+            >
+              <option value="">-- Select Store --</option>
+              {stores.map((store) => (
+                <option key={store.id} value={store.id}>
+                  {store.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        <div style={row}>
-          <label>Supplier:</label>
-          <select
-            name="supplierId"
-            value={form.supplierId}
-            onChange={handleChange}
-            required
-          >
-            <option value="">-- Select Supplier --</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+        {/* Purchase Items Section */}
+        <div style={itemsSection}>
+          <div style={sectionHeader}>
+            <h3>Purchase Items</h3>
+            <button type="button" onClick={addItem} style={addButton}>
+              + Add Item
+            </button>
+          </div>
+
+          {purchaseItems.map((item, index) => (
+            <div key={index} style={itemRow}>
+              <div style={gridRow}>
+                <div style={row}>
+                  <label>Material:</label>
+                  <select
+                    value={item.materialId}
+                    onChange={(e) => handleItemChange(index, 'materialId', e.target.value)}
+                    required
+                  >
+                    <option value="">-- Select Material --</option>
+                    {materials.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.unit})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={row}>
+                  <label>Quantity:</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={item.quantity}
+                    onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div style={row}>
+                  <label>Unit Price:</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={item.unitPrice}
+                    onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div style={row}>
+                  <label>Total:</label>
+                  <input 
+                    type="text" 
+                    value={item.total.toFixed(2)} 
+                    readOnly 
+                    style={totalInput}
+                  />
+                </div>
+
+                {purchaseItems.length > 1 && (
+                  <div style={removeButtonContainer}>
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      style={removeButton}
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* 🆕 Deliver To (Store) */}
-        <div style={row}>
-          <label>Deliver to:</label>
-          <select
-            name="storeId"
-            value={form.storeId}
-            onChange={handleChange}
-            required
-          >
-            <option value="">-- Select Store --</option>
-            {stores.map((store) => (
-              <option key={store.id} value={store.id}>
-                {store.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div style={row}>
-          <label>Quantity:</label>
-          <input
-            type="number"
-            name="quantity"
-            value={form.quantity}
-            onChange={handleChange}
-            required
+        {/* Grand Total */}
+        <div style={grandTotalRow}>
+          <label style={grandTotalLabel}>Grand Total:</label>
+          <input 
+            type="text" 
+            value={form.grandTotal.toFixed(2)} 
+            readOnly 
+            style={grandTotalInput}
           />
         </div>
 
-        <div style={row}>
-          <label>Unit Price:</label>
-          <input
-            type="number"
-            name="unitPrice"
-            value={form.unitPrice}
-            onChange={handleChange}
-            required
-          />
-        </div>
-
-        <div style={row}>
-          <label>Total Price:</label>
-          <input type="text" value={form.totalPrice.toFixed(2)} readOnly />
-        </div>
-
-        <button type="submit" style={button}>
-          Add Purchase
+        <button 
+          type="submit" 
+          style={{ ...button, ...(loading ? buttonLoading : {}) }}
+          disabled={loading}
+        >
+          {loading ? "Creating Purchase..." : "Create Purchase"}
         </button>
       </form>
       {message && (
-        <p style={{ textAlign: "center", marginTop: "1rem" }}>{message}</p>
+        <p style={{ 
+          textAlign: "center", 
+          marginTop: "1rem", 
+          color: message.includes("✅") ? "green" : "red",
+          fontWeight: "bold" 
+        }}>
+          {message}
+        </p>
       )}
     </div>
   );
 }
 
-// --- Simple inline styles ---
+// Styles (same as previous)
 const container = {
-  maxWidth: "600px",
+  maxWidth: "900px",
   margin: "2rem auto",
   padding: "1.5rem",
   background: "#fff",
   borderRadius: "10px",
   boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
 };
+
 const title = { textAlign: "center", marginBottom: "1rem" };
-const formBox = { display: "flex", flexDirection: "column", gap: "1rem" };
-const row = { display: "flex", flexDirection: "column", gap: ".3rem" };
+
+const formBox = { 
+  display: "flex", 
+  flexDirection: "column", 
+  gap: "1.5rem" 
+};
+
+const gridRow = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr 1fr 1fr auto",
+  gap: "1rem",
+  alignItems: "end"
+};
+
+const row = { 
+  display: "flex", 
+  flexDirection: "column", 
+  gap: ".3rem" 
+};
+
+const itemsSection = {
+  border: "1px solid #e2e8f0",
+  borderRadius: "8px",
+  padding: "1rem",
+  background: "#f8fafc"
+};
+
+const sectionHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: "1rem"
+};
+
+const addButton = {
+  padding: "0.5rem 1rem",
+  background: "#10b981",
+  color: "white",
+  border: "none",
+  borderRadius: "6px",
+  cursor: "pointer",
+  fontSize: "0.9rem"
+};
+
+const itemRow = {
+  padding: "1rem",
+  background: "white",
+  borderRadius: "6px",
+  border: "1px solid #e2e8f0",
+  marginBottom: "0.5rem"
+};
+
+const totalInput = {
+  background: "#f1f5f9",
+  fontWeight: "bold"
+};
+
+const removeButtonContainer = {
+  display: "flex",
+  alignItems: "center",
+  height: "100%"
+};
+
+const removeButton = {
+  background: "#ef4444",
+  color: "white",
+  border: "none",
+  borderRadius: "50%",
+  width: "30px",
+  height: "30px",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "1.2rem"
+};
+
+const grandTotalRow = {
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+  gap: "1rem",
+  padding: "1rem",
+  background: "#dbeafe",
+  borderRadius: "6px",
+  border: "2px solid #3b82f6"
+};
+
+const grandTotalLabel = {
+  fontSize: "1.1rem",
+  fontWeight: "bold",
+  color: "#1e40af"
+};
+
+const grandTotalInput = {
+  fontSize: "1.2rem",
+  fontWeight: "bold",
+  color: "#1e40af",
+  background: "transparent",
+  border: "none",
+  width: "120px",
+  textAlign: "right"
+};
+
 const button = {
-  padding: "10px",
+  padding: "12px",
   background: "#2563eb",
   color: "#fff",
   border: "none",
   borderRadius: "6px",
   cursor: "pointer",
+  fontSize: "1rem",
+  fontWeight: "bold"
+};
+
+const buttonLoading = {
+  background: "#9ca3af",
+  cursor: "not-allowed"
 };

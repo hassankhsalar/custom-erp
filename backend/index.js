@@ -123,6 +123,11 @@ const storeRoutes = require('./routes/storeRoutes');
 const supplierRoutes = require('./routes/supplierRoutes');
 const purchaseRoutes = require('./routes/purchaseRoutes');
 const salesRoutes = require('./routes/salesRoutes');
+const shopRoutes = require('./routes/shopRoutes');
+const shopSalesRoutes = require('./routes/shop-sales');
+const storeToShopTransfersRoutes = require('./routes/store-to-shop-transfers');
+const dashboardRoutes = require('./routes/dashboard');
+const userRoutes = require('./routes/users');
 
 app.use('/api/materials', materialRoutes);
 app.use('/api/products', productRoutes);
@@ -132,6 +137,11 @@ app.use('/api/stores', storeRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/sales', salesRoutes);
+app.use('/api/shops', shopRoutes);
+app.use('/api/shop-sales', shopSalesRoutes);
+app.use('/api/store-to-shop-transfers', storeToShopTransfersRoutes);
+app.use('/api/dash-board', dashboardRoutes);
+app.use('/api/users', userRoutes);
 
 const port = 3001;
 app.listen(port, () => {
