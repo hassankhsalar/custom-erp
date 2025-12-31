@@ -52,6 +52,7 @@ model Material {
   purchaseItems       PurchaseItem[]
   shopMaterial        ShopMaterial[]
   storeToShopTransferItem StoreToShopTransferItem[]
+  factoryMaterials    FactoryMaterial[]
 }
 
 model Product {
@@ -75,6 +76,7 @@ model Product {
   saleReturnItem           SaleReturnItem[]
   shopProduct             ShopProduct[]
   storeToShopTransferItem StoreToShopTransferItem[]
+  factoryProducts         FactoryProduct[]
 }
 
 model ProductMaterial {
@@ -97,8 +99,9 @@ model Factory {
   email       String?
   address     String?
   productions Production[] // Added for relation
+  factoryProducts FactoryProduct[]
+  factoryMaterials FactoryMaterial[]
 }
-
 model Production {
   id                      Int                      @id @default(autoincrement()) // Changed to Int
   reference               String                   @unique
@@ -359,4 +362,48 @@ model StoreToShopTransferItem {
   @@index([transferId])
   @@index([productId])
   @@index([materialId])
+}
+
+model Transfer {
+  id            Int            @id @default(autoincrement())
+  reference     String         @unique
+  from          String
+  fromId        Int
+  to            String
+  toId          Int
+  shipping_cost Float
+  note          String?
+  document      String?
+  transferItems TransferItem[]
+}
+
+model TransferItem {
+  id         Int      @id @default(autoincrement())
+  transferId Int
+  transfer   Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  item       String
+  itemId     Int
+  quantity   Float
+}
+
+model FactoryProduct {
+  factoryId Int
+  productId Int
+  stock     Float @default(0)
+
+  factory   Factory @relation(fields: [factoryId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+
+  @@id([factoryId, productId])
+}
+
+model FactoryMaterial {
+  factoryId  Int
+  materialId Int
+  stock      Float @default(0)
+
+  factory  Factory  @relation(fields: [factoryId], references: [id])
+  material Material @relation(fields: [materialId], references: [id])
+
+  @@id([factoryId, materialId])
 }
