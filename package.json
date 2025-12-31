@@ -26,6 +26,7 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.553.0",
+    "multer": "^2.0.2",
     "prisma": "^6.16.2",
     "tailwindcss": "^4.1.13"
   },

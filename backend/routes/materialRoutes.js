@@ -19,9 +19,18 @@ router.post('/', async (req, res) => {
 
 // Get all materials
 router.get('/', async (req, res) => {
+  const { search } = req.query;
+  const where = {};
+
+  if (search) {
+    where.name = {
+      contains: search,
+    };
+  }
+
   try {
-    const materials = await prisma.material.findMany();
-    res.json({materials});
+    const materials = await prisma.material.findMany({ where });
+    res.json({ materials });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

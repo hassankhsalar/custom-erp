@@ -6,7 +6,6 @@ CREATE TABLE `User` (
     `password` VARCHAR(191) NOT NULL,
     `role` ENUM('USER', 'ADMIN') NOT NULL DEFAULT 'USER',
     `permissions` JSON NULL,
-    `assignedLocations` JSON NULL,
     `profileId` INTEGER NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
@@ -329,6 +328,33 @@ CREATE TABLE `StoreToShopTransferItem` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- CreateTable
+CREATE TABLE `Transfer` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `reference` VARCHAR(191) NOT NULL,
+    `from` VARCHAR(191) NOT NULL,
+    `fromId` INTEGER NOT NULL,
+    `to` VARCHAR(191) NOT NULL,
+    `toId` INTEGER NOT NULL,
+    `shipping_cost` DOUBLE NOT NULL,
+    `note` VARCHAR(191) NULL,
+    `document` VARCHAR(191) NULL,
+
+    UNIQUE INDEX `Transfer_reference_key`(`reference`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `TransferItem` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `transferId` INTEGER NOT NULL,
+    `item` VARCHAR(191) NOT NULL,
+    `itemId` INTEGER NOT NULL,
+    `quantity` DOUBLE NOT NULL,
+
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 -- AddForeignKey
 ALTER TABLE `User` ADD CONSTRAINT `User_profileId_fkey` FOREIGN KEY (`profileId`) REFERENCES `Profile`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
@@ -436,3 +462,6 @@ ALTER TABLE `StoreToShopTransferItem` ADD CONSTRAINT `StoreToShopTransferItem_pr
 
 -- AddForeignKey
 ALTER TABLE `StoreToShopTransferItem` ADD CONSTRAINT `StoreToShopTransferItem_materialId_fkey` FOREIGN KEY (`materialId`) REFERENCES `Material`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `TransferItem` ADD CONSTRAINT `TransferItem_transferId_fkey` FOREIGN KEY (`transferId`) REFERENCES `Transfer`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;

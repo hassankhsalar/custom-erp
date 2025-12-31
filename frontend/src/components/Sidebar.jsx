@@ -63,6 +63,27 @@ const Sidebar = () => {
           )}
         </li>
 
+        <li>
+          <div onClick={() => toggleMenu('transfer')} className="flex justify-between items-center py-2 px-3 bg-gray-800 cursor-pointer rounded-md hover:bg-gray-700 mt-2">
+            Transfer
+          </div>
+          {openMenus.transfer && (
+            <ul className="pl-6 border-l border-gray-700 mt-1">
+              <li><Link to="/transfer/add" className="block py-1 px-2 text-gray-300 hover:text-white">Add Transfer</Link></li>
+              <li><Link to="/transfer/store-to-store" className="block py-1 px-2 text-gray-300 hover:text-white">Store to store transfer</Link></li>
+              <li><Link to="/transfer/store-to-factory" className="block py-1 px-2 text-gray-300 hover:text-white">Store to factory</Link></li>
+              <li><Link to="/transfer/store-to-shop" className="block py-1 px-2 text-gray-300 hover:text-white">Store to Shop</Link></li>
+              <li><Link to="/transfer/factory-to-factory" className="block py-1 px-2 text-gray-300 hover:text-white">Factory to factory</Link></li>
+              <li><Link to="/transfer/factory-to-store" className="block py-1 px-2 text-gray-300 hover:text-white">Factory to store</Link></li>
+              <li><Link to="/transfer/factory-to-shop" className="block py-1 px-2 text-gray-300 hover:text-white">Factory to shop</Link></li>
+              <li><Link to="/transfer/shop-to-shop" className="block py-1 px-2 text-gray-300 hover:text-white">Shop to shop</Link></li>
+              <li><Link to="/transfer/shop-to-store" className="block py-1 px-2 text-gray-300 hover:text-white">Shop to store</Link></li>
+              <li><Link to="/transfer/shop-to-factory" className="block py-1 px-2 text-gray-300 hover:text-white">Shop to factory</Link></li>
+            </ul>
+          )}
+        </li>
+
+
 
         <li>
           <div onClick={() => toggleMenu('products')} className="flex justify-between items-center py-2 px-3 bg-gray-800 cursor-pointer rounded-md hover:bg-gray-700 mt-2"> {/* Flex, justify, items, padding, background, cursor, rounded, hover, margin-top */}
