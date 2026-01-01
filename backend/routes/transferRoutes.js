@@ -24,8 +24,63 @@ router.get('/', async (req, res) => {
     where,
     skip: (page - 1) * 10,
     take: 10,
+    include: {
+      transferItems: {
+        select: {
+          quantity: true,
+        },
+      },
+    },
   });
-  res.json(transfers);
+
+  // Collect all unique IDs for stores, shops, and factories
+  const storeIds = new Set();
+  const shopIds = new Set();
+  const factoryIds = new Set();
+
+  transfers.forEach(transfer => {
+    if (transfer.from === 'store') storeIds.add(transfer.fromId);
+    if (transfer.to === 'store') storeIds.add(transfer.toId);
+    if (transfer.from === 'shop') shopIds.add(transfer.fromId);
+    if (transfer.to === 'shop') shopIds.add(transfer.toId);
+    if (transfer.from === 'factory') factoryIds.add(transfer.fromId);
+    if (transfer.to === 'factory') factoryIds.add(transfer.toId);
+  });
+
+  // Fetch names in bulk
+  const [stores, shops, factories] = await Promise.all([
+    storeIds.size > 0 ? prisma.store.findMany({ where: { id: { in: Array.from(storeIds) } }, select: { id: true, name: true } }) : [],
+    shopIds.size > 0 ? prisma.shop.findMany({ where: { id: { in: Array.from(shopIds) } }, select: { id: true, name: true } }) : [],
+    factoryIds.size > 0 ? prisma.factory.findMany({ where: { id: { in: Array.from(factoryIds) } }, select: { id: true, name: true } }) : [],
+  ]);
+
+  const storeMap = new Map(stores.map(s => [s.id, s.name]));
+  const shopMap = new Map(shops.map(s => [s.id, s.name]));
+  const factoryMap = new Map(factories.map(f => [f.id, f.name]));
+
+  const transfersWithNamesAndTotalProducts = transfers.map(transfer => {
+    let fromName = 'N/A';
+    let toName = 'N/A';
+
+    if (transfer.from === 'store') fromName = storeMap.get(transfer.fromId) || 'N/A';
+    else if (transfer.from === 'shop') fromName = shopMap.get(transfer.fromId) || 'N/A';
+    else if (transfer.from === 'factory') fromName = factoryMap.get(transfer.fromId) || 'N/A';
+
+    if (transfer.to === 'store') toName = storeMap.get(transfer.toId) || 'N/A';
+    else if (transfer.to === 'shop') toName = shopMap.get(transfer.toId) || 'N/A';
+    else if (transfer.to === 'factory') toName = factoryMap.get(transfer.toId) || 'N/A';
+
+    const totalProducts = transfer.transferItems.reduce((sum, item) => sum + item.quantity, 0);
+
+    return {
+        ...transfer,
+        fromName,
+        toName,
+        totalProducts,
+    };
+  });
+
+  res.json(transfersWithNamesAndTotalProducts);
 });
 
 router.post('/', upload.single('document'), async (req, res) => {
