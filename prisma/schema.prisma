@@ -354,6 +354,7 @@ model Transfer {
   to            String
   toId          Int
   shipping_cost Float
+  status        String         @default("processing")
   note          String?
   document      String?
   transferItems TransferItem[]
