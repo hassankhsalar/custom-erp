@@ -53,7 +53,6 @@ router.post('/', authenticateToken, async (req, res) => {
               code: p.code,
               quantity: parseFloat(p.quantity),
               unit_cost: parseFloat(p.unit_cost),
-              moved_to_store: parseFloat(p.moved_to_store || 0),
             })),
           },
           productionMaterials: {
@@ -169,12 +168,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
             material: true,
           }
         },
-        factoryToStoreTransfers: {
-          include: {
-            product: true,
-            store: true,
-          }
-        }
+
       },
     });
 
@@ -267,7 +261,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
               code: p.code,
               quantity: parseFloat(p.quantity),
               unit_cost: parseFloat(p.unit_cost),
-              moved_to_store: parseFloat(p.moved_to_store || 0),
             })),
           },
           productionMaterials: {
@@ -315,7 +308,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 // Change production status
 router.put('/:id/status', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { status, products, materials, transfers } = req.body;
+  const { status, products, materials } = req.body;
 
   try {
     const result = await prisma.$transaction(async (prisma) => {
@@ -326,6 +319,10 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
       });
 
       if (status === 'production_done') {
+        const production = await prisma.production.findUnique({
+          where: { id: parseInt(id) },
+        });
+        const factoryId = production.factoryId;
         // Update products with received and scrap quantities
         for (const p of products) {
           await prisma.productionProducts.update({
@@ -336,6 +333,42 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
               unit_cost: parseFloat(p.unit_cost),
             },
           });
+
+          // Add fine products to factory stock
+          if (p.received > 0) {
+            const factoryProduct = await prisma.factoryProduct.findUnique({
+              where: {
+                factoryId_productId: {
+                  factoryId: factoryId,
+                  productId: p.productId,
+                }
+              }
+            });
+
+            if (factoryProduct) {
+              await prisma.factoryProduct.update({
+                where: {
+                  factoryId_productId: {
+                    factoryId: factoryId,
+                    productId: p.productId,
+                  }
+                },
+                data: {
+                  stock: {
+                    increment: parseFloat(p.received),
+                  },
+                },
+              });
+            } else {
+              await prisma.factoryProduct.create({
+                data: {
+                  factoryId: factoryId,
+                  productId: p.productId,
+                  stock: parseFloat(p.received),
+                }
+              });
+            }
+          }
         }
         // Update materials with scrap quantities
         for (const m of materials) {
@@ -355,93 +388,6 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error(`Error updating status for production ${id}:`, error);
     res.status(500).json({ error: `Failed to update status: ${error.message}` });
-  }
-});
-
-// Transfer products to store
-router.post('/:id/transfer', authenticateToken, async (req, res) => {
-  const { id } = req.params;
-  const { transfers } = req.body;
-
-  try {
-    const result = await prisma.$transaction(async (prisma) => {
-      // Handle product transfers
-      for (const transfer of transfers) {
-        // Create transfer record
-        await prisma.factoryToStoreTransfer.create({
-          data: {
-            productionId: parseInt(id),
-            productId: parseInt(transfer.productId),
-            storeId: parseInt(transfer.storeId),
-            quantity: parseFloat(transfer.quantity),
-          },
-        });
-
-        // Update moved_to_store in productionProducts
-        await prisma.productionProducts.update({
-          where: { id: parseInt(transfer.productionProductId) },
-          data: {
-            moved_to_store: {
-              increment: parseFloat(transfer.quantity),
-            },
-          },
-        });
-
-        // Update product stock in store
-        const storeProduct = await prisma.storeProduct.findUnique({
-            where: {
-                store_id_product_id: {
-                    store_id: parseInt(transfer.storeId),
-                    product_id: parseInt(transfer.productId),
-                }
-            }
-        });
-
-        if (storeProduct) {
-            await prisma.storeProduct.update({
-                where: {
-                    store_id_product_id: {
-                        store_id: parseInt(transfer.storeId),
-                        product_id: parseInt(transfer.productId),
-                    }
-                },
-                data: {
-                    stock: {
-                        increment: parseFloat(transfer.quantity),
-                    },
-                },
-            });
-        } else {
-            await prisma.storeProduct.create({
-                data: {
-                    store_id: parseInt(transfer.storeId),
-                    product_id: parseInt(transfer.productId),
-                    stock: parseFloat(transfer.quantity),
-                }
-            });
-        }
-      }
-
-      // Check if all products are transferred and update production status
-      const productionProducts = await prisma.productionProducts.findMany({
-        where: { productionId: parseInt(id) },
-      });
-
-      const allTransferred = productionProducts.every(p => p.moved_to_store >= p.received);
-      const newStatus = allTransferred ? 'transfer_done' : 'partial_transfer';
-
-      const updatedProduction = await prisma.production.update({
-        where: { id: parseInt(id) },
-        data: { status: newStatus },
-      });
-
-      return updatedProduction;
-    });
-
-    res.json(result);
-  } catch (error) {
-    console.error(`Error transferring products for production ${id}:`, error);
-    res.status(500).json({ error: `Failed to transfer products: ${error.message}` });
   }
 });
 

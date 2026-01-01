@@ -71,7 +71,6 @@ model Product {
   materials               ProductMaterial[]
   productionProducts      ProductionProducts[]
   storeProducts           StoreProduct[]
-  factoryToStoreTransfers FactoryToStoreTransfer[]
   saleItem                SaleItem[]
   saleReturnItem           SaleReturnItem[]
   shopProduct             ShopProduct[]
@@ -116,7 +115,6 @@ model Production {
   updatedAt               DateTime                 @updatedAt
   productionProducts      ProductionProducts[]
   productionMaterials     ProductionMaterial[]
-  factoryToStoreTransfers FactoryToStoreTransfer[]
 }
 
 model Store {
@@ -127,7 +125,6 @@ model Store {
   mobile                  String?
   storeMaterials          StoreMaterial[]
   storeProducts           StoreProduct[]
-  factoryToStoreTransfers FactoryToStoreTransfer[]
   purchases               Purchase[]
   storeToShopTransfer     StoreToShopTransfer[]
   //sales                   Sale[]
@@ -165,7 +162,6 @@ model ProductionProducts {
   code           String
   quantity       Float
   unit_cost      Float
-  moved_to_store Float
   received       Float      @default(0)
   scrap          Float      @default(0)
   createdAt      DateTime   @default(now())
@@ -185,17 +181,7 @@ model ProductionMaterial {
   @@unique([productionId, materialId])
 }
 
-model FactoryToStoreTransfer {
-  id           Int        @id @default(autoincrement())
-  productId    Int
-  product      Product    @relation(fields: [productId], references: [id])
-  productionId Int
-  production   Production @relation(fields: [productionId], references: [id])
-  storeId      Int
-  store        Store      @relation(fields: [storeId], references: [id])
-  quantity     Float
-  createdAt    DateTime   @default(now())
-}
+
 
 model Supplier {
   id        Int        @id @default(autoincrement())
