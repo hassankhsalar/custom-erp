@@ -67,15 +67,18 @@ const AddTransfer = () => {
   const handleSearch = async (e) => {
     setSearch(e.target.value);
     if (e.target.value.length > 2) {
-      const res = await axios.get(API_ROUTES.PRODUCTS, {
+      const resProducts = await axios.get(API_ROUTES.PRODUCTS, {
         params: { search: e.target.value },
       });
-      const res2 = await axios.get(API_ROUTES.MATERIALS, {
+      const productsWithTag = resProducts.data.products.map(p => ({ ...p, itemType: 'product' }));
+
+      const resMaterials = await axios.get(API_ROUTES.MATERIALS, {
         params: { search: e.target.value },
       })
-      setSearchResults([...res.data.products, ...res2.data.materials]);
-    }
+      const materialsWithTag = resMaterials.data.materials.map(m => ({ ...m, itemType: 'material' }));
 
+      setSearchResults([...productsWithTag, ...materialsWithTag]);
+    }
   };
 
   const handleAddItem = (item) => {
