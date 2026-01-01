@@ -35,6 +35,7 @@ router.post('/', upload.single('document'), async (req, res) => {
   try {
     const transfer = await prisma.transfer.create({
       data: {
+        reference: `TR-${Date.now()}`,
         from,
         to,
         fromId: parseInt(fromId),

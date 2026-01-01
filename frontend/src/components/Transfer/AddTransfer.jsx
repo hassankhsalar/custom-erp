@@ -36,6 +36,34 @@ const AddTransfer = () => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    const dataMap = {
+      store: stores,
+      shop: shops,
+      factory: factories,
+    };
+    const data = dataMap[fromType];
+    if (data && data.length > 0) {
+      setFromId(data[0].id);
+    } else {
+      setFromId('');
+    }
+  }, [fromType, stores, shops, factories]);
+
+  useEffect(() => {
+    const dataMap = {
+      store: stores,
+      shop: shops,
+      factory: factories,
+    };
+    const data = dataMap[toType];
+    if (data && data.length > 0) {
+      setToId(data[0].id);
+    } else {
+      setToId('');
+    }
+  }, [toType, stores, shops, factories]);
+
   const handleSearch = async (e) => {
     setSearch(e.target.value);
     if (e.target.value.length > 2) {
@@ -45,7 +73,6 @@ const AddTransfer = () => {
       const res2 = await axios.get(API_ROUTES.MATERIALS, {
         params: { search: e.target.value },
       })
-      console.log(res.data, res2.data);
       setSearchResults([...res.data.products, ...res2.data.materials]);
     }
 
@@ -76,14 +103,17 @@ const AddTransfer = () => {
       formData.append('document', document);
     }
     formData.append('items', JSON.stringify(items));
-
+    console.log("Form data:", Object.fromEntries(formData));
+    
     try {
-      await axios.post('/api/transfers', formData, {
+      await axios.post(API_ROUTES.TRANSFERS, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
       alert('Transfer created successfully');
+      location.reload();
+
     } catch (error) {
       alert('Failed to create transfer');
     }
