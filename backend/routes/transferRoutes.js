@@ -116,32 +116,66 @@ router.post('/', upload.single('document'), async (req, res) => {
       const updateStock = async (locationType, locationId, itemId, quantity, increment = false) => {
         let model;
         let where;
-        let data;
+        let createData;
+        let updateData;
 
         const id = parseInt(itemId);
         const qty = parseFloat(quantity);
+        const locId = parseInt(locationId);
 
         switch (locationType) {
           case 'store':
             model = item.itemType === 'product' ? 'storeProduct' : 'storeMaterial';
-            where = item.itemType === 'product' ? { store_id_product_id: { store_id: parseInt(locationId), product_id: id } } : { store_id_material_id: { store_id: parseInt(locationId), material_id: id } };
-            data = { stock: increment ? { increment: qty } : { decrement: qty } };
+            where = item.itemType === 'product'
+              ? { store_id_product_id: { store_id: locId, product_id: id } }
+              : { store_id_material_id: { store_id: locId, material_id: id } };
+
+            if (item.itemType === 'product') {
+                createData = { store_id: locId, product_id: id, stock: qty };
+            } else {
+                createData = { store_id: locId, material_id: id, stock: qty };
+            }
+            updateData = { stock: increment ? { increment: qty } : { decrement: qty } };
             break;
           case 'shop':
             model = item.itemType === 'product' ? 'shopProduct' : 'shopMaterial';
-            where = item.itemType === 'product' ? { shop_id_product_id: { shop_id: parseInt(locationId), product_id: id } } : { shop_id_material_id: { shop_id: parseInt(locationId), material_id: id } };
-            data = { stock: increment ? { increment: qty } : { decrement: qty } };
+            where = item.itemType === 'product'
+              ? { shop_id_product_id: { shop_id: locId, product_id: id } }
+              : { shop_id_material_id: { shop_id: locId, material_id: id } };
+
+            if (item.itemType === 'product') {
+                createData = { shop_id: locId, product_id: id, stock: qty };
+            } else {
+                createData = { shop_id: locId, material_id: id, stock: qty };
+            }
+            updateData = { stock: increment ? { increment: qty } : { decrement: qty } };
             break;
           case 'factory':
             model = item.itemType === 'product' ? 'factoryProduct' : 'factoryMaterial';
-            where = item.itemType === 'product' ? { factoryId_productId: { factoryId: parseInt(locationId), productId: id } } : { factoryId_materialId: { factoryId: parseInt(locationId), materialId: id } };
-            data = { stock: increment ? { increment: qty } : { decrement: qty } };
+            where = item.itemType === 'product'
+              ? { factoryId_productId: { factoryId: locId, productId: id } }
+              : { factoryId_materialId: { factoryId: locId, materialId: id } };
+
+            if (item.itemType === 'product') {
+                createData = { factoryId: locId, productId: id, stock: qty };
+            } else {
+                createData = { factoryId: locId, materialId: id, stock: qty };
+            }
+            updateData = { stock: increment ? { increment: qty } : { decrement: qty } };
             break;
           default:
             return;
         }
 
-        await prisma[model].update({ where, data });
+        if (increment) { // If incrementing, use upsert
+          await prisma[model].upsert({
+            where,
+            update: updateData,
+            create: createData,
+          });
+        } else { // If decrementing, update existing record. If it doesn't exist, Prisma will throw an error.
+          await prisma[model].update({ where, data: updateData });
+        }
       };
 
       await updateStock(from, fromId, item.id, item.quantity, false);
