@@ -10,7 +10,6 @@ const NewProduction = () => {
     factoryId: '',
     status: 'pending',
     //attachments: '',
-    shipping_cost: '',
   });
   const [factories, setFactories] = useState([]);
   const [stores, setStores] = useState([]);
@@ -56,7 +55,6 @@ const NewProduction = () => {
               name: material.name,
               quantity: material_quantity * productQuantity,
               price: material.unit_cost,
-              storeId: stores.length > 0 ? stores[0].id : '',
             });
           }
         });
@@ -72,7 +70,6 @@ const NewProduction = () => {
           return {
             ...newMat,
             price: existingMat.price,
-            storeId: existingMat.storeId,
           };
         }
         return newMat;
@@ -152,7 +149,7 @@ const NewProduction = () => {
           unit_cost: p.unit_cost,
           moved_to_store: p.moved_to_store,
         })),
-        materials: selectedMaterials,
+        materials: selectedMaterials.map(({ storeId, ...material }) => material),
       };
       await axios.post(API_ROUTES.PRODUCTIONS, payload, {
         headers: { Authorization: `Bearer ${token}` },
@@ -221,8 +218,6 @@ const NewProduction = () => {
             >
               <option value="pending">Pending</option>
               <option value="running">Running</option>
-              <option value="production_done">Production Done</option>
-              <option value="transfer_done">Transfer Done</option>
             </select>
           </div>
           {/* <div>
@@ -237,18 +232,7 @@ const NewProduction = () => {
               placeholder="e.g., url1,url2,url3"
             />
           </div> */}
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="shipping_cost">Shipping Cost</label>
-            <input
-              type="number"
-              name="shipping_cost"
-              id="shipping_cost"
-              value={formData.shipping_cost}
-              onChange={handleChange}
-              className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-              step="0.01"
-            />
-          </div>
+
         </div>
 
         {/* Product Search */}
@@ -352,7 +336,6 @@ const NewProduction = () => {
                   <th className="px-4 py-2 border border-gray-300">Material Name</th>
                   <th className="px-4 py-2 border border-gray-300">Quantity</th>
                   <th className="px-4 py-2 border border-gray-300">Price</th>
-                  <th className="px-4 py-2 border border-gray-300">Store</th>
                   <th className="px-4 py-2 border border-gray-300">Action</th>
                 </tr>
               </thead>
@@ -378,17 +361,7 @@ const NewProduction = () => {
                         step="0.01"
                       />
                     </td>
-                    <td className="border border-gray-300 px-4 py-2">
-                      <select
-                        value={material.storeId}
-                        onChange={(e) => handleMaterialChange(index, 'storeId', e.target.value)}
-                        className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                      >
-                        {stores.map(store => (
-                          <option key={store.id} value={store.id}>{store.name}</option>
-                        ))}
-                      </select>
-                    </td>
+
                     <td className="border border-gray-300 px-4 py-2">
                       <button
                         type="button"

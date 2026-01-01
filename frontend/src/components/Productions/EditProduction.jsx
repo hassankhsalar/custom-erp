@@ -264,8 +264,6 @@ const EditProduction = () => {
             >
               <option value="pending">Pending</option>
               <option value="running">Running</option>
-              <option value="production_done">Production Done</option>
-              <option value="transfer_done">Transfer Done</option>
             </select>
           </div>
           {/* <div>

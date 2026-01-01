@@ -33,7 +33,7 @@ const generateReference = async () => {
 
 // Create a new production
 router.post('/', authenticateToken, async (req, res) => {
-  const { start_date, estimated_end_date, factoryId, status, shipping_cost, products, materials } = req.body;
+  const { start_date, estimated_end_date, factoryId, status, products, materials } = req.body;
 //, attachments removed
   try {
     const reference = await generateReference();
@@ -47,7 +47,6 @@ router.post('/', authenticateToken, async (req, res) => {
           factoryId: parseInt(factoryId),
           status,
           //attachments: attachments ? attachments.join(',') : null, 
-          shipping_cost: shipping_cost ? parseFloat(shipping_cost) : null,
           productionProducts: {
             create: products.map(p => ({
               productId: parseInt(p.productId),
@@ -60,7 +59,6 @@ router.post('/', authenticateToken, async (req, res) => {
           productionMaterials: {
             create: materials.map(m => ({
               materialId: parseInt(m.materialId),
-              storeId: parseInt(m.storeId),
               quantity: parseFloat(m.quantity),
               price: parseFloat(m.price),
             })),
@@ -73,24 +71,24 @@ router.post('/', authenticateToken, async (req, res) => {
       });
 
       for (const material of materials) {
-        const storeMaterial = await prisma.storeMaterial.findUnique({
+        const factoryMaterial = await prisma.factoryMaterial.findUnique({
           where: {
-            store_id_material_id: {
-              store_id: parseInt(material.storeId),
-              material_id: parseInt(material.materialId),
+            factoryId_materialId: {
+              factoryId: parseInt(factoryId),
+              materialId: parseInt(material.materialId),
             }
           }
         });
 
-        if (!storeMaterial || storeMaterial.stock < parseFloat(material.quantity)) {
-          throw new Error(`Not enough stock for material ${material.materialId} in store ${material.storeId}`);
+        if (!factoryMaterial || factoryMaterial.stock < parseFloat(material.quantity)) {
+          throw new Error(`Not enough stock for material ${material.name} in this factory`);
         }
 
-        await prisma.storeMaterial.update({
+        await prisma.factoryMaterial.update({
           where: {
-            store_id_material_id: {
-              store_id: parseInt(material.storeId),
-              material_id: parseInt(material.materialId),
+            factoryId_materialId: {
+              factoryId: parseInt(factoryId),
+              materialId: parseInt(material.materialId),
             }
           },
           data: {
@@ -169,7 +167,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
         productionMaterials: {
           include: {
             material: true,
-            store: true,
           }
         },
         factoryToStoreTransfers: {
@@ -194,7 +191,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Update a production
 router.put('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { start_date, estimated_end_date, factoryId, status, shipping_cost, products, materials } = req.body;
+  const { start_date, estimated_end_date, factoryId, status, products, materials } = req.body;
 //, attachments
   try {
     const result = await prisma.$transaction(async (prisma) => {
@@ -207,10 +204,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
       // Restore stock for old materials
       if (oldProduction && oldProduction.productionMaterials) {
         for (const material of oldProduction.productionMaterials) {
-          await prisma.storeMaterial.updateMany({
+          await prisma.factoryMaterial.updateMany({
             where: {
-              store_id: material.storeId,
-              material_id: material.materialId,
+              factoryId: oldProduction.factoryId, // Use factoryId from oldProduction
+              materialId: material.materialId,
             },
             data: {
               stock: {
@@ -227,24 +224,24 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
       // Decrement stock for new materials and check for availability
       for (const material of materials) {
-        const storeMaterial = await prisma.storeMaterial.findUnique({
+        const factoryMaterial = await prisma.factoryMaterial.findUnique({
           where: {
-            store_id_material_id: {
-              store_id: parseInt(material.storeId),
-              material_id: parseInt(material.materialId),
+            factoryId_materialId: {
+              factoryId: parseInt(factoryId),
+              materialId: parseInt(material.materialId),
             }
           }
         });
 
-        if (!storeMaterial || storeMaterial.stock < parseFloat(material.quantity)) {
-          throw new Error(`Not enough stock for material ${material.materialId} in store ${material.storeId}`);
+        if (!factoryMaterial || factoryMaterial.stock < parseFloat(material.quantity)) {
+          throw new Error(`Not enough stock for material ${material.materialId} in factory ${factoryId}`);
         }
 
-        await prisma.storeMaterial.update({
+        await prisma.factoryMaterial.update({
           where: {
-            store_id_material_id: {
-              store_id: parseInt(material.storeId),
-              material_id: parseInt(material.materialId),
+            factoryId_materialId: {
+              factoryId: parseInt(factoryId),
+              materialId: parseInt(material.materialId),
             }
           },
           data: {
@@ -264,7 +261,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
           factoryId: parseInt(factoryId),
           status,
           //attachments: attachments ? attachments.join(',') : null,
-          shipping_cost: shipping_cost ? parseFloat(shipping_cost) : null,
           productionProducts: {
             create: products.map(p => ({
               productId: parseInt(p.productId),
@@ -277,7 +273,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
           productionMaterials: {
             create: materials.map(m => ({
               materialId: parseInt(m.materialId),
-              storeId: parseInt(m.storeId),
               quantity: parseFloat(m.quantity),
               price: parseFloat(m.price),
             })),

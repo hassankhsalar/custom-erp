@@ -112,7 +112,6 @@ model Production {
   factory                 Factory                  @relation(fields: [factoryId], references: [id])
   status                  String                   @default("pending") // e.g., "pending", "running", "done"
   attachments             String? // Changed to String?
-  shipping_cost           Float?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   productionProducts      ProductionProducts[]
@@ -128,7 +127,6 @@ model Store {
   mobile                  String?
   storeMaterials          StoreMaterial[]
   storeProducts           StoreProduct[]
-  productionMaterials     ProductionMaterial[]
   factoryToStoreTransfers FactoryToStoreTransfer[]
   purchases               Purchase[]
   storeToShopTransfer     StoreToShopTransfer[]
@@ -180,13 +178,11 @@ model ProductionMaterial {
   production   Production @relation(fields: [productionId], references: [id])
   materialId   Int
   material     Material   @relation(fields: [materialId], references: [id])
-  storeId      Int
-  store        Store      @relation(fields: [storeId], references: [id])
   quantity     Float
   price        Float
   scrap        Float      @default(0)
 
-  @@unique([productionId, materialId, storeId])
+  @@unique([productionId, materialId])
 }
 
 model FactoryToStoreTransfer {
