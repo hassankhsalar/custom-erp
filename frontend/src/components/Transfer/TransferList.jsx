@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { API_ROUTES } from '../../config';
 
 const TransferList = ({ fromType, toType, title }) => {
   const [transfers, setTransfers] = useState([]);
@@ -8,7 +9,7 @@ const TransferList = ({ fromType, toType, title }) => {
 
   useEffect(() => {
     const fetchTransfers = async () => {
-      const res = await axios.get('/api/transfers', {
+      const res = await axios.get(API_ROUTES.TRANSFERS, {
         params: {
           from: fromType,
           to: toType,
