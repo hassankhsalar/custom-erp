@@ -29,21 +29,31 @@ const TransferList = ({ fromType, toType, title }) => {
       <table className="w-full">
         <thead>
           <tr>
-            <th className="text-left">Reference</th>
-            <th className="text-left">From</th>
-            <th className="text-left">To</th>
-            <th className="text-left">Shipping Cost</th>
-            <th className="text-left">Note</th>
+            <th className="text-left p-2 border border-gray-200">Reference</th>
+            <th className="text-left p-2 border border-gray-200">From</th>
+            <th className="text-left p-2 border border-gray-200">To</th>
+            <th className="text-left p-2 border border-gray-200">Shipping Cost</th>
+            <th className="text-left p-2 border border-gray-200">Total Products</th>
+            <th className="text-left p-2 border border-gray-200">Note</th>
           </tr>
         </thead>
         <tbody>
           {transfers.map((transfer) => (
             <tr key={transfer.id}>
-              <td>{transfer.reference}</td>
-              <td>{transfer.from}</td>
-              <td>{transfer.to}</td>
-              <td>{transfer.shipping_cost}</td>
-              <td>{transfer.note}</td>
+              <td className='p-2 border border-gray-200'>{transfer.reference}</td>
+              <td className='p-2 border border-gray-200'>
+                {transfer.fromName}
+                <br />
+                <span className="text-gray-500 text-xs">({transfer.from})</span>
+              </td>
+              <td className='p-2 border border-gray-200'>
+                {transfer.toName}
+                <br />
+                <span className="text-gray-500 text-xs">({transfer.to})</span>
+              </td>
+              <td className='p-2 border border-gray-200'>{transfer.shipping_cost}</td>
+              <td className='p-2 border border-gray-200'>{transfer.totalProducts}</td>
+              <td className='p-2 border border-gray-200'>{transfer.note}</td>
             </tr>
           ))}
         </tbody>
