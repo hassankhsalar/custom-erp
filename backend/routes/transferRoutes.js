@@ -1,12 +1,30 @@
 const express = require('express');
 const router = express.Router();
+const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 
-router.get('/', async (req, res) => {
-  const { from, to, page = 1, search } = req.query;
+const JWT_SECRET = 'your-secret-key'; // Replace with a strong secret key
+
+// Middleware to protect routes
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token == null) return res.sendStatus(401);
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
+
+
+router.get('/', authenticateToken, async (req, res) => {
+  const { from, to, page = 1, search='' } = req.query;
   const where = {};
   if (from) {
     where.from = from;
@@ -20,18 +38,23 @@ router.get('/', async (req, res) => {
       { note: { contains: search } },
     ];
   }
-  const transfers = await prisma.transfer.findMany({
-    where,
-    skip: (page - 1) * 10,
-    take: 10,
-    include: {
-      transferItems: {
-        select: {
-          quantity: true,
+  const [transfers, totalItems] = await prisma.$transaction([
+    prisma.transfer.findMany({
+      where,
+      skip: (page - 1) * 10,
+      take: 10,
+      include: {
+        transferItems: {
+          select: {
+            quantity: true,
+          },
         },
       },
-    },
-  });
+    }),
+    prisma.transfer.count({ where }),
+  ]);
+
+  const totalPages = Math.ceil(totalItems / 10);
 
   // Collect all unique IDs for stores, shops, and factories
   const storeIds = new Set();
@@ -80,10 +103,14 @@ router.get('/', async (req, res) => {
     };
   });
 
-  res.json(transfersWithNamesAndTotalProducts);
+  res.json({
+    transfers: transfersWithNamesAndTotalProducts,
+    totalItems,
+    totalPages,
+  });
 });
 
-router.post('/', upload.single('document'), async (req, res) => {
+router.post('/', authenticateToken, upload.single('document'), async (req, res) => {
   const { from, to, fromId, toId, items, shipping_cost, note } = req.body;
   const document = req.file;
 
@@ -179,13 +206,106 @@ router.post('/', upload.single('document'), async (req, res) => {
       };
 
       await updateStock(from, fromId, item.id, item.quantity, false);
-      await updateStock(to, toId, item.id, item.quantity, true);
     }
 
     res.status(201).json(transfer);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to create transfer' });
+  }
+});
+
+// Update transfer status
+router.put('/:id/status', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  try {
+    const updatedTransfer = await prisma.$transaction(async (prisma) => {
+      const transfer = await prisma.transfer.findUnique({
+        where: { id: parseInt(id) },
+        include: { transferItems: true },
+      });
+
+      if (!transfer) {
+        return res.status(404).json({ error: 'Transfer not found' });
+      }
+
+      const newStatus = await prisma.transfer.update({
+        where: { id: parseInt(id) },
+        data: { status },
+      });
+
+      if (status === 'transfer_done') {
+        const updateStock = async (locationType, locationId, itemId, quantity) => {
+          let model;
+          let where;
+          let createData;
+          let updateData;
+
+          const itemIdInt = parseInt(itemId);
+          const qty = parseFloat(quantity);
+          const locId = parseInt(locationId);
+
+          // Determine the model and where clause based on locationType and itemType
+          // This logic needs to be adapted from your existing updateStock function
+          // Assuming item.itemType is available in transfer.transferItems
+          const itemType = transfer.transferItems.find(i => i.itemId === itemIdInt).item; // Assuming item field holds 'product' or 'material'
+
+          switch (locationType) {
+            case 'store':
+              model = itemType === 'product' ? 'storeProduct' : 'storeMaterial';
+              where = itemType === 'product'
+                ? { store_id_product_id: { store_id: locId, product_id: itemIdInt } }
+                : { store_id_material_id: { store_id: locId, material_id: itemIdInt } };
+              createData = itemType === 'product'
+                ? { store_id: locId, product_id: itemIdInt, stock: qty }
+                : { store_id: locId, material_id: itemIdInt, stock: qty };
+              updateData = { stock: { increment: qty } };
+              break;
+            case 'shop':
+              model = itemType === 'product' ? 'shopProduct' : 'shopMaterial';
+              where = itemType === 'product'
+                ? { shop_id_product_id: { shop_id: locId, product_id: itemIdInt } }
+                : { shop_id_material_id: { shop_id: locId, material_id: itemIdInt } };
+              createData = itemType === 'product'
+                ? { shop_id: locId, product_id: itemIdInt, stock: qty }
+                : { shop_id: locId, material_id: itemIdInt, stock: qty };
+              updateData = { stock: { increment: qty } };
+              break;
+            case 'factory':
+              model = itemType === 'product' ? 'factoryProduct' : 'factoryMaterial';
+              where = itemType === 'product'
+                ? { factoryId_productId: { factoryId: locId, productId: itemIdInt } }
+                : { factoryId_materialId: { factoryId: locId, materialId: itemIdInt } };
+              createData = itemType === 'product'
+                ? { factoryId: locId, productId: itemIdInt, stock: qty }
+                : { factoryId: locId, materialId: itemIdInt, stock: qty };
+              updateData = { stock: { increment: qty } };
+              break;
+            default:
+              throw new Error(`Invalid location type: ${locationType}`);
+          }
+
+          await prisma[model].upsert({
+            where,
+            update: updateData,
+            create: createData,
+          });
+        };
+
+        for (const item of transfer.transferItems) {
+          await updateStock(transfer.to, transfer.toId, item.itemId, item.quantity);
+        }
+      }
+
+      return newStatus;
+    });
+
+    res.json(updatedTransfer);
+  } catch (error) {
+    console.error('Error updating transfer status:', error);
+    res.status(500).json({ error: `Failed to update transfer status: ${error.message}` });
   }
 });
 
