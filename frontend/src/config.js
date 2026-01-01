@@ -25,8 +25,10 @@ export const API_ROUTES = {
   SHOP_SALES_PRODUCTS: (shopId) => `${API_BASE_URL}/shop-sales/products/shop/${shopId}`,
   SHOP_SALES_BY_ID: (id) => `${API_BASE_URL}/shop-sales/${id}`,
 
-//transfer routes
-STORE_TO_SHOP_TRANSFERS: `${API_BASE_URL}/store-to-shop-transfers`,
+  //transfer routes
+  TRANSFERS: `${API_BASE_URL}/api/transfers`,
+  
+  STORE_TO_SHOP_TRANSFERS: `${API_BASE_URL}/store-to-shop-transfers`,
   STORE_TO_SHOP_TRANSFERS_SHOPS: `${API_BASE_URL}/store-to-shop-transfers/shops`,
   STORE_TO_SHOP_TRANSFER_STATUS: (id) => `${API_BASE_URL}/store-to-shop-transfers/${id}/status`,
 
