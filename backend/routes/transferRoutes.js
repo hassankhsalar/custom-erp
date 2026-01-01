@@ -52,7 +52,7 @@ router.post('/', upload.single('document'), async (req, res) => {
       await prisma.transferItem.create({
         data: {
           transferId: transfer.id,
-          item: item.name,
+          item: item.itemType,
           itemId: item.id,
           quantity: parseFloat(item.quantity),
         },
@@ -68,18 +68,18 @@ router.post('/', upload.single('document'), async (req, res) => {
 
         switch (locationType) {
           case 'store':
-            model = item.sale_price ? 'storeProduct' : 'storeMaterial';
-            where = item.sale_price ? { store_id_product_id: { store_id: parseInt(locationId), product_id: id } } : { store_id_material_id: { store_id: parseInt(locationId), material_id: id } };
+            model = item.itemType === 'product' ? 'storeProduct' : 'storeMaterial';
+            where = item.itemType === 'product' ? { store_id_product_id: { store_id: parseInt(locationId), product_id: id } } : { store_id_material_id: { store_id: parseInt(locationId), material_id: id } };
             data = { stock: increment ? { increment: qty } : { decrement: qty } };
             break;
           case 'shop':
-            model = item.sale_price ? 'shopProduct' : 'shopMaterial';
-            where = item.sale_price ? { shop_id_product_id: { shop_id: parseInt(locationId), product_id: id } } : { shop_id_material_id: { shop_id: parseInt(locationId), material_id: id } };
+            model = item.itemType === 'product' ? 'shopProduct' : 'shopMaterial';
+            where = item.itemType === 'product' ? { shop_id_product_id: { shop_id: parseInt(locationId), product_id: id } } : { shop_id_material_id: { shop_id: parseInt(locationId), material_id: id } };
             data = { stock: increment ? { increment: qty } : { decrement: qty } };
             break;
           case 'factory':
-            model = item.sale_price ? 'factoryProduct' : 'factoryMaterial';
-            where = item.sale_price ? { factoryId_productId: { factoryId: parseInt(locationId), productId: id } } : { factoryId_materialId: { factoryId: parseInt(locationId), materialId: id } };
+            model = item.itemType === 'product' ? 'factoryProduct' : 'factoryMaterial';
+            where = item.itemType === 'product' ? { factoryId_productId: { factoryId: parseInt(locationId), productId: id } } : { factoryId_materialId: { factoryId: parseInt(locationId), materialId: id } };
             data = { stock: increment ? { increment: qty } : { decrement: qty } };
             break;
           default:
