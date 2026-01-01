@@ -15,7 +15,7 @@ const Sidebar = () => {
     }));
   };
 
-  console.log(currentUser);
+  // console.log(currentUser);
 
   return (
     <div className="w-64 bg-black text-white p-5 min-h-screen shadow-lg"> {/* Black background, white text, padding, min-height, shadow */}

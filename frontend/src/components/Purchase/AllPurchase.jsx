@@ -20,7 +20,7 @@ export default function AllPurchase() {
     };
     fetchPurchases();
   }, []);
-  console.log(purchases);
+  // console.log(purchases);
 
   if (loading)
     return (
