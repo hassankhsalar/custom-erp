@@ -71,7 +71,6 @@ model Product {
   materials               ProductMaterial[]
   productionProducts      ProductionProducts[]
   storeProducts           StoreProduct[]
-  factoryToStoreTransfers FactoryToStoreTransfer[]
   saleItem                SaleItem[]
   saleReturnItem           SaleReturnItem[]
   shopProduct             ShopProduct[]
@@ -112,12 +111,10 @@ model Production {
   factory                 Factory                  @relation(fields: [factoryId], references: [id])
   status                  String                   @default("pending") // e.g., "pending", "running", "done"
   attachments             String? // Changed to String?
-  shipping_cost           Float?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   productionProducts      ProductionProducts[]
   productionMaterials     ProductionMaterial[]
-  factoryToStoreTransfers FactoryToStoreTransfer[]
 }
 
 model Store {
@@ -128,8 +125,6 @@ model Store {
   mobile                  String?
   storeMaterials          StoreMaterial[]
   storeProducts           StoreProduct[]
-  productionMaterials     ProductionMaterial[]
-  factoryToStoreTransfers FactoryToStoreTransfer[]
   purchases               Purchase[]
   storeToShopTransfer     StoreToShopTransfer[]
   //sales                   Sale[]
@@ -167,7 +162,6 @@ model ProductionProducts {
   code           String
   quantity       Float
   unit_cost      Float
-  moved_to_store Float
   received       Float      @default(0)
   scrap          Float      @default(0)
   createdAt      DateTime   @default(now())
@@ -180,26 +174,14 @@ model ProductionMaterial {
   production   Production @relation(fields: [productionId], references: [id])
   materialId   Int
   material     Material   @relation(fields: [materialId], references: [id])
-  storeId      Int
-  store        Store      @relation(fields: [storeId], references: [id])
   quantity     Float
   price        Float
   scrap        Float      @default(0)
 
-  @@unique([productionId, materialId, storeId])
+  @@unique([productionId, materialId])
 }
 
-model FactoryToStoreTransfer {
-  id           Int        @id @default(autoincrement())
-  productId    Int
-  product      Product    @relation(fields: [productId], references: [id])
-  productionId Int
-  production   Production @relation(fields: [productionId], references: [id])
-  storeId      Int
-  store        Store      @relation(fields: [storeId], references: [id])
-  quantity     Float
-  createdAt    DateTime   @default(now())
-}
+
 
 model Supplier {
   id        Int        @id @default(autoincrement())

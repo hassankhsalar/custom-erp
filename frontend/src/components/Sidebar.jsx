@@ -142,8 +142,8 @@ const Sidebar = () => {
           </div>
           {openMenus.shop && (
             <ul className="pl-6 border-l border-gray-700 mt-1">
-              <li><Link to="/shop/add" className="block py-1 px-2 text-gray-300 hover:text-white">Add Shop</Link></li>
               <li><Link to="/shop/all" className="block py-1 px-2 text-gray-300 hover:text-white">All Shop</Link></li>
+              <li><Link to="/shop/add" className="block py-1 px-2 text-gray-300 hover:text-white">Add Shop</Link></li>
             </ul>
           )}
         </li>

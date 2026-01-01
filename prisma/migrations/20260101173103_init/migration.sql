@@ -92,7 +92,6 @@ CREATE TABLE `Production` (
     `factoryId` INTEGER NOT NULL,
     `status` VARCHAR(191) NOT NULL DEFAULT 'pending',
     `attachments` VARCHAR(191) NULL,
-    `shipping_cost` DOUBLE NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
@@ -152,12 +151,11 @@ CREATE TABLE `ProductionMaterial` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `productionId` INTEGER NOT NULL,
     `materialId` INTEGER NOT NULL,
-    `storeId` INTEGER NOT NULL,
     `quantity` DOUBLE NOT NULL,
     `price` DOUBLE NOT NULL,
     `scrap` DOUBLE NOT NULL DEFAULT 0,
 
-    UNIQUE INDEX `ProductionMaterial_productionId_materialId_storeId_key`(`productionId`, `materialId`, `storeId`),
+    UNIQUE INDEX `ProductionMaterial_productionId_materialId_key`(`productionId`, `materialId`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -355,6 +353,24 @@ CREATE TABLE `TransferItem` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- CreateTable
+CREATE TABLE `FactoryProduct` (
+    `factoryId` INTEGER NOT NULL,
+    `productId` INTEGER NOT NULL,
+    `stock` DOUBLE NOT NULL DEFAULT 0,
+
+    PRIMARY KEY (`factoryId`, `productId`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `FactoryMaterial` (
+    `factoryId` INTEGER NOT NULL,
+    `materialId` INTEGER NOT NULL,
+    `stock` DOUBLE NOT NULL DEFAULT 0,
+
+    PRIMARY KEY (`factoryId`, `materialId`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 -- AddForeignKey
 ALTER TABLE `User` ADD CONSTRAINT `User_profileId_fkey` FOREIGN KEY (`profileId`) REFERENCES `Profile`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
@@ -390,9 +406,6 @@ ALTER TABLE `ProductionMaterial` ADD CONSTRAINT `ProductionMaterial_productionId
 
 -- AddForeignKey
 ALTER TABLE `ProductionMaterial` ADD CONSTRAINT `ProductionMaterial_materialId_fkey` FOREIGN KEY (`materialId`) REFERENCES `Material`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE `ProductionMaterial` ADD CONSTRAINT `ProductionMaterial_storeId_fkey` FOREIGN KEY (`storeId`) REFERENCES `Store`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE `FactoryToStoreTransfer` ADD CONSTRAINT `FactoryToStoreTransfer_productId_fkey` FOREIGN KEY (`productId`) REFERENCES `Product`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -465,3 +478,15 @@ ALTER TABLE `StoreToShopTransferItem` ADD CONSTRAINT `StoreToShopTransferItem_ma
 
 -- AddForeignKey
 ALTER TABLE `TransferItem` ADD CONSTRAINT `TransferItem_transferId_fkey` FOREIGN KEY (`transferId`) REFERENCES `Transfer`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `FactoryProduct` ADD CONSTRAINT `FactoryProduct_factoryId_fkey` FOREIGN KEY (`factoryId`) REFERENCES `Factory`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `FactoryProduct` ADD CONSTRAINT `FactoryProduct_productId_fkey` FOREIGN KEY (`productId`) REFERENCES `Product`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `FactoryMaterial` ADD CONSTRAINT `FactoryMaterial_factoryId_fkey` FOREIGN KEY (`factoryId`) REFERENCES `Factory`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE `FactoryMaterial` ADD CONSTRAINT `FactoryMaterial_materialId_fkey` FOREIGN KEY (`materialId`) REFERENCES `Material`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
