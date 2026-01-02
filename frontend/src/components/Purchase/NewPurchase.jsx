@@ -5,7 +5,7 @@ export default function NewPurchase() {
   const [suppliers, setSuppliers] = useState([]);
   const [stores, setStores] = useState([]);
   const [purchaseItems, setPurchaseItems] = useState([
-    { materialId: "", quantity: "", unitPrice: "", total: 0 }
+    { materialId: "", quantity: "", unitPrice: "", total: 0, materialUnitPrice: 0 }
   ]);
   const [form, setForm] = useState({
     supplierId: "",
@@ -26,7 +26,7 @@ export default function NewPurchase() {
     try {
       const res = await fetch("http://localhost:3001/api/materials");
       const data = await res.json();
-      setMaterials(data.materials || []);
+      setMaterials(data.materials || data || []);
     } catch (error) {
       console.error("Failed to fetch materials:", error);
       setMaterials([]);
@@ -75,10 +75,29 @@ export default function NewPurchase() {
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...purchaseItems];
     
-    updatedItems[index][field] = value;
+    if (field === 'materialId') {
+      // Find the selected material
+      const selectedMaterial = materials.find(m => m.id === parseInt(value));
+      
+      if (selectedMaterial) {
+        // Update both materialId and the unit price from the material
+        updatedItems[index].materialId = value;
+        updatedItems[index].materialUnitPrice = selectedMaterial.unit_cost || 0;
+        
+        // If unitPrice is empty or zero, auto-fill with material's unit_cost
+        if (!updatedItems[index].unitPrice || updatedItems[index].unitPrice === "0") {
+          updatedItems[index].unitPrice = selectedMaterial.unit_cost.toString();
+        }
+      } else {
+        updatedItems[index].materialId = value;
+        updatedItems[index].materialUnitPrice = 0;
+      }
+    } else {
+      updatedItems[index][field] = value;
+    }
     
     // Auto-calculate total when quantity or unitPrice changes
-    if (field === 'quantity' || field === 'unitPrice') {
+    if (field === 'quantity' || field === 'unitPrice' || field === 'materialId') {
       const quantity = parseFloat(updatedItems[index].quantity) || 0;
       const unitPrice = parseFloat(updatedItems[index].unitPrice) || 0;
       updatedItems[index].total = quantity * unitPrice;
@@ -90,7 +109,7 @@ export default function NewPurchase() {
   const addItem = () => {
     setPurchaseItems([
       ...purchaseItems,
-      { materialId: "", quantity: "", unitPrice: "", total: 0 }
+      { materialId: "", quantity: "", unitPrice: "", total: 0, materialUnitPrice: 0 }
     ]);
   };
 
@@ -99,6 +118,38 @@ export default function NewPurchase() {
       const updatedItems = purchaseItems.filter((_, i) => i !== index);
       setPurchaseItems(updatedItems);
     }
+  };
+
+  // Helper function to get material name by ID
+  const getMaterialName = (id) => {
+    const material = materials.find(m => m.id === parseInt(id));
+    return material ? `${material.name} (${material.unit})` : '-- Select Material --';
+  };
+
+  // Helper function to get material unit cost by ID
+  const getMaterialUnitCost = (id) => {
+    const material = materials.find(m => m.id === parseInt(id));
+    return material ? material.unit_cost : 0;
+  };
+
+  // Auto-fill unit price when material is selected (separate function for onBlur)
+  const handleMaterialSelect = (index, materialId) => {
+    if (!materialId) return;
+    
+    const updatedItems = [...purchaseItems];
+    const material = materials.find(m => m.id === parseInt(materialId));
+    
+    if (material) {
+      // Only auto-fill if unitPrice is empty or zero
+      if (!updatedItems[index].unitPrice || updatedItems[index].unitPrice === "0") {
+        updatedItems[index].unitPrice = material.unit_cost.toString();
+        const quantity = parseFloat(updatedItems[index].quantity) || 0;
+        updatedItems[index].total = quantity * material.unit_cost;
+      }
+      updatedItems[index].materialUnitPrice = material.unit_cost;
+    }
+    
+    setPurchaseItems(updatedItems);
   };
 
   const handleSubmit = async (e) => {
@@ -154,7 +205,7 @@ export default function NewPurchase() {
           grandTotal: 0,
           reference: `PUR-${Date.now()}`
         });
-        setPurchaseItems([{ materialId: "", quantity: "", unitPrice: "", total: 0 }]);
+        setPurchaseItems([{ materialId: "", quantity: "", unitPrice: "", total: 0, materialUnitPrice: 0 }]);
       } else {
         setMessage(`❌ ${data.error || data.message || "Failed to add purchase"}`);
       }
@@ -215,73 +266,98 @@ export default function NewPurchase() {
             </button>
           </div>
 
-          {purchaseItems.map((item, index) => (
-            <div key={index} style={itemRow}>
-              <div style={gridRow}>
-                <div style={row}>
-                  <label>Material:</label>
-                  <select
-                    value={item.materialId}
-                    onChange={(e) => handleItemChange(index, 'materialId', e.target.value)}
-                    required
-                  >
-                    <option value="">-- Select Material --</option>
-                    {materials.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} ({m.unit})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={row}>
-                  <label>Quantity:</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={item.quantity}
-                    onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div style={row}>
-                  <label>Unit Price:</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={item.unitPrice}
-                    onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div style={row}>
-                  <label>Total:</label>
-                  <input 
-                    type="text" 
-                    value={item.total.toFixed(2)} 
-                    readOnly 
-                    style={totalInput}
-                  />
-                </div>
-
-                {purchaseItems.length > 1 && (
-                  <div style={removeButtonContainer}>
-                    <button
-                      type="button"
-                      onClick={() => removeItem(index)}
-                      style={removeButton}
+          {purchaseItems.map((item, index) => {
+            const materialUnitCost = getMaterialUnitCost(item.materialId);
+            const materialName = getMaterialName(item.materialId);
+            
+            return (
+              <div key={index} style={itemRow}>
+                <div style={gridRow}>
+                  <div style={row}>
+                    <label>Material:</label>
+                    <select
+                      value={item.materialId}
+                      onChange={(e) => handleItemChange(index, 'materialId', e.target.value)}
+                      onBlur={() => handleMaterialSelect(index, item.materialId)}
+                      required
                     >
-                      ×
-                    </button>
+                      <option value="">-- Select Material --</option>
+                      {materials.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} ({m.unit}) - ${m.unit_cost}/unit
+                        </option>
+                      ))}
+                    </select>
+                    {item.materialId && (
+                      <small style={{ color: "#666", fontSize: "0.8rem", marginTop: "2px" }}>
+                        Standard price: ${materialUnitCost.toFixed(2)}
+                      </small>
+                    )}
                   </div>
-                )}
+
+                  <div style={row}>
+                    <label>Quantity:</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="1"
+                      value={item.quantity}
+                      onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div style={row}>
+                    <label>Unit Price:</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder={item.materialId ? `e.g., ${materialUnitCost.toFixed(2)}` : "Select material first"}
+                      value={item.unitPrice}
+                      onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
+                      required
+                      style={{
+                        ...(item.materialId && parseFloat(item.unitPrice) === materialUnitCost 
+                          ? { borderColor: "#10b981", backgroundColor: "#f0fdf4" } 
+                          : item.materialId && parseFloat(item.unitPrice) !== materialUnitCost
+                          ? { borderColor: "#f59e0b", backgroundColor: "#fffbeb" }
+                          : {})
+                      }}
+                    />
+                    {item.materialId && parseFloat(item.unitPrice) !== materialUnitCost && item.unitPrice && (
+                      <small style={{ color: "#f59e0b", fontSize: "0.8rem", marginTop: "2px" }}>
+                        Different from standard price (${materialUnitCost.toFixed(2)})
+                      </small>
+                    )}
+                  </div>
+
+                  <div style={row}>
+                    <label>Total:</label>
+                    <input 
+                      type="text" 
+                      value={item.total.toFixed(2)} 
+                      readOnly 
+                      style={totalInput}
+                    />
+                  </div>
+
+                  {purchaseItems.length > 1 && (
+                    <div style={removeButtonContainer}>
+                      <button
+                        type="button"
+                        onClick={() => removeItem(index)}
+                        style={removeButton}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Grand Total */}
@@ -317,7 +393,7 @@ export default function NewPurchase() {
   );
 }
 
-// Styles (same as previous)
+// Styles
 const container = {
   maxWidth: "900px",
   margin: "2rem auto",
