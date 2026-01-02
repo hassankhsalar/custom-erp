@@ -13,6 +13,7 @@ export const API_ROUTES = {
   STORES: `${API_BASE_URL}/stores`,
   SALES: `${API_BASE_URL}/sales`,
   PURCHASES: `${API_BASE_URL}/purchases`,
+  SUPPLIERS: `${API_BASE_URL}/suppliers`,
 
   SHOPS: `${API_BASE_URL}/shops`,
   SHOPS_ALL: `${API_BASE_URL}/shops`,

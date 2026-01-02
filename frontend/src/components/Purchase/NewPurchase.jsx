@@ -3,13 +3,16 @@ import { useEffect, useState } from "react";
 export default function NewPurchase() {
   const [materials, setMaterials] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
-  const [stores, setStores] = useState([]);
+  const [destinations, setDestinations] = useState([]);
+  const [destinationType, setDestinationType] = useState("store");
+  const [destinationId, setDestinationId] = useState("");
   const [purchaseItems, setPurchaseItems] = useState([
     { materialId: "", quantity: "", unitPrice: "", total: 0, materialUnitPrice: 0 }
   ]);
   const [form, setForm] = useState({
     supplierId: "",
-    storeId: "",
+    destinationType: "store",
+    destinationId: "",
     grandTotal: 0,
     reference: `PUR-${Date.now()}`
   });
@@ -19,8 +22,8 @@ export default function NewPurchase() {
   useEffect(() => {
     fetchMaterials();
     fetchSuppliers();
-    fetchStores();
-  }, []);
+    fetchDestinations();
+  }, [destinationType]);
 
   const fetchMaterials = async () => {
     try {
@@ -44,20 +47,48 @@ export default function NewPurchase() {
     }
   };
 
-  const fetchStores = async () => {
+  const fetchDestinations = async () => {
     try {
+      let endpoint = "";
+      switch (destinationType) {
+        case "store":
+          endpoint = "http://localhost:3001/api/stores";
+          break;
+        case "shop":
+          endpoint = "http://localhost:3001/api/shops";
+          break;
+        case "factory":
+          endpoint = "http://localhost:3001/api/factories";
+          break;
+        default:
+          endpoint = "http://localhost:3001/api/stores";
+      }
+
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:3001/api/stores", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!res.ok) throw new Error("Unauthorized");
+      const headers = {};
+      
+      // Add token for protected routes (stores require auth)
+      if (destinationType === "store") {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const res = await fetch(endpoint, { headers });
+      if (!res.ok) throw new Error("Failed to fetch destinations");
       const data = await res.json();
-      setStores(Array.isArray(data) ? data : data.stores || []);
+      
+      // Handle different response formats
+      if (Array.isArray(data)) {
+        setDestinations(data);
+      } else if (data.stores) {
+        setDestinations(data.stores);
+      } else if (data.shops) {
+        setDestinations(data.shops || data);
+      } else {
+        setDestinations([]);
+      }
     } catch (error) {
-      console.error("Failed to fetch stores:", error);
-      setStores([]);
+      console.error("Failed to fetch destinations:", error);
+      setDestinations([]);
     }
   };
 
@@ -72,19 +103,33 @@ export default function NewPurchase() {
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleDestinationTypeChange = (e) => {
+    const newType = e.target.value;
+    setDestinationType(newType);
+    setDestinationId("");
+    setForm(prev => ({ 
+      ...prev, 
+      destinationType: newType,
+      destinationId: ""
+    }));
+  };
+
+  const handleDestinationChange = (e) => {
+    const newId = e.target.value;
+    setDestinationId(newId);
+    setForm(prev => ({ ...prev, destinationId: newId }));
+  };
+
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...purchaseItems];
     
     if (field === 'materialId') {
-      // Find the selected material
       const selectedMaterial = materials.find(m => m.id === parseInt(value));
       
       if (selectedMaterial) {
-        // Update both materialId and the unit price from the material
         updatedItems[index].materialId = value;
         updatedItems[index].materialUnitPrice = selectedMaterial.unit_cost || 0;
         
-        // If unitPrice is empty or zero, auto-fill with material's unit_cost
         if (!updatedItems[index].unitPrice || updatedItems[index].unitPrice === "0") {
           updatedItems[index].unitPrice = selectedMaterial.unit_cost.toString();
         }
@@ -96,7 +141,6 @@ export default function NewPurchase() {
       updatedItems[index][field] = value;
     }
     
-    // Auto-calculate total when quantity or unitPrice changes
     if (field === 'quantity' || field === 'unitPrice' || field === 'materialId') {
       const quantity = parseFloat(updatedItems[index].quantity) || 0;
       const unitPrice = parseFloat(updatedItems[index].unitPrice) || 0;
@@ -120,19 +164,12 @@ export default function NewPurchase() {
     }
   };
 
-  // Helper function to get material name by ID
-  const getMaterialName = (id) => {
-    const material = materials.find(m => m.id === parseInt(id));
-    return material ? `${material.name} (${material.unit})` : '-- Select Material --';
-  };
-
   // Helper function to get material unit cost by ID
   const getMaterialUnitCost = (id) => {
     const material = materials.find(m => m.id === parseInt(id));
     return material ? material.unit_cost : 0;
   };
 
-  // Auto-fill unit price when material is selected (separate function for onBlur)
   const handleMaterialSelect = (index, materialId) => {
     if (!materialId) return;
     
@@ -140,7 +177,6 @@ export default function NewPurchase() {
     const material = materials.find(m => m.id === parseInt(materialId));
     
     if (material) {
-      // Only auto-fill if unitPrice is empty or zero
       if (!updatedItems[index].unitPrice || updatedItems[index].unitPrice === "0") {
         updatedItems[index].unitPrice = material.unit_cost.toString();
         const quantity = parseFloat(updatedItems[index].quantity) || 0;
@@ -158,8 +194,8 @@ export default function NewPurchase() {
     setMessage("");
     
     // Validate form
-    if (!form.supplierId || !form.storeId) {
-      setMessage("❌ Please select supplier and store");
+    if (!form.supplierId || !form.destinationId) {
+      setMessage("❌ Please select supplier and destination");
       setLoading(false);
       return;
     }
@@ -179,7 +215,8 @@ export default function NewPurchase() {
     try {
       const payload = {
         supplierId: parseInt(form.supplierId),
-        storeId: parseInt(form.storeId),
+        destinationType: form.destinationType,
+        destinationId: parseInt(form.destinationId),
         grandTotal: form.grandTotal,
         reference: form.reference,
         items: validItems.map(item => ({
@@ -201,10 +238,13 @@ export default function NewPurchase() {
         // Reset form
         setForm({
           supplierId: "",
-          storeId: "",
+          destinationType: "store",
+          destinationId: "",
           grandTotal: 0,
           reference: `PUR-${Date.now()}`
         });
+        setDestinationType("store");
+        setDestinationId("");
         setPurchaseItems([{ materialId: "", quantity: "", unitPrice: "", total: 0, materialUnitPrice: 0 }]);
       } else {
         setMessage(`❌ ${data.error || data.message || "Failed to add purchase"}`);
@@ -220,7 +260,7 @@ export default function NewPurchase() {
     <div style={container}>
       <h2 style={title}>New Purchase</h2>
       <form onSubmit={handleSubmit} style={formBox}>
-        {/* Supplier and Store Selection */}
+        {/* Supplier and Destination Selection */}
         <div style={gridRow}>
           <div style={row}>
             <label>Supplier:</label>
@@ -240,17 +280,30 @@ export default function NewPurchase() {
           </div>
 
           <div style={row}>
-            <label>Deliver to:</label>
+            <label>Deliver to Type:</label>
             <select
-              name="storeId"
-              value={form.storeId}
-              onChange={handleFormChange}
+              value={destinationType}
+              onChange={handleDestinationTypeChange}
               required
             >
-              <option value="">-- Select Store --</option>
-              {stores.map((store) => (
-                <option key={store.id} value={store.id}>
-                  {store.name}
+              <option value="store">Store</option>
+              <option value="shop">Shop</option>
+              <option value="factory">Factory</option>
+            </select>
+          </div>
+
+          <div style={row}>
+            <label>Deliver to:</label>
+            <select
+              name="destinationId"
+              value={form.destinationId}
+              onChange={handleDestinationChange}
+              required
+            >
+              <option value="">-- Select {destinationType.charAt(0).toUpperCase() + destinationType.slice(1)} --</option>
+              {destinations.map((dest) => (
+                <option key={dest.id} value={dest.id}>
+                  {dest.name}
                 </option>
               ))}
             </select>
@@ -268,7 +321,6 @@ export default function NewPurchase() {
 
           {purchaseItems.map((item, index) => {
             const materialUnitCost = getMaterialUnitCost(item.materialId);
-            const materialName = getMaterialName(item.materialId);
             
             return (
               <div key={index} style={itemRow}>
@@ -393,7 +445,7 @@ export default function NewPurchase() {
   );
 }
 
-// Styles
+// Styles (keep the same styles as before)
 const container = {
   maxWidth: "900px",
   margin: "2rem auto",
