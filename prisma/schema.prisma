@@ -198,11 +198,16 @@ model Purchase {
   reference   String?       @unique
   supplierId Int
   storeId    Int?
+  destinationType String? // New: "store", "shop", "factory"
+  destinationId   Int?    // New: ID of store/shop/factory
   supplier   Supplier @relation(fields: [supplierId], references: [id], name: "SupplierPurchases")
   createdAt  DateTime @default(now())
   store      Store?   @relation(fields: [storeId], references: [id])
   grandTotal  Float
   purchaseItems PurchaseItem[]
+
+  @@index([destinationType])
+  @@index([destinationId])
 }
 
 model PurchaseItem {

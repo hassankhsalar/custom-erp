@@ -189,48 +189,48 @@ export default function NewPurchase() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage("");
-    
-    // Validate form
-    if (!form.supplierId || !form.destinationId) {
-      setMessage("❌ Please select supplier and destination");
-      setLoading(false);
-      return;
-    }
+  e.preventDefault();
+  setLoading(true);
+  setMessage("");
+  
+  // Validate form
+  if (!form.supplierId || !form.destinationId) {
+    setMessage("❌ Please select supplier and destination");
+    setLoading(false);
+    return;
+  }
 
-    // Validate items
-    const validItems = purchaseItems.filter(item => 
-      item.materialId && item.quantity && item.unitPrice && 
-      parseFloat(item.quantity) > 0 && parseFloat(item.unitPrice) > 0
-    );
+  // Validate items
+  const validItems = purchaseItems.filter(item => 
+    item.materialId && item.quantity && item.unitPrice && 
+    parseFloat(item.quantity) > 0 && parseFloat(item.unitPrice) > 0
+  );
 
-    if (validItems.length === 0) {
-      setMessage("❌ Please add at least one valid material with quantity and unit price");
-      setLoading(false);
-      return;
-    }
+  if (validItems.length === 0) {
+    setMessage("❌ Please add at least one valid material with quantity and unit price");
+    setLoading(false);
+    return;
+  }
 
-    try {
-      const payload = {
-        supplierId: parseInt(form.supplierId),
-        destinationType: form.destinationType,
-        destinationId: parseInt(form.destinationId),
-        grandTotal: form.grandTotal,
-        reference: form.reference,
-        items: validItems.map(item => ({
-          materialId: parseInt(item.materialId),
-          quantity: parseFloat(item.quantity),
-          unitPrice: parseFloat(item.unitPrice)
-        }))
-      };
+  try {
+    const payload = {
+      supplierId: parseInt(form.supplierId),
+      destinationType: form.destinationType, // Add this
+      destinationId: parseInt(form.destinationId), // Add this
+      grandTotal: form.grandTotal,
+      reference: form.reference,
+      items: validItems.map(item => ({
+        materialId: parseInt(item.materialId),
+        quantity: parseFloat(item.quantity),
+        unitPrice: parseFloat(item.unitPrice)
+      }))
+    };
 
-      const res = await fetch("http://localhost:3001/api/purchases", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+    const res = await fetch("http://localhost:3001/api/purchases", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
       
       const data = await res.json();
       if (res.ok) {

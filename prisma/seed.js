@@ -73,6 +73,8 @@ async function main() {
     },
   });
 
+  
+
   // --- MATERIALS ---
   const materials = await prisma.material.createMany({
     data: [
@@ -142,6 +144,8 @@ async function main() {
       reference: "PUR-001",
       supplierId: supplier.id,
       storeId: store.id,
+      destinationType: 'store', // Add this
+      destinationId: 1, // Add this
       grandTotal: 30000,
       purchaseItems: {
         create: [

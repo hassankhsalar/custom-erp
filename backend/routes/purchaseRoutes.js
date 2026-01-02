@@ -3,39 +3,32 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// ➕ Add Purchase (Updated to support multiple destination types)
+// ➕ Add Purchase (Updated with destination tracking)
 router.post("/", async (req, res) => {
   try {
-    // Support both old and new format
     const { 
       supplierId, 
       storeId, // For backward compatibility
-      destinationType = "store", // New: store, shop, or factory
-      destinationId, // New: ID of store, shop, or factory
+      destinationType = "store", 
+      destinationId, 
       grandTotal, 
       reference, 
       items 
     } = req.body;
 
-    // Validate required fields - support both formats
-    let actualStoreId = null;
+    // Validate required fields
     let actualDestinationType = destinationType;
     let actualDestinationId = null;
 
-    // For backward compatibility: if storeId is provided, use it
+    // Handle both old and new formats
     if (storeId && !destinationId) {
-      actualStoreId = parseInt(storeId);
+      // Old format: storeId provided
       actualDestinationType = "store";
       actualDestinationId = parseInt(storeId);
     } else if (destinationId) {
-      // New format: use destinationType and destinationId
+      // New format: destinationId provided
       actualDestinationId = parseInt(destinationId);
       actualDestinationType = destinationType || "store";
-      
-      // If destinationType is "store", set actualStoreId for backward compatibility
-      if (actualDestinationType === "store") {
-        actualStoreId = actualDestinationId;
-      }
     } else {
       return res.status(400).json({ 
         error: "Either storeId or destinationId is required" 
@@ -55,6 +48,9 @@ router.post("/", async (req, res) => {
       });
     }
 
+    // Validate that the destination exists
+    await validateDestinationExists(actualDestinationType, actualDestinationId);
+
     // Validate each item
     for (const item of items) {
       if (!item.materialId || !item.quantity || !item.unitPrice) {
@@ -73,14 +69,19 @@ router.post("/", async (req, res) => {
     const calculatedGrandTotal = grandTotal || 
       items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
 
+    // Set storeId for backward compatibility (only if destination is a store)
+    const storeIdForBackward = actualDestinationType === "store" ? actualDestinationId : null;
+
     // Create purchase transaction
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Create the purchase
+      // 1. Create the purchase with destination tracking
       const purchase = await tx.purchase.create({
         data: {
           reference: reference || `PUR-${Date.now()}`,
           supplierId: parseInt(supplierId),
-          storeId: actualStoreId, // For backward compatibility, null for shop/factory
+          storeId: storeIdForBackward, // For backward compatibility
+          destinationType: actualDestinationType,
+          destinationId: actualDestinationId,
           grandTotal: calculatedGrandTotal,
         },
       });
@@ -145,8 +146,6 @@ router.post("/", async (req, res) => {
       purchase: {
         ...result.purchase,
         purchaseItems: result.purchaseItems,
-        destinationType: actualDestinationType,
-        destinationId: actualDestinationId,
       },
     });
 
@@ -170,9 +169,65 @@ router.post("/", async (req, res) => {
   }
 });
 
+// Helper function to validate destination exists
+async function validateDestinationExists(destinationType, destinationId) {
+  switch (destinationType) {
+    case "store":
+      const store = await prisma.store.findUnique({
+        where: { id: destinationId }
+      });
+      if (!store) throw new Error("Store not found");
+      break;
+      
+    case "shop":
+      const shop = await prisma.shop.findUnique({
+        where: { id: destinationId }
+      });
+      if (!shop) throw new Error("Shop not found");
+      break;
+      
+    case "factory":
+      const factory = await prisma.factory.findUnique({
+        where: { id: destinationId }
+      });
+      if (!factory) throw new Error("Factory not found");
+      break;
+      
+    default:
+      throw new Error("Invalid destination type");
+  }
+}
+
+// Helper function to get destination details
+async function getDestinationDetails(destinationType, destinationId) {
+  if (!destinationType || !destinationId) return null;
+  
+  switch (destinationType) {
+    case "store":
+      return await prisma.store.findUnique({
+        where: { id: destinationId },
+        select: { id: true, name: true, address: true }
+      });
+      
+    case "shop":
+      return await prisma.shop.findUnique({
+        where: { id: destinationId },
+        select: { id: true, name: true, address: true }
+      });
+      
+    case "factory":
+      return await prisma.factory.findUnique({
+        where: { id: destinationId },
+        select: { id: true, name: true, address: true }
+      });
+      
+    default:
+      return null;
+  }
+}
+
 // Helper function to update store material stock
 async function updateStoreMaterialStock(tx, storeId, materialId, quantity) {
-  // Check if the store already has this material
   const existingStoreMaterial = await tx.storeMaterial.findUnique({
     where: {
       store_id_material_id: {
@@ -183,7 +238,6 @@ async function updateStoreMaterialStock(tx, storeId, materialId, quantity) {
   });
 
   if (existingStoreMaterial) {
-    // Update stock for that store
     await tx.storeMaterial.update({
       where: {
         store_id_material_id: {
@@ -196,7 +250,6 @@ async function updateStoreMaterialStock(tx, storeId, materialId, quantity) {
       },
     });
   } else {
-    // Create a new record if it doesn't exist
     await tx.storeMaterial.create({
       data: {
         store_id: storeId,
@@ -206,7 +259,6 @@ async function updateStoreMaterialStock(tx, storeId, materialId, quantity) {
     });
   }
 
-  // Update total material stock
   await tx.material.update({
     where: { id: materialId },
     data: { current_stock: { increment: quantity } },
@@ -215,7 +267,6 @@ async function updateStoreMaterialStock(tx, storeId, materialId, quantity) {
 
 // Helper function to update shop material stock
 async function updateShopMaterialStock(tx, shopId, materialId, quantity) {
-  // Check if the shop already has this material
   const existingShopMaterial = await tx.shopMaterial.findUnique({
     where: {
       shop_id_material_id: {
@@ -226,7 +277,6 @@ async function updateShopMaterialStock(tx, shopId, materialId, quantity) {
   });
 
   if (existingShopMaterial) {
-    // Update stock for that shop
     await tx.shopMaterial.update({
       where: {
         shop_id_material_id: {
@@ -239,7 +289,6 @@ async function updateShopMaterialStock(tx, shopId, materialId, quantity) {
       },
     });
   } else {
-    // Create a new record if it doesn't exist
     await tx.shopMaterial.create({
       data: {
         shop_id: shopId,
@@ -249,7 +298,6 @@ async function updateShopMaterialStock(tx, shopId, materialId, quantity) {
     });
   }
 
-  // Update total material stock
   await tx.material.update({
     where: { id: materialId },
     data: { current_stock: { increment: quantity } },
@@ -258,7 +306,6 @@ async function updateShopMaterialStock(tx, shopId, materialId, quantity) {
 
 // Helper function to update factory material stock
 async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity) {
-  // Check if the factory already has this material
   const existingFactoryMaterial = await tx.factoryMaterial.findUnique({
     where: {
       factoryId_materialId: {
@@ -269,7 +316,6 @@ async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity) {
   });
 
   if (existingFactoryMaterial) {
-    // Update stock for that factory
     await tx.factoryMaterial.update({
       where: {
         factoryId_materialId: {
@@ -282,7 +328,6 @@ async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity) {
       },
     });
   } else {
-    // Create a new record if it doesn't exist
     await tx.factoryMaterial.create({
       data: {
         factoryId: factoryId,
@@ -292,14 +337,13 @@ async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity) {
     });
   }
 
-  // Update total material stock
   await tx.material.update({
     where: { id: materialId },
     data: { current_stock: { increment: quantity } },
   });
 }
 
-// 📋 Get all purchases with items (updated to show destination info)
+// 📋 Get all purchases with destination details
 router.get("/", async (req, res) => {
   try {
     const purchases = await prisma.purchase.findMany({
@@ -315,43 +359,44 @@ router.get("/", async (req, res) => {
       orderBy: { id: "desc" },
     });
 
-    // Add destination information for each purchase
-    const purchasesWithDestination = await Promise.all(
+    // Fetch destination details for each purchase
+    const purchasesWithDestinations = await Promise.all(
       purchases.map(async (purchase) => {
-        let destinationInfo = null;
+        let destination = null;
         
-        if (purchase.store) {
-          // This is a store purchase (backward compatibility)
-          destinationInfo = {
+        // If destinationType and destinationId are available, use them
+        if (purchase.destinationType && purchase.destinationId) {
+          destination = await getDestinationDetails(
+            purchase.destinationType, 
+            purchase.destinationId
+          );
+        } 
+        // Otherwise fall back to store for backward compatibility
+        else if (purchase.storeId && purchase.store) {
+          destination = {
             type: "store",
-            name: purchase.store.name,
-            id: purchase.storeId
-          };
-        } else {
-          // For purchases without storeId (shop/factory), we need to check other tables
-          // This would require additional logic if you want to display shop/factory names
-          // For now, just mark as unknown
-          destinationInfo = {
-            type: "unknown",
-            name: "Unknown Destination",
-            id: null
+            id: purchase.storeId,
+            name: purchase.store.name
           };
         }
-
+        
         return {
           ...purchase,
-          destination: destinationInfo
+          destination: destination ? {
+            type: purchase.destinationType || "store",
+            ...destination
+          } : null
         };
       })
     );
 
-    res.json(purchasesWithDestination);
+    res.json(purchasesWithDestinations);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// 📋 Get single purchase with details
+// 📋 Get single purchase with full destination details
 router.get("/:id", async (req, res) => {
   try {
     const purchase = await prisma.purchase.findUnique({
@@ -371,7 +416,26 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ error: "Purchase not found" });
     }
 
-    res.json(purchase);
+    // Add destination details
+    let destination = null;
+    if (purchase.destinationType && purchase.destinationId) {
+      destination = await getDestinationDetails(
+        purchase.destinationType, 
+        purchase.destinationId
+      );
+    } else if (purchase.storeId && purchase.store) {
+      destination = {
+        type: "store",
+        id: purchase.storeId,
+        name: purchase.store.name,
+        address: purchase.store.address
+      };
+    }
+
+    res.json({
+      ...purchase,
+      destination
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
