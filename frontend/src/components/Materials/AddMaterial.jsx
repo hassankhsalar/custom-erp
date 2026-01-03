@@ -12,6 +12,7 @@ const AddMaterial = () => {
     barcode: '',
     unit: '',
     unit_cost: '',
+    sale_price: '',
   });
 
   const handleChange = (e) => {
@@ -28,6 +29,7 @@ const AddMaterial = () => {
       await axios.post(API_ROUTES.MATERIALS, {
         ...material,
         unit_cost: parseFloat(material.unit_cost),
+        sale_price: material.sale_price ? parseFloat(material.sale_price) : null,
       });
       navigate('/materials/all');
     } catch (error) {
@@ -95,14 +97,14 @@ const AddMaterial = () => {
           </div>
           <div className="flex flex-col">
             <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="unit">
-              Unit
+              Unit Type
             </label>
             <input
               type="text"
               name="unit"
               value={material.unit}
               onChange={handleChange}
-              placeholder="Unit"
+              placeholder="Kg/piece/litre"
               required
               className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
@@ -120,6 +122,24 @@ const AddMaterial = () => {
               required
               className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
+          </div>
+          <div className="flex flex-col">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="sale_price">
+              Sale Price
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              name="sale_price"
+              value={material.sale_price}
+              onChange={handleChange}
+              placeholder="Sale Price"
+              className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            />
+            <small className="text-gray-500 text-xs mt-1">
+              Optional. Leave empty if material is not for direct sale.
+            </small>
           </div>
         </div>
         <button type="submit" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Add Material</button>

@@ -60,6 +60,8 @@ export default function ShopPOS() {
       });
   }, [shopId]);
 
+  console.log(products);
+
   // ✅ Add new blank sale item
   const handleAddItem = () => {
     setItems((prev) => [
