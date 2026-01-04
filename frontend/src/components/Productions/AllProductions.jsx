@@ -9,23 +9,17 @@ const AllProductions = () => {
   const [productions, setProductions] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [stores, setStores] = useState([]);
 
   // Modal states
-  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
-  const [updateStatusModalOpen, setUpdateStatusModalOpen] = useState(false);
-  const [transferModalOpen, setTransferModalOpen] = useState(false);
-  const [selectedProduction, setSelectedProduction] = useState(null);
+  const [modal, setModal] = useState({ isOpen: false, type: null, data: null });
 
   // Status change states
   const [selectedStatus, setSelectedStatus] = useState('');
   const [editableProducts, setEditableProducts] = useState([]);
   const [editableMaterials, setEditableMaterials] = useState([]);
-  const [transferData, setTransferData] = useState({});
 
   useEffect(() => {
     fetchProductions(currentPage);
-    fetchStores();
   }, [currentPage]);
 
   const fetchProductions = async (page) => {
@@ -42,17 +36,6 @@ const AllProductions = () => {
     }
   };
 
-  const fetchStores = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_ROUTES.STORES}?pagination=false`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setStores(response.data.stores);
-    } catch (error) {
-      console.error('Error fetching stores:', error);
-    }
-  };
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this production?')) {
@@ -68,68 +51,39 @@ const AllProductions = () => {
     }
   };
 
-  const openDetailsModal = async (production) => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_ROUTES.PRODUCTIONS}/${production.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setSelectedProduction(response.data);
-      setDetailsModalOpen(true);
-    } catch (error) {
-      console.error('Error fetching production details:', error);
+  const openModal = async (type, production) => {
+    let productionData = production;
+    if (type === 'details') {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(`${API_ROUTES.PRODUCTIONS}/${production.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        productionData = response.data;
+      } catch (error) {
+        console.error('Error fetching production details:', error);
+        return;
+      }
+    }
+    
+    setModal({ isOpen: true, type, data: productionData });
+
+    if (type === 'updateStatus') {
+      setSelectedStatus(production.status);
+      if (production.status === 'production_done') {
+          setEditableProducts(production.productionProducts.map(p => ({...p, received: p.quantity, scrap: 0})))
+          setEditableMaterials(production.productionMaterials.map(m => ({...m, scrap: 0})))
+      } else {
+          setEditableProducts(production.productionProducts);
+          setEditableMaterials(production.productionMaterials);
+      }
     }
   };
 
-  const closeDetailsModal = () => {
-    setDetailsModalOpen(false);
-    setSelectedProduction(null);
-  };
-
-  const openUpdateStatusModal = (production) => {
-    setSelectedProduction(production);
-    setSelectedStatus(production.status);
-    if (production.status === 'production_done') {
-        setEditableProducts(production.productionProducts.map(p => ({...p, received: p.quantity, scrap: 0})))
-        setEditableMaterials(production.productionMaterials.map(m => ({...m, scrap: 0})))
-    } else {
-        setEditableProducts(production.productionProducts);
-        setEditableMaterials(production.productionMaterials);
-    }
-    setUpdateStatusModalOpen(true);
-  };
-
-  const closeUpdateStatusModal = () => {
-    setUpdateStatusModalOpen(false);
-    setSelectedProduction(null);
+  const closeModal = () => {
+    setModal({ isOpen: false, type: null, data: null });
     setEditableProducts([]);
     setEditableMaterials([]);
-    setTransferData({});
-  };
-
-  const openTransferModal = (production) => {
-    setSelectedProduction(production);
-    setEditableProducts(production.productionProducts);
-    const initialTransferData = {};
-    production.productionProducts.forEach(p => {
-        if (p.received > p.moved_to_store) {
-            initialTransferData[p.id] = {
-                productId: p.productId,
-                productionProductId: p.id,
-                quantity: p.received - p.moved_to_store,
-                storeId: null
-            };
-        }
-    });
-    setTransferData(initialTransferData);
-    setTransferModalOpen(true);
-  };
-
-  const closeTransferModal = () => {
-    setTransferModalOpen(false);
-    setSelectedProduction(null);
-    setEditableProducts([]);
-    setTransferData({});
   };
 
   const handleStatusChange = async () => {
@@ -140,38 +94,14 @@ const AllProductions = () => {
             products: selectedStatus === 'production_done' ? editableProducts : undefined,
             materials: selectedStatus === 'production_done' ? editableMaterials : undefined,
         };
-        await axios.put(`${API_ROUTES.PRODUCTIONS}/${selectedProduction.id}/status`, payload, {
+        await axios.put(`${API_ROUTES.PRODUCTIONS}/${modal.data.id}/status`, payload, {
             headers: { Authorization: `Bearer ${token}` },
         });
         fetchProductions(currentPage);
-        closeUpdateStatusModal();
+        closeModal();
     } catch (error) {
         console.error('Error updating status:', error);
         alert('Failed to update status');
-    }
-  }
-
-  const handleTransfer = async () => {
-    try {
-        const token = localStorage.getItem('token');
-        const validTransfers = Object.values(transferData).filter(t => t.storeId && t.quantity > 0);
-
-        if (validTransfers.length === 0) {
-            alert('Please select a store and enter a valid quantity for at least one product.');
-            return;
-        }
-
-        const payload = { 
-            transfers: validTransfers,
-        };
-        await axios.post(`${API_ROUTES.PRODUCTIONS}/${selectedProduction.id}/transfer`, payload, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        fetchProductions(currentPage);
-        closeTransferModal();
-    } catch (error) {
-        console.error('Error transferring products:', error);
-        alert('Failed to transfer products');
     }
   }
 
@@ -183,17 +113,7 @@ const AllProductions = () => {
     setEditableMaterials(prev => prev.map((m, i) => i === index ? {...m, [field]: value} : m));
   }
 
-  const handleTransferChange = (productId, field, value) => {
-    setTransferData(prev => ({
-        ...prev,
-        [productId]: {
-            ...prev[productId],
-            productId: selectedProduction.productionProducts.find(p => p.id === productId).productId,
-            productionProductId: productId,
-            [field]: value,
-        }
-    }))
-  }
+
 
   return (
     <div className="container mx-auto p-4">
@@ -230,18 +150,16 @@ const AllProductions = () => {
                 </td>
                 <td className="border border-gray-300 px-4 py-2">
                   <div className='flex gap-3'>
-                    <button onClick={() => openDetailsModal(production)} className="text-blue-500 hover:text-blue-700 cursor-pointer mr-2"><FaEye /></button>
+                    <button onClick={() => openModal('details', production)} className="text-blue-500 hover:text-blue-700 cursor-pointer mr-2"><FaEye /></button>
                     { ['running', 'pending'].includes(production.status) && 
                       <Link to={`/productions/edit/${production.id}`} className="text-teal-500 hover:text-teal-700 cursor-pointer mr-2"><FaPen /></Link>
                     }
                     
                     <button onClick={() => handleDelete(production.id)} className="text-rose-500 hover:text-rose-700 cursor-pointer mr-2"><FaTrash /></button>
                     { ['running', 'pending'].includes(production.status) && 
-                      <button onClick={() => openUpdateStatusModal(production)} className="text-violet-500 hover:text-violet-700 cursor-pointer"><BsToggles /></button>
+                      <button onClick={() => openModal('updateStatus', production)} className="text-violet-500 hover:text-violet-700 cursor-pointer"><BsToggles /></button>
                     }
-                    {['production_done', 'partial_transfer', 'transfer_done'].includes(production.status) && 
-                      <button onClick={() => openTransferModal(production)} className="text-sky-500 hover:text-sky-700 cursor-pointer"><FaExchangeAlt /></button>
-                    }
+
                   </div>
                 </td>
               </tr>
@@ -271,10 +189,10 @@ const AllProductions = () => {
       
 
       {/* Details Modal */}
-      {detailsModalOpen && selectedProduction && (
+      {modal.isOpen && modal.type === 'details' && (
         <div className="fixed inset-0 bg-black/80 bg-opacity-50 flex items-center justify-center">
           <div className="bg-white p-6 rounded-lg shadow-lg max-w-4xl w-full">
-            <h2 className="text-xl font-bold mb-4">Production Details: {selectedProduction.reference}</h2>
+            <h2 className="text-xl font-bold mb-4">Production Details: {modal.data.reference}</h2>
             <h3 className="text-lg font-semibold mb-2">Products</h3>
             <table className="min-w-full bg-white border border-gray-300 mb-4">
               <thead>
@@ -282,9 +200,8 @@ const AllProductions = () => {
                   <th className="px-4 py-2 border">Name</th>
                   <th className="px-4 py-2 border">Code</th>
                   <th className="px-4 py-2 border">Quantity</th>
-                  {['production_done', 'partial_transfer', 'transfer_done'].includes(selectedProduction.status) && (
+                  {['production_done'].includes(modal.data.status) && (
                     <>
-                      <th className="px-4 py-2 border">Moved</th>
                       <th className="px-4 py-2 border">Received</th>
                       <th className="px-4 py-2 border">Scrap</th>
                       <th className="px-4 py-2 border">Cost</th>
@@ -293,14 +210,13 @@ const AllProductions = () => {
                 </tr>
               </thead>
               <tbody>
-                {selectedProduction.productionProducts.map(p => (
+                {modal.data.productionProducts.map(p => (
                   <tr key={p.id}>
                     <td className='p-2 border border-gray-300'>{p.product.name}</td>
                     <td className='p-2 border border-gray-300'>{p.code}</td>
                     <td className='p-2 border border-gray-300'>{p.quantity}</td>
-                    {['production_done', 'partial_transfer', 'transfer_done'].includes(selectedProduction.status) && (
+                    {['production_done'].includes(modal.data.status) && (
                       <>
-                        <td className='p-2 border border-gray-300'>{p.moved_to_store}</td>
                         <td className='p-2 border border-gray-300'>{p.received}</td>
                         <td className='p-2 border border-gray-300'>{p.scrap}</td>
                         <td className='p-2 border border-gray-300'>{p.unit_cost}</td>
@@ -317,17 +233,17 @@ const AllProductions = () => {
                 <tr>
                   <th className="px-4 py-2 border">Name</th>
                   <th className="px-4 py-2 border">Quantity</th>
-                  {['production_done', 'partial_transfer', 'transfer_done'].includes(selectedProduction.status) && (
+                  {['production_done'].includes(modal.data.status) && (
                     <th className="px-4 py-2 border">Scrap</th>
                   )}
                 </tr>
               </thead>
               <tbody>
-                {selectedProduction.productionMaterials.map(m => (
+                {modal.data.productionMaterials.map(m => (
                   <tr key={m.id}>
                     <td className='p-2 border border-gray-300'>{m.material.name}</td>
                     <td className='p-2 border border-gray-300'>{m.quantity}</td>
-                    {['production_done', 'partial_transfer', 'transfer_done'].includes(selectedProduction.status) && (
+                    {['production_done'].includes(modal.data.status) && (
                       <td className='p-2 border border-gray-300'>{m.scrap}</td>
                     )}
                   </tr>
@@ -335,42 +251,18 @@ const AllProductions = () => {
               </tbody>
             </table>
 
-            {['partial_transfer', 'transfer_done'].includes(selectedProduction.status) && selectedProduction.factoryToStoreTransfers?.length > 0 && (
-              <>
-                <h3 className="text-lg font-semibold mb-2 mt-4">Transfer Details</h3>
-                <table className="min-w-full bg-white border border-gray-300">
-                  <thead>
-                    <tr>
-                      <th className="px-4 py-2 border">Product</th>
-                      <th className="px-4 py-2 border">Store</th>
-                      <th className="px-4 py-2 border">Quantity</th>
-                      <th className="px-4 py-2 border">Date</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedProduction.factoryToStoreTransfers.map(t => (
-                      <tr key={t.id}>
-                        <td className='p-2 border border-gray-300'>{t.product.name}</td>
-                        <td className='p-2 border border-gray-300'>{t.store.name}</td>
-                        <td className='p-2 border border-gray-300'>{t.quantity}</td>
-                        <td className='p-2 border border-gray-300'>{new Intl.DateTimeFormat('en-GB').format(new Date(t.createdAt))}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </>
-            )}
 
-            <button onClick={closeDetailsModal} className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded mt-4">Close</button>
+
+            <button onClick={closeModal} className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded mt-4">Close</button>
           </div>
         </div>
       )}
 
       {/* Update Status Modal */}
-      {updateStatusModalOpen && selectedProduction && (
+      {modal.isOpen && modal.type === 'updateStatus' && (
         <div className="fixed inset-0 bg-black/80 bg-opacity-50 flex items-center justify-center">
           <div className="bg-white p-6 rounded-lg shadow-lg max-w-4xl w-full overflow-y-auto max-h-screen">
-            <h2 className="text-xl font-bold mb-4">Change Status: {selectedProduction.reference}</h2>
+            <h2 className="text-xl font-bold mb-4">Change Status: {modal.data.reference}</h2>
             <select value={selectedStatus} onChange={e => setSelectedStatus(e.target.value)} className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-4">
               <option value="pending">Pending</option>
               <option value="running">Running</option>
@@ -393,37 +285,14 @@ const AllProductions = () => {
             )}
 
             <div className="flex justify-end mt-4">
-              <button onClick={closeUpdateStatusModal} className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded mr-2">Cancel</button>
+              <button onClick={closeModal} className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded mr-2">Cancel</button>
               <button onClick={handleStatusChange} className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Save Changes</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Transfer Modal */}
-      {transferModalOpen && selectedProduction && (
-        <div className="fixed inset-0 bg-black/80 bg-opacity-50 flex items-center justify-center">
-            <div className="bg-white p-6 rounded-lg shadow-lg max-w-4xl w-full overflow-y-auto max-h-screen">
-                <h2 className="text-xl font-bold mb-4">Transfer Products: {selectedProduction.reference}</h2>
-                <div>
-                    <h3 className="text-lg font-semibold mb-2">Transfer Products</h3>
-                    <table className="min-w-full bg-white border border-gray-300">
-                        <thead><tr><th>Name</th><th>Received</th><th>Moved</th><th>Action</th></tr></thead>
-                        <tbody>{editableProducts.map(p => <tr key={p.id}><td className='p-2 border border-gray-300'>{p.product.name}</td><td className='p-2 border border-gray-300'>{p.received}</td><td className='p-2 border border-gray-300'>{p.moved_to_store}</td><td className='p-2 border border-gray-300'>
-                            {p.received > p.moved_to_store && <div>
-                                <input type="number" placeholder="Quantity" value={transferData[p.id]?.quantity || ''} onChange={e => handleTransferChange(p.id, 'quantity', e.target.value)} />
-                                <select value={transferData[p.id]?.storeId || ''} onChange={e => handleTransferChange(p.id, 'storeId', e.target.value)}><option value="">Select Store</option>{stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
-                            </div>}
-                        </td></tr>)}</tbody>
-                    </table>
-                </div>
-                <div className="flex justify-end mt-4">
-                    <button onClick={closeTransferModal} className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded mr-2">Cancel</button>
-                    <button onClick={handleTransfer} className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Transfer</button>
-                </div>
-            </div>
-        </div>
-      )}
+
     </div>
   );
 };

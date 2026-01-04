@@ -22,13 +22,26 @@ router.get("/shops", async (req, res) => {
   }
 });
 
-// Get products for a specific shop
-router.get("/products/shop/:shopId", async (req, res) => {
+// Get unified items (products + materials) for a specific shop
+router.get("/items/shop/:shopId", async (req, res) => {
   try {
     const { shopId } = req.params;
+    const { search } = req.query;
     
+    // Fetch shop products
     const shopProducts = await prisma.shopProduct.findMany({
-      where: { shop_id: parseInt(shopId) },
+      where: { 
+        shop_id: parseInt(shopId),
+        ...(search ? {
+          product: {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' } },
+              { barcode: { contains: search, mode: 'insensitive' } },
+              { category: { contains: search, mode: 'insensitive' } }
+            ]
+          }
+        } : {})
+      },
       include: {
         product: {
           select: {
@@ -38,30 +51,94 @@ router.get("/products/shop/:shopId", async (req, res) => {
             wholesale_price: true,
             barcode: true,
             category: true,
-            stock: true
+            stock: true,
+            image: true
           }
         }
       }
     });
 
-    // Transform the data to match frontend expectations
+    // Fetch shop materials
+    const shopMaterials = await prisma.shopMaterial.findMany({
+      where: { 
+        shop_id: parseInt(shopId),
+        ...(search ? {
+          material: {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' } },
+              { barcode: { contains: search, mode: 'insensitive' } },
+              { brand: { contains: search, mode: 'insensitive' } },
+              { description: { contains: search, mode: 'insensitive' } }
+            ]
+          }
+        } : {})
+      },
+      include: {
+        material: {
+          select: {
+            id: true,
+            name: true,
+            sale_price: true,
+            unit_cost: true,
+            barcode: true,
+            brand: true,
+            unit: true,
+            current_stock: true,
+            image: true
+          }
+        }
+      }
+    });
+
+    // Transform the data to unified format
     const products = shopProducts.map(sp => ({
       id: sp.product.id,
       name: sp.product.name,
+      type: "product",
       sale_price: sp.product.sale_price,
       wholesale_price: sp.product.wholesale_price,
+      cost_price: null, // Products don't have unit_cost in schema
       barcode: sp.product.barcode,
       category: sp.product.category,
-      stock: sp.stock // Use shop-specific stock
+      brand: null,
+      unit: null, // Products don't have unit in schema
+      stock: sp.stock,
+      shop_stock: sp.stock,
+      global_stock: sp.product.stock,
+      image: sp.product.image,
+      minStock: 0 // You might want to add this field later
     }));
 
-    res.json(products);
+    const materials = shopMaterials.map(sm => ({
+      id: sm.material.id,
+      name: sm.material.name,
+      type: "material",
+      sale_price: sm.material.sale_price,
+      wholesale_price: null, // Materials don't have wholesale_price
+      cost_price: sm.material.unit_cost,
+      barcode: sm.material.barcode,
+      category: null,
+      brand: sm.material.brand,
+      unit: sm.material.unit,
+      stock: sm.stock,
+      shop_stock: sm.stock,
+      global_stock: sm.material.current_stock,
+      image: sm.material.image,
+      minStock: 0
+    }));
+
+    // Combine and sort by name
+    const items = [...products, ...materials].sort((a, b) => 
+      a.name.localeCompare(b.name)
+    );
+
+    res.json(items);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Create a new sale for shop
+// Create a new sale for shop (updated for products & materials)
 router.post("/", async (req, res) => {
   try {
     const { shopId, customer, paymentType, discount, items } = req.body;
@@ -73,11 +150,17 @@ router.post("/", async (req, res) => {
 
     // Validate items
     for (const item of items) {
-      if (!item.productId || !item.quantity || !item.unitPrice) {
-        return res.status(400).json({ error: "Each item must have productId, quantity, and unitPrice" });
+      if (!item.type || !item.quantity || !item.unitPrice) {
+        return res.status(400).json({ error: "Each item must have type, quantity, and unitPrice" });
       }
       if (item.quantity <= 0 || item.unitPrice <= 0) {
         return res.status(400).json({ error: "Quantity and unitPrice must be positive numbers" });
+      }
+      if (!['product', 'material'].includes(item.type)) {
+        return res.status(400).json({ error: "Item type must be 'product' or 'material'" });
+      }
+      if (!item.itemId) {
+        return res.status(400).json({ error: "Each item must have itemId" });
       }
     }
 
@@ -102,44 +185,36 @@ router.post("/", async (req, res) => {
         },
       });
 
-      // Create sale items and update shop stock
-      const saleItems = await Promise.all(
-        items.map(async (item) => {
-          // Create sale item
-          const saleItem = await tx.saleItem.create({
-            data: {
-              saleId: sale.id,
-              productId: parseInt(item.productId),
-              quantity: parseFloat(item.quantity),
-              unitPrice: parseFloat(item.unitPrice),
-              totalPrice: parseFloat(item.quantity) * parseFloat(item.unitPrice),
-            },
-          });
-
-          // Update shop product stock
+      // Process each sale item
+      const saleItems = [];
+      
+      for (const item of items) {
+        // Check stock based on item type
+        if (item.type === "product") {
+          // Check and update shop product stock
           const shopProduct = await tx.shopProduct.findUnique({
             where: {
               shop_id_product_id: {
                 shop_id: parseInt(shopId),
-                product_id: parseInt(item.productId),
+                product_id: parseInt(item.itemId),
               },
             },
           });
 
           if (!shopProduct) {
-            throw new Error(`Product ${item.productId} not found in shop ${shopId}`);
+            throw new Error(`Product ${item.itemId} not found in shop ${shopId}`);
           }
 
           if (shopProduct.stock < parseFloat(item.quantity)) {
-            throw new Error(`Insufficient stock for product ${item.productId}. Available: ${shopProduct.stock}, Requested: ${item.quantity}`);
+            throw new Error(`Insufficient stock for product ${item.itemId}. Available: ${shopProduct.stock}, Requested: ${item.quantity}`);
           }
 
-          // Update shop stock
+          // Update shop product stock
           await tx.shopProduct.update({
             where: {
               shop_id_product_id: {
                 shop_id: parseInt(shopId),
-                product_id: parseInt(item.productId),
+                product_id: parseInt(item.itemId),
               },
             },
             data: {
@@ -147,17 +222,77 @@ router.post("/", async (req, res) => {
             },
           });
 
-          // Update global product stock (optional)
+          // Update global product stock
           await tx.product.update({
-            where: { id: parseInt(item.productId) },
+            where: { id: parseInt(item.itemId) },
             data: {
               stock: { decrement: parseFloat(item.quantity) },
             },
           });
 
-          return saleItem;
-        })
-      );
+        } else if (item.type === "material") {
+          // Check and update shop material stock
+          const shopMaterial = await tx.shopMaterial.findUnique({
+            where: {
+              shop_id_material_id: {
+                shop_id: parseInt(shopId),
+                material_id: parseInt(item.itemId),
+              },
+            },
+          });
+
+          if (!shopMaterial) {
+            throw new Error(`Material ${item.itemId} not found in shop ${shopId}`);
+          }
+
+          if (shopMaterial.stock < parseFloat(item.quantity)) {
+            throw new Error(`Insufficient stock for material ${item.itemId}. Available: ${shopMaterial.stock}, Requested: ${item.quantity}`);
+          }
+
+          // Update shop material stock
+          await tx.shopMaterial.update({
+            where: {
+              shop_id_material_id: {
+                shop_id: parseInt(shopId),
+                material_id: parseInt(item.itemId),
+              },
+            },
+            data: {
+              stock: { decrement: parseFloat(item.quantity) },
+            },
+          });
+
+          // Update global material stock
+          await tx.material.update({
+            where: { id: parseInt(item.itemId) },
+            data: {
+              current_stock: { decrement: parseFloat(item.quantity) },
+            },
+          });
+        }
+
+        // Create sale item record - FIXED
+        const saleItemData = {
+          saleId: sale.id,
+          quantity: parseFloat(item.quantity),
+          unitPrice: parseFloat(item.unitPrice),
+          totalPrice: parseFloat(item.quantity) * parseFloat(item.unitPrice),
+        };
+
+        // Set productId or materialId based on type
+        if (item.type === "product") {
+          saleItemData.productId = parseInt(item.itemId);
+        } else if (item.type === "material") {
+          saleItemData.materialId = parseInt(item.itemId);
+        }
+
+        // Create sale item
+        const saleItem = await tx.saleItem.create({
+          data: saleItemData,
+        });
+
+        saleItems.push(saleItem);
+      }
 
       return { sale, saleItems };
     });
@@ -171,7 +306,7 @@ router.post("/", async (req, res) => {
   } catch (err) {
     console.error("Sale creation error:", err);
     
-    if (err.message.includes("Insufficient stock")) {
+    if (err.message.includes("Insufficient stock") || err.message.includes("not found in shop")) {
       return res.status(400).json({ error: err.message });
     }
     
@@ -179,7 +314,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Get all shop sales
+// Get all shop sales with both product and material details
 router.get("/", async (req, res) => {
   try {
     const sales = await prisma.sale.findMany({
@@ -199,6 +334,16 @@ router.get("/", async (req, res) => {
                 id: true,
                 name: true,
                 barcode: true,
+                sale_price: true,
+              },
+            },
+            material: {
+              select: {
+                id: true,
+                name: true,
+                barcode: true,
+                unit: true,
+                sale_price: true,
               },
             },
           },
@@ -226,6 +371,7 @@ router.get("/:id", async (req, res) => {
         saleItems: {
           include: {
             product: true,
+            material: true,
           },
         },
       },

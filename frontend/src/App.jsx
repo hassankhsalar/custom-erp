@@ -44,6 +44,16 @@ import AllReturns from './components/Sale/AllReturns';
 import StoreDetails from './components/Stores/StoreDetails';
 import StoreToShopTransfer from './components/Stores/StoreToShopTransfer';
 import TransferManagement from './components/Stores/TransferManagement';
+import AddTransfer from './components/Transfer/AddTransfer';
+import StoreToStore from './components/Transfer/StoreToStore';
+import StoreToFactory from './components/Transfer/StoreToFactory';
+import StoreToShop from './components/Transfer/StoreToShop';
+import FactoryToFactory from './components/Transfer/FactoryToFactory';
+import FactoryToStore from './components/Transfer/FactoryToStore';
+import FactoryToShop from './components/Transfer/FactoryToShop';
+import ShopToShop from './components/Transfer/ShopToShop';
+import ShopToStore from './components/Transfer/ShopToStore';
+import ShopToFactory from './components/Transfer/ShopToFactory';
 
 const AuthContext = createContext(null);
 
@@ -136,6 +146,16 @@ function App() {
             <Route path="/users/create" element={<CreateUser />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/transfers" element={<TransferManagement />} />
+            <Route path="/transfer/add" element={<AddTransfer />} />
+            <Route path="/transfer/store-to-store" element={<StoreToStore />} />
+            <Route path="/transfer/store-to-factory" element={<StoreToFactory />} />
+            <Route path="/transfer/store-to-shop" element={<StoreToShop />} />
+            <Route path="/transfer/factory-to-factory" element={<FactoryToFactory />} />
+            <Route path="/transfer/factory-to-store" element={<FactoryToStore />} />
+            <Route path="/transfer/factory-to-shop" element={<FactoryToShop />} />
+            <Route path="/transfer/shop-to-shop" element={<ShopToShop />} />
+            <Route path="/transfer/shop-to-store" element={<ShopToStore />} />
+            <Route path="/transfer/shop-to-factory" element={<ShopToFactory />} />
             {/* Default route for authenticated users */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>

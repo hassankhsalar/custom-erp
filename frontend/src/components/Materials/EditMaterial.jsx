@@ -14,6 +14,7 @@ const EditMaterial = () => {
     image: '',
     unit: '',
     unit_cost: '',
+    sale_price: '',
     current_stock: '',
   });
 
@@ -133,6 +134,20 @@ const EditMaterial = () => {
               value={material.unit_cost}
               onChange={handleChange}
               placeholder="Unit Cost"
+              required
+              className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="unit_cost">
+              Sale Price
+            </label>
+            <input
+              type="number"
+              name="sale_price"
+              value={material.sale_price || ''}
+              onChange={handleChange}
+              placeholder="sale price"
               required
               className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />

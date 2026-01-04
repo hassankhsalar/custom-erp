@@ -128,6 +128,7 @@ const shopSalesRoutes = require('./routes/shop-sales');
 const storeToShopTransfersRoutes = require('./routes/store-to-shop-transfers');
 const dashboardRoutes = require('./routes/dashboard');
 const userRoutes = require('./routes/users');
+const transferRoutes = require('./routes/transferRoutes');
 
 app.use('/api/materials', materialRoutes);
 app.use('/api/products', productRoutes);
@@ -142,6 +143,7 @@ app.use('/api/shop-sales', shopSalesRoutes);
 app.use('/api/store-to-shop-transfers', storeToShopTransfersRoutes);
 app.use('/api/dash-board', dashboardRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/transfers', transferRoutes);
 
 const port = 3001;
 app.listen(port, () => {
