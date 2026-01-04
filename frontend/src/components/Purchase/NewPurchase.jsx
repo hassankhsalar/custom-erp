@@ -2,12 +2,22 @@ import { useEffect, useState } from "react";
 
 export default function NewPurchase() {
   const [materials, setMaterials] = useState([]);
+  const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [destinations, setDestinations] = useState([]);
   const [destinationType, setDestinationType] = useState("store");
   const [destinationId, setDestinationId] = useState("");
   const [purchaseItems, setPurchaseItems] = useState([
-    { materialId: "", quantity: "", unitPrice: "", total: 0, materialUnitPrice: 0 }
+    { 
+      itemType: "material", // "material" or "product"
+      materialId: "", 
+      productId: "", 
+      quantity: "", 
+      unitPrice: "", 
+      total: 0, 
+      materialUnitPrice: 0,
+      productCost: 0
+    }
   ]);
   const [form, setForm] = useState({
     supplierId: "",
@@ -21,6 +31,7 @@ export default function NewPurchase() {
 
   useEffect(() => {
     fetchMaterials();
+    fetchProducts();
     fetchSuppliers();
     fetchDestinations();
   }, [destinationType]);
@@ -33,6 +44,17 @@ export default function NewPurchase() {
     } catch (error) {
       console.error("Failed to fetch materials:", error);
       setMaterials([]);
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const res = await fetch("http://localhost:3001/api/products");
+      const data = await res.json();
+      setProducts(data.products || data || []);
+    } catch (error) {
+      console.error("Failed to fetch products:", error);
+      setProducts([]);
     }
   };
 
@@ -120,6 +142,26 @@ export default function NewPurchase() {
     setForm(prev => ({ ...prev, destinationId: newId }));
   };
 
+  const handleItemTypeChange = (index, newType) => {
+    const updatedItems = [...purchaseItems];
+    updatedItems[index].itemType = newType;
+    
+    // Clear the other ID when switching types
+    if (newType === "material") {
+      updatedItems[index].productId = "";
+      updatedItems[index].productCost = 0;
+    } else {
+      updatedItems[index].materialId = "";
+      updatedItems[index].materialUnitPrice = 0;
+    }
+    
+    // Clear unit price when switching types
+    updatedItems[index].unitPrice = "";
+    updatedItems[index].total = 0;
+    
+    setPurchaseItems(updatedItems);
+  };
+
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...purchaseItems];
     
@@ -137,11 +179,27 @@ export default function NewPurchase() {
         updatedItems[index].materialId = value;
         updatedItems[index].materialUnitPrice = 0;
       }
-    } else {
+    } 
+    else if (field === 'productId') {
+      const selectedProduct = products.find(p => p.id === parseInt(value));
+      
+      if (selectedProduct) {
+        updatedItems[index].productId = value;
+        updatedItems[index].productCost = selectedProduct.cost || 0;
+        
+        if (!updatedItems[index].unitPrice || updatedItems[index].unitPrice === "0") {
+          updatedItems[index].unitPrice = selectedProduct.cost.toString();
+        }
+      } else {
+        updatedItems[index].productId = value;
+        updatedItems[index].productCost = 0;
+      }
+    }
+    else {
       updatedItems[index][field] = value;
     }
     
-    if (field === 'quantity' || field === 'unitPrice' || field === 'materialId') {
+    if (field === 'quantity' || field === 'unitPrice' || field === 'materialId' || field === 'productId') {
       const quantity = parseFloat(updatedItems[index].quantity) || 0;
       const unitPrice = parseFloat(updatedItems[index].unitPrice) || 0;
       updatedItems[index].total = quantity * unitPrice;
@@ -153,7 +211,16 @@ export default function NewPurchase() {
   const addItem = () => {
     setPurchaseItems([
       ...purchaseItems,
-      { materialId: "", quantity: "", unitPrice: "", total: 0, materialUnitPrice: 0 }
+      { 
+        itemType: "material",
+        materialId: "", 
+        productId: "", 
+        quantity: "", 
+        unitPrice: "", 
+        total: 0, 
+        materialUnitPrice: 0,
+        productCost: 0
+      }
     ]);
   };
 
@@ -164,74 +231,107 @@ export default function NewPurchase() {
     }
   };
 
-  // Helper function to get material unit cost by ID
-  const getMaterialUnitCost = (id) => {
-    const material = materials.find(m => m.id === parseInt(id));
-    return material ? material.unit_cost : 0;
+  // Helper function to get item details
+  const getItemDetails = (item) => {
+    if (item.itemType === "material" && item.materialId) {
+      const material = materials.find(m => m.id === parseInt(item.materialId));
+      return {
+        name: material?.name || "",
+        unit: material?.unit || "",
+        standardPrice: material?.unit_cost || 0
+      };
+    } else if (item.itemType === "product" && item.productId) {
+      const product = products.find(p => p.id === parseInt(item.productId));
+      return {
+        name: product?.name || "",
+        unit: "unit",
+        standardPrice: product?.cost || 0
+      };
+    }
+    return { name: "", unit: "", standardPrice: 0 };
   };
 
-  const handleMaterialSelect = (index, materialId) => {
-    if (!materialId) return;
+  const handleItemSelect = (index, itemType, itemId) => {
+    if (!itemId) return;
     
     const updatedItems = [...purchaseItems];
-    const material = materials.find(m => m.id === parseInt(materialId));
     
-    if (material) {
-      if (!updatedItems[index].unitPrice || updatedItems[index].unitPrice === "0") {
-        updatedItems[index].unitPrice = material.unit_cost.toString();
-        const quantity = parseFloat(updatedItems[index].quantity) || 0;
-        updatedItems[index].total = quantity * material.unit_cost;
+    if (itemType === "material") {
+      const material = materials.find(m => m.id === parseInt(itemId));
+      if (material) {
+        if (!updatedItems[index].unitPrice || updatedItems[index].unitPrice === "0") {
+          updatedItems[index].unitPrice = material.unit_cost.toString();
+          const quantity = parseFloat(updatedItems[index].quantity) || 0;
+          updatedItems[index].total = quantity * material.unit_cost;
+        }
+        updatedItems[index].materialUnitPrice = material.unit_cost;
       }
-      updatedItems[index].materialUnitPrice = material.unit_cost;
+    } else {
+      const product = products.find(p => p.id === parseInt(itemId));
+      if (product) {
+        if (!updatedItems[index].unitPrice || updatedItems[index].unitPrice === "0") {
+          updatedItems[index].unitPrice = product.cost.toString();
+          const quantity = parseFloat(updatedItems[index].quantity) || 0;
+          updatedItems[index].total = quantity * product.cost;
+        }
+        updatedItems[index].productCost = product.cost;
+      }
     }
     
     setPurchaseItems(updatedItems);
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setMessage("");
-  
-  // Validate form
-  if (!form.supplierId || !form.destinationId) {
-    setMessage("❌ Please select supplier and destination");
-    setLoading(false);
-    return;
-  }
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
+    
+    // Validate form
+    if (!form.supplierId || !form.destinationId) {
+      setMessage("❌ Please select supplier and destination");
+      setLoading(false);
+      return;
+    }
 
-  // Validate items
-  const validItems = purchaseItems.filter(item => 
-    item.materialId && item.quantity && item.unitPrice && 
-    parseFloat(item.quantity) > 0 && parseFloat(item.unitPrice) > 0
-  );
-
-  if (validItems.length === 0) {
-    setMessage("❌ Please add at least one valid material with quantity and unit price");
-    setLoading(false);
-    return;
-  }
-
-  try {
-    const payload = {
-      supplierId: parseInt(form.supplierId),
-      destinationType: form.destinationType, // Add this
-      destinationId: parseInt(form.destinationId), // Add this
-      grandTotal: form.grandTotal,
-      reference: form.reference,
-      items: validItems.map(item => ({
-        materialId: parseInt(item.materialId),
-        quantity: parseFloat(item.quantity),
-        unitPrice: parseFloat(item.unitPrice)
-      }))
-    };
-
-    const res = await fetch("http://localhost:3001/api/purchases", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    // Validate items
+    const validItems = purchaseItems.filter(item => {
+      if (!item.itemType || !item.quantity || !item.unitPrice) return false;
+      if (parseFloat(item.quantity) <= 0 || parseFloat(item.unitPrice) <= 0) return false;
       
+      if (item.itemType === "material" && !item.materialId) return false;
+      if (item.itemType === "product" && !item.productId) return false;
+      
+      return true;
+    });
+
+    if (validItems.length === 0) {
+      setMessage("❌ Please add at least one valid item with quantity and unit price");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const payload = {
+        supplierId: parseInt(form.supplierId),
+        destinationType: form.destinationType,
+        destinationId: parseInt(form.destinationId),
+        grandTotal: form.grandTotal,
+        reference: form.reference,
+        items: validItems.map(item => ({
+          itemType: item.itemType,
+          materialId: item.itemType === "material" ? parseInt(item.materialId) : undefined,
+          productId: item.itemType === "product" ? parseInt(item.productId) : undefined,
+          quantity: parseFloat(item.quantity),
+          unitPrice: parseFloat(item.unitPrice)
+        }))
+      };
+
+      const res = await fetch("http://localhost:3001/api/purchases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+        
       const data = await res.json();
       if (res.ok) {
         setMessage("✅ Purchase added successfully!");
@@ -245,7 +345,16 @@ export default function NewPurchase() {
         });
         setDestinationType("store");
         setDestinationId("");
-        setPurchaseItems([{ materialId: "", quantity: "", unitPrice: "", total: 0, materialUnitPrice: 0 }]);
+        setPurchaseItems([{ 
+          itemType: "material",
+          materialId: "", 
+          productId: "", 
+          quantity: "", 
+          unitPrice: "", 
+          total: 0, 
+          materialUnitPrice: 0,
+          productCost: 0
+        }]);
       } else {
         setMessage(`❌ ${data.error || data.message || "Failed to add purchase"}`);
       }
@@ -320,29 +429,77 @@ export default function NewPurchase() {
           </div>
 
           {purchaseItems.map((item, index) => {
-            const materialUnitCost = getMaterialUnitCost(item.materialId);
+            const itemDetails = getItemDetails(item);
+            const standardPrice = itemDetails.standardPrice;
+            const currentPrice = parseFloat(item.unitPrice) || 0;
             
             return (
               <div key={index} style={itemRow}>
                 <div style={gridRow}>
+                  {/* Item Type Selector */}
                   <div style={row}>
-                    <label>Material:</label>
+                    <label>Item Type:</label>
                     <select
-                      value={item.materialId}
-                      onChange={(e) => handleItemChange(index, 'materialId', e.target.value)}
-                      onBlur={() => handleMaterialSelect(index, item.materialId)}
+                      value={item.itemType}
+                      onChange={(e) => handleItemTypeChange(index, e.target.value)}
                       required
+                      style={{
+                        backgroundColor: item.itemType === "material" ? "#e0f2fe" : "#f0fdf4",
+                        borderColor: item.itemType === "material" ? "#0ea5e9" : "#10b981"
+                      }}
                     >
-                      <option value="">-- Select Material --</option>
-                      {materials.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} ({m.unit}) - ${m.unit_cost}/unit
-                        </option>
-                      ))}
+                      <option value="material">📦 Material</option>
+                      <option value="product">🏷️ Product</option>
                     </select>
-                    {item.materialId && (
+                  </div>
+
+                  {/* Item Selection */}
+                  <div style={row}>
+                    <label>
+                      {item.itemType === "material" ? "Material:" : "Product:"}
+                    </label>
+                    <select
+                      value={item.itemType === "material" ? item.materialId : item.productId}
+                      onChange={(e) => {
+                        if (item.itemType === "material") {
+                          handleItemChange(index, 'materialId', e.target.value);
+                        } else {
+                          handleItemChange(index, 'productId', e.target.value);
+                        }
+                      }}
+                      onBlur={() => {
+                        if (item.itemType === "material") {
+                          handleItemSelect(index, "material", item.materialId);
+                        } else {
+                          handleItemSelect(index, "product", item.productId);
+                        }
+                      }}
+                      required
+                      style={{
+                        backgroundColor: item.itemType === "material" ? "#f0f9ff" : "#f0fdf4"
+                      }}
+                    >
+                      <option value="">
+                        -- Select {item.itemType === "material" ? "Material" : "Product"} --
+                      </option>
+                      {item.itemType === "material" ? (
+                        materials.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} ({m.unit}) - ${m.unit_cost}/unit
+                          </option>
+                        ))
+                      ) : (
+                        products.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} - Cost: ${p.cost}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    {((item.itemType === "material" && item.materialId) || 
+                      (item.itemType === "product" && item.productId)) && (
                       <small style={{ color: "#666", fontSize: "0.8rem", marginTop: "2px" }}>
-                        Standard price: ${materialUnitCost.toFixed(2)}
+                        Standard price: ${standardPrice.toFixed(2)}
                       </small>
                     )}
                   </div>
@@ -366,21 +523,21 @@ export default function NewPurchase() {
                       type="number"
                       step="0.01"
                       min="0.01"
-                      placeholder={item.materialId ? `e.g., ${materialUnitCost.toFixed(2)}` : "Select material first"}
+                      placeholder={`e.g., ${standardPrice.toFixed(2)}`}
                       value={item.unitPrice}
                       onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
                       required
                       style={{
-                        ...(item.materialId && parseFloat(item.unitPrice) === materialUnitCost 
+                        ...(standardPrice > 0 && currentPrice === standardPrice 
                           ? { borderColor: "#10b981", backgroundColor: "#f0fdf4" } 
-                          : item.materialId && parseFloat(item.unitPrice) !== materialUnitCost
+                          : standardPrice > 0 && currentPrice !== standardPrice
                           ? { borderColor: "#f59e0b", backgroundColor: "#fffbeb" }
                           : {})
                       }}
                     />
-                    {item.materialId && parseFloat(item.unitPrice) !== materialUnitCost && item.unitPrice && (
+                    {standardPrice > 0 && currentPrice !== standardPrice && item.unitPrice && (
                       <small style={{ color: "#f59e0b", fontSize: "0.8rem", marginTop: "2px" }}>
-                        Different from standard price (${materialUnitCost.toFixed(2)})
+                        Different from standard price (${standardPrice.toFixed(2)})
                       </small>
                     )}
                   </div>
@@ -405,6 +562,28 @@ export default function NewPurchase() {
                         ×
                       </button>
                     </div>
+                  )}
+                </div>
+                
+                {/* Item Type Indicator */}
+                <div style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginTop: "8px",
+                  fontSize: "0.8rem"
+                }}>
+                  <span style={{
+                    padding: "2px 8px",
+                    borderRadius: "12px",
+                    backgroundColor: item.itemType === "material" ? "#dbeafe" : "#dcfce7",
+                    color: item.itemType === "material" ? "#1e40af" : "#166534"
+                  }}>
+                    {item.itemType === "material" ? "📦 Material" : "🏷️ Product"}
+                  </span>
+                  {itemDetails.name && (
+                    <span style={{ color: "#6b7280" }}>
+                      Selected: {itemDetails.name}
+                    </span>
                   )}
                 </div>
               </div>

@@ -79,6 +79,7 @@ model Product {
   shopProduct             ShopProduct[]
   storeToShopTransferItem StoreToShopTransferItem[]
   factoryProducts         FactoryProduct[]
+  purchaseItem            PurchaseItem[]
 }
 
 model ProductMaterial {
@@ -217,14 +218,19 @@ model PurchaseItem {
   id         Int      @id @default(autoincrement())
   purchaseId Int
   purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
-  materialId Int
-  material   Material @relation(fields: [materialId], references: [id])
+  materialId Int?
+  material   Material? @relation(fields: [materialId], references: [id])
+  productId  Int?
+  product    Product?  @relation(fields: [productId], references: [id])
+  itemType   String   @default("material") // "material" or "product"
   quantity   Float
   unitPrice  Float
   totalPrice Float
   createdAt  DateTime @default(now())
 
-  @@unique([purchaseId, materialId])
+  @@unique([purchaseId, productId, materialId])
+  @@index([productId])
+  @@index([materialId])
 }
 
 model Sale {

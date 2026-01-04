@@ -766,7 +766,6 @@ router.get("/returns-list", async (req, res) => {
       orderBy: { createdAt: "desc" },
     });
 
-    console.log(`✅ Returning ${saleReturns.length} returns`);
     res.json(saleReturns);
   } catch (err) {
     console.error("❌ Error in /returns-list:", err);
