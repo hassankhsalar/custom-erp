@@ -13,6 +13,7 @@ const AddMaterial = () => {
     unit: '',
     unit_cost: '',
     sale_price: '',
+    alert_quantity: '', // NEW FIELD
   });
 
   const handleChange = (e) => {
@@ -30,6 +31,7 @@ const AddMaterial = () => {
         ...material,
         unit_cost: parseFloat(material.unit_cost),
         sale_price: material.sale_price ? parseFloat(material.sale_price) : null,
+        alert_quantity: material.alert_quantity ? parseFloat(material.alert_quantity) : 0, // NEW FIELD
       });
       navigate('/materials/all');
     } catch (error) {
@@ -120,6 +122,8 @@ const AddMaterial = () => {
               onChange={handleChange}
               placeholder="Unit Cost"
               required
+              min="0"
+              step="0.01"
               className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
@@ -141,8 +145,28 @@ const AddMaterial = () => {
               Optional. Leave empty if material is not for direct sale.
             </small>
           </div>
+          <div className="flex flex-col">
+            <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="alert_quantity">
+              Alert Quantity
+            </label>
+            <input
+              type="number"
+              name="alert_quantity"
+              value={material.alert_quantity}
+              onChange={handleChange}
+              placeholder="Alert Quantity"
+              min="0"
+              step="0.01"
+              className="shadow appearance-none border border-gray-300 rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            />
+            <small className="text-gray-500 text-xs mt-1">
+              Low stock alert threshold. Leave empty to disable alerts.
+            </small>
+          </div>
         </div>
-        <button type="submit" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Add Material</button>
+        <button type="submit" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+          Add Material
+        </button>
       </form>
     </div>
   );

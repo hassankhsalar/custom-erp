@@ -47,6 +47,7 @@ model Material {
   current_stock       Float                @default(0)
   created_at          DateTime             @default(now())
   updated_at          DateTime             @updatedAt
+  alert_quantity      Float                @default(0)
   ProductMaterial     ProductMaterial[]
   storeMaterials      StoreMaterial[]
   productionMaterials ProductionMaterial[]
