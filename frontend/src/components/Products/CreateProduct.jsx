@@ -9,6 +9,7 @@ const CreateProduct = () => {
     sale_price: '',
     wholesale_price: '',
     cost: '',
+    alert_quantity: '0', // NEW FIELD
   });
   const [materials, setMaterials] = useState([]);
   const [allMaterials, setAllMaterials] = useState([]);
@@ -86,6 +87,7 @@ const CreateProduct = () => {
       sale_price: parseFloat(product.sale_price),
       wholesale_price: parseFloat(product.wholesale_price),
       cost: parseFloat(product.cost),
+      alert_quantity: parseInt(product.alert_quantity), // NEW FIELD
       materials: materials.map(m => ({...m, material_id: parseInt(m.material_id), material_quantity: parseFloat(m.material_quantity), price: parseFloat(m.price)})),
     };
 
@@ -93,7 +95,14 @@ const CreateProduct = () => {
       await axios.post(API_ROUTES.PRODUCTS, productData);
       alert('Product created successfully!');
       // Clear form
-      setProduct({ name: '', description: '', sale_price: '', wholesale_price: '', cost: '' });
+      setProduct({ 
+        name: '', 
+        description: '', 
+        sale_price: '', 
+        wholesale_price: '', 
+        cost: '', 
+        alert_quantity: '0' // RESET NEW FIELD
+      });
       setMaterials([]);
     } catch (error) {
       console.error('Error creating product:', error);
@@ -102,20 +111,74 @@ const CreateProduct = () => {
   };
 
   const selectedMaterial = allMaterials.find(
-  (m) => m.id === parseInt(newMaterial.material_id)
-);
+    (m) => m.id === parseInt(newMaterial.material_id)
+  );
 
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Create Product</h1>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className='grid grid-cols-2 sm:grid-cols-1 md:grid-cols-2 gap-4'>
-          <input type="text" name="name" value={product.name} onChange={handleProductChange} placeholder="Product Name" className="w-full p-2 border border-gray-300" required />
-          <input type="number" name="sale_price" value={product.sale_price} onChange={handleProductChange} placeholder="Sale Price" className="w-full p-2 border border-gray-300" required />
-          <input type="number" name="wholesale_price" value={product.wholesale_price} onChange={handleProductChange} placeholder="Wholesale Price" className="w-full p-2 border border-gray-300" required />
-          <input type="number" name="cost" value={product.cost} onChange={handleProductChange} placeholder="Cost" className="w-full p-2 border border-gray-300" required />
+          <input 
+            type="text" 
+            name="name" 
+            value={product.name} 
+            onChange={handleProductChange} 
+            placeholder="Product Name" 
+            className="w-full p-2 border border-gray-300" 
+            required 
+          />
+          <input 
+            type="number" 
+            name="sale_price" 
+            value={product.sale_price} 
+            onChange={handleProductChange} 
+            placeholder="Sale Price" 
+            className="w-full p-2 border border-gray-300" 
+            required 
+            min="0"
+            step="0.01"
+          />
+          <input 
+            type="number" 
+            name="wholesale_price" 
+            value={product.wholesale_price} 
+            onChange={handleProductChange} 
+            placeholder="Wholesale Price" 
+            className="w-full p-2 border border-gray-300" 
+            required 
+            min="0"
+            step="0.01"
+          />
+          <input 
+            type="number" 
+            name="cost" 
+            value={product.cost} 
+            onChange={handleProductChange} 
+            placeholder="Cost" 
+            className="w-full p-2 border border-gray-300" 
+            required 
+            min="0"
+            step="0.01"
+          />
+          <input 
+            type="number" 
+            name="alert_quantity" 
+            value={product.alert_quantity === '0' ? '' : product.alert_quantity}
+            onChange={handleProductChange} 
+            placeholder="Alert Quantity" 
+            className="w-full p-2 border border-gray-300" 
+            min="0"
+            step="1"
+          />
         </div>
-        <textarea name="description" value={product.description} onChange={handleProductChange} placeholder="Description" className="w-full p-2 border border-gray-300"></textarea>
+        <textarea 
+          name="description" 
+          value={product.description} 
+          onChange={handleProductChange} 
+          placeholder="Description" 
+          className="w-full p-2 border border-gray-300"
+        ></textarea>
         
         <div className="border border-gray-300 p-4 rounded">
           <h2 className="text-xl font-semibold mb-2">Materials</h2>
@@ -166,9 +229,25 @@ const CreateProduct = () => {
             )}
           </div>
           <div className="flex items-center space-x-2 mt-2">
-            <input type="number" value={newMaterial.material_quantity} onChange={(e) => setNewMaterial({ ...newMaterial, material_quantity: e.target.value })} placeholder="Quantity" className="p-2 border border-gray-300" />
+            <input 
+              type="number" 
+              value={newMaterial.material_quantity} 
+              onChange={(e) => setNewMaterial({ ...newMaterial, material_quantity: e.target.value })} 
+              placeholder="Quantity" 
+              className="p-2 border border-gray-300" 
+              min="0"
+              step="0.01"
+            />
             
-            <input type="number" value={newMaterial.price} onChange={(e) => setNewMaterial({ ...newMaterial, price: e.target.value })} placeholder={selectedMaterial?.unit_cost || "Price"} className="p-2 border border-gray-300" />
+            <input 
+              type="number" 
+              value={newMaterial.price} 
+              onChange={(e) => setNewMaterial({ ...newMaterial, price: e.target.value })} 
+              placeholder={selectedMaterial?.unit_cost || "Price"} 
+              className="p-2 border border-gray-300" 
+              min="0"
+              step="0.01"
+            />
 
             <button type="button" onClick={handleAddOrUpdateMaterial} className="bg-blue-500 text-white p-2 px-8 cursor-pointer rounded">
               {editingMaterialIndex !== null ? 'Update Material' : 'Add Material'}
