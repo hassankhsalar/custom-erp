@@ -3,13 +3,16 @@ import { useEffect, useState } from "react";
 export default function NewPurchase() {
   const [materials, setMaterials] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
-  const [stores, setStores] = useState([]);
+  const [destinations, setDestinations] = useState([]);
+  const [destinationType, setDestinationType] = useState("store");
+  const [destinationId, setDestinationId] = useState("");
   const [purchaseItems, setPurchaseItems] = useState([
-    { materialId: "", quantity: "", unitPrice: "", total: 0 }
+    { materialId: "", quantity: "", unitPrice: "", total: 0, materialUnitPrice: 0 }
   ]);
   const [form, setForm] = useState({
     supplierId: "",
-    storeId: "",
+    destinationType: "store",
+    destinationId: "",
     grandTotal: 0,
     reference: `PUR-${Date.now()}`
   });
@@ -19,14 +22,14 @@ export default function NewPurchase() {
   useEffect(() => {
     fetchMaterials();
     fetchSuppliers();
-    fetchStores();
-  }, []);
+    fetchDestinations();
+  }, [destinationType]);
 
   const fetchMaterials = async () => {
     try {
       const res = await fetch("http://localhost:3001/api/materials");
       const data = await res.json();
-      setMaterials(data.materials || []);
+      setMaterials(data.materials || data || []);
     } catch (error) {
       console.error("Failed to fetch materials:", error);
       setMaterials([]);
@@ -44,20 +47,48 @@ export default function NewPurchase() {
     }
   };
 
-  const fetchStores = async () => {
+  const fetchDestinations = async () => {
     try {
+      let endpoint = "";
+      switch (destinationType) {
+        case "store":
+          endpoint = "http://localhost:3001/api/stores";
+          break;
+        case "shop":
+          endpoint = "http://localhost:3001/api/shops";
+          break;
+        case "factory":
+          endpoint = "http://localhost:3001/api/factories";
+          break;
+        default:
+          endpoint = "http://localhost:3001/api/stores";
+      }
+
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:3001/api/stores", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!res.ok) throw new Error("Unauthorized");
+      const headers = {};
+      
+      // Add token for protected routes (stores require auth)
+      if (destinationType === "store") {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const res = await fetch(endpoint, { headers });
+      if (!res.ok) throw new Error("Failed to fetch destinations");
       const data = await res.json();
-      setStores(Array.isArray(data) ? data : data.stores || []);
+      
+      // Handle different response formats
+      if (Array.isArray(data)) {
+        setDestinations(data);
+      } else if (data.stores) {
+        setDestinations(data.stores);
+      } else if (data.shops) {
+        setDestinations(data.shops || data);
+      } else {
+        setDestinations([]);
+      }
     } catch (error) {
-      console.error("Failed to fetch stores:", error);
-      setStores([]);
+      console.error("Failed to fetch destinations:", error);
+      setDestinations([]);
     }
   };
 
@@ -72,13 +103,45 @@ export default function NewPurchase() {
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleDestinationTypeChange = (e) => {
+    const newType = e.target.value;
+    setDestinationType(newType);
+    setDestinationId("");
+    setForm(prev => ({ 
+      ...prev, 
+      destinationType: newType,
+      destinationId: ""
+    }));
+  };
+
+  const handleDestinationChange = (e) => {
+    const newId = e.target.value;
+    setDestinationId(newId);
+    setForm(prev => ({ ...prev, destinationId: newId }));
+  };
+
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...purchaseItems];
     
-    updatedItems[index][field] = value;
+    if (field === 'materialId') {
+      const selectedMaterial = materials.find(m => m.id === parseInt(value));
+      
+      if (selectedMaterial) {
+        updatedItems[index].materialId = value;
+        updatedItems[index].materialUnitPrice = selectedMaterial.unit_cost || 0;
+        
+        if (!updatedItems[index].unitPrice || updatedItems[index].unitPrice === "0") {
+          updatedItems[index].unitPrice = selectedMaterial.unit_cost.toString();
+        }
+      } else {
+        updatedItems[index].materialId = value;
+        updatedItems[index].materialUnitPrice = 0;
+      }
+    } else {
+      updatedItems[index][field] = value;
+    }
     
-    // Auto-calculate total when quantity or unitPrice changes
-    if (field === 'quantity' || field === 'unitPrice') {
+    if (field === 'quantity' || field === 'unitPrice' || field === 'materialId') {
       const quantity = parseFloat(updatedItems[index].quantity) || 0;
       const unitPrice = parseFloat(updatedItems[index].unitPrice) || 0;
       updatedItems[index].total = quantity * unitPrice;
@@ -90,7 +153,7 @@ export default function NewPurchase() {
   const addItem = () => {
     setPurchaseItems([
       ...purchaseItems,
-      { materialId: "", quantity: "", unitPrice: "", total: 0 }
+      { materialId: "", quantity: "", unitPrice: "", total: 0, materialUnitPrice: 0 }
     ]);
   };
 
@@ -101,48 +164,73 @@ export default function NewPurchase() {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage("");
+  // Helper function to get material unit cost by ID
+  const getMaterialUnitCost = (id) => {
+    const material = materials.find(m => m.id === parseInt(id));
+    return material ? material.unit_cost : 0;
+  };
+
+  const handleMaterialSelect = (index, materialId) => {
+    if (!materialId) return;
     
-    // Validate form
-    if (!form.supplierId || !form.storeId) {
-      setMessage("❌ Please select supplier and store");
-      setLoading(false);
-      return;
+    const updatedItems = [...purchaseItems];
+    const material = materials.find(m => m.id === parseInt(materialId));
+    
+    if (material) {
+      if (!updatedItems[index].unitPrice || updatedItems[index].unitPrice === "0") {
+        updatedItems[index].unitPrice = material.unit_cost.toString();
+        const quantity = parseFloat(updatedItems[index].quantity) || 0;
+        updatedItems[index].total = quantity * material.unit_cost;
+      }
+      updatedItems[index].materialUnitPrice = material.unit_cost;
     }
+    
+    setPurchaseItems(updatedItems);
+  };
 
-    // Validate items
-    const validItems = purchaseItems.filter(item => 
-      item.materialId && item.quantity && item.unitPrice && 
-      parseFloat(item.quantity) > 0 && parseFloat(item.unitPrice) > 0
-    );
+  const handleSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(true);
+  setMessage("");
+  
+  // Validate form
+  if (!form.supplierId || !form.destinationId) {
+    setMessage("❌ Please select supplier and destination");
+    setLoading(false);
+    return;
+  }
 
-    if (validItems.length === 0) {
-      setMessage("❌ Please add at least one valid material with quantity and unit price");
-      setLoading(false);
-      return;
-    }
+  // Validate items
+  const validItems = purchaseItems.filter(item => 
+    item.materialId && item.quantity && item.unitPrice && 
+    parseFloat(item.quantity) > 0 && parseFloat(item.unitPrice) > 0
+  );
 
-    try {
-      const payload = {
-        supplierId: parseInt(form.supplierId),
-        storeId: parseInt(form.storeId),
-        grandTotal: form.grandTotal,
-        reference: form.reference,
-        items: validItems.map(item => ({
-          materialId: parseInt(item.materialId),
-          quantity: parseFloat(item.quantity),
-          unitPrice: parseFloat(item.unitPrice)
-        }))
-      };
+  if (validItems.length === 0) {
+    setMessage("❌ Please add at least one valid material with quantity and unit price");
+    setLoading(false);
+    return;
+  }
 
-      const res = await fetch("http://localhost:3001/api/purchases", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+  try {
+    const payload = {
+      supplierId: parseInt(form.supplierId),
+      destinationType: form.destinationType, // Add this
+      destinationId: parseInt(form.destinationId), // Add this
+      grandTotal: form.grandTotal,
+      reference: form.reference,
+      items: validItems.map(item => ({
+        materialId: parseInt(item.materialId),
+        quantity: parseFloat(item.quantity),
+        unitPrice: parseFloat(item.unitPrice)
+      }))
+    };
+
+    const res = await fetch("http://localhost:3001/api/purchases", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
       
       const data = await res.json();
       if (res.ok) {
@@ -150,11 +238,14 @@ export default function NewPurchase() {
         // Reset form
         setForm({
           supplierId: "",
-          storeId: "",
+          destinationType: "store",
+          destinationId: "",
           grandTotal: 0,
           reference: `PUR-${Date.now()}`
         });
-        setPurchaseItems([{ materialId: "", quantity: "", unitPrice: "", total: 0 }]);
+        setDestinationType("store");
+        setDestinationId("");
+        setPurchaseItems([{ materialId: "", quantity: "", unitPrice: "", total: 0, materialUnitPrice: 0 }]);
       } else {
         setMessage(`❌ ${data.error || data.message || "Failed to add purchase"}`);
       }
@@ -169,7 +260,7 @@ export default function NewPurchase() {
     <div style={container}>
       <h2 style={title}>New Purchase</h2>
       <form onSubmit={handleSubmit} style={formBox}>
-        {/* Supplier and Store Selection */}
+        {/* Supplier and Destination Selection */}
         <div style={gridRow}>
           <div style={row}>
             <label>Supplier:</label>
@@ -189,17 +280,30 @@ export default function NewPurchase() {
           </div>
 
           <div style={row}>
-            <label>Deliver to:</label>
+            <label>Deliver to Type:</label>
             <select
-              name="storeId"
-              value={form.storeId}
-              onChange={handleFormChange}
+              value={destinationType}
+              onChange={handleDestinationTypeChange}
               required
             >
-              <option value="">-- Select Store --</option>
-              {stores.map((store) => (
-                <option key={store.id} value={store.id}>
-                  {store.name}
+              <option value="store">Store</option>
+              <option value="shop">Shop</option>
+              <option value="factory">Factory</option>
+            </select>
+          </div>
+
+          <div style={row}>
+            <label>Deliver to:</label>
+            <select
+              name="destinationId"
+              value={form.destinationId}
+              onChange={handleDestinationChange}
+              required
+            >
+              <option value="">-- Select {destinationType.charAt(0).toUpperCase() + destinationType.slice(1)} --</option>
+              {destinations.map((dest) => (
+                <option key={dest.id} value={dest.id}>
+                  {dest.name}
                 </option>
               ))}
             </select>
@@ -215,73 +319,97 @@ export default function NewPurchase() {
             </button>
           </div>
 
-          {purchaseItems.map((item, index) => (
-            <div key={index} style={itemRow}>
-              <div style={gridRow}>
-                <div style={row}>
-                  <label>Material:</label>
-                  <select
-                    value={item.materialId}
-                    onChange={(e) => handleItemChange(index, 'materialId', e.target.value)}
-                    required
-                  >
-                    <option value="">-- Select Material --</option>
-                    {materials.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} ({m.unit})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={row}>
-                  <label>Quantity:</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={item.quantity}
-                    onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div style={row}>
-                  <label>Unit Price:</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={item.unitPrice}
-                    onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div style={row}>
-                  <label>Total:</label>
-                  <input 
-                    type="text" 
-                    value={item.total.toFixed(2)} 
-                    readOnly 
-                    style={totalInput}
-                  />
-                </div>
-
-                {purchaseItems.length > 1 && (
-                  <div style={removeButtonContainer}>
-                    <button
-                      type="button"
-                      onClick={() => removeItem(index)}
-                      style={removeButton}
+          {purchaseItems.map((item, index) => {
+            const materialUnitCost = getMaterialUnitCost(item.materialId);
+            
+            return (
+              <div key={index} style={itemRow}>
+                <div style={gridRow}>
+                  <div style={row}>
+                    <label>Material:</label>
+                    <select
+                      value={item.materialId}
+                      onChange={(e) => handleItemChange(index, 'materialId', e.target.value)}
+                      onBlur={() => handleMaterialSelect(index, item.materialId)}
+                      required
                     >
-                      ×
-                    </button>
+                      <option value="">-- Select Material --</option>
+                      {materials.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} ({m.unit}) - ${m.unit_cost}/unit
+                        </option>
+                      ))}
+                    </select>
+                    {item.materialId && (
+                      <small style={{ color: "#666", fontSize: "0.8rem", marginTop: "2px" }}>
+                        Standard price: ${materialUnitCost.toFixed(2)}
+                      </small>
+                    )}
                   </div>
-                )}
+
+                  <div style={row}>
+                    <label>Quantity:</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="1"
+                      value={item.quantity}
+                      onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div style={row}>
+                    <label>Unit Price:</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder={item.materialId ? `e.g., ${materialUnitCost.toFixed(2)}` : "Select material first"}
+                      value={item.unitPrice}
+                      onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
+                      required
+                      style={{
+                        ...(item.materialId && parseFloat(item.unitPrice) === materialUnitCost 
+                          ? { borderColor: "#10b981", backgroundColor: "#f0fdf4" } 
+                          : item.materialId && parseFloat(item.unitPrice) !== materialUnitCost
+                          ? { borderColor: "#f59e0b", backgroundColor: "#fffbeb" }
+                          : {})
+                      }}
+                    />
+                    {item.materialId && parseFloat(item.unitPrice) !== materialUnitCost && item.unitPrice && (
+                      <small style={{ color: "#f59e0b", fontSize: "0.8rem", marginTop: "2px" }}>
+                        Different from standard price (${materialUnitCost.toFixed(2)})
+                      </small>
+                    )}
+                  </div>
+
+                  <div style={row}>
+                    <label>Total:</label>
+                    <input 
+                      type="text" 
+                      value={item.total.toFixed(2)} 
+                      readOnly 
+                      style={totalInput}
+                    />
+                  </div>
+
+                  {purchaseItems.length > 1 && (
+                    <div style={removeButtonContainer}>
+                      <button
+                        type="button"
+                        onClick={() => removeItem(index)}
+                        style={removeButton}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Grand Total */}
@@ -317,7 +445,7 @@ export default function NewPurchase() {
   );
 }
 
-// Styles (same as previous)
+// Styles (keep the same styles as before)
 const container = {
   maxWidth: "900px",
   margin: "2rem auto",

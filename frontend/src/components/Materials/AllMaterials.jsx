@@ -41,6 +41,7 @@ const AllMaterials = () => {
               <th className="w-1/6 py-3 px-4 uppercase font-semibold text-sm">Brand</th>
               <th className="w-1/6 py-3 px-4 uppercase font-semibold text-sm">Unit</th>
               <th className="w-1/6 py-3 px-4 uppercase font-semibold text-sm">Unit Cost</th>
+              <th className="w-1/6 py-3 px-4 uppercase font-semibold text-sm">Sale Price</th>
               <th className="w-1/6 py-3 px-4 uppercase font-semibold text-sm">Current Stock</th>
               <th className="py-3 px-4 uppercase font-semibold text-sm">Actions</th>
             </tr>
@@ -53,6 +54,7 @@ const AllMaterials = () => {
                 <td className="w-1/6 py-3 px-4">{material.brand}</td>
                 <td className="w-1/6 py-3 px-4">{material.unit}</td>
                 <td className="w-1/6 py-3 px-4">{material.unit_cost}</td>
+                <td className="w-1/6 py-3 px-4">{material.sale_price ? `$${material.sale_price.toFixed(2)}` : '-'}</td>
                 <td className="w-1/6 py-3 px-4">{material.current_stock}</td>
                 <td className="py-3 px-4">
                   <div className="relative inline-block text-left">

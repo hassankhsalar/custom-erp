@@ -73,12 +73,14 @@ async function main() {
     },
   });
 
+  
+
   // --- MATERIALS ---
   const materials = await prisma.material.createMany({
     data: [
-      { name: "Steel Rod", unit: "kg", unit_cost: 100 },
-      { name: "Plastic Sheet", unit: "kg", unit_cost: 50 },
-      { name: "Paint", unit: "liter", unit_cost: 120 },
+      { name: "Steel Rod", brand: "bsrm", description: "long lasting", barcode: "SR-0120", unit: "kg", unit_cost: 100, sale_price: 120 },
+      { name: "Plastic Sheet", brand: "rfl", description: "strong plastic", barcode: "PS-0130", unit: "kg", unit_cost: 50, sale_price: 60 },
+      { name: "Paint", brand: "berger", description: "long lasting paint", barcode: "P-0120", unit: "liter", unit_cost: 120, sale_price: 130 },
     ],
   });
 
@@ -142,6 +144,8 @@ async function main() {
       reference: "PUR-001",
       supplierId: supplier.id,
       storeId: store.id,
+      destinationType: 'store', // Add this
+      destinationId: 1, // Add this
       grandTotal: 30000,
       purchaseItems: {
         create: [

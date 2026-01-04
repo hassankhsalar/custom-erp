@@ -43,6 +43,7 @@ model Material {
   image               String?
   unit                String
   unit_cost           Float
+  sale_price          Float?  
   current_stock       Float                @default(0)
   created_at          DateTime             @default(now())
   updated_at          DateTime             @updatedAt
@@ -53,6 +54,7 @@ model Material {
   shopMaterial        ShopMaterial[]
   storeToShopTransferItem StoreToShopTransferItem[]
   factoryMaterials    FactoryMaterial[]
+  saleItem            SaleItem[]
 }
 
 model Product {
@@ -198,11 +200,16 @@ model Purchase {
   reference   String?       @unique
   supplierId Int
   storeId    Int?
+  destinationType String? // New: "store", "shop", "factory"
+  destinationId   Int?    // New: ID of store/shop/factory
   supplier   Supplier @relation(fields: [supplierId], references: [id], name: "SupplierPurchases")
   createdAt  DateTime @default(now())
   store      Store?   @relation(fields: [storeId], references: [id])
   grandTotal  Float
   purchaseItems PurchaseItem[]
+
+  @@index([destinationType])
+  @@index([destinationId])
 }
 
 model PurchaseItem {
@@ -243,11 +250,16 @@ model SaleItem {
   id         Int     @id @default(autoincrement())
   saleId     Int
   sale       Sale    @relation(fields: [saleId], references: [id])
-  productId  Int
-  product    Product @relation(fields: [productId], references: [id])
+  productId  Int?
+  product    Product? @relation(fields: [productId], references: [id])
+  materialId Int?
+  material   Material? @relation(fields: [materialId], references: [id])
   quantity   Float
   unitPrice  Float
   totalPrice Float
+
+  @@index([productId])
+  @@index([materialId])
 }
 
 model SaleReturn {

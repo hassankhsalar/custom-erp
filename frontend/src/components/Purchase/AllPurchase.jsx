@@ -20,7 +20,39 @@ export default function AllPurchase() {
     };
     fetchPurchases();
   }, []);
-  // console.log(purchases);
+
+  console.log(purchases);
+
+  // Helper function to get destination display name
+  const getDestinationDisplay = (purchase) => {
+    // First, check if we have destination data from the API
+    if (purchase.destination) {
+      const dest = purchase.destination;
+      return `${dest.type.charAt(0).toUpperCase() + dest.type.slice(1)}: ${dest.name}`;
+    }
+    
+    // Fallback to store for backward compatibility
+    if (purchase.store) {
+      return `Store: ${purchase.store.name}`;
+    }
+    
+    // If no destination info is available
+    return "-";
+  };
+
+  // Helper function to get destination for the detailed table
+  const getDestinationForTable = (purchase) => {
+    if (purchase.destination) {
+      const dest = purchase.destination;
+      return `${dest.type}: ${dest.name}`;
+    }
+    
+    if (purchase.store) {
+      return `store: ${purchase.store.name}`;
+    }
+    
+    return "-";
+  };
 
   if (loading)
     return (
@@ -53,7 +85,7 @@ export default function AllPurchase() {
                 <div style={purchaseInfo}>
                   <strong>Reference: {purchase.reference}</strong>
                   <span>Supplier: {purchase.supplier?.name || "-"}</span>
-                  <span>Store: {purchase.store?.name || "-"}</span>
+                  <span>Destination: {getDestinationDisplay(purchase)}</span>
                   <span>
                     Date: {new Date(purchase.createdAt).toLocaleDateString()}
                   </span>
@@ -123,7 +155,7 @@ export default function AllPurchase() {
                   <th style={th}>Unit Price</th>
                   <th style={th}>Total Price</th>
                   <th style={th}>Date</th>
-                  <th style={th}>Store</th>
+                  <th style={th}>Destination</th>
                 </tr>
               </thead>
               <tbody>
@@ -149,7 +181,7 @@ export default function AllPurchase() {
                       <td style={td}>
                         {new Date(purchase.createdAt).toLocaleDateString()}
                       </td>
-                      <td style={td}>{purchase.store?.name || "-"}</td>
+                      <td style={td}>{getDestinationForTable(purchase)}</td>
                     </tr>
                   ))
                 )}
@@ -162,7 +194,7 @@ export default function AllPurchase() {
   );
 }
 
-// --- Updated Styles ---
+// --- Styles (unchanged) ---
 const container = {
   maxWidth: "1000px",
   margin: "2rem auto",
