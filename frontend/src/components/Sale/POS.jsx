@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
-import { CircleDollarSign, Search, ShoppingCart, Store, TriangleAlert, UserRound } from "lucide-react";
+import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound } from "lucide-react";
 
 export default function ShopPOS() {
   const [shops, setShops] = useState([]);
@@ -707,7 +707,7 @@ export default function ShopPOS() {
                               </button>
                             </div>
                             <div className="text-xs text-gray-500 mt-2">
-                              Available: {item.shop_stock + item.quantity}
+                              Available: {item.shop_stock - item.quantity}
                             </div>
                           </td>
                           <td className="p-4">
@@ -775,7 +775,7 @@ export default function ShopPOS() {
                           </span>
                         ) : (
                           <span className="flex items-center justify-center">
-                            <span className="mr-2">💳</span>
+                            <span className="mr-2"><CreditCard size={27} /></span>
                             Complete Sale (${grandTotal.toFixed(2)})
                           </span>
                         )}
