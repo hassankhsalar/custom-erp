@@ -1,3 +1,4 @@
+import { Mailbox, ShoppingCart, Store, Undo2, ArrowUpDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -11,6 +12,7 @@ export default function SaleReturn() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   
   const navigate = useNavigate();
 
@@ -81,6 +83,81 @@ export default function SaleReturn() {
     setFilteredSales(filtered);
   }, [searchQuery, sales]);
 
+  // Function to handle sorting
+  const handleSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // Format sales data for table display
+  const formatSalesData = (sales) => {
+    return sales.map(sale => ({
+      id: sale.id,
+      reference: sale.reference,
+      shop: sale.shop?.name || "-",
+      customer: sale.customer || "-",
+      total: `$${sale.grandTotal?.toFixed(2)}`,
+      date: new Date(sale.createdAt).toLocaleDateString(),
+      items: sale.saleItems?.length || 0,
+      status: "Available for Return",
+      rawDate: sale.createdAt,
+      originalSale: sale // Store original sale object for selection
+    }));
+  };
+
+  // Sort data based on sortConfig
+  const sortedData = sortConfig.key ? 
+    [...formatSalesData(filteredSales)].sort((a, b) => {
+      // Special handling for date sorting
+      if (sortConfig.key === 'date') {
+        const dateA = new Date(a.rawDate);
+        const dateB = new Date(b.rawDate);
+        if (sortConfig.direction === 'ascending') {
+          return dateA - dateB;
+        }
+        return dateB - dateA;
+      }
+
+      // Special handling for currency values
+      if (sortConfig.key === 'total') {
+        const valueA = parseFloat(a[sortConfig.key].replace('$', ''));
+        const valueB = parseFloat(b[sortConfig.key].replace('$', ''));
+        if (sortConfig.direction === 'ascending') {
+          return valueA - valueB;
+        }
+        return valueB - valueA;
+      }
+
+      // Special handling for items count
+      if (sortConfig.key === 'items') {
+        if (sortConfig.direction === 'ascending') {
+          return a.items - b.items;
+        }
+        return b.items - a.items;
+      }
+
+      // Default string comparison
+      const aValue = a[sortConfig.key];
+      const bValue = b[sortConfig.key];
+      
+      if (aValue < bValue) {
+        return sortConfig.direction === 'ascending' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === 'ascending' ? 1 : -1;
+      }
+      return 0;
+    }) : 
+    formatSalesData(filteredSales);
+
+  // Get table headers for the sales table
+  const tableHeaders = sales.length > 0 ? 
+    ['reference', 'customer', 'total', 'date', 'items', 'status'] : 
+    ['reference', 'customer', 'total', 'date', 'items', 'status'];
+
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
   };
@@ -90,11 +167,12 @@ export default function SaleReturn() {
   };
 
   const handleSelectSale = (sale) => {
-    setSelectedSale(sale);
+    // Use the original sale object stored in the formatted data
+    setSelectedSale(sale.originalSale);
     setError("");
     
     // Initialize return items with original sale items
-    const returnItems = sale.saleItems.map(item => ({
+    const returnItems = sale.originalSale.saleItems.map(item => ({
       saleItemId: item.id,
       productId: item.productId || item.materialId,
       name: item.product?.name || item.material?.name || `Item ${item.id}`,
@@ -213,6 +291,7 @@ export default function SaleReturn() {
       }
 
       // Show success message with details
+      const totalAmount = calculateTotals().totalAmount;
       alert(`✅ ${data.message || "Return processed successfully!"}\nReference: ${data.return?.reference || "N/A"}\nAmount: $${(data.return?.totalAmount || totalAmount).toFixed(2)}\nShop: ${data.return?.shop?.name || selectedSale.shop?.name}`);
       
       // Remove the returned sale from the list
@@ -238,7 +317,7 @@ export default function SaleReturn() {
   return (
     <div className="max-w-6xl mx-auto p-6">
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">🔙 Shop Sale Return</h2>
+        <h2 className="text-2xl font-bold text-gray-800 mb-2 inline-flex gap-2 bg-red-400/30 text-red-400 py-1 px-2 rounded-md"><Undo2 size={30} /> Shop Sale Return</h2>
         <p className="text-gray-600 mb-6">Process returns for previous shop sales</p>
 
         {/* Shop Selection */}
@@ -321,94 +400,98 @@ export default function SaleReturn() {
           </div>
         )}
 
-        {/* Sales Table - Only show when shop is selected */}
+        {/* Sales Table with AllSales design - Only show when shop is selected */}
         {selectedShop && (
           <div className="mb-6">
-            <div className="overflow-x-auto border border-gray-200 rounded-lg">
-              <table className="w-full">
-                <thead className="bg-gray-50">
+            {/* Apply AllSales table design here */}
+            <div className="customTable w-full rounded-md border overflow-hidden dark:border-slate-700 border-gray-200">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-100 dark:bg-slate-900">
                   <tr>
-                    <th className="text-left p-3 font-medium text-gray-700">Reference</th>
-                    <th className="text-left p-3 font-medium text-gray-700">Customer</th>
-                    <th className="text-left p-3 font-medium text-gray-700">Total</th>
-                    <th className="text-left p-3 font-medium text-gray-700">Date</th>
-                    <th className="text-left p-3 font-medium text-gray-700">Items</th>
-                    <th className="text-left p-3 font-medium text-gray-700">Status</th>
-                    <th className="text-left p-3 font-medium text-gray-700">Actions</th>
+                    {tableHeaders.map((key) => (
+                      <th
+                        key={key}
+                        className="p-3 text-left font-medium dark:text-[#abc2d3] text-gray-700 cursor-pointer"
+                      >
+                        <div className="flex items-center gap-[5px]">
+                          {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}
+                          <ArrowUpDown
+                            onClick={() => handleSort(key)}
+                            className="hover:bg-gray-200 dark:hover:bg-slate-800 p-[5px] rounded-md text-[1.6rem]"
+                          />
+                        </div>
+                      </th>
+                    ))}
+                    <th className="p-3 text-left dark:text-[#abc2d3] font-medium text-gray-700">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSales.map((sale) => (
-                    <tr 
-                      key={sale.id} 
-                      className={`border-b hover:bg-gray-50 ${
-                        selectedSale?.id === sale.id ? 'bg-blue-50 border-blue-200' : ''
+                  {sortedData.map((item) => (
+                    <tr
+                      key={item.id}
+                      className={`border-t dark:border-slate-700 border-gray-200 hover:bg-gray-50 ${
+                        selectedSale?.id === item.id ? 'bg-blue-50' : ''
                       }`}
                     >
-                      <td className="p-3">
-                        <span className="font-medium">{sale.reference}</span>
-                      </td>
-                      <td className="p-3">{sale.customer || "Walk-in"}</td>
-                      <td className="p-3 font-medium">${sale.grandTotal?.toFixed(2)}</td>
-                      <td className="p-3">{new Date(sale.createdAt).toLocaleDateString()}</td>
-                      <td className="p-3">
-                        <span className="bg-gray-100 px-2 py-1 rounded text-sm">
-                          {sale.saleItems?.length || 0}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <span className="text-green-600 text-sm font-medium flex items-center">
-                          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                          Available for Return
-                        </span>
-                      </td>
+                      {tableHeaders.map((key) => (
+                        <td key={key} className="p-3 dark:text-black">
+                          {key === 'status' ? (
+                            <span className="text-green-600 text-sm font-medium flex items-center">
+                              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                              Available for Return
+                            </span>
+                          ) : key === 'items' ? (
+                            <span className="bg-gray-100 px-2 py-1 rounded text-sm">
+                              {item.items}
+                            </span>
+                          ) : (
+                            item[key]
+                          )}
+                        </td>
+                      ))}
                       <td className="p-3">
                         <button
-                          onClick={() => handleSelectSale(sale)}
+                          onClick={() => handleSelectSale(item)}
                           className={`px-4 py-2 rounded text-sm font-medium ${
-                            selectedSale?.id === sale.id
+                            selectedSale?.id === item.id
                               ? 'bg-blue-600 text-white'
                               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                           }`}
                         >
-                          {selectedSale?.id === sale.id ? 'Selected' : 'Select'}
+                          {selectedSale?.id === item.id ? 'Selected' : 'Select'}
                         </button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-            
-            {/* Empty States */}
-            {sales.length === 0 && (
-              <div className="text-center py-8 text-gray-500 border border-gray-200 rounded-lg">
-                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <p className="mt-2">No sales available for return</p>
-                <p className="text-sm text-gray-400 mt-1">
-                  All sales for this shop have been returned or no sales exist yet
+
+              {/* Empty States */}
+              {sales.length === 0 && (
+                <p className="text-[0.9rem] text-gray-500 py-6 text-center w-full">
+                  No sales available for return
                 </p>
-              </div>
-            )}
-            
-            {sales.length > 0 && filteredSales.length === 0 && searchQuery && (
-              <div className="text-center py-8 text-gray-500 border border-gray-200 rounded-lg">
-                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <p className="mt-2">No sales found matching "{searchQuery}"</p>
-                <button
-                  onClick={clearSearch}
-                  className="mt-2 text-blue-600 hover:text-blue-800 underline"
-                >
-                  Clear search and show all sales
-                </button>
-              </div>
-            )}
+              )}
+              
+              {sales.length > 0 && filteredSales.length === 0 && searchQuery && (
+                <div className="text-center py-8 text-gray-500">
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <p className="mt-2">No sales found matching "{searchQuery}"</p>
+                  <button
+                    onClick={clearSearch}
+                    className="mt-2 text-blue-600 hover:text-blue-800 underline"
+                  >
+                    Clear search and show all sales
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -605,7 +688,7 @@ export default function SaleReturn() {
         {/* Empty State - Shop not selected */}
         {!selectedShop && (
           <div className="text-center py-12 text-gray-500">
-            <div className="text-6xl mb-4">🏬</div>
+            <div className="text-6xl mb-4 inline-flex justify-center"><Store color="skyblue" size={52} /></div>
             <p className="text-lg">Select a shop to view sales and process returns</p>
           </div>
         )}
@@ -613,7 +696,7 @@ export default function SaleReturn() {
         {/* Empty State - Sale not selected */}
         {selectedShop && !selectedSale && sales.length > 0 && (
           <div className="text-center py-12 text-gray-500">
-            <div className="text-6xl mb-4">🛒</div>
+            <div className="text-6xl mb-4 inline-flex justify-center"><ShoppingCart color="skyblue" size={42} /></div>
             <p className="text-lg">Select a shop sale from the table to process a return</p>
           </div>
         )}
@@ -621,7 +704,7 @@ export default function SaleReturn() {
         {/* Empty State - No sales for selected shop */}
         {selectedShop && sales.length === 0 && (
           <div className="text-center py-12 text-gray-500">
-            <div className="text-6xl mb-4">📭</div>
+            <div className="text-6xl mb-4"><Mailbox /></div>
             <p className="text-lg">No sales available for return</p>
             <p className="text-sm text-gray-400 mt-2">
               All sales for this shop have been returned or no sales exist yet

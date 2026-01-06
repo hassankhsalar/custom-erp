@@ -1,4 +1,4 @@
-import { ArrowUpDown, ClipboardList, EllipsisVertical, Eye, Pencil, Trash } from "lucide-react";
+import { ArrowUpDown, ClipboardList } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export default function AllSales() {

@@ -18,7 +18,7 @@ const Sidebar = () => {
   // console.log(currentUser);
 
   return (
-    <div className="w-64 bg-black rounded-tr-lg text-white p-5 min-h-screen shadow-lg"> {/* Black background, white text, padding, min-height, shadow */}
+    <div className="w-64 bg-black rounded-tr-lg text-white p-5 min-h-full shadow-lg"> {/* Black background, white text, padding, min-height, shadow */}
       <ul>
         <li><Link to="/dashboard" className="block py-2 px-3 rounded-md hover:bg-gray-700">Dashboard</Link></li> {/* Block link, padding, rounded, hover effect */}
         
