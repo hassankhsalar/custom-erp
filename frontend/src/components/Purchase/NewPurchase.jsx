@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Plus, Trash2, Package, Tag, Truck, Building2, Store, Factory, ShoppingBag, Check } from "lucide-react";
 
 export default function NewPurchase() {
   const [materials, setMaterials] = useState([]);
@@ -365,392 +366,431 @@ export default function NewPurchase() {
     }
   };
 
+  // Get destination icon
+  const getDestinationIcon = (type) => {
+    switch (type) {
+      case "store": return <Store size={18} />;
+      case "shop": return <ShoppingBag size={18} />;
+      case "factory": return <Factory size={18} />;
+      default: return <Building2 size={18} />;
+    }
+  };
+
   return (
-    <div style={container}>
-      <h2 style={title}>New Purchase</h2>
-      <form onSubmit={handleSubmit} style={formBox}>
-        {/* Supplier and Destination Selection */}
-        <div style={gridRow}>
-          <div style={row}>
-            <label>Supplier:</label>
-            <select
-              name="supplierId"
-              value={form.supplierId}
-              onChange={handleFormChange}
-              required
-            >
-              <option value="">-- Select Supplier --</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+      {/* Background decorative elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-300/20 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-300/20 rounded-full blur-3xl"></div>
+      </div>
 
-          <div style={row}>
-            <label>Deliver to Type:</label>
-            <select
-              value={destinationType}
-              onChange={handleDestinationTypeChange}
-              required
-            >
-              <option value="store">Store</option>
-              <option value="shop">Shop</option>
-              <option value="factory">Factory</option>
-            </select>
-          </div>
-
-          <div style={row}>
-            <label>Deliver to:</label>
-            <select
-              name="destinationId"
-              value={form.destinationId}
-              onChange={handleDestinationChange}
-              required
-            >
-              <option value="">-- Select {destinationType.charAt(0).toUpperCase() + destinationType.slice(1)} --</option>
-              {destinations.map((dest) => (
-                <option key={dest.id} value={dest.id}>
-                  {dest.name}
-                </option>
-              ))}
-            </select>
+      <div className="relative max-w-6xl mx-auto">
+        {/* Header Card */}
+        <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-blue-100/50 mb-6 p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl shadow-lg">
+                <Truck className="text-white" size={32} />
+              </div>
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  New Purchase Order
+                </h1>
+                <p className="text-gray-600 mt-1">Create a new purchase order for materials or products</p>
+              </div>
+            </div>
+            <div className="hidden md:block px-4 py-2 bg-white/60 backdrop-blur-sm rounded-lg border border-white/80">
+              <p className="text-sm font-medium text-gray-700">Reference</p>
+              <p className="text-lg font-bold text-blue-600">{form.reference}</p>
+            </div>
           </div>
         </div>
 
-        {/* Purchase Items Section */}
-        <div style={itemsSection}>
-          <div style={sectionHeader}>
-            <h3>Purchase Items</h3>
-            <button type="button" onClick={addItem} style={addButton}>
-              + Add Item
-            </button>
-          </div>
-
-          {purchaseItems.map((item, index) => {
-            const itemDetails = getItemDetails(item);
-            const standardPrice = itemDetails.standardPrice;
-            const currentPrice = parseFloat(item.unitPrice) || 0;
-            
-            return (
-              <div key={index} style={itemRow}>
-                <div style={gridRow}>
-                  {/* Item Type Selector */}
-                  <div style={row}>
-                    <label>Item Type:</label>
-                    <select
-                      value={item.itemType}
-                      onChange={(e) => handleItemTypeChange(index, e.target.value)}
-                      required
-                      style={{
-                        backgroundColor: item.itemType === "material" ? "#e0f2fe" : "#f0fdf4",
-                        borderColor: item.itemType === "material" ? "#0ea5e9" : "#10b981"
-                      }}
-                    >
-                      <option value="material">📦 Material</option>
-                      <option value="product">🏷️ Product</option>
-                    </select>
-                  </div>
-
-                  {/* Item Selection */}
-                  <div style={row}>
-                    <label>
-                      {item.itemType === "material" ? "Material:" : "Product:"}
-                    </label>
-                    <select
-                      value={item.itemType === "material" ? item.materialId : item.productId}
-                      onChange={(e) => {
-                        if (item.itemType === "material") {
-                          handleItemChange(index, 'materialId', e.target.value);
-                        } else {
-                          handleItemChange(index, 'productId', e.target.value);
-                        }
-                      }}
-                      onBlur={() => {
-                        if (item.itemType === "material") {
-                          handleItemSelect(index, "material", item.materialId);
-                        } else {
-                          handleItemSelect(index, "product", item.productId);
-                        }
-                      }}
-                      required
-                      style={{
-                        backgroundColor: item.itemType === "material" ? "#f0f9ff" : "#f0fdf4"
-                      }}
-                    >
-                      <option value="">
-                        -- Select {item.itemType === "material" ? "Material" : "Product"} --
-                      </option>
-                      {item.itemType === "material" ? (
-                        materials.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name} ({m.unit}) - ${m.unit_cost}/unit
-                          </option>
-                        ))
-                      ) : (
-                        products.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} - Cost: ${p.cost}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                    {((item.itemType === "material" && item.materialId) || 
-                      (item.itemType === "product" && item.productId)) && (
-                      <small style={{ color: "#666", fontSize: "0.8rem", marginTop: "2px" }}>
-                        Standard price: ${standardPrice.toFixed(2)}
-                      </small>
-                    )}
-                  </div>
-
-                  <div style={row}>
-                    <label>Quantity:</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0.01"
-                      placeholder="1"
-                      value={item.quantity}
-                      onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div style={row}>
-                    <label>Unit Price:</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0.01"
-                      placeholder={`e.g., ${standardPrice.toFixed(2)}`}
-                      value={item.unitPrice}
-                      onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
-                      required
-                      style={{
-                        ...(standardPrice > 0 && currentPrice === standardPrice 
-                          ? { borderColor: "#10b981", backgroundColor: "#f0fdf4" } 
-                          : standardPrice > 0 && currentPrice !== standardPrice
-                          ? { borderColor: "#f59e0b", backgroundColor: "#fffbeb" }
-                          : {})
-                      }}
-                    />
-                    {standardPrice > 0 && currentPrice !== standardPrice && item.unitPrice && (
-                      <small style={{ color: "#f59e0b", fontSize: "0.8rem", marginTop: "2px" }}>
-                        Different from standard price (${standardPrice.toFixed(2)})
-                      </small>
-                    )}
-                  </div>
-
-                  <div style={row}>
-                    <label>Total:</label>
-                    <input 
-                      type="text" 
-                      value={item.total.toFixed(2)} 
-                      readOnly 
-                      style={totalInput}
-                    />
-                  </div>
-
-                  {purchaseItems.length > 1 && (
-                    <div style={removeButtonContainer}>
-                      <button
-                        type="button"
-                        onClick={() => removeItem(index)}
-                        style={removeButton}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Supplier & Destination */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Supplier Selection Card */}
+            <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Building2 className="text-blue-600" size={20} />
                 </div>
-                
-                {/* Item Type Indicator */}
-                <div style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginTop: "8px",
-                  fontSize: "0.8rem"
-                }}>
-                  <span style={{
-                    padding: "2px 8px",
-                    borderRadius: "12px",
-                    backgroundColor: item.itemType === "material" ? "#dbeafe" : "#dcfce7",
-                    color: item.itemType === "material" ? "#1e40af" : "#166534"
-                  }}>
-                    {item.itemType === "material" ? "📦 Material" : "🏷️ Product"}
-                  </span>
-                  {itemDetails.name && (
-                    <span style={{ color: "#6b7280" }}>
-                      Selected: {itemDetails.name}
-                    </span>
-                  )}
+                Supplier Information
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Supplier *
+                  </label>
+                  <div className="relative">
+                    <select
+                      name="supplierId"
+                      value={form.supplierId}
+                      onChange={handleFormChange}
+                      required
+                      className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-400/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 appearance-none"
+                    >
+                      <option value="">-- Choose Supplier --</option>
+                      {suppliers.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                      </svg>
+                    </div>
+                  </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
+            </div>
 
-        {/* Grand Total */}
-        <div style={grandTotalRow}>
-          <label style={grandTotalLabel}>Grand Total:</label>
-          <input 
-            type="text" 
-            value={form.grandTotal.toFixed(2)} 
-            readOnly 
-            style={grandTotalInput}
-          />
-        </div>
+            {/* Destination Selection Card */}
+            <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <Truck className="text-green-600" size={20} />
+                </div>
+                Delivery Destination
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Destination Type *
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {["store", "shop", "factory"].map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => {
+                          setDestinationType(type);
+                          setForm(prev => ({ 
+                            ...prev, 
+                            destinationType: type,
+                            destinationId: ""
+                          }));
+                        }}
+                        className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all duration-300 ${
+                          destinationType === type
+                            ? "bg-gradient-to-br from-blue-500 to-purple-500 text-white border-transparent shadow-lg"
+                            : "bg-white/60 border-gray-200/50 hover:bg-white/80"
+                        }`}
+                      >
+                        {getDestinationIcon(type)}
+                        <span className="text-xs mt-1 capitalize">{type}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-        <button 
-          type="submit" 
-          style={{ ...button, ...(loading ? buttonLoading : {}) }}
-          disabled={loading}
-        >
-          {loading ? "Creating Purchase..." : "Create Purchase"}
-        </button>
-      </form>
-      {message && (
-        <p style={{ 
-          textAlign: "center", 
-          marginTop: "1rem", 
-          color: message.includes("✅") ? "green" : "red",
-          fontWeight: "bold" 
-        }}>
-          {message}
-        </p>
-      )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Deliver to *
+                  </label>
+                  <div className="relative">
+                    <select
+                      name="destinationId"
+                      value={form.destinationId}
+                      onChange={handleDestinationChange}
+                      required
+                      className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-400/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 appearance-none"
+                    >
+                      <option value="">-- Select {destinationType.charAt(0).toUpperCase() + destinationType.slice(1)} --</option>
+                      {destinations.map((dest) => (
+                        <option key={dest.id} value={dest.id}>
+                          {dest.name}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Items */}
+          <div className="lg:col-span-2">
+            <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <Package className="text-purple-600" size={20} />
+                  </div>
+                  Purchase Items
+                </h2>
+                <button
+                  type="button"
+                  onClick={addItem}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <Plus size={18} />
+                  Add Item
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {purchaseItems.map((item, index) => {
+                  const itemDetails = getItemDetails(item);
+                  const standardPrice = itemDetails.standardPrice;
+                  const currentPrice = parseFloat(item.unitPrice) || 0;
+                  
+                  return (
+                    <div key={index} className="backdrop-blur-sm bg-white/50 border border-white/60 rounded-xl p-5 shadow-lg">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg ${item.itemType === "material" ? "bg-blue-100" : "bg-green-100"}`}>
+                            {item.itemType === "material" ? 
+                              <Package className="text-blue-600" size={18} /> : 
+                              <Tag className="text-green-600" size={18} />
+                            }
+                          </div>
+                          <h3 className="font-medium text-gray-800">
+                            Item #{index + 1}
+                          </h3>
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleItemTypeChange(index, "material")}
+                              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all duration-300 ${
+                                item.itemType === "material"
+                                  ? "bg-blue-500 text-white shadow-md"
+                                  : "bg-white/60 text-gray-600 hover:bg-white/80"
+                              }`}
+                            >
+                              <Package size={14} />
+                              Material
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleItemTypeChange(index, "product")}
+                              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all duration-300 ${
+                                item.itemType === "product"
+                                  ? "bg-green-500 text-white shadow-md"
+                                  : "bg-white/60 text-gray-600 hover:bg-white/80"
+                              }`}
+                            >
+                              <Tag size={14} />
+                              Product
+                            </button>
+                          </div>
+                          
+                          {purchaseItems.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeItem(index)}
+                              className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* Item Selection */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            {item.itemType === "material" ? "Material" : "Product"} *
+                          </label>
+                          <div className="relative">
+                            <select
+                              value={item.itemType === "material" ? item.materialId : item.productId}
+                              onChange={(e) => {
+                                if (item.itemType === "material") {
+                                  handleItemChange(index, 'materialId', e.target.value);
+                                } else {
+                                  handleItemChange(index, 'productId', e.target.value);
+                                }
+                              }}
+                              onBlur={() => {
+                                if (item.itemType === "material") {
+                                  handleItemSelect(index, "material", item.materialId);
+                                } else {
+                                  handleItemSelect(index, "product", item.productId);
+                                }
+                              }}
+                              required
+                              className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 appearance-none"
+                            >
+                              <option value="">
+                                -- Select {item.itemType === "material" ? "Material" : "Product"} --
+                              </option>
+                              {item.itemType === "material" ? (
+                                materials.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.name} ({m.unit}) - ${m.unit_cost}/unit
+                                  </option>
+                                ))
+                              ) : (
+                                products.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name} - Cost: ${p.cost}
+                                  </option>
+                                ))
+                              )}
+                            </select>
+                          </div>
+                          {itemDetails.name && (
+                            <p className="mt-2 text-xs text-gray-600">
+                              Selected: <span className="font-medium">{itemDetails.name}</span>
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Quantity */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Quantity *
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            placeholder="1.00"
+                            value={item.quantity}
+                            onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
+                            required
+                            className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400"
+                          />
+                          {itemDetails.unit && (
+                            <p className="mt-1 text-xs text-gray-500">Unit: {itemDetails.unit}</p>
+                          )}
+                        </div>
+
+                        {/* Unit Price */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Unit Price *
+                          </label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            placeholder={`e.g., ${standardPrice.toFixed(2)}`}
+                            value={item.unitPrice}
+                            onChange={(e) => handleItemChange(index, 'unitPrice', e.target.value)}
+                            required
+                            className={`w-full px-4 py-3 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400 ${
+                              standardPrice > 0 && currentPrice === standardPrice 
+                                ? "bg-green-50/60 border-green-200/50" 
+                                : standardPrice > 0 && currentPrice !== standardPrice
+                                ? "bg-yellow-50/60 border-yellow-200/50"
+                                : "bg-white/60 border-gray-200/50"
+                            }`}
+                          />
+                          {standardPrice > 0 && (
+                            <p className={`mt-1 text-xs ${
+                              currentPrice === standardPrice 
+                                ? "text-green-600" 
+                                : "text-yellow-600"
+                            }`}>
+                              Standard: ${standardPrice.toFixed(2)}
+                              {currentPrice !== standardPrice && " (modified)"}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Total */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Total
+                          </label>
+                          <div className="relative">
+                            <input 
+                              type="text" 
+                              value={`$${item.total.toFixed(2)}`} 
+                              readOnly 
+                              className="w-full px-4 py-3 bg-gradient-to-r from-blue-50/60 to-purple-50/60 border border-gray-300/50 rounded-xl text-lg font-bold text-blue-700 placeholder:text-gray-400"
+                            />
+                            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                              <div className="p-1 bg-white/80 rounded-md shadow-sm">
+                                <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4z" clipRule="evenodd" />
+                                </svg>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Grand Total */}
+              <div className="mt-8 pt-6 border-t border-white/50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Total Items: {purchaseItems.length}</p>
+                    <p className="text-lg font-semibold text-gray-800">Grand Total</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      ${form.grandTotal.toFixed(2)}
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">Including all items and taxes</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="mt-8">
+                <button 
+                  type="submit" 
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="w-full py-4 px-6 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold rounded-xl shadow-2xl hover:shadow-3xl transform hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3"
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      Processing Purchase...
+                    </>
+                  ) : (
+                    <>
+                      <Check size={20} />
+                      Create Purchase Order
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Message */}
+              {message && (
+                <div className={`mt-6 p-4 rounded-xl backdrop-blur-sm ${
+                  message.includes("✅") 
+                    ? "bg-green-50/50 border border-green-200/50" 
+                    : "bg-red-50/50 border border-red-200/50"
+                }`}>
+                  <p className={`font-medium flex items-center gap-2 ${
+                    message.includes("✅") ? "text-green-700" : "text-red-700"
+                  }`}>
+                    {message.includes("✅") ? (
+                      <Check className="text-green-600" size={18} />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full bg-red-600 flex items-center justify-center">
+                        <span className="text-white text-xs font-bold">!</span>
+                      </div>
+                    )}
+                    {message}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
-
-// Styles (keep the same styles as before)
-const container = {
-  maxWidth: "900px",
-  margin: "2rem auto",
-  padding: "1.5rem",
-  background: "#fff",
-  borderRadius: "10px",
-  boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
-};
-
-const title = { textAlign: "center", marginBottom: "1rem" };
-
-const formBox = { 
-  display: "flex", 
-  flexDirection: "column", 
-  gap: "1.5rem" 
-};
-
-const gridRow = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr 1fr 1fr auto",
-  gap: "1rem",
-  alignItems: "end"
-};
-
-const row = { 
-  display: "flex", 
-  flexDirection: "column", 
-  gap: ".3rem" 
-};
-
-const itemsSection = {
-  border: "1px solid #e2e8f0",
-  borderRadius: "8px",
-  padding: "1rem",
-  background: "#f8fafc"
-};
-
-const sectionHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: "1rem"
-};
-
-const addButton = {
-  padding: "0.5rem 1rem",
-  background: "#10b981",
-  color: "white",
-  border: "none",
-  borderRadius: "6px",
-  cursor: "pointer",
-  fontSize: "0.9rem"
-};
-
-const itemRow = {
-  padding: "1rem",
-  background: "white",
-  borderRadius: "6px",
-  border: "1px solid #e2e8f0",
-  marginBottom: "0.5rem"
-};
-
-const totalInput = {
-  background: "#f1f5f9",
-  fontWeight: "bold"
-};
-
-const removeButtonContainer = {
-  display: "flex",
-  alignItems: "center",
-  height: "100%"
-};
-
-const removeButton = {
-  background: "#ef4444",
-  color: "white",
-  border: "none",
-  borderRadius: "50%",
-  width: "30px",
-  height: "30px",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "1.2rem"
-};
-
-const grandTotalRow = {
-  display: "flex",
-  justifyContent: "flex-end",
-  alignItems: "center",
-  gap: "1rem",
-  padding: "1rem",
-  background: "#dbeafe",
-  borderRadius: "6px",
-  border: "2px solid #3b82f6"
-};
-
-const grandTotalLabel = {
-  fontSize: "1.1rem",
-  fontWeight: "bold",
-  color: "#1e40af"
-};
-
-const grandTotalInput = {
-  fontSize: "1.2rem",
-  fontWeight: "bold",
-  color: "#1e40af",
-  background: "transparent",
-  border: "none",
-  width: "120px",
-  textAlign: "right"
-};
-
-const button = {
-  padding: "12px",
-  background: "#2563eb",
-  color: "#fff",
-  border: "none",
-  borderRadius: "6px",
-  cursor: "pointer",
-  fontSize: "1rem",
-  fontWeight: "bold"
-};
-
-const buttonLoading = {
-  background: "#9ca3af",
-  cursor: "not-allowed"
-};
