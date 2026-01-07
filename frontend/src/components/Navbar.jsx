@@ -10,10 +10,10 @@ const Navbar = () => {
     const location = useLocation();
 
     const navItems = [
-        { name: "Dashboard", icon: <Home size={18} />, path: "/" },
-        { name: "Features", icon: <Zap size={18} />, path: "/features" },
-        { name: "Reports", icon: <Newspaper size={18} />, path: "/reports" },
-        { name: "Marketplace", icon: <Store size={18} />, path: "/marketplace" }
+        { name: "Dashboard", icon: <Home size={18} />, path: "/dashboard" },
+        { name: "All Sales", icon: <Zap size={18} />, path: "/sale/all" },
+        { name: "Reports", icon: <Newspaper size={18} />, path: "/" },
+        { name: "Shops", icon: <Store size={18} />, path: "/shop/all" }
     ];
 
     const isActive = (path) => {

@@ -236,7 +236,7 @@ export default function AllReturns() {
     const sale = returnData.sale || {};
 
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="fixed inset-0 bg-white bg-opacity-30 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
           {/* Modal Header */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6">
