@@ -231,7 +231,7 @@ const AllShop = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200/50">
-              {shops.map((shop, index) => {
+              {shops.map((shop) => {
                 const shopProducts = shop.shopProducts || [];
                 const shopMaterials = shop.shopMaterials || [];
                 const totalProductStock = shopProducts.reduce((sum, p) => sum + (parseFloat(p.stock) || 0), 0);
