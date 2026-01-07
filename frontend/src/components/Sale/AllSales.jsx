@@ -1,12 +1,14 @@
-import { ArrowUpDown, ClipboardList } from "lucide-react";
+import { ArrowUpDown, ClipboardList, TrendingUp, DollarSign, Calendar, Store, User, Tag, CreditCard, Filter } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export default function AllSales() {
   const [sales, setSales] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
+    setLoading(true);
     fetch("http://localhost:3001/api/shop-sales", {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -16,10 +18,15 @@ export default function AllSales() {
         if (!res.ok) throw new Error("Unauthorized");
         return res.json();
       })
-      .then(setSales);
+      .then((data) => {
+        setSales(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
   }, []);
 
-  // Function to handle sorting
   const handleSort = (key) => {
     let direction = 'ascending';
     if (sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -27,18 +34,16 @@ export default function AllSales() {
     }
     setSortConfig({ key, direction });
   };
-  
 
-  // Format sales data for table display
   const formatSalesData = (sales) => {
     return sales.map(sale => ({
       id: sale.id,
       reference: sale.reference,
       shop: sale.shop?.name || "-",
       customer: sale.customer || "-",
-      total: `$${sale.totalAmount.toFixed(2)}`,
-      discount: `$${sale.discount.toFixed(2)}`,
-      "grand total": `$${sale.grandTotal.toFixed(2)}`,
+      total: `$${sale.totalAmount?.toFixed(2) || "0.00"}`,
+      discount: `$${sale.discount?.toFixed(2) || "0.00"}`,
+      "grand total": `$${sale.grandTotal?.toFixed(2) || "0.00"}`,
       payment: sale.paymentType,
       date: new Date(sale.createdAt).toLocaleDateString(),
       rawDate: sale.createdAt
@@ -56,10 +61,9 @@ export default function AllSales() {
         return dateB - dateA;
       }
 
-      // Special handling for currency values
       if (sortConfig.key === 'total' || sortConfig.key === 'discount' || sortConfig.key === 'grand total') {
-        const valueA = parseFloat(a[sortConfig.key].replace('$', ''));
-        const valueB = parseFloat(b[sortConfig.key].replace('$', ''));
+        const valueA = parseFloat(a[sortConfig.key].replace('$', '')) || 0;
+        const valueB = parseFloat(b[sortConfig.key].replace('$', '')) || 0;
         if (sortConfig.direction === 'ascending') {
           return valueA - valueB;
         }
@@ -83,55 +87,194 @@ export default function AllSales() {
     Object.keys(formatSalesData(sales)[0]).filter(key => key !== 'id' && key !== 'rawDate') : 
     ['reference', 'shop', 'customer', 'total', 'discount', 'grand total', 'payment', 'date'];
 
-  return (
-    <div className="max-w-6xl mx-auto p-6">
-      <h2 className="text-2xl text-gray-800 font-bold mb-6 inline-flex p-2 rounded-md items-center gap-2 bg-gray-200">
-        <ClipboardList size={32} /> All Sales
-      </h2>
+  // Calculate summary statistics
+  const totalRevenue = sales.reduce((sum, sale) => sum + (sale.grandTotal || 0), 0);
+  const totalDiscount = sales.reduce((sum, sale) => sum + (sale.discount || 0), 0);
+  const averageSale = sales.length > 0 ? totalRevenue / sales.length : 0;
 
-      {/* table */}
-      <div className="customTable w-full rounded-md border overflow-hidden dark:border-slate-700 border-gray-200">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-100 dark:bg-slate-900">
-            <tr>
-              {tableHeaders.map((key) => (
-                <th
-                  key={key}
-                  className="p-3 text-left font-medium dark:text-[#abc2d3] text-gray-700 cursor-pointer"
-                >
-                  <div className="flex items-center gap-[5px]">
-                    {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}
-                    <ArrowUpDown
-                      onClick={() => handleSort(key)}
-                      className="hover:bg-gray-200 dark:hover:bg-slate-800 p-[5px] rounded-md text-[1.6rem]"
-                    />
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sortedData.map((item) => (
-              <tr
-                key={item.id}
-                className="border-t dark:border-slate-700 border-gray-200 hover:bg-gray-50"
-              >
+  const getColumnIcon = (key) => {
+    switch(key) {
+      case 'reference': return <Tag size={14} className="mr-2" />;
+      case 'shop': return <Store size={14} className="mr-2" />;
+      case 'customer': return <User size={14} className="mr-2" />;
+      case 'total': return <DollarSign size={14} className="mr-2" />;
+      case 'discount': return <Tag size={14} className="mr-2" />;
+      case 'grand total': return <TrendingUp size={14} className="mr-2" />;
+      case 'payment': return <CreditCard size={14} className="mr-2" />;
+      case 'date': return <Calendar size={14} className="mr-2" />;
+      default: return <Tag size={14} className="mr-2" />;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 p-6">
+        <div className="glass-card p-8 text-center max-w-md mx-auto mt-10">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          <p className="mt-4 text-gray-600">Loading sales data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-emerald-50 p-4 md:p-6">
+      {/* Header Section */}
+      <div className="glass-card p-6 mb-6 border border-white/20 backdrop-blur-xl">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex items-center">
+            <div className="glass-icon p-3 rounded-xl mr-4 bg-gradient-to-r from-emerald-500/10 to-blue-500/10">
+              <ClipboardList className="text-emerald-600" size={28} />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-emerald-600 to-blue-600 bg-clip-text text-transparent">
+                All Sales
+              </h1>
+              <p className="text-gray-600 mt-1">Overview of all sales transactions</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 glass-tag px-4 py-2 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
+            <Filter size={16} className="text-emerald-600" />
+            <span className="text-sm font-medium text-gray-700">
+              {sales.length} {sales.length === 1 ? 'Sale' : 'Sales'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="glass-card p-6 border border-white/20 backdrop-blur-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-1">Total Revenue</p>
+              <h3 className="text-2xl font-bold text-gray-900">${totalRevenue.toFixed(2)}</h3>
+            </div>
+            <div className="glass-icon p-3 rounded-xl bg-gradient-to-r from-emerald-500/10 to-emerald-600/10">
+              <TrendingUp className="text-emerald-600" size={24} />
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card p-6 border border-white/20 backdrop-blur-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-1">Total Discounts</p>
+              <h3 className="text-2xl font-bold text-gray-900">${totalDiscount.toFixed(2)}</h3>
+            </div>
+            <div className="glass-icon p-3 rounded-xl bg-gradient-to-r from-amber-500/10 to-amber-600/10">
+              <Tag className="text-amber-600" size={24} />
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card p-6 border border-white/20 backdrop-blur-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600 mb-1">Average Sale</p>
+              <h3 className="text-2xl font-bold text-gray-900">${averageSale.toFixed(2)}</h3>
+            </div>
+            <div className="glass-icon p-3 rounded-xl bg-gradient-to-r from-blue-500/10 to-blue-600/10">
+              <DollarSign className="text-blue-600" size={24} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Sales Table */}
+      <div className="glass-card overflow-hidden border border-white/20 backdrop-blur-xl">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gradient-to-r from-gray-50/50 to-gray-100/50 backdrop-blur-sm">
                 {tableHeaders.map((key) => (
-                  <td key={key} className="p-3 dark:text-black">
-                    {item[key]}
-                  </td>
+                  <th
+                    key={key}
+                    className="p-4 text-left font-medium text-gray-700 cursor-pointer border-b border-white/20"
+                  >
+                    <div className="flex items-center gap-2">
+                      {getColumnIcon(key)}
+                      <span className="font-semibold">
+                        {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}
+                      </span>
+                      <ArrowUpDown
+                        onClick={() => handleSort(key)}
+                        className="glass-icon-button p-1.5 rounded-md hover:bg-gray-200/50 transition-colors cursor-pointer"
+                        size={16}
+                      />
+                    </div>
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {sortedData.map((item, index) => (
+                <tr
+                  key={item.id}
+                  className={`border-t border-white/10 hover:bg-white/10 transition-all duration-200 ${
+                    index % 2 === 0 ? 'bg-white/5' : ''
+                  }`}
+                >
+                  {tableHeaders.map((key) => (
+                    <td key={key} className="p-4">
+                      <div className={`flex items-center ${
+                        key === 'total' || key === 'grand total' ? 'font-semibold text-gray-900' :
+                        key === 'discount' ? 'text-amber-600' :
+                        key === 'payment' ? 'font-medium text-blue-600' :
+                        'text-gray-700'
+                      }`}>
+                        {key === 'payment' && (
+                          <CreditCard size={12} className="mr-2 text-gray-400" />
+                        )}
+                        {key === 'date' && (
+                          <Calendar size={12} className="mr-2 text-gray-400" />
+                        )}
+                        {item[key]}
+                      </div>
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
-        {!sales?.length && (
-          <p className="text-[0.9rem] text-gray-500 py-6 text-center w-full">
-            No data found!
-          </p>
-        )}
+          {!sales?.length && (
+            <div className="text-center py-12">
+              <div className="glass-icon p-4 rounded-full inline-flex mb-4 bg-gradient-to-r from-gray-100/50 to-gray-200/50">
+                <ClipboardList className="text-gray-400" size={32} />
+              </div>
+              <p className="text-gray-500 text-lg font-medium">No sales data found</p>
+              <p className="text-gray-400 text-sm mt-1">Start making sales to see them here</p>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Footer Stats */}
+      {sales.length > 0 && (
+        <div className="glass-card p-4 mt-6 border border-white/20 backdrop-blur-xl">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="glass-tag px-3 py-1.5 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
+                <span className="text-sm font-medium text-gray-700">
+                  Showing <span className="text-emerald-600 font-bold">{sales.length}</span> sales
+                </span>
+              </div>
+              <div className="glass-tag px-3 py-1.5 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
+                <span className="text-sm font-medium text-gray-700">
+                  Sorted by: <span className="text-blue-600 font-medium">
+                    {sortConfig.key ? sortConfig.key.replace(/([A-Z])/g, ' $1') : 'Date'} 
+                    <span className="ml-1">{sortConfig.direction === 'ascending' ? '↑' : '↓'}</span>
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div className="text-sm text-gray-500">
+              Last updated: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

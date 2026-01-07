@@ -604,7 +604,7 @@ const AllUser = () => {
                   <button
                     type="submit"
                     disabled={updateLoading}
-                    className="glass-button px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25 flex items-center justify-center"
+                    className="glass-button px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-gray-700 rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25 flex items-center justify-center"
                   >
                     <Save size={18} className="mr-2" />
                     {updateLoading ? (
