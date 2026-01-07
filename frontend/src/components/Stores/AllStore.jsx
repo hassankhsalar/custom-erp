@@ -310,29 +310,7 @@ const AllStore = () => {
         <StoreMaterialsModal materials={currentStoreMaterials} onClose={closeMaterialsModal} />
       )}
 
-      {/* Add these styles to your global CSS or style tag */}
-      <style jsx>{`
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        .glass-card {
-          background: rgba(255, 255, 255, 0.25);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-        }
-        
-        .glass-card:hover {
-          background: rgba(255, 255, 255, 0.3);
-        }
-      `}</style>
+      
     </div>
   );
 };
