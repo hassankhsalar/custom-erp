@@ -3,7 +3,7 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// ➕ Add Purchase (Updated with destination tracking)
+// ➕ Add Purchase (Updated to support both products and materials)
 router.post("/", async (req, res) => {
   try {
     const { 
@@ -53,11 +53,30 @@ router.post("/", async (req, res) => {
 
     // Validate each item
     for (const item of items) {
-      if (!item.materialId || !item.quantity || !item.unitPrice) {
+      if (!item.itemType || !["product", "material"].includes(item.itemType)) {
         return res.status(400).json({ 
-          error: "Each item must have materialId, quantity, and unitPrice" 
+          error: "Each item must have itemType (product or material)" 
         });
       }
+      
+      if (item.itemType === "product" && !item.productId) {
+        return res.status(400).json({ 
+          error: "Product items must have productId" 
+        });
+      }
+      
+      if (item.itemType === "material" && !item.materialId) {
+        return res.status(400).json({ 
+          error: "Material items must have materialId" 
+        });
+      }
+      
+      if (!item.quantity || !item.unitPrice) {
+        return res.status(400).json({ 
+          error: "Each item must have quantity and unitPrice" 
+        });
+      }
+      
       if (item.quantity <= 0 || item.unitPrice <= 0) {
         return res.status(400).json({ 
           error: "Quantity and unitPrice must be positive numbers" 
@@ -86,52 +105,51 @@ router.post("/", async (req, res) => {
         },
       });
 
-      // 2. Create purchase items
+      // 2. Create purchase items and update stock
       const purchaseItems = await Promise.all(
         items.map(async (item) => {
           const totalPrice = item.quantity * item.unitPrice;
           
+          const purchaseItemData = {
+            purchaseId: purchase.id,
+            itemType: item.itemType,
+            quantity: parseFloat(item.quantity),
+            unitPrice: parseFloat(item.unitPrice),
+            totalPrice: totalPrice,
+          };
+
+          // Set productId or materialId based on item type
+          if (item.itemType === "product") {
+            purchaseItemData.productId = parseInt(item.productId);
+          } else {
+            purchaseItemData.materialId = parseInt(item.materialId);
+          }
+
           const purchaseItem = await tx.purchaseItem.create({
-            data: {
-              purchaseId: purchase.id,
-              materialId: parseInt(item.materialId),
-              quantity: parseFloat(item.quantity),
-              unitPrice: parseFloat(item.unitPrice),
-              totalPrice: totalPrice,
-            },
+            data: purchaseItemData,
             include: {
+              product: true,
               material: true,
             },
           });
 
-          // 3. Update material stock based on destination type
-          switch (actualDestinationType) {
-            case "store":
-              await updateStoreMaterialStock(
-                tx, 
-                actualDestinationId, 
-                parseInt(item.materialId), 
-                parseFloat(item.quantity)
-              );
-              break;
-              
-            case "shop":
-              await updateShopMaterialStock(
-                tx, 
-                actualDestinationId, 
-                parseInt(item.materialId), 
-                parseFloat(item.quantity)
-              );
-              break;
-              
-            case "factory":
-              await updateFactoryMaterialStock(
-                tx, 
-                actualDestinationId, 
-                parseInt(item.materialId), 
-                parseFloat(item.quantity)
-              );
-              break;
+          // 3. Update stock based on destination type and item type
+          if (item.itemType === "product") {
+            await updateProductStock(
+              tx, 
+              actualDestinationType,
+              actualDestinationId, 
+              parseInt(item.productId), 
+              parseFloat(item.quantity)
+            );
+          } else {
+            await updateMaterialStock(
+              tx, 
+              actualDestinationType,
+              actualDestinationId, 
+              parseInt(item.materialId), 
+              parseFloat(item.quantity)
+            );
           }
 
           return purchaseItem;
@@ -161,7 +179,7 @@ router.post("/", async (req, res) => {
     
     if (err.code === 'P2025') {
       return res.status(404).json({ 
-        error: "Destination not found" 
+        error: "Destination or item not found" 
       });
     }
     
@@ -226,7 +244,158 @@ async function getDestinationDetails(destinationType, destinationId) {
   }
 }
 
-// Helper function to update store material stock
+// Helper function to update product stock
+async function updateProductStock(tx, destinationType, destinationId, productId, quantity) {
+  switch (destinationType) {
+    case "store":
+      await updateStoreProductStock(tx, destinationId, productId, quantity);
+      break;
+      
+    case "shop":
+      await updateShopProductStock(tx, destinationId, productId, quantity);
+      break;
+      
+    case "factory":
+      await updateFactoryProductStock(tx, destinationId, productId, quantity);
+      break;
+  }
+}
+
+// Helper function to update material stock
+async function updateMaterialStock(tx, destinationType, destinationId, materialId, quantity) {
+  switch (destinationType) {
+    case "store":
+      await updateStoreMaterialStock(tx, destinationId, materialId, quantity);
+      break;
+      
+    case "shop":
+      await updateShopMaterialStock(tx, destinationId, materialId, quantity);
+      break;
+      
+    case "factory":
+      await updateFactoryMaterialStock(tx, destinationId, materialId, quantity);
+      break;
+  }
+}
+
+// Store product stock update
+async function updateStoreProductStock(tx, storeId, productId, quantity) {
+  const existingStoreProduct = await tx.storeProduct.findUnique({
+    where: {
+      store_id_product_id: {
+        store_id: storeId,
+        product_id: productId,
+      },
+    },
+  });
+
+  if (existingStoreProduct) {
+    await tx.storeProduct.update({
+      where: {
+        store_id_product_id: {
+          store_id: storeId,
+          product_id: productId,
+        },
+      },
+      data: {
+        stock: { increment: quantity },
+      },
+    });
+  } else {
+    await tx.storeProduct.create({
+      data: {
+        store_id: storeId,
+        product_id: productId,
+        stock: quantity,
+      },
+    });
+  }
+
+  await tx.product.update({
+    where: { id: productId },
+    data: { stock: { increment: quantity } },
+  });
+}
+
+// Shop product stock update
+async function updateShopProductStock(tx, shopId, productId, quantity) {
+  const existingShopProduct = await tx.shopProduct.findUnique({
+    where: {
+      shop_id_product_id: {
+        shop_id: shopId,
+        product_id: productId,
+      },
+    },
+  });
+
+  if (existingShopProduct) {
+    await tx.shopProduct.update({
+      where: {
+        shop_id_product_id: {
+          shop_id: shopId,
+          product_id: productId,
+        },
+      },
+      data: {
+        stock: { increment: quantity },
+      },
+    });
+  } else {
+    await tx.shopProduct.create({
+      data: {
+        shop_id: shopId,
+        product_id: productId,
+        stock: quantity,
+      },
+    });
+  }
+
+  await tx.product.update({
+    where: { id: productId },
+    data: { stock: { increment: quantity } },
+  });
+}
+
+// Factory product stock update
+async function updateFactoryProductStock(tx, factoryId, productId, quantity) {
+  const existingFactoryProduct = await tx.factoryProduct.findUnique({
+    where: {
+      factoryId_productId: {
+        factoryId: factoryId,
+        productId: productId,
+      },
+    },
+  });
+
+  if (existingFactoryProduct) {
+    await tx.factoryProduct.update({
+      where: {
+        factoryId_productId: {
+          factoryId: factoryId,
+          productId: productId,
+        },
+      },
+      data: {
+        stock: { increment: quantity },
+      },
+    });
+  } else {
+    await tx.factoryProduct.create({
+      data: {
+        factoryId: factoryId,
+        productId: productId,
+        stock: quantity,
+      },
+    });
+  }
+
+  await tx.product.update({
+    where: { id: productId },
+    data: { stock: { increment: quantity } },
+  });
+}
+
+// Store material stock update (existing)
 async function updateStoreMaterialStock(tx, storeId, materialId, quantity) {
   const existingStoreMaterial = await tx.storeMaterial.findUnique({
     where: {
@@ -265,7 +434,7 @@ async function updateStoreMaterialStock(tx, storeId, materialId, quantity) {
   });
 }
 
-// Helper function to update shop material stock
+// Shop material stock update (existing)
 async function updateShopMaterialStock(tx, shopId, materialId, quantity) {
   const existingShopMaterial = await tx.shopMaterial.findUnique({
     where: {
@@ -304,7 +473,7 @@ async function updateShopMaterialStock(tx, shopId, materialId, quantity) {
   });
 }
 
-// Helper function to update factory material stock
+// Factory material stock update (existing)
 async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity) {
   const existingFactoryMaterial = await tx.factoryMaterial.findUnique({
     where: {
@@ -352,7 +521,8 @@ router.get("/", async (req, res) => {
         store: { select: { name: true } },
         purchaseItems: {
           include: {
-            material: { select: { name: true, unit: true } },
+            product: { select: { name: true, barcode: true, sale_price: true } },
+            material: { select: { name: true, unit: true, unit_cost: true } },
           },
         },
       },
@@ -406,6 +576,7 @@ router.get("/:id", async (req, res) => {
         store: true,
         purchaseItems: {
           include: {
+            product: true,
             material: true,
           },
         },

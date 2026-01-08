@@ -9,6 +9,7 @@ const CreateProduct = () => {
     sale_price: '',
     wholesale_price: '',
     cost: '',
+    alert_quantity: '0',
   });
   const [materials, setMaterials] = useState([]);
   const [allMaterials, setAllMaterials] = useState([]);
@@ -86,6 +87,7 @@ const CreateProduct = () => {
       sale_price: parseFloat(product.sale_price),
       wholesale_price: parseFloat(product.wholesale_price),
       cost: parseFloat(product.cost),
+      alert_quantity: parseInt(product.alert_quantity),
       materials: materials.map(m => ({...m, material_id: parseInt(m.material_id), material_quantity: parseFloat(m.material_quantity), price: parseFloat(m.price)})),
     };
 
@@ -93,7 +95,14 @@ const CreateProduct = () => {
       await axios.post(API_ROUTES.PRODUCTS, productData);
       alert('Product created successfully!');
       // Clear form
-      setProduct({ name: '', description: '', sale_price: '', wholesale_price: '', cost: '' });
+      setProduct({ 
+        name: '', 
+        description: '', 
+        sale_price: '', 
+        wholesale_price: '', 
+        cost: '', 
+        alert_quantity: '0'
+      });
       setMaterials([]);
     } catch (error) {
       console.error('Error creating product:', error);
@@ -102,82 +111,252 @@ const CreateProduct = () => {
   };
 
   const selectedMaterial = allMaterials.find(
-  (m) => m.id === parseInt(newMaterial.material_id)
-);
+    (m) => m.id === parseInt(newMaterial.material_id)
+  );
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Create Product</h1>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className='grid grid-cols-2 sm:grid-cols-1 md:grid-cols-2 gap-4'>
-          <input type="text" name="name" value={product.name} onChange={handleProductChange} placeholder="Product Name" className="w-full p-2 border border-gray-300" required />
-          <input type="number" name="sale_price" value={product.sale_price} onChange={handleProductChange} placeholder="Sale Price" className="w-full p-2 border border-gray-300" required />
-          <input type="number" name="wholesale_price" value={product.wholesale_price} onChange={handleProductChange} placeholder="Wholesale Price" className="w-full p-2 border border-gray-300" required />
-          <input type="number" name="cost" value={product.cost} onChange={handleProductChange} placeholder="Cost" className="w-full p-2 border border-gray-300" required />
-        </div>
-        <textarea name="description" value={product.description} onChange={handleProductChange} placeholder="Description" className="w-full p-2 border border-gray-300"></textarea>
+    <div className="container mx-auto p-4 min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+      <div className="backdrop-blur-lg bg-white/70 rounded-2xl shadow-2xl p-6 border border-white/30">
+        <h1 className="text-3xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+          Create New Product
+        </h1>
         
-        <div className="border border-gray-300 p-4 rounded">
-          <h2 className="text-xl font-semibold mb-2">Materials</h2>
-          <table className="min-w-full bg-white mb-4">
-            <thead className="bg-gray-800 text-white">
-              <tr>
-                <th className="py-2 px-4">Material</th>
-                <th className="py-2 px-4">Quantity</th>
-                <th className="py-2 px-4">Price</th>
-                <th className="py-2 px-4">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {materials.map((mat, index) => (
-                <tr key={index}>
-                  <td className="border border-gray-300 px-4 py-2">{mat.material_name}</td>
-                  <td className="border border-gray-300 px-4 py-2">{mat.material_quantity}</td>
-                  <td className="border border-gray-300 px-4 py-2">{mat.price}</td>
-                  <td className="border border-gray-300 px-4 py-2">
-                    <button type="button" onClick={() => handleEditMaterial(mat, index)} className="bg-yellow-500 text-white p-1 rounded mr-2">Edit</button>
-                    <button type="button" onClick={() => handleDeleteMaterial(index)} className="bg-red-500 text-white p-1 rounded">Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="relative">
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search for a material"
-              className="w-full p-2 border border-gray-300"
-            />
-            {filteredMaterials.length > 0 && (
-              <ul className="absolute z-10 w-full bg-white border border-gray-300 mt-1 max-h-60 overflow-y-auto">
-                {filteredMaterials.map(material => (
-                  <li
-                    key={material.id}
-                    onMouseDown={() => handleSelectMaterial(material)}
-                    className="p-2 hover:bg-gray-200 cursor-pointer"
-                  >
-                    {material.name}
-                  </li>
-                ))}
-              </ul>
-            )}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Product Details Card */}
+          <div className="backdrop-blur-sm bg-white/50 rounded-xl p-6 border border-white/40 shadow-lg">
+            <h2 className="text-xl font-semibold mb-4 text-gray-800">Product Details</h2>
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-5'>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
+                  <input 
+                    type="text" 
+                    name="name" 
+                    value={product.name} 
+                    onChange={handleProductChange} 
+                    placeholder="Enter product name" 
+                    className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200" 
+                    required 
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Sale Price *</label>
+                  <input 
+                    type="number" 
+                    name="sale_price" 
+                    value={product.sale_price} 
+                    onChange={handleProductChange} 
+                    placeholder="0.00" 
+                    className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200" 
+                    required 
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Wholesale Price *</label>
+                  <input 
+                    type="number" 
+                    name="wholesale_price" 
+                    value={product.wholesale_price} 
+                    onChange={handleProductChange} 
+                    placeholder="0.00" 
+                    className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200" 
+                    required 
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cost *</label>
+                  <input 
+                    type="number" 
+                    name="cost" 
+                    value={product.cost} 
+                    onChange={handleProductChange} 
+                    placeholder="0.00" 
+                    className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-all duration-200" 
+                    required 
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Alert Quantity</label>
+                  <input 
+                    type="number" 
+                    name="alert_quantity" 
+                    value={product.alert_quantity === '0' ? '' : product.alert_quantity}
+                    onChange={handleProductChange} 
+                    placeholder="Optional - Set low stock alert" 
+                    className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-yellow-500/30 focus:border-yellow-500 transition-all duration-200" 
+                    min="0"
+                    step="1"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <textarea 
+                    name="description" 
+                    value={product.description} 
+                    onChange={handleProductChange} 
+                    placeholder="Product description..." 
+                    rows="3"
+                    className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 resize-none"
+                  ></textarea>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center space-x-2 mt-2">
-            <input type="number" value={newMaterial.material_quantity} onChange={(e) => setNewMaterial({ ...newMaterial, material_quantity: e.target.value })} placeholder="Quantity" className="p-2 border border-gray-300" />
-            
-            <input type="number" value={newMaterial.price} onChange={(e) => setNewMaterial({ ...newMaterial, price: e.target.value })} placeholder={selectedMaterial?.unit_cost || "Price"} className="p-2 border border-gray-300" />
 
-            <button type="button" onClick={handleAddOrUpdateMaterial} className="bg-blue-500 text-white p-2 px-8 cursor-pointer rounded">
-              {editingMaterialIndex !== null ? 'Update Material' : 'Add Material'}
+          {/* Materials Section */}
+          <div className="backdrop-blur-sm bg-white/50 rounded-xl p-6 border border-white/40 shadow-lg">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-800">Materials</h2>
+              <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full">
+                {materials.length} item{materials.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            {/* Materials Table */}
+            {materials.length > 0 && (
+              <div className="mb-6 overflow-hidden rounded-lg border border-gray-200/50 bg-white/60 backdrop-blur-sm">
+                <table className="min-w-full">
+                  <thead className="bg-gradient-to-r from-gray-800 to-gray-700 text-white">
+                    <tr>
+                      <th className="py-3 px-4 text-left font-medium">Material</th>
+                      <th className="py-3 px-4 text-left font-medium">Quantity</th>
+                      <th className="py-3 px-4 text-left font-medium">Price</th>
+                      <th className="py-3 px-4 text-left font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200/50">
+                    {materials.map((mat, index) => (
+                      <tr key={index} className="hover:bg-gray-50/50 transition-colors duration-150">
+                        <td className="py-3 px-4 text-gray-800 font-medium">{mat.material_name}</td>
+                        <td className="py-3 px-4">
+                          <span className="bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
+                            {mat.material_quantity}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-medium text-gray-900">
+                          ${parseFloat(mat.price).toFixed(2)}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex space-x-2">
+                            <button 
+                              type="button" 
+                              onClick={() => handleEditMaterial(mat, index)} 
+                              className="bg-amber-500/90 hover:bg-amber-600 text-white p-2 px-4 rounded-lg transition-all duration-200 hover:shadow-md backdrop-blur-sm"
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => handleDeleteMaterial(index)} 
+                              className="bg-red-500/90 hover:bg-red-600 text-white p-2 px-4 rounded-lg transition-all duration-200 hover:shadow-md backdrop-blur-sm"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Add Material Form */}
+            <div className="space-y-4">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="🔍 Search for a material..."
+                  className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                />
+                {filteredMaterials.length > 0 && (
+                  <div className="absolute z-20 w-full mt-1 overflow-hidden rounded-lg border border-gray-200/70 bg-white/95 backdrop-blur-lg shadow-xl">
+                    <ul className="max-h-60 overflow-y-auto">
+                      {filteredMaterials.map(material => (
+                        <li
+                          key={material.id}
+                          onMouseDown={() => handleSelectMaterial(material)}
+                          className="p-3 hover:bg-blue-50/80 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors duration-150"
+                        >
+                          <div className="font-medium text-gray-800">{material.name}</div>
+                          {material.unit_cost && (
+                            <div className="text-sm text-gray-500">Unit Cost: ${material.unit_cost}</div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantity</label>
+                  <input 
+                    type="number" 
+                    value={newMaterial.material_quantity} 
+                    onChange={(e) => setNewMaterial({ ...newMaterial, material_quantity: e.target.value })} 
+                    placeholder="Enter quantity" 
+                    className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200" 
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Price {selectedMaterial?.unit_cost && `(Default: $${selectedMaterial.unit_cost})`}
+                  </label>
+                  <input 
+                    type="number" 
+                    value={newMaterial.price} 
+                    onChange={(e) => setNewMaterial({ ...newMaterial, price: e.target.value })} 
+                    placeholder={selectedMaterial?.unit_cost || "Enter price"} 
+                    className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200" 
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+                
+                <div className="flex items-end">
+                  <button 
+                    type="button" 
+                    onClick={handleAddOrUpdateMaterial} 
+                    className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white p-3 rounded-lg font-medium transition-all duration-200 hover:shadow-lg backdrop-blur-sm"
+                  >
+                    {editingMaterialIndex !== null ? 'Update Material' : 'Add Material'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Submit Button */}
+          <div className="flex justify-center pt-4">
+            <button 
+              type="submit" 
+              className="bg-gradient-to-r from-green-600 to-emerald-700 hover:from-green-700 hover:to-emerald-800 text-white p-4 px-12 rounded-xl font-medium text-lg transition-all duration-200 hover:shadow-xl backdrop-blur-sm transform hover:-translate-y-0.5"
+            >
+              Create Product
             </button>
           </div>
-        </div>
-
-        <button type="submit" className="bg-green-500 text-white p-2 px-8 cursor-pointer rounded">Create Product</button>
-      </form>
+        </form>
+      </div>
     </div>
   );
 };
