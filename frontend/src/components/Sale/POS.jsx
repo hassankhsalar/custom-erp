@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
+import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound } from "lucide-react";
 
 export default function ShopPOS() {
   const [shops, setShops] = useState([]);
@@ -387,11 +388,10 @@ export default function ShopPOS() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 shadow-lg">
+      <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 shadow-lg rounded-md rounded-tl-none">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold">🏪 Shop POS System</h1>
-            <p className="text-blue-100">Unified Sales for Products & Materials</p>
+            <h1 className="text-2xl md:text-3xl font-bold flex"> <Store size={42} className="mx-3" /> Shop POS System</h1>
           </div>
           <div className="mt-2 md:mt-0">
             {shopId && (
@@ -412,7 +412,7 @@ export default function ShopPOS() {
             <div className="bg-white rounded-xl shadow-md p-5">
               <div className="flex items-center gap-2 mb-4">
                 <div className="p-2 bg-blue-100 rounded-lg">
-                  <span className="text-blue-600">🏬</span>
+                  <span className="text-blue-600"><Store/></span>
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-800">Select Shop</h3>
@@ -441,7 +441,7 @@ export default function ShopPOS() {
             <div className="bg-white rounded-xl shadow-md p-5 relative">
               <div className="flex items-center gap-2 mb-4">
                 <div className="p-2 bg-green-100 rounded-lg">
-                  <span className="text-green-600">🔍</span>
+                  <span className="text-green-600"><Search /></span>
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-800">Search Items</h3>
@@ -468,7 +468,7 @@ export default function ShopPOS() {
                       <div
                         key={`${item.type}-${item.id}`}
                         onClick={() => !isOutOfStock && handleAddToCart(item)}
-                        className={`p-3 hover:bg-gray-50 cursor-pointer border-b transition ${isOutOfStock ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-400 transition ${isOutOfStock ? 'opacity-50 cursor-not-allowed' : ''}`} 
                       >
                         <div className="flex justify-between items-center">
                           <div className="flex-1">
@@ -517,10 +517,10 @@ export default function ShopPOS() {
 
             {/* Stock Alerts Card */}
             {(lowStockItems.length > 0 || outOfStockItems.length > 0) && (
-              <div className="bg-white rounded-xl shadow-md p-5">
-                <div className="flex items-center gap-2 mb-4">
+              <div className="bg-white rounded-xl shadow-md p-3">
+                <div className="flex items-center gap-4 mb-4">
                   <div className="p-2 bg-red-100 rounded-lg">
-                    <span className="text-red-600">⚠️</span>
+                    <span className="text-red-600"><TriangleAlert size={35} /></span>
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-800">Stock Alerts</h3>
@@ -548,7 +548,7 @@ export default function ShopPOS() {
                 )}
                 
                 {lowStockItems.length > 0 && (
-                  <div>
+                  <div className=" border border-gray-200 p-2 rounded-lg">
                     <h4 className="text-sm font-medium text-amber-700 mb-2">Low Stock ({lowStockItems.length})</h4>
                     <div className="space-y-2 max-h-32 overflow-y-auto">
                       {lowStockItems.slice(0, 5).map(item => (
@@ -572,9 +572,9 @@ export default function ShopPOS() {
 
             {/* Customer & Payment Card */}
             <div className="bg-white rounded-xl shadow-md p-5 space-y-4">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-4">
                 <div className="p-2 bg-purple-100 rounded-lg">
-                  <span className="text-purple-600">👤</span>
+                  <span className="text-purple-600"><UserRound size={42} /></span>
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-800">Customer & Payment</h3>
@@ -616,7 +616,7 @@ export default function ShopPOS() {
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg">
-                      <span className="text-white text-xl">🛒</span>
+                      <span className="text-white text-xl"><ShoppingCart /></span>
                     </div>
                     <div>
                       <h3 className="font-bold text-gray-800 text-lg">Shopping Cart</h3>
@@ -636,7 +636,7 @@ export default function ShopPOS() {
               {/* Cart Items */}
               {cartItems.length === 0 ? (
                 <div className="p-12 text-center">
-                  <div className="text-6xl mb-4 text-gray-300">🛒</div>
+                  <div className="text-6xl mb-4 text-gray-300 flex justify-center"><ShoppingCart size={72} /></div>
                   <h4 className="text-xl font-semibold text-gray-500 mb-2">Your cart is empty</h4>
                   <p className="text-gray-400">Search and add items to get started</p>
                 </div>
@@ -707,7 +707,7 @@ export default function ShopPOS() {
                               </button>
                             </div>
                             <div className="text-xs text-gray-500 mt-2">
-                              Available: {item.shop_stock + item.quantity}
+                              Available: {item.shop_stock - item.quantity}
                             </div>
                           </td>
                           <td className="p-4">
@@ -716,7 +716,7 @@ export default function ShopPOS() {
                           <td className="p-4">
                             <button
                               onClick={() => handleRemoveFromCart(index)}
-                              className="text-red-600 hover:text-red-800 font-medium text-sm"
+                              className="bg-red-100 text-red-600 hover:text-red-800 font-medium text-sm px-2 rounded-md"
                             >
                               Remove
                             </button>
@@ -775,7 +775,7 @@ export default function ShopPOS() {
                           </span>
                         ) : (
                           <span className="flex items-center justify-center">
-                            <span className="mr-2">💳</span>
+                            <span className="mr-2"><CreditCard size={27} /></span>
                             Complete Sale (${grandTotal.toFixed(2)})
                           </span>
                         )}
@@ -795,7 +795,7 @@ export default function ShopPOS() {
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-yellow-100 rounded-lg">
-                <span className="text-yellow-600">💰</span>
+                <span className="text-yellow-600"><CircleDollarSign /></span>
               </div>
               <div>
                 <h3 className="font-bold text-gray-800 text-lg">Override Price</h3>

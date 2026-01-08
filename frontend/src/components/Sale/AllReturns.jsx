@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
+import { ChartLine, Eye, HandCoins, NotebookText, Package, Printer, ScrollText, Search, SquareKanban, Store } from "lucide-react";
 
 export default function AllReturns() {
   const [returns, setReturns] = useState([]);
@@ -235,13 +236,13 @@ export default function AllReturns() {
     const sale = returnData.sale || {};
 
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="fixed inset-0 bg-white bg-opacity-30 flex items-center justify-center p-4 z-50">
         <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
           {/* Modal Header */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-6">
             <div className="flex justify-between items-start">
               <div>
-                <h2 className="text-2xl font-bold">📦 Return Details</h2>
+                <h2 className="text-2xl font-bold inline-flex items-center gap-2"><Package/> Return Details</h2>
                 <p className="text-blue-100 mt-1">{returnData.reference}</p>
               </div>
               <button
@@ -286,7 +287,7 @@ export default function AllReturns() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h3 className="font-semibold text-gray-800 mb-3 flex items-center">
-                      <span className="mr-2">🏪</span> Shop Information
+                      <span className="mr-2"><Store/></span> Shop Information
                     </h3>
                     <div className="space-y-2">
                       <p><span className="font-medium">Shop:</span> {shop.name}</p>
@@ -298,7 +299,7 @@ export default function AllReturns() {
 
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h3 className="font-semibold text-gray-800 mb-3 flex items-center">
-                      <span className="mr-2">🧾</span> Original Sale
+                      <span className="mr-2"><ScrollText /></span> Original Sale
                     </h3>
                     <div className="space-y-2">
                       <p><span className="font-medium">Sale Reference:</span> {sale.reference}</p>
@@ -313,7 +314,7 @@ export default function AllReturns() {
                 {/* Returned Items */}
                 <div className="mb-8">
                   <h3 className="font-semibold text-gray-800 mb-4 text-lg flex items-center">
-                    <span className="mr-2">📦</span> Returned Items ({items.length})
+                    <span className="mr-2"><Package/></span> Returned Items ({items.length})
                   </h3>
                   
                   {items.length === 0 ? (
@@ -350,7 +351,7 @@ export default function AllReturns() {
                                       ? 'bg-blue-100 text-blue-800' 
                                       : 'bg-purple-100 text-purple-800'
                                   }`}>
-                                    {isProduct ? '📦 Product' : '🔧 Material'}
+                                    {isProduct ? 'Product' : 'Material'}
                                   </span>
                                 </td>
                                 <td className="p-3">
@@ -386,7 +387,7 @@ export default function AllReturns() {
                 {/* Additional Information */}
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h3 className="font-semibold text-gray-800 mb-3 flex items-center">
-                    <span className="mr-2">📝</span> Additional Information
+                    <span className="mr-2"><NotebookText /></span> Additional Information
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -412,9 +413,9 @@ export default function AllReturns() {
                 // Option to print receipt
                 window.print();
               }}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100"
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-300 inline-flex items-center gap-2"
             >
-              🖨️ Print Receipt
+              <Printer /> Print Receipt
             </button>
             <button
               onClick={closeModal}
@@ -448,14 +449,14 @@ export default function AllReturns() {
         {/* Header */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">📦 All Returns</h2>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2 inline-flex gap-2 bg-red-400/30 text-red-400 py-2 px-3 rounded-md"><Package size={32} /> All Returns</h2>
             <p className="text-gray-600">Complete history of all returns from shops</p>
           </div>
           <button
             onClick={exportToCSV}
             className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2 mt-4 lg:mt-0"
           >
-            📊 Export to CSV
+            <SquareKanban /> Export to CSV
           </button>
         </div>
 
@@ -471,7 +472,7 @@ export default function AllReturns() {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-center">
               <div className="bg-blue-100 p-3 rounded-lg">
-                <span className="text-blue-600 text-2xl">📈</span>
+                <span className="text-blue-600 text-2xl"><ChartLine /></span>
               </div>
               <div className="ml-4">
                 <p className="text-sm text-blue-600 font-medium">Total Returns</p>
@@ -483,7 +484,7 @@ export default function AllReturns() {
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="flex items-center">
               <div className="bg-green-100 p-3 rounded-lg">
-                <span className="text-green-600 text-2xl">💰</span>
+                <span className="text-green-600 text-2xl"><HandCoins /></span>
               </div>
               <div className="ml-4">
                 <p className="text-sm text-green-600 font-medium">Total Return Amount</p>
@@ -495,7 +496,7 @@ export default function AllReturns() {
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
             <div className="flex items-center">
               <div className="bg-purple-100 p-3 rounded-lg">
-                <span className="text-purple-600 text-2xl">📦</span>
+                <span className="text-purple-600 text-2xl"><Package /></span>
               </div>
               <div className="ml-4">
                 <p className="text-sm text-purple-600 font-medium">Total Items</p>
@@ -507,7 +508,7 @@ export default function AllReturns() {
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
             <div className="flex items-center">
               <div className="bg-amber-100 p-3 rounded-lg">
-                <span className="text-amber-600 text-2xl">🏪</span>
+                <span className="text-amber-600 text-2xl"><Store /></span>
               </div>
               <div className="ml-4">
                 <p className="text-sm text-amber-600 font-medium">Shops with Returns</p>
@@ -519,7 +520,7 @@ export default function AllReturns() {
 
         {/* Filters */}
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
-          <h3 className="font-semibold text-gray-800 mb-3">🔍 Filters</h3>
+          <h3 className="font-semibold text-gray-800 mb-3"><Search /> Filters</h3>
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
@@ -626,7 +627,7 @@ export default function AllReturns() {
                   <tr key={returnItem.id} className="border-b hover:bg-gray-50">
                     <td className="p-4">
                       <div>
-                        <p className="font-semibold text-gray-800">{returnItem.reference}</p>
+                        <p className="font-medium text-sm text-gray-800">{returnItem.reference}</p>
                         <p className="text-sm text-gray-500 mt-1">
                           Return ID: {returnItem.id}
                         </p>
@@ -634,12 +635,12 @@ export default function AllReturns() {
                     </td>
                     <td className="p-4">
                       <div>
-                        <p className="font-medium">{returnItem.shop?.name}</p>
+                        <p className="font-medium text-sm">{returnItem.shop?.name}</p>
                         <p className="text-sm text-gray-500">{returnItem.shop?.shop_keeper}</p>
                       </div>
                     </td>
                     <td className="p-4">
-                      <p className="font-medium">{returnItem.sale?.reference}</p>
+                      <p className="font-medium text-sm">{returnItem.sale?.reference}</p>
                       <p className="text-sm text-gray-500">
                         {new Date(returnItem.sale?.createdAt).toLocaleDateString()}
                       </p>
@@ -660,7 +661,7 @@ export default function AllReturns() {
                                   ? 'bg-blue-100 text-blue-800' 
                                   : 'bg-purple-100 text-purple-800'
                               }`}>
-                                {item.product?.name ? '📦 Product' : '🔧 Material'}
+                                {item.product?.name ? 'Product' : 'Material'}
                               </span>
                             </div>
                             <div className="text-right">
@@ -687,7 +688,7 @@ export default function AllReturns() {
                       </p>
                     </td>
                     <td className="p-4">
-                      <p className="font-medium">
+                      <p className="font-medium text-sm">
                         {new Date(returnItem.createdAt).toLocaleDateString()}
                       </p>
                       <p className="text-sm text-gray-500">
@@ -697,9 +698,9 @@ export default function AllReturns() {
                     <td className="p-4">
                       <button
                         onClick={() => openReturnModal(returnItem)}
-                        className="text-blue-600 hover:text-blue-800 font-medium text-sm px-3 py-1 bg-blue-50 rounded-lg hover:bg-blue-100"
+                        className="text-blue-600 hover:text-blue-800 font-medium text-sm px-3 py-1 bg-blue-50 rounded-lg hover:bg-blue-100 inline-flex items-center"
                       >
-                        👁️ View Details
+                        <Eye /> View Details
                       </button>
                     </td>
                   </tr>
