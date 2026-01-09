@@ -462,6 +462,31 @@ model ProductRepairItem {
   @@index([createdAt])
 }
 
+model ScrapProductRecord {
+  id          Int       @id @default(autoincrement())
+  reason      String 
+  note        String
+  totalLoss   Float
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  scrapProducts ScrapProducts[]
+
+  @@index([createdAt])
+}
+
+model ScrapProducts {
+  id          Int       @id @default(autoincrement())
+  scrapProductRecordId  Int
+  quantity    Float
+  lossPerUnit Float
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  record      ScrapProductRecord @relation(fields: [scrapProductRecordId], references: [id])
+
+  @@index([createdAt])
+}
+
 
 model Accounts {
   id          Int       @id @default(autoincrement())
