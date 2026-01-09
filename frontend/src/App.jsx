@@ -63,6 +63,8 @@ import ShopToFactory from "./components/Transfer/ShopToFactory";
 import Navbar from "./components/Navbar";
 import Notifications from "./components/Notifications";
 import UserProfile from "./components/UserProfile";
+import ScrapRecord from "./components/ScrapRecord/ScrapRecord";
+import ProductRepair from "./components/ProductRepair/ProductRepair";
 
 const AuthContext = createContext(null);
 
@@ -165,6 +167,12 @@ function App() {
             <Route path="/users/all" element={<AllUser />} />
             <Route path="/users/create" element={<CreateUser />} />
             <Route path="/settings" element={<Settings />} />
+
+            
+            <Route path="/scraprecord" element={<ScrapRecord />} />
+            <Route path="/productrepair" element={<ProductRepair />} />
+
+
             <Route path="/transfers" element={<TransferManagement />} />
             <Route path="/transfer/add" element={<AddTransfer />} />
             <Route path="/transfer/store-to-store" element={<StoreToStore />} />

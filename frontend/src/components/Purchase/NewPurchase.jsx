@@ -384,7 +384,7 @@ export default function NewPurchase() {
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-300/20 rounded-full blur-3xl"></div>
       </div>
 
-      <div className="relative max-w-6xl mx-auto">
+      <div className="relative max-w-6xl xl:max-w-full">
         {/* Header Card */}
         <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-blue-100/50 mb-6 p-6">
           <div className="flex items-center justify-between">
