@@ -72,33 +72,33 @@ const AllProductions = () => {
   };
 
   const openModal = async (type, production) => {
-    let productionData = production;
-    if (type === 'details') {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await axios.get(`${API_ROUTES.PRODUCTIONS}/${production.id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        productionData = response.data;
-      } catch (error) {
-        console.error('Error fetching production details:', error);
-        return;
-      }
+  let productionData = production;
+  if (type === 'details') {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_ROUTES.PRODUCTIONS}/${production.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      productionData = response.data;
+    } catch (error) {
+      console.error('Error fetching production details:', error);
+      return;
     }
-    
-    setModal({ isOpen: true, type, data: productionData });
+  }
+  
+  setModal({ isOpen: true, type, data: productionData });
 
-    if (type === 'updateStatus') {
-      setSelectedStatus(production.status);
-      if (production.status === 'production_done') {
-          setEditableProducts(production.productionProducts.map(p => ({...p, received: p.quantity, scrap: 0})))
-          setEditableMaterials(production.productionMaterials.map(m => ({...m, scrap: 0})))
-      } else {
-          setEditableProducts(production.productionProducts);
-          setEditableMaterials(production.productionMaterials);
-      }
+  if (type === 'updateStatus') {
+    setSelectedStatus(production.status);
+    if (production.status === 'production_done') {
+        setEditableProducts(production.productionProducts.map(p => ({...p, received: p.quantity, scrap: 0})))
+        setEditableMaterials(production.productionMaterials.map(m => ({...m, scrap: 0, fine: 0}))) // Initialize fine
+    } else {
+        setEditableProducts(production.productionProducts);
+        setEditableMaterials(production.productionMaterials.map(m => ({...m, fine: 0}))); // Initialize fine
     }
-  };
+  }
+};
 
   const closeModal = () => {
     setModal({ isOpen: false, type: null, data: null });
@@ -130,8 +130,31 @@ const AllProductions = () => {
   }
 
   const handleMaterialEdit = (index, field, value) => {
-    setEditableMaterials(prev => prev.map((m, i) => i === index ? {...m, [field]: value} : m));
-  }
+  setEditableMaterials(prev => {
+    const newMaterials = [...prev];
+    const material = { ...newMaterials[index] };
+    
+    // Ensure scrap + fine doesn't exceed original quantity
+    if (field === 'scrap' || field === 'fine') {
+      const scrapValue = field === 'scrap' ? parseFloat(value) || 0 : material.scrap || 0;
+      const fineValue = field === 'fine' ? parseFloat(value) || 0 : material.fine || 0;
+      const maxAllowed = material.quantity;
+      
+      // If sum exceeds quantity, adjust the other field
+      if (scrapValue + fineValue > maxAllowed) {
+        if (field === 'scrap') {
+          material.fine = Math.max(0, maxAllowed - scrapValue);
+        } else {
+          material.scrap = Math.max(0, maxAllowed - fineValue);
+        }
+      }
+    }
+    
+    material[field] = value;
+    newMaterials[index] = material;
+    return newMaterials;
+  });
+}
 
   // Get status color and icon
   const getStatusConfig = (status) => {
@@ -649,8 +672,8 @@ const AllProductions = () => {
                           <tr>
                             <th className="p-3 text-left font-medium text-gray-700">Product</th>
                             <th className="p-3 text-left font-medium text-gray-700">Quantity</th>
-                            <th className="p-3 text-left font-medium text-gray-700">Received</th>
-                            <th className="p-3 text-left font-medium text-gray-700">Scrap</th>
+                            <th className="p-3 text-left font-medium text-gray-700">Fine Products</th>
+                            <th className="p-3 text-left font-medium text-gray-700">Defect</th>
                             <th className="p-3 text-left font-medium text-gray-700">Cost</th>
                           </tr>
                         </thead>
@@ -712,6 +735,7 @@ const AllProductions = () => {
                           <tr>
                             <th className="p-3 text-left font-medium text-gray-700">Material</th>
                             <th className="p-3 text-left font-medium text-gray-700">Quantity</th>
+                            <th className="p-3 text-left font-medium text-gray-700">Fine materials</th>
                             <th className="p-3 text-left font-medium text-gray-700">Scrap</th>
                           </tr>
                         </thead>
@@ -725,6 +749,16 @@ const AllProductions = () => {
                                 </div>
                               </td>
                               <td className="p-3 text-gray-600">{m.quantity}</td>
+                              <td className="p-3">
+                                <input
+                                  type="number"
+                                  value={m.fine || 0} // Add fine field
+                                  onChange={(e) => handleMaterialEdit(i, 'fine', e.target.value)}
+                                  className="w-20 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/30"
+                                  min="0"
+                                  max={m.quantity}
+                                />
+                              </td>
                               <td className="p-3">
                                 <input
                                   type="number"
