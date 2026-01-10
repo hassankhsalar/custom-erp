@@ -65,6 +65,7 @@ import Notifications from "./components/Notifications";
 import UserProfile from "./components/UserProfile";
 import ScrapRecord from "./components/ScrapRecord/ScrapRecord";
 import ProductRepair from "./components/ProductRepair/ProductRepair";
+import AddScrapRecord from "./components/ScrapRecord/AddScrapRecord";
 
 const AuthContext = createContext(null);
 
@@ -170,6 +171,7 @@ function App() {
 
             
             <Route path="/scraprecord" element={<ScrapRecord />} />
+            <Route path="/addscraprecord" element={<AddScrapRecord />} />
             <Route path="/productrepair" element={<ProductRepair />} />
 
 

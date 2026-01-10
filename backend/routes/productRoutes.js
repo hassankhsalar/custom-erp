@@ -171,4 +171,37 @@ router.get('/store/:storeId', async (req, res) => {
   }
 });
 
+// search endpoint:
+router.get('/search', async (req, res) => {
+  const { q } = req.query;
+  
+  try {
+    const products = await prisma.product.findMany({
+      where: {
+        OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          { barcode: { contains: q, mode: 'insensitive' } },
+          { description: { contains: q, mode: 'insensitive' } }
+        ]
+      },
+      take: 10,
+      select: {
+        id: true,
+        name: true,
+        barcode: true,
+        description: true,
+        cost: true,
+        sale_price: true,
+        stock: true,
+        category: true
+      }
+    });
+    
+    res.json(products);
+  } catch (error) {
+    console.error('Error searching products:', error);
+    res.status(500).json({ error: 'Failed to search products' });
+  }
+});
+
 module.exports = router;

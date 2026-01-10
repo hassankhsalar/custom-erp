@@ -83,6 +83,7 @@ model Product {
   factoryProducts         FactoryProduct[]
   purchaseItem            PurchaseItem[]
   productRepairItem       ProductRepairItem[]
+  scrapProduct            ScrapProduct[]
 }
 
 model ProductMaterial {
@@ -469,20 +470,22 @@ model ScrapProductRecord {
   totalLoss   Float
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-  scrapProducts ScrapProducts[]
+  scrapProduct ScrapProduct[]
 
   @@index([createdAt])
 }
 
-model ScrapProducts {
+model ScrapProduct {
   id          Int       @id @default(autoincrement())
   scrapProductRecordId  Int
+  productId   Int      
   quantity    Float
   lossPerUnit Float
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   record      ScrapProductRecord @relation(fields: [scrapProductRecordId], references: [id])
+  product     Product            @relation(fields: [productId], references: [id])
 
   @@index([createdAt])
 }
