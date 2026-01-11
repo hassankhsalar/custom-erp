@@ -130,6 +130,8 @@ const dashboardRoutes = require('./routes/dashboard');
 const userRoutes = require('./routes/users');
 const transferRoutes = require('./routes/transferRoutes');
 const scrapRoutes = require('./routes/scrapRoutes');
+const scrapProductsRoutes = require('./routes/scrapProductsRoutes');
+const productRepairsRoutes = require('./routes/productRepairsRoutes');
 
 app.use('/api/materials', materialRoutes);
 app.use('/api/products', productRoutes);
@@ -146,6 +148,8 @@ app.use('/api/dash-board', dashboardRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/transfers', transferRoutes);
 app.use('/api/scrap-records', scrapRoutes);
+app.use('/api/scrap-products', scrapProductsRoutes);
+app.use('/api/product-repairs', productRepairsRoutes);
 
 const port = 3001;
 app.listen(port, () => {

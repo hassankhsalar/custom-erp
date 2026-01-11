@@ -433,14 +433,16 @@ model Notification {
 }
 
 model ProductRepair {
-  id          Int       @id @default(autoincrement())
-  repairPoints String
-  shippingCost Float
+  id              Int       @id @default(autoincrement())
+  destination     String
+  shippingCost    Float
   document        String?
-  from      String   //store, shop or factory
-  fromId      Int
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  note            String?
+  status          String @default("pending") // pending, in_progress, completed, failed
+  from            String   //store, shop or factory
+  fromId          Int
+  createdAt       DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   productRepairItem  ProductRepairItem[]
 

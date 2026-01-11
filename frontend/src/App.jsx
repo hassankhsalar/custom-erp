@@ -66,6 +66,7 @@ import UserProfile from "./components/UserProfile";
 import ScrapRecord from "./components/ScrapRecord/ScrapRecord";
 import ProductRepair from "./components/ProductRepair/ProductRepair";
 import AddScrapRecord from "./components/ScrapRecord/AddScrapRecord";
+import AddRepairProduct from "./components/ProductRepair/AddRepairProduct";
 
 const AuthContext = createContext(null);
 
@@ -172,8 +173,9 @@ function App() {
             
             <Route path="/scraprecord" element={<ScrapRecord />} />
             <Route path="/addscraprecord" element={<AddScrapRecord />} />
-            <Route path="/productrepair" element={<ProductRepair />} />
 
+            <Route path="/productrepair" element={<ProductRepair />} />
+            <Route path="/addrepairproduct" element={<AddRepairProduct />} />
 
             <Route path="/transfers" element={<TransferManagement />} />
             <Route path="/transfer/add" element={<AddTransfer />} />

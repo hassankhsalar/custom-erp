@@ -39,6 +39,11 @@ export const API_ROUTES = {
   //scrap
   SCRAP_RECORDS: `${API_BASE_URL}/scrap-records`,
 
+  // Add this new route for fetching scrap products by location
+  SCRAP_PRODUCTS: `${API_BASE_URL}/scrap-products`,
+  
+  // Add product repair routes
+  PRODUCT_REPAIRS: `${API_BASE_URL}/product-repairs`,
   
   DASHBOARD2: 'http://localhost:3001/api/dash-board',
 

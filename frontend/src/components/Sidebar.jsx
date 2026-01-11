@@ -110,7 +110,10 @@ const Sidebar = () => {
       color: 'from-cyan-500 to-blue-500',
       bgColor: 'bg-gradient-to-r from-pink-50 to-rose-100/50',
       textColor: 'text-pink-700',
-      path: '/productrepair', 
+      subItems: [
+        { name: 'Repaired Products', path: '/productrepair', icon: <Box size={16} /> },
+        { name: 'Repair Product', path: '/addrepairproduct', icon: <Package size={16} /> }
+      ] 
     },
 
     
