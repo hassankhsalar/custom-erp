@@ -5,24 +5,24 @@ const jwt = require('jsonwebtoken');
 const prisma = new PrismaClient();
 const router = express.Router();
 
-const JWT_SECRET = 'your-secret-key'; // Replace with a strong secret key
+//const JWT_SECRET = 'your-secret-key'; // Replace with a strong secret key
 
 // Middleware to protect routes
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+// const authenticateToken = (req, res, next) => {
+//   const authHeader = req.headers['authorization'];
+//   const token = authHeader && authHeader.split(' ')[1];
 
-  if (token == null) return res.sendStatus(401);
+//   if (token == null) return res.sendStatus(401);
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;
-    next();
-  });
-};
+//   jwt.verify(token, JWT_SECRET, (err, user) => {
+//     if (err) return res.sendStatus(403);
+//     req.user = user;
+//     next();
+//   });
+// };
 
 // Get all stores with pagination
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
@@ -65,7 +65,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Get a single store by ID
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', async (req, res) => {
   const { id } = req.params;
   try {
     const store = await prisma.store.findUnique({
@@ -95,7 +95,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Create a new store
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/',  async (req, res) => {
   const { name, address, store_keeper, mobile, storeProducts, storeMaterials } = req.body;
   try {
     const newStore = await prisma.store.create({
@@ -126,7 +126,7 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // Update a store
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id',  async (req, res) => {
   const { id } = req.params;
   const { name, address, store_keeper, mobile, storeProducts, storeMaterials } = req.body;
   try {
@@ -167,7 +167,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 });
 
 // Delete a store
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', async (req, res) => {
   const { id } = req.params;
   try {
     await prisma.store.delete({

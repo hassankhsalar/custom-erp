@@ -57,6 +57,8 @@ model Material {
   factoryMaterials    FactoryMaterial[]
   saleItem            SaleItem[]
   saleReturnItem      SaleReturnItem[]
+  materialRepairItem  MaterialRepairItem[]
+  ScrapMaterial       ScrapMaterial[]
 }
 
 model Product {
@@ -492,6 +494,66 @@ model ScrapProduct {
   @@index([createdAt])
 }
 
+
+model MaterialRepair {
+  id              Int       @id @default(autoincrement())
+  destination     String
+  shippingCost    Float
+  document        String?
+  note            String?
+  status          String @default("pending") // pending, in_progress, completed, failed
+  from            String   //store, shop or factory
+  fromId          Int
+  createdAt       DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  materialRepairItem  MaterialRepairItem[]
+
+  @@index([createdAt])
+}
+
+model MaterialRepairItem {
+  id          Int       @id @default(autoincrement())
+  repairId    Int 
+  materialId   Int
+  quantity    Float
+  success     Float
+  fail        Float
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  repair      MaterialRepair  @relation(fields: [repairId], references: [id])
+  material     Material        @relation(fields: [materialId], references: [id])
+
+  @@index([createdAt])
+}
+
+model ScrapMaterialRecord {
+  id          Int       @id @default(autoincrement())
+  reason      String 
+  note        String
+  totalLoss   Float
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  scrapMaterial ScrapMaterial[]
+
+  @@index([createdAt])
+}
+
+model ScrapMaterial {
+  id          Int       @id @default(autoincrement())
+  scrapMaterialRecordId  Int
+  materialId   Int      
+  quantity    Float
+  lossPerUnit Float
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  record       ScrapMaterialRecord @relation(fields: [scrapMaterialRecordId], references: [id])
+  material     Material            @relation(fields: [materialId], references: [id])
+
+  @@index([createdAt])
+}
 
 model Accounts {
   id          Int       @id @default(autoincrement())

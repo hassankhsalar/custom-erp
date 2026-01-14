@@ -67,6 +67,10 @@ import ScrapRecord from "./components/ScrapRecord/ScrapRecord";
 import ProductRepair from "./components/ProductRepair/ProductRepair";
 import AddScrapRecord from "./components/ScrapRecord/AddScrapRecord";
 import AddRepairProduct from "./components/ProductRepair/AddRepairProduct";
+import AddRepairMaterial from "./components/MaterialRepair/AddRepairMaterial";
+import MaterialRepair from "./components/MaterialRepair/MaterialRepair";
+import AddMaterialScrapRecord from "./components/ScrapRecord/AddMaterialScrapRecord";
+import MaterialScrapRecord from "./components/ScrapRecord/MaterialScrapRecord";
 
 const AuthContext = createContext(null);
 
@@ -174,8 +178,14 @@ function App() {
             <Route path="/scraprecord" element={<ScrapRecord />} />
             <Route path="/addscraprecord" element={<AddScrapRecord />} />
 
+            <Route path="/materialscraprecord" element={<MaterialScrapRecord />} />
+            <Route path="/addmaterialscraprecord" element={<AddMaterialScrapRecord />} />
+
             <Route path="/productrepair" element={<ProductRepair />} />
             <Route path="/addrepairproduct" element={<AddRepairProduct />} />
+
+            <Route path="/materialrepair" element={<MaterialRepair />} />
+            <Route path="/addrepairmaterial" element={<AddRepairMaterial />} />
 
             <Route path="/transfers" element={<TransferManagement />} />
             <Route path="/transfer/add" element={<AddTransfer />} />
