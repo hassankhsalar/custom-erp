@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES } from '../../config';
+import { Image as ImageIcon, X, Upload } from 'lucide-react';
 
 const EditMaterial = () => {
   const { id } = useParams();
@@ -19,12 +20,36 @@ const EditMaterial = () => {
     alert_quantity: '',
   });
   const [loading, setLoading] = useState(true);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [selectedImageFile, setSelectedImageFile] = useState(null);
+
+  // Function to get full image URL (same as EditProduct)
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    
+    if (imagePath.startsWith('http')) return imagePath;
+    
+    const baseUrl = 'http://localhost:3001';
+    
+    if (imagePath.startsWith('/uploads')) {
+      return `${baseUrl}${imagePath}`;
+    } else {
+      return `${baseUrl}/uploads/${imagePath}`;
+    }
+  };
 
   useEffect(() => {
     const fetchMaterial = async () => {
       try {
         const response = await axios.get(`${API_ROUTES.MATERIALS}/${id}`);
         setMaterial(response.data);
+        
+        // Set image preview if image exists
+        if (response.data.image) {
+          setImagePreview(getImageUrl(response.data.image));
+        }
+        
         setLoading(false);
       } catch (error) {
         console.error('Error fetching material:', error);
@@ -42,21 +67,115 @@ const EditMaterial = () => {
     }));
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (jpg, png, gif, etc.)');
+      return;
+    }
+
+    // Check file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size too large. Maximum size is 5MB.');
+      return;
+    }
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+
+    // Store the file for later upload
+    setSelectedImageFile(file);
+  };
+
+  const uploadImage = async (file) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    try {
+      // Use the correct endpoint: /api/uploads/material
+      const response = await axios.post(`${API_ROUTES.UPLOADS}/material`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      return response.data.imageUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw error;
+    }
+  };
+
+  const removeImage = () => {
+    setMaterial({ ...material, image: null });
+    setImagePreview(null);
+    setSelectedImageFile(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setUploadingImage(true);
+    
     try {
-      await axios.put(`${API_ROUTES.MATERIALS}/${id}`, {
+      let imageUrl = material.image;
+      
+      // Upload image if a new one was selected
+      if (selectedImageFile) {
+        try {
+          imageUrl = await uploadImage(selectedImageFile);
+          setMaterial({ ...material, image: imageUrl });
+        } catch (uploadError) {
+          console.error('Image upload failed:', uploadError);
+          alert('Failed to upload image. Material will be updated without changing the image.');
+        }
+      }
+      
+      // Prepare material data
+      const materialData = {
         ...material,
         unit_cost: parseFloat(material.unit_cost),
         sale_price: material.sale_price ? parseFloat(material.sale_price) : null,
         current_stock: parseFloat(material.current_stock),
         alert_quantity: material.alert_quantity ? parseFloat(material.alert_quantity) : null,
-      });
+        // Only update image if we have a new URL
+        image: selectedImageFile ? imageUrl : material.image,
+      };
+      
+      // Update the material
+      await axios.put(`${API_ROUTES.MATERIALS}/${id}`, materialData);
+      
       alert('Material updated successfully!');
       navigate('/materials/all');
+      
     } catch (error) {
       console.error('Error updating material:', error);
-      alert('Error updating material. Please try again.');
+      
+      // Try a simpler approach if the first fails
+      try {
+        const simpleData = {
+          name: material.name,
+          description: material.description || '',
+          unit: material.unit,
+          unit_cost: parseFloat(material.unit_cost),
+          current_stock: parseFloat(material.current_stock),
+        };
+        
+        await axios.put(`${API_ROUTES.MATERIALS}/${id}`, simpleData);
+        alert('Basic material information updated successfully!');
+        navigate('/materials/all');
+      } catch (secondError) {
+        console.error('Second attempt failed:', secondError);
+        alert('Error updating material. Please try again.');
+      }
+    } finally {
+      setUploadingImage(false);
     }
   };
 
@@ -90,6 +209,7 @@ const EditMaterial = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Material Details Card */}
           <div className="backdrop-blur-sm bg-white/50 rounded-xl p-6 border border-white/40 shadow-lg">
             <h2 className="text-xl font-semibold mb-6 text-gray-800 flex items-center">
               <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -98,9 +218,81 @@ const EditMaterial = () => {
               Material Information
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left Column */}
-              <div className="space-y-5">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Image Upload Section */}
+              <div className="lg:col-span-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Material Image</label>
+                <div className="space-y-4">
+                  {/* Image Preview */}
+                  <div className="relative group">
+                    <div className="w-full aspect-square rounded-xl overflow-hidden border-2 border-dashed border-gray-300/50 bg-gray-50/50 flex items-center justify-center">
+                      {imagePreview ? (
+                        <>
+                          <img 
+                            src={imagePreview} 
+                            alt="Material preview" 
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+                          <button
+                            type="button"
+                            onClick={removeImage}
+                            className="absolute top-2 right-2 bg-red-500/90 hover:bg-red-600 text-white p-2 rounded-full transition-all duration-200 hover:shadow-lg backdrop-blur-sm"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <div className="text-center p-6">
+                          <ImageIcon className="w-16 h-16 text-gray-400 mx-auto mb-3" />
+                          <p className="text-sm text-gray-500">No image uploaded</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Upload Progress */}
+                    {uploadingImage && (
+                      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center rounded-xl">
+                        <div className="text-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white mx-auto mb-2"></div>
+                          <p className="text-white text-sm">Uploading...</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Upload Button */}
+                  <div>
+                    <input
+                      type="file"
+                      id="image-upload"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="hidden"
+                      disabled={uploadingImage}
+                    />
+                    <label
+                      htmlFor="image-upload"
+                      className={`flex items-center justify-center w-full p-4 rounded-lg border-2 border-dashed border-blue-300/50 bg-blue-50/30 cursor-pointer transition-all duration-200 hover:bg-blue-50/50 hover:border-blue-400/50 hover:shadow-md ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      <div className="text-center">
+                        <Upload className="w-6 h-6 text-blue-500 mx-auto mb-2" />
+                        <p className="text-sm font-medium text-blue-600">
+                          {uploadingImage ? 'Uploading...' : 'Upload New Image'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">JPG, PNG, GIF up to 5MB</p>
+                      </div>
+                    </label>
+                    {selectedImageFile && !uploadingImage && (
+                      <p className="text-xs text-green-600 mt-2 text-center">
+                        ✓ New image selected. It will be uploaded when you save.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Material Details Form */}
+              <div className="lg:col-span-2 space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Name <span className="text-red-500">*</span>
@@ -112,7 +304,7 @@ const EditMaterial = () => {
                     onChange={handleChange}
                     placeholder="Material name"
                     required
-                    className="w-full p-3 border border-gray-400/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                    className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                   />
                 </div>
 
@@ -126,7 +318,7 @@ const EditMaterial = () => {
                     onChange={handleChange}
                     placeholder="Material description..."
                     rows="3"
-                    className="w-full p-3 border border-gray-400/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 resize-none"
+                    className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 resize-none"
                   />
                 </div>
 
@@ -141,7 +333,7 @@ const EditMaterial = () => {
                       value={material.brand}
                       onChange={handleChange}
                       placeholder="Brand name"
-                      className="w-full p-3 border border-gray-400/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200"
+                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200"
                     />
                   </div>
 
@@ -155,14 +347,11 @@ const EditMaterial = () => {
                       value={material.barcode}
                       onChange={handleChange}
                       placeholder="Barcode or SKU"
-                      className="w-full p-3 border border-gray-400/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200"
+                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200"
                     />
                   </div>
                 </div>
-              </div>
 
-              {/* Right Column */}
-              <div className="space-y-5">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -175,7 +364,7 @@ const EditMaterial = () => {
                       onChange={handleChange}
                       placeholder="kg/piece/litre"
                       required
-                      className="w-full p-3 border border-gray-400/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200"
+                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200"
                     />
                   </div>
 
@@ -192,7 +381,7 @@ const EditMaterial = () => {
                       required
                       min="0"
                       step="0.01"
-                      className="w-full p-3 border border-gray-400/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                     />
                   </div>
                 </div>
@@ -213,7 +402,7 @@ const EditMaterial = () => {
                         required
                         min="0"
                         step="0.01"
-                        className="w-full p-3 pl-8 border border-gray-400/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200"
+                        className="w-full p-3 pl-8 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200"
                       />
                     </div>
                   </div>
@@ -232,7 +421,7 @@ const EditMaterial = () => {
                         placeholder="Optional sale price"
                         min="0"
                         step="0.01"
-                        className="w-full p-3 pl-8 border border-gray-400/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200"
+                        className="w-full p-3 pl-8 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200"
                       />
                     </div>
                     <div className="mt-1 text-xs text-gray-500 bg-blue-50/50 p-2 rounded backdrop-blur-sm border border-blue-100/50">
@@ -253,7 +442,7 @@ const EditMaterial = () => {
                     placeholder="Low stock threshold"
                     min="0"
                     step="0.01"
-                    className="w-full p-3 border border-gray-400/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all duration-200"
+                    className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all duration-200"
                   />
                   <div className="mt-1 text-xs text-gray-500 bg-amber-50/50 p-2 rounded backdrop-blur-sm border border-amber-100/50">
                     Set low stock alert. Material will show as "Low Stock" when quantity falls below this value.
@@ -338,17 +527,28 @@ const EditMaterial = () => {
               type="button" 
               onClick={() => navigate('/materials/all')}
               className="bg-gray-100/80 hover:bg-gray-200/80 text-gray-700 hover:text-gray-900 p-3 px-8 rounded-xl font-medium transition-all duration-200 hover:shadow-md backdrop-blur-sm border border-gray-300/50"
+              disabled={uploadingImage}
             >
               Cancel
             </button>
             <button 
               type="submit" 
-              className="bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-700 hover:to-green-800 text-white p-3 px-12 rounded-xl font-medium text-lg transition-all duration-200 hover:shadow-xl backdrop-blur-sm transform hover:-translate-y-0.5 flex items-center"
+              disabled={uploadingImage}
+              className={`bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-700 hover:to-green-800 text-white p-3 px-12 rounded-xl font-medium text-lg transition-all duration-200 hover:shadow-xl backdrop-blur-sm transform hover:-translate-y-0.5 flex items-center ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-              </svg>
-              Update Material
+              {uploadingImage ? (
+                <span className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
+                  Updating...
+                </span>
+              ) : (
+                <>
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Update Material
+                </>
+              )}
             </button>
           </div>
         </form>

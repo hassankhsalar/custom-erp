@@ -4,21 +4,39 @@ const path = require('path');
 const fs = require('fs');
 const router = express.Router();
 
-// Ensure uploads directory exists
-const uploadDir = 'uploads/products';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+// Ensure uploads directories exist
+const productUploadDir = 'uploads/products';
+const materialUploadDir = 'uploads/materials';
+
+if (!fs.existsSync(productUploadDir)) {
+  fs.mkdirSync(productUploadDir, { recursive: true });
 }
 
-// Configure storage
-const storage = multer.diskStorage({
+if (!fs.existsSync(materialUploadDir)) {
+  fs.mkdirSync(materialUploadDir, { recursive: true });
+}
+
+// Configure storage for products
+const productStorage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, uploadDir);
+    cb(null, productUploadDir);
   },
   filename: function (req, file, cb) {
     // Create unique filename
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, 'product-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+// Configure storage for materials
+const materialStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, materialUploadDir);
+  },
+  filename: function (req, file, cb) {
+    // Create unique filename
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'material-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
 
@@ -35,21 +53,28 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Configure upload
-const upload = multer({
-  storage: storage,
+// Configure upload for products
+const uploadProduct = multer({
+  storage: productStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: fileFilter
+});
+
+// Configure upload for materials
+const uploadMaterial = multer({
+  storage: materialStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: fileFilter
 });
 
 // Upload product image
-router.post('/product', upload.single('image'), (req, res) => {
+router.post('/product', uploadProduct.single('image'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file provided' });
     }
     
-    // Construct the URL (adjust according to your server setup)
+    // Construct the URL
     const imageUrl = `/uploads/products/${req.file.filename}`;
     
     res.json({
@@ -58,15 +83,36 @@ router.post('/product', upload.single('image'), (req, res) => {
       filename: req.file.filename
     });
   } catch (error) {
-    console.error('Error uploading image:', error);
+    console.error('Error uploading product image:', error);
     res.status(500).json({ error: 'Failed to upload image' });
   }
 });
 
-// Get uploaded image
+// Upload material image
+router.post('/material', uploadMaterial.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+    
+    // Construct the URL
+    const imageUrl = `/uploads/materials/${req.file.filename}`;
+    
+    res.json({
+      success: true,
+      imageUrl: imageUrl,
+      filename: req.file.filename
+    });
+  } catch (error) {
+    console.error('Error uploading material image:', error);
+    res.status(500).json({ error: 'Failed to upload image' });
+  }
+});
+
+// Get uploaded product image
 router.get('/products/:filename', (req, res) => {
   const filename = req.params.filename;
-  const filePath = path.join(uploadDir, filename);
+  const filePath = path.join(productUploadDir, filename);
   
   if (fs.existsSync(filePath)) {
     res.sendFile(path.resolve(filePath));
@@ -74,5 +120,20 @@ router.get('/products/:filename', (req, res) => {
     res.status(404).json({ error: 'Image not found' });
   }
 });
+
+// Get uploaded material image
+router.get('/materials/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(materialUploadDir, filename);
+  
+  if (fs.existsSync(filePath)) {
+    res.sendFile(path.resolve(filePath));
+  } else {
+    res.status(404).json({ error: 'Image not found' });
+  }
+});
+
+// Serve static files from uploads directory
+router.use('/uploads', express.static('uploads'));
 
 module.exports = router;
