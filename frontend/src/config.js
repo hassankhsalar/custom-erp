@@ -54,6 +54,9 @@ export const API_ROUTES = {
   // Scrap materials route
   SCRAP_MATERIALS: `${API_BASE_URL}/scrap-materials`,
 
+  //Image file uploads
+  UPLOADS: `${API_BASE_URL}/uploads`,
+
 
   //user routes
   USERS: 'http://localhost:3001/api/users',

@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_ROUTES } from '../../config';
+import { Upload, X, Eye } from 'lucide-react';
 
 const CreateProduct = () => {
   const [product, setProduct] = useState({
@@ -17,6 +19,9 @@ const CreateProduct = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredMaterials, setFilteredMaterials] = useState([]);
   const [editingMaterialIndex, setEditingMaterialIndex] = useState(null);
+  const [image, setImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     const fetchMaterials = async () => {
@@ -80,20 +85,86 @@ const CreateProduct = () => {
     setSearchTerm(material.material_name);
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImage(file);
+      
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setImage(null);
+    setImagePreview('');
+  };
+
+  const uploadImage = async () => {
+    if (!image) return null;
+    
+    const formData = new FormData();
+    formData.append('image', image);
+    
+    try {
+      setUploading(true);
+      const response = await axios.post(`${API_ROUTES.UPLOADS}/product`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data.imageUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      alert('Failed to upload image');
+      return null;
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const productData = {
-      ...product,
-      sale_price: parseFloat(product.sale_price),
-      wholesale_price: parseFloat(product.wholesale_price),
-      cost: parseFloat(product.cost),
-      alert_quantity: parseInt(product.alert_quantity),
-      materials: materials.map(m => ({...m, material_id: parseInt(m.material_id), material_quantity: parseFloat(m.material_quantity), price: parseFloat(m.price)})),
-    };
+    
+    // Validate required fields
+    if (!product.name || !product.sale_price || !product.wholesale_price || !product.cost) {
+      alert('Please fill all required fields');
+      return;
+    }
 
     try {
+      let imageUrl = null;
+      
+      // Upload image if exists
+      if (image) {
+        imageUrl = await uploadImage();
+        if (!imageUrl) {
+          return; // Stop if image upload failed
+        }
+      }
+
+      const productData = {
+        ...product,
+        sale_price: parseFloat(product.sale_price),
+        wholesale_price: parseFloat(product.wholesale_price),
+        cost: parseFloat(product.cost),
+        alert_quantity: parseInt(product.alert_quantity),
+        image: imageUrl,
+        materials: materials.map(m => ({
+          ...m, 
+          material_id: parseInt(m.material_id), 
+          material_quantity: parseFloat(m.material_quantity), 
+          price: parseFloat(m.price)
+        })),
+      };
+
       await axios.post(API_ROUTES.PRODUCTS, productData);
       alert('Product created successfully!');
+      
       // Clear form
       setProduct({ 
         name: '', 
@@ -104,9 +175,11 @@ const CreateProduct = () => {
         alert_quantity: '0'
       });
       setMaterials([]);
+      setImage(null);
+      setImagePreview('');
     } catch (error) {
       console.error('Error creating product:', error);
-      alert('Error creating product');
+      alert(error.response?.data?.error || 'Error creating product');
     }
   };
 
@@ -169,6 +242,59 @@ const CreateProduct = () => {
                     step="0.01"
                   />
                 </div>
+
+                {/* Image Upload Section */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Product Image</label>
+                  <div className="space-y-3">
+                    {imagePreview ? (
+                      <div className="relative">
+                        <div className="w-32 h-32 rounded-lg overflow-hidden border-2 border-blue-300/50">
+                          <img 
+                            src={imagePreview} 
+                            alt="Preview" 
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemoveImage}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 transition-colors"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300/50 rounded-lg cursor-pointer bg-white/50 hover:bg-gray-50/50 transition-colors">
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                          <Upload className="w-8 h-8 mb-2 text-gray-400" />
+                          <p className="mb-1 text-sm text-gray-500">
+                            <span className="font-medium">Click to upload</span> or drag and drop
+                          </p>
+                          <p className="text-xs text-gray-400">PNG, JPG, JPEG (MAX. 5MB)</p>
+                        </div>
+                        <input 
+                          type="file" 
+                          className="hidden" 
+                          accept="image/*"
+                          onChange={handleImageChange}
+                        />
+                      </label>
+                    )}
+                    
+                    {/* Image Preview Modal Trigger */}
+                    {imagePreview && (
+                      <button
+                        type="button"
+                        onClick={() => window.open(imagePreview, '_blank')}
+                        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
+                      >
+                        <Eye size={16} />
+                        View Full Preview
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
               
               <div className="space-y-4">
@@ -208,9 +334,36 @@ const CreateProduct = () => {
                     value={product.description} 
                     onChange={handleProductChange} 
                     placeholder="Product description..." 
-                    rows="3"
+                    rows="5"
                     className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 resize-none"
                   ></textarea>
+                </div>
+                
+                {/* Additional optional fields can be added here */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label>
+                    <input 
+                      type="text" 
+                      name="barcode" 
+                      value={product.barcode || ''} 
+                      onChange={handleProductChange} 
+                      placeholder="Optional barcode" 
+                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-gray-500/30 focus:border-gray-500 transition-all duration-200" 
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                    <input 
+                      type="text" 
+                      name="category" 
+                      value={product.category || ''} 
+                      onChange={handleProductChange} 
+                      placeholder="Optional category" 
+                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-gray-500/30 focus:border-gray-500 transition-all duration-200" 
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -350,9 +503,12 @@ const CreateProduct = () => {
           <div className="flex justify-center pt-4">
             <button 
               type="submit" 
-              className="bg-gradient-to-r from-green-600 to-emerald-700 hover:from-green-700 hover:to-emerald-800 text-white p-4 px-12 rounded-xl font-medium text-lg transition-all duration-200 hover:shadow-xl backdrop-blur-sm transform hover:-translate-y-0.5"
+              disabled={uploading}
+              className={`bg-gradient-to-r from-green-600 to-emerald-700 hover:from-green-700 hover:to-emerald-800 text-white p-4 px-12 rounded-xl font-medium text-lg transition-all duration-200 hover:shadow-xl backdrop-blur-sm transform hover:-translate-y-0.5 ${
+                uploading ? 'opacity-70 cursor-not-allowed' : ''
+              }`}
             >
-              Create Product
+              {uploading ? 'Uploading Image...' : 'Create Product'}
             </button>
           </div>
         </form>

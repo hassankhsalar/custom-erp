@@ -136,6 +136,10 @@ const materialRepairsRoutes = require('./routes/materialRepairsRoutes');
 const scrapMaterialsRoutes = require('./routes/scrapMaterialsRoutes');
 const materialScrapRoutes = require('./routes/materialScrapRoutes');
 
+const uploadRoutes = require('./routes/uploadRoutes');
+
+
+
 app.use('/api/materials', materialRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/factories', factoryRoutes);
@@ -156,6 +160,10 @@ app.use('/api/product-repairs', productRepairsRoutes);
 app.use('/api/material-repairs', materialRepairsRoutes);
 app.use('/api/scrap-materials', scrapMaterialsRoutes);
 app.use('/api/materials-scrap-records', materialScrapRoutes);
+app.use('/api/uploads', uploadRoutes);
+
+// serve static files from uploads directory
+app.use('/uploads', express.static('uploads'));
 
 const port = 3001;
 app.listen(port, () => {
