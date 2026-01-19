@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
-import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound } from "lucide-react";
+import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon } from "lucide-react";
 
 export default function ShopPOS() {
   const [shops, setShops] = useState([]);
@@ -22,6 +22,21 @@ export default function ShopPOS() {
 
   const searchInputRef = useRef(null);
   const navigate = useNavigate();
+
+  // Function to get full image URL
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    
+    if (imagePath.startsWith('http')) return imagePath;
+    
+    const baseUrl = 'http://localhost:3001';
+    
+    if (imagePath.startsWith('/uploads')) {
+      return `${baseUrl}${imagePath}`;
+    } else {
+      return `${baseUrl}/uploads/${imagePath}`;
+    }
+  };
 
   // Fetch all shops
   useEffect(() => {
@@ -140,7 +155,8 @@ export default function ShopPOS() {
         barcode: item.barcode,
         unit: item.unit,
         shop_stock: item.shop_stock,
-        original_price: salePrice // Store original price for reference
+        original_price: salePrice, // Store original price for reference
+        image: item.image // Store image for display
       };
       
       setCartItems([...cartItems, newItem]);
@@ -463,6 +479,7 @@ export default function ShopPOS() {
                   {searchResults.map((item) => {
                     const isLowStock = item.shop_stock < 20;
                     const isOutOfStock = item.shop_stock <= 0;
+                    const imageUrl = getImageUrl(item.image);
                     
                     return (
                       <div
@@ -470,34 +487,67 @@ export default function ShopPOS() {
                         onClick={() => !isOutOfStock && handleAddToCart(item)}
                         className={`p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-400 transition ${isOutOfStock ? 'opacity-50 cursor-not-allowed' : ''}`} 
                       >
-                        <div className="flex justify-between items-center">
-                          <div className="flex-1">
-                            <div className="font-medium text-gray-800">{item.name}</div>
-                            <div className="text-sm text-gray-600">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${item.type === 'product' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
-                                {item.type === 'product' ? '📦 Product' : '🔧 Material'}
-                              </span>
-                              {item.barcode && <span className="ml-2">| {item.barcode}</span>}
-                            </div>
-                            <div className="flex items-center mt-1">
-                              <span className={`text-sm font-medium ${isLowStock ? 'text-amber-600' : 'text-gray-700'}`}>
-                                Stock: {item.shop_stock} {item.unit && `(${item.unit})`}
-                              </span>
-                              {isLowStock && !isOutOfStock && (
-                                <span className="ml-2 px-1.5 py-0.5 text-xs bg-amber-100 text-amber-800 rounded">Low Stock</span>
-                              )}
-                              {isOutOfStock && (
-                                <span className="ml-2 px-1.5 py-0.5 text-xs bg-red-100 text-red-800 rounded">Out of Stock</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-semibold text-gray-900">${(item.sale_price || 0).toFixed(2)}</div>
-                            {!isOutOfStock && (
-                              <button className="mt-1 bg-gradient-to-r from-green-500 to-green-600 text-white text-xs px-3 py-1.5 rounded-lg hover:from-green-600 hover:to-green-700 transition">
-                                Add to Cart
-                              </button>
+                        <div className="flex items-start space-x-3">
+                          {/* Image Section */}
+                          <div className="flex-shrink-0">
+                            {imageUrl ? (
+                              <div className="w-16 h-16 rounded-lg overflow-hidden border border-gray-200 bg-white">
+                                <img 
+                                  src={imageUrl} 
+                                  alt={item.name}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    const parent = e.target.parentElement;
+                                    parent.innerHTML = `
+                                      <div class="w-full h-full flex items-center justify-center bg-gray-100">
+                                        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                      </div>
+                                    `;
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <div className="w-16 h-16 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center">
+                                <ImageIcon className="w-8 h-8 text-gray-400" />
+                              </div>
                             )}
+                          </div>
+                          
+                          {/* Item Details */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-800 truncate">{item.name}</div>
+                                <div className="text-sm text-gray-600 mt-1">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${item.type === 'product' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
+                                    {item.type === 'product' ? '📦 Product' : '🔧 Material'}
+                                  </span>
+                                  {item.barcode && <span className="ml-2">| {item.barcode}</span>}
+                                </div>
+                                <div className="flex items-center mt-2">
+                                  <span className={`text-sm font-medium ${isLowStock ? 'text-amber-600' : 'text-gray-700'}`}>
+                                    Stock: {item.shop_stock} {item.unit && `(${item.unit})`}
+                                  </span>
+                                  {isLowStock && !isOutOfStock && (
+                                    <span className="ml-2 px-1.5 py-0.5 text-xs bg-amber-100 text-amber-800 rounded">Low Stock</span>
+                                  )}
+                                  {isOutOfStock && (
+                                    <span className="ml-2 px-1.5 py-0.5 text-xs bg-red-100 text-red-800 rounded">Out of Stock</span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-right ml-2">
+                                <div className="font-semibold text-gray-900">${(item.sale_price || 0).toFixed(2)}</div>
+                                {!isOutOfStock && (
+                                  <button className="mt-1 bg-gradient-to-r from-green-500 to-green-600 text-white text-xs px-3 py-1.5 rounded-lg hover:from-green-600 hover:to-green-700 transition whitespace-nowrap">
+                                    Add to Cart
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -653,76 +703,113 @@ export default function ShopPOS() {
                       </tr>
                     </thead>
                     <tbody>
-                      {cartItems.map((item, index) => (
-                        <tr key={index} className="border-b hover:bg-gray-50 transition">
-                          <td className="p-4">
-                            <div className="font-medium text-gray-900">{item.name}</div>
-                            <div className="text-sm text-gray-600 mt-1">
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${item.type === 'product' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
-                                {item.type === 'product' ? '📦 Product' : '🔧 Material'}
-                              </span>
-                              {item.barcode && <span className="ml-2">| {item.barcode}</span>}
-                              {item.unit && <span className="ml-2">| Unit: {item.unit}</span>}
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-gray-900">${item.unitPrice.toFixed(2)}</span>
-                              {item.unitPrice !== item.original_price && (
-                                <span className="text-xs text-green-600 bg-green-100 px-1.5 py-0.5 rounded">
-                                  Overridden
-                                </span>
-                              )}
+                      {cartItems.map((item, index) => {
+                        const imageUrl = getImageUrl(item.image);
+                        
+                        return (
+                          <tr key={index} className="border-b hover:bg-gray-50 transition">
+                            <td className="p-4">
+                              <div className="flex items-start space-x-3">
+                                {/* Cart Item Image */}
+                                <div className="flex-shrink-0">
+                                  {imageUrl ? (
+                                    <div className="w-16 h-16 rounded-lg overflow-hidden border border-gray-200 bg-white">
+                                      <img 
+                                        src={imageUrl} 
+                                        alt={item.name}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                          e.target.style.display = 'none';
+                                          const parent = e.target.parentElement;
+                                          parent.innerHTML = `
+                                            <div class="w-full h-full flex items-center justify-center bg-gray-100">
+                                              <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                              </svg>
+                                            </div>
+                                          `;
+                                        }}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="w-16 h-16 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center">
+                                      <ImageIcon className="w-6 h-6 text-gray-400" />
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                {/* Cart Item Details */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-gray-900">{item.name}</div>
+                                  <div className="text-sm text-gray-600 mt-1">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${item.type === 'product' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
+                                      {item.type === 'product' ? '📦 Product' : '🔧 Material'}
+                                    </span>
+                                    {item.barcode && <span className="ml-2">| {item.barcode}</span>}
+                                    {item.unit && <span className="ml-2">| Unit: {item.unit}</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-gray-900">${item.unitPrice.toFixed(2)}</span>
+                                {item.unitPrice !== item.original_price && (
+                                  <span className="text-xs text-green-600 bg-green-100 px-1.5 py-0.5 rounded">
+                                    Overridden
+                                  </span>
+                                )}
+                                <button
+                                  onClick={() => handleOpenPriceModal(index)}
+                                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                >
+                                  Edit
+                                </button>
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex items-center space-x-2">
+                                <button
+                                  onClick={() => handleUpdateQuantity(index, item.quantity - 1)}
+                                  className="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-lg hover:bg-gray-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                  disabled={item.quantity <= 1}
+                                >
+                                  <span className="text-gray-700">-</span>
+                                </button>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max={item.shop_stock + item.quantity} // Current stock + quantity in cart
+                                  value={item.quantity}
+                                  onChange={(e) => handleUpdateQuantity(index, parseInt(e.target.value) || 1)}
+                                  className="w-16 border border-gray-300 p-2 text-center rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                />
+                                <button
+                                  onClick={() => handleUpdateQuantity(index, item.quantity + 1)}
+                                  className="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-lg hover:bg-gray-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                  disabled={item.quantity >= item.shop_stock + item.quantity}
+                                >
+                                  <span className="text-gray-700">+</span>
+                                </button>
+                              </div>
+                              <div className="text-xs text-gray-500 mt-2">
+                                Available: {item.shop_stock - item.quantity}
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <div className="font-semibold text-gray-900">${item.totalPrice.toFixed(2)}</div>
+                            </td>
+                            <td className="p-4">
                               <button
-                                onClick={() => handleOpenPriceModal(index)}
-                                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                onClick={() => handleRemoveFromCart(index)}
+                                className="bg-red-100 text-red-600 hover:text-red-800 font-medium text-sm px-2 rounded-md"
                               >
-                                Edit
+                                Remove
                               </button>
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center space-x-2">
-                              <button
-                                onClick={() => handleUpdateQuantity(index, item.quantity - 1)}
-                                className="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-lg hover:bg-gray-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                disabled={item.quantity <= 1}
-                              >
-                                <span className="text-gray-700">-</span>
-                              </button>
-                              <input
-                                type="number"
-                                min="1"
-                                max={item.shop_stock + item.quantity} // Current stock + quantity in cart
-                                value={item.quantity}
-                                onChange={(e) => handleUpdateQuantity(index, parseInt(e.target.value) || 1)}
-                                className="w-16 border border-gray-300 p-2 text-center rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              />
-                              <button
-                                onClick={() => handleUpdateQuantity(index, item.quantity + 1)}
-                                className="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-lg hover:bg-gray-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                disabled={item.quantity >= item.shop_stock + item.quantity}
-                              >
-                                <span className="text-gray-700">+</span>
-                              </button>
-                            </div>
-                            <div className="text-xs text-gray-500 mt-2">
-                              Available: {item.shop_stock - item.quantity}
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className="font-semibold text-gray-900">${item.totalPrice.toFixed(2)}</div>
-                          </td>
-                          <td className="p-4">
-                            <button
-                              onClick={() => handleRemoveFromCart(index)}
-                              className="bg-red-100 text-red-600 hover:text-red-800 font-medium text-sm px-2 rounded-md"
-                            >
-                              Remove
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
