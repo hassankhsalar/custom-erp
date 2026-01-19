@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpDown, Package, Truck, Building2, Calendar, FileText, Store, ShoppingBag, Factory, Layers } from "lucide-react";
+import { ArrowUpDown, Package, Truck, Building2, Calendar, FileText, Store, ShoppingBag, Factory, Layers, Tag } from "lucide-react";
 
 export default function AllPurchase() {
   const [purchases, setPurchases] = useState([]);
@@ -63,24 +63,56 @@ export default function AllPurchase() {
     setSortConfig({ key, direction });
   };
 
+  // Get item type and name
+  const getItemTypeAndName = (item) => {
+    if (item.itemType === 'material' && item.material) {
+      return {
+        type: 'Material',
+        name: item.material.name,
+        icon: <Package size={14} className="text-blue-500" />,
+        unit: item.material.unit || ""
+      };
+    } else if (item.itemType === 'product' && item.product) {
+      return {
+        type: 'Product',
+        name: item.product.name,
+        icon: <Tag size={14} className="text-green-500" />,
+        unit: "unit"
+      };
+    }
+    return {
+      type: 'Unknown',
+      name: '-',
+      icon: null,
+      unit: ""
+    };
+  };
+
   // Format purchase items data for table display
   const formatPurchaseItemsData = (purchases) => {
     return purchases.flatMap((purchase, purchaseIndex) =>
-      purchase.purchaseItems?.map((item, itemIndex) => ({
-        id: `${purchase.id}-${item.id}`,
-        "#": purchaseIndex * 10 + itemIndex + 1,
-        "purchase ref": purchase.reference,
-        material: item.material?.name || "-",
-        supplier: purchase.supplier?.name || "-",
-        quantity: `${item.quantity} ${item.material?.unit || ""}`,
-        "unit price": `$${item.unitPrice?.toFixed(2) || "0.00"}`,
-        "total price": `$${item.totalPrice?.toFixed(2) || "0.00"}`,
-        date: new Date(purchase.createdAt).toLocaleDateString(),
-        destination: getDestinationForTable(purchase),
-        rawDate: purchase.createdAt,
-        rawUnitPrice: item.unitPrice,
-        rawTotalPrice: item.totalPrice
-      })) || []
+      purchase.purchaseItems?.map((item, itemIndex) => {
+        const itemInfo = getItemTypeAndName(item);
+        return {
+          id: `${purchase.id}-${item.id}`,
+          "#": purchaseIndex * 10 + itemIndex + 1,
+          "purchase ref": purchase.reference,
+          "item type": itemInfo.type,
+          material: itemInfo.type === 'Material' ? itemInfo.name : '-',
+          product: itemInfo.type === 'Product' ? itemInfo.name : '-',
+          supplier: purchase.supplier?.name || "-",
+          quantity: `${item.quantity} ${itemInfo.unit}`,
+          "unit price": `$${item.unitPrice?.toFixed(2) || "0.00"}`,
+          "total price": `$${item.totalPrice?.toFixed(2) || "0.00"}`,
+          date: new Date(purchase.createdAt).toLocaleDateString(),
+          destination: getDestinationForTable(purchase),
+          rawDate: purchase.createdAt,
+          rawUnitPrice: item.unitPrice,
+          rawTotalPrice: item.totalPrice,
+          rawItemType: item.itemType,
+          icon: itemInfo.icon
+        };
+      }) || []
     );
   };
 
@@ -105,6 +137,16 @@ export default function AllPurchase() {
         return valueB - valueA;
       }
 
+      // Special handling for item type
+      if (sortConfig.key === 'item type') {
+        const typeA = a.rawItemType || '';
+        const typeB = b.rawItemType || '';
+        if (sortConfig.direction === 'ascending') {
+          return typeA.localeCompare(typeB);
+        }
+        return typeB.localeCompare(typeA);
+      }
+
       const aValue = a[sortConfig.key];
       const bValue = b[sortConfig.key];
       
@@ -120,9 +162,10 @@ export default function AllPurchase() {
 
   const tableHeaders = purchases.length > 0 && formatPurchaseItemsData(purchases).length > 0 ? 
     Object.keys(formatPurchaseItemsData(purchases)[0]).filter(key => 
-      key !== 'id' && key !== 'rawDate' && key !== 'rawUnitPrice' && key !== 'rawTotalPrice'
+      key !== 'id' && key !== 'rawDate' && key !== 'rawUnitPrice' && key !== 'rawTotalPrice' && 
+      key !== 'rawItemType' && key !== 'icon'
     ) : 
-    ['#', 'purchase ref', 'material', 'supplier', 'quantity', 'unit price', 'total price', 'date', 'destination'];
+    ['#', 'purchase ref', 'item type', 'material', 'product', 'supplier', 'quantity', 'unit price', 'total price', 'date', 'destination'];
 
   if (loading)
     return (
@@ -281,28 +324,46 @@ export default function AllPurchase() {
                     <thead className="bg-gray-100/80">
                       <tr>
                         <th className="p-3 text-left font-medium text-gray-700">#</th>
+                        <th className="p-3 text-left font-medium text-gray-700">Type</th>
                         <th className="p-3 text-left font-medium text-gray-700">Material</th>
+                        <th className="p-3 text-left font-medium text-gray-700">Product</th>
                         <th className="p-3 text-left font-medium text-gray-700">Quantity</th>
                         <th className="p-3 text-left font-medium text-gray-700">Unit Price</th>
                         <th className="p-3 text-left font-medium text-gray-700">Total Price</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {purchase.purchaseItems?.map((item, index) => (
-                        <tr key={item.id} className="border-t border-white/50 hover:bg-white/30">
-                          <td className="p-3">{index + 1}</td>
-                          <td className="p-3 font-medium">{item.material?.name || "-"}</td>
-                          <td className="p-3">
-                            {item.quantity} {item.material?.unit || ""}
-                          </td>
-                          <td className="p-3 font-medium text-blue-600">
-                            ${item.unitPrice?.toFixed(2) || "0.00"}
-                          </td>
-                          <td className="p-3 font-bold text-green-600">
-                            ${item.totalPrice?.toFixed(2) || "0.00"}
-                          </td>
-                        </tr>
-                      ))}
+                      {purchase.purchaseItems?.map((item, index) => {
+                        const itemInfo = getItemTypeAndName(item);
+                        return (
+                          <tr key={item.id} className="border-t border-white/50 hover:bg-white/30">
+                            <td className="p-3">{index + 1}</td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-1">
+                                {itemInfo.icon}
+                                <span className={`font-medium ${itemInfo.type === 'Material' ? 'text-blue-600' : 'text-green-600'}`}>
+                                  {itemInfo.type}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="p-3 font-medium">
+                              {itemInfo.type === 'Material' ? itemInfo.name : '-'}
+                            </td>
+                            <td className="p-3 font-medium">
+                              {itemInfo.type === 'Product' ? itemInfo.name : '-'}
+                            </td>
+                            <td className="p-3">
+                              {item.quantity} {itemInfo.unit}
+                            </td>
+                            <td className="p-3 font-medium text-blue-600">
+                              ${item.unitPrice?.toFixed(2) || "0.00"}
+                            </td>
+                            <td className="p-3 font-bold text-green-600">
+                              ${item.totalPrice?.toFixed(2) || "0.00"}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -360,7 +421,28 @@ export default function AllPurchase() {
                     >
                       {tableHeaders.map((key) => (
                         <td key={key} className="p-3">
-                          {key === 'unit price' || key === 'total price' ? (
+                          {key === 'item type' ? (
+                            <div className="flex items-center gap-2">
+                              {item.icon}
+                              <span className={`font-medium ${item.rawItemType === 'material' ? 'text-blue-600' : 'text-green-600'}`}>
+                                {item[key]}
+                              </span>
+                            </div>
+                          ) : key === 'material' ? (
+                            <div className="flex items-center gap-2">
+                              {item.rawItemType === 'material' ? (
+                                <Package size={14} className="text-blue-500" />
+                              ) : null}
+                              <span>{item[key]}</span>
+                            </div>
+                          ) : key === 'product' ? (
+                            <div className="flex items-center gap-2">
+                              {item.rawItemType === 'product' ? (
+                                <Tag size={14} className="text-green-500" />
+                              ) : null}
+                              <span>{item[key]}</span>
+                            </div>
+                          ) : key === 'unit price' || key === 'total price' ? (
                             <span className={`font-medium ${
                               key === 'total price' ? 'text-green-600 font-bold' : 'text-blue-600'
                             }`}>
