@@ -14,7 +14,8 @@ import {
   DollarSign,
   Calendar,
   X,
-  Save
+  Save,
+  Image as ImageIcon // Add this import
 } from 'lucide-react';
 
 const ScrapRecord = () => {
@@ -106,6 +107,14 @@ const ScrapRecord = () => {
   // Calculate total loss safely
   const getTotalLoss = (record) => {
     return record.totalLoss || 0;
+  };
+
+  // Helper function to get image URL (copied from AllProductions)
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    if (imagePath.startsWith('/uploads/')) return `http://localhost:3001${imagePath}`;
+    return `http://localhost:3001/uploads/${imagePath}`;
   };
 
   return (
@@ -463,27 +472,47 @@ const ScrapRecord = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {getScrapProducts(modal.data).map(sp => (
-                        <tr key={sp.id} className="border-t border-white/50 hover:bg-white/30">
-                          <td className="p-3">
-                            <div className="flex items-center gap-2">
-                              <div className="p-2 bg-orange-100 rounded-lg">
-                                <Package size={14} className="text-orange-600" />
+                      {getScrapProducts(modal.data).map(sp => {
+                        // Get product image from scrap product data
+                        const productImage = sp.product?.image || sp.product?.photo || sp.product?.thumbnail;
+                        const imageUrl = productImage ? getImageUrl(productImage) : null;
+                        
+                        return (
+                          <tr key={sp.id} className="border-t border-white/50 hover:bg-white/30">
+                            <td className="p-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 bg-gray-50">
+                                  {imageUrl ? (
+                                    <img 
+                                      src={imageUrl} 
+                                      alt={sp.product?.name || 'Product'}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.parentElement.innerHTML = '<div class="w-full h-full bg-gray-100 flex items-center justify-center"><ImageIcon size={14} class="text-gray-400" /></div>';
+                                      }}
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                                      <ImageIcon size={14} className="text-gray-400" />
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-gray-800">{sp.product?.name || 'N/A'}</p>
+                                  <p className="text-xs text-gray-500">ID: {sp.productId}</p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-medium text-gray-800">{sp.product?.name || 'N/A'}</p>
-                                <p className="text-xs text-gray-500">ID: {sp.productId}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-3 text-gray-600">{sp.product?.barcode || 'N/A'}</td>
-                          <td className="p-3 font-medium text-red-600">{sp.quantity || 0}</td>
-                          <td className="p-3 font-medium">${(sp.lossPerUnit || 0).toFixed(2)}</td>
-                          <td className="p-3 font-bold text-red-700">${((sp.quantity || 0) * (sp.lossPerUnit || 0)).toFixed(2)}</td>
-                          <td className="p-3 text-gray-600">${sp.product?.cost?.toFixed(2) || '0.00'}</td>
-                          <td className="p-3 text-gray-600">${sp.product?.sale_price?.toFixed(2) || '0.00'}</td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="p-3 text-gray-600">{sp.product?.barcode || 'N/A'}</td>
+                            <td className="p-3 font-medium text-red-600">{sp.quantity || 0}</td>
+                            <td className="p-3 font-medium">${(sp.lossPerUnit || 0).toFixed(2)}</td>
+                            <td className="p-3 font-bold text-red-700">${((sp.quantity || 0) * (sp.lossPerUnit || 0)).toFixed(2)}</td>
+                            <td className="p-3 text-gray-600">${sp.product?.cost?.toFixed(2) || '0.00'}</td>
+                            <td className="p-3 text-gray-600">${sp.product?.sale_price?.toFixed(2) || '0.00'}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                     <tfoot className="bg-red-50/50">
                       <tr>
