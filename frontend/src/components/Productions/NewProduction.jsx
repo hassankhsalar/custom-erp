@@ -17,7 +17,8 @@ import {
   DollarSign,
   Warehouse,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Image as ImageIcon
 } from 'lucide-react';
 
 const NewProduction = () => {
@@ -97,6 +98,14 @@ const NewProduction = () => {
     });
   }, [selectedProducts, stores]);
 
+  // Helper function to get image URL
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    if (imagePath.startsWith('/uploads/')) return `http://localhost:3001${imagePath}`;
+    return `http://localhost:3001/uploads/${imagePath}`;
+  };
+
   const handleSearch = async (e) => {
     setSearchTerm(e.target.value);
     if (e.target.value.length > 2) {
@@ -119,7 +128,13 @@ const NewProduction = () => {
       if (prev.find(p => p.id === product.id)) {
         return prev;
       }
-      return [...prev, { ...product, quantity: 1, unit_cost: product.cost, moved_to_store: 0 }];
+      return [...prev, { 
+        ...product, 
+        quantity: 1, 
+        unit_cost: product.cost, 
+        moved_to_store: 0,
+        image: product.image || product.photo || product.thumbnail
+      }];
     });
     setSearchTerm('');
     setSearchResults([]);
@@ -430,31 +445,50 @@ const NewProduction = () => {
                     <div className="p-3 border-b border-white/50">
                       <p className="text-sm font-medium text-gray-700">{searchResults.length} products found</p>
                     </div>
-                    {searchResults.map(product => (
-                      <div
-                        key={product.id}
-                        className="p-3 border-b border-white/30 last:border-b-0 cursor-pointer hover:bg-white/50 transition-colors duration-200"
-                        onClick={() => addProductToProduction(product)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-emerald-100 rounded-lg">
-                              <Package size={16} className="text-emerald-600" />
+                    {searchResults.map(product => {
+                      const productImage = product.image || product.photo || product.thumbnail;
+                      const imageUrl = productImage ? getImageUrl(productImage) : null;
+                      
+                      return (
+                        <div
+                          key={product.id}
+                          className="p-3 border-b border-white/30 last:border-b-0 cursor-pointer hover:bg-white/50 transition-colors duration-200"
+                          onClick={() => addProductToProduction(product)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200">
+                                {imageUrl ? (
+                                  <img 
+                                    src={imageUrl} 
+                                    alt={product.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                      e.target.parentElement.innerHTML = '<div class="w-full h-full bg-gray-100 flex items-center justify-center"><ImageIcon size={16} class="text-gray-400" /></div>';
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                                    <ImageIcon size={16} className="text-gray-400" />
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-800">{product.name}</p>
+                                <p className="text-sm text-gray-600">Barcode: {product.barcode}</p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-medium text-gray-800">{product.name}</p>
-                              <p className="text-sm text-gray-600">Barcode: {product.barcode}</p>
+                            <div className="text-right">
+                              <p className="text-sm font-medium text-green-600">${product.cost?.toFixed(2)}</p>
+                              <button className="mt-1 px-3 py-1 bg-emerald-500 text-white text-xs rounded-lg hover:bg-emerald-600 transition-colors">
+                                Add
+                              </button>
                             </div>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-medium text-green-600">${product.cost?.toFixed(2)}</p>
-                            <button className="mt-1 px-3 py-1 bg-emerald-500 text-white text-xs rounded-lg hover:bg-emerald-600 transition-colors">
-                              Add
-                            </button>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -482,63 +516,84 @@ const NewProduction = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedProducts.map((product, index) => (
-                          <tr key={product.id} className="border-t border-white/50 hover:bg-white/30">
-                            <td className="p-3">
-                              <div className="flex items-center gap-3">
-                                <div className="p-2 bg-blue-100 rounded-lg">
-                                  <Package size={14} className="text-blue-600" />
+                        {selectedProducts.map((product, index) => {
+                          const imageUrl = product.image ? getImageUrl(product.image) : null;
+                          
+                          return (
+                            <tr key={product.id} className="border-t border-white/50 hover:bg-white/30">
+                              <td className="p-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200">
+                                    {imageUrl ? (
+                                      <img 
+                                        src={imageUrl} 
+                                        alt={product.name}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                          e.target.style.display = 'none';
+                                          e.target.parentElement.innerHTML = '<div class="w-full h-full bg-gray-100 flex items-center justify-center"><ImageIcon size={14} class="text-gray-400" /></div>';
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                                        <ImageIcon size={14} className="text-gray-400" />
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <span className="font-medium block">{product.name}</span>
+                                    <span className="text-xs text-gray-500">{product.category || 'No category'}</span>
+                                  </div>
                                 </div>
-                                <span className="font-medium">{product.name}</span>
-                              </div>
-                            </td>
-                            <td className="p-3 font-mono text-gray-600">{product.barcode}</td>
-                            <td className="p-3">
-                              <input
-                                type="number"
-                                value={product.quantity}
-                                onChange={(e) => handleProductChange(index, 'quantity', e.target.value)}
-                                className="w-20 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                step="1"
-                                min="1"
-                              />
-                            </td>
-                            <td className="p-3">
-                              <div className="relative">
-                                <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-                                  <DollarSign size={14} className="text-gray-400" />
-                                </div>
+                              </td>
+                              <td className="p-3 font-mono text-gray-600">{product.barcode}</td>
+                              <td className="p-3">
                                 <input
                                   type="number"
-                                  value={product.unit_cost}
-                                  onChange={(e) => handleProductChange(index, 'unit_cost', e.target.value)}
-                                  className="w-24 pl-8 pr-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                  step="0.01"
+                                  value={product.quantity}
+                                  onChange={(e) => handleProductChange(index, 'quantity', e.target.value)}
+                                  className="w-20 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                  step="1"
+                                  min="1"
+                                />
+                              </td>
+                              <td className="p-3">
+                                <div className="relative">
+                                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                                    <DollarSign size={14} className="text-gray-400" />
+                                  </div>
+                                  <input
+                                    type="number"
+                                    value={product.unit_cost}
+                                    onChange={(e) => handleProductChange(index, 'unit_cost', e.target.value)}
+                                    className="w-24 pl-8 pr-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    step="0.01"
+                                    min="0"
+                                  />
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <input
+                                  type="number"
+                                  value={product.moved_to_store}
+                                  onChange={(e) => handleProductChange(index, 'moved_to_store', e.target.value)}
+                                  className="w-20 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-400"
+                                  step="1"
                                   min="0"
                                 />
-                              </div>
-                            </td>
-                            <td className="p-3">
-                              <input
-                                type="number"
-                                value={product.moved_to_store}
-                                onChange={(e) => handleProductChange(index, 'moved_to_store', e.target.value)}
-                                className="w-20 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-400"
-                                step="1"
-                                min="0"
-                              />
-                            </td>
-                            <td className="p-3">
-                              <button
-                                type="button"
-                                onClick={() => removeProductFromProduction(index)}
-                                className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                              </td>
+                              <td className="p-3">
+                                <button
+                                  type="button"
+                                  onClick={() => removeProductFromProduction(index)}
+                                  className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

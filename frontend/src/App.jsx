@@ -105,14 +105,15 @@ const PrivateRoute = () => {
 // Layout component for authenticated users
 const AuthenticatedLayout = () => {
   return (
-    <div className="">
-      <div className="h-25 w-full mx-auto">
-        <Navbar />
-      </div>
-      <div className="flex">
-        <div>
+    <div className="flex">
+      
+      <div>
           <Sidebar />
         </div>
+      <div className="">
+        <div className="h-25 w-full mx-auto">
+        <Navbar />
+      </div>
         <div style={{ flexGrow: 1, padding: "0px" }}>
           <Outlet /> {/* This is where nested routes will render */}
         </div>
