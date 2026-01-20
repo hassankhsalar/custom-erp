@@ -16,7 +16,8 @@ import {
   X,
   Warehouse,
   Store,
-  Factory
+  Factory,
+  Image as ImageIcon // Add this import
 } from 'lucide-react';
 
 const MaterialScrapRecord = () => {
@@ -132,6 +133,14 @@ const MaterialScrapRecord = () => {
     const locationType = record.locationType?.charAt(0).toUpperCase() + record.locationType?.slice(1) || 'Location';
     const branchId = record.branchId || '';
     return `${locationType} ${branchId}`;
+  };
+
+  // Helper function to get image URL
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    if (imagePath.startsWith('/uploads/')) return `http://localhost:3001${imagePath}`;
+    return `http://localhost:3001/uploads/${imagePath}`;
   };
 
   return (
@@ -322,8 +331,7 @@ const MaterialScrapRecord = () => {
                     <button
                       onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                       disabled={currentPage === 1}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 ${
-                        currentPage === 1 
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 ${currentPage === 1 
                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
                           : 'bg-white/60 text-gray-700 hover:bg-white/80 hover:shadow-md'
                       }`}
@@ -340,8 +348,7 @@ const MaterialScrapRecord = () => {
                     <button
                       onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                       disabled={currentPage === totalPages}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 ${
-                        currentPage === totalPages 
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 ${currentPage === totalPages 
                           ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
                           : 'bg-white/60 text-gray-700 hover:bg-white/80 hover:shadow-md'
                       }`}
@@ -517,26 +524,46 @@ const MaterialScrapRecord = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {getScrapMaterials(modal.data).map(sm => (
-                        <tr key={sm.id} className="border-t border-white/50 hover:bg-white/30">
-                          <td className="p-3">
-                            <div className="flex items-center gap-2">
-                              <div className="p-2 bg-orange-100 rounded-lg">
-                                <Package size={14} className="text-orange-600" />
+                      {getScrapMaterials(modal.data).map(sm => {
+                        // Get material image (if materials have images)
+                        const materialImage = sm.material?.image || sm.material?.photo || sm.material?.thumbnail;
+                        const imageUrl = materialImage ? getImageUrl(materialImage) : null;
+                        
+                        return (
+                          <tr key={sm.id} className="border-t border-white/50 hover:bg-white/30">
+                            <td className="p-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 bg-gray-50">
+                                  {imageUrl ? (
+                                    <img 
+                                      src={imageUrl} 
+                                      alt={sm.material?.name || 'Material'}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.parentElement.innerHTML = '<div class="w-full h-full bg-gray-100 flex items-center justify-center"><ImageIcon size={14} class="text-gray-400" /></div>';
+                                      }}
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                                      <ImageIcon size={14} className="text-gray-400" />
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="font-medium text-gray-800">{sm.material?.name || 'N/A'}</p>
+                                  <p className="text-xs text-gray-500">ID: {sm.materialId}</p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-medium text-gray-800">{sm.material?.name || 'N/A'}</p>
-                                <p className="text-xs text-gray-500">ID: {sm.materialId}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-3 text-gray-600">{sm.material?.barcode || sm.material?.material_code || 'N/A'}</td>
-                          <td className="p-3 font-medium text-red-600">{sm.quantity || 0}</td>
-                          <td className="p-3 font-medium">${(sm.lossPerUnit || 0).toFixed(2)}</td>
-                          <td className="p-3 font-bold text-red-700">${((sm.quantity || 0) * (sm.lossPerUnit || 0)).toFixed(2)}</td>
-                          <td className="p-3 text-gray-600">${sm.material?.unit_cost?.toFixed(2) || '0.00'}</td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="p-3 text-gray-600">{sm.material?.barcode || sm.material?.material_code || 'N/A'}</td>
+                            <td className="p-3 font-medium text-red-600">{sm.quantity || 0}</td>
+                            <td className="p-3 font-medium">${(sm.lossPerUnit || 0).toFixed(2)}</td>
+                            <td className="p-3 font-bold text-red-700">${((sm.quantity || 0) * (sm.lossPerUnit || 0)).toFixed(2)}</td>
+                            <td className="p-3 text-gray-600">${sm.material?.unit_cost?.toFixed(2) || '0.00'}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                     <tfoot className="bg-red-50/50">
                       <tr>

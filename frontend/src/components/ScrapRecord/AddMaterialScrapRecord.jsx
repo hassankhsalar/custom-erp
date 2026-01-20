@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
@@ -16,7 +15,8 @@ import {
   FileText,
   Check,
   AlertCircle,
-  Loader
+  Loader,
+  Image as ImageIcon // Add this import
 } from 'lucide-react';
 
 const AddMaterialScrapRecord = () => {
@@ -68,6 +68,14 @@ const AddMaterialScrapRecord = () => {
     };
     setStatistics(stats);
   }, [scrapMaterials]);
+
+  // Helper function to get image URL (similar to AddScrapRecord.jsx)
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    if (imagePath.startsWith('/uploads/')) return `http://localhost:3001${imagePath}`;
+    return `http://localhost:3001/uploads/${imagePath}`;
+  };
 
   const fetchAllMaterials = async () => {
     try {
@@ -405,32 +413,52 @@ const AddMaterialScrapRecord = () => {
                               <div className="px-3 py-2 text-xs font-medium text-gray-500 border-b border-gray-100">
                                 Search Results ({searchResults.length})
                               </div>
-                              {searchResults.map(material => (
-                                <div
-                                  key={material.id}
-                                  onClick={() => handleMaterialSelect(material)}
-                                  className="px-3 py-3 hover:bg-gray-50/80 cursor-pointer transition-colors duration-150 border-b border-gray-100 last:border-b-0"
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                      <div className="p-2 bg-blue-100 rounded-lg">
-                                        <Package size={16} className="text-blue-600" />
+                              {searchResults.map(material => {
+                                // Get material image (similar to AddScrapRecord.jsx)
+                                const materialImage = material?.image || material?.photo || material?.thumbnail;
+                                const imageUrl = materialImage ? getImageUrl(materialImage) : null;
+                                
+                                return (
+                                  <div
+                                    key={material.id}
+                                    onClick={() => handleMaterialSelect(material)}
+                                    className="px-3 py-3 hover:bg-gray-50/80 cursor-pointer transition-colors duration-150 border-b border-gray-100 last:border-b-0"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 bg-gray-50">
+                                          {imageUrl ? (
+                                            <img 
+                                              src={imageUrl} 
+                                              alt={material.name}
+                                              className="w-full h-full object-cover"
+                                              onError={(e) => {
+                                                e.target.style.display = 'none';
+                                                e.target.parentElement.innerHTML = '<div class="w-full h-full bg-gray-100 flex items-center justify-center"><ImageIcon size={12} class="text-gray-400" /></div>';
+                                              }}
+                                            />
+                                          ) : (
+                                            <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                                              <ImageIcon size={12} className="text-gray-400" />
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div>
+                                          <p className="font-medium text-gray-800">{material.name}</p>
+                                          <p className="text-xs text-gray-500">
+                                            {material.barcode ? `Barcode: ${material.barcode} | ` : ''}
+                                            {material.material_code ? `Code: ${material.material_code} | ` : ''}
+                                            Cost: ${material.unit_cost?.toFixed(2) || '0.00'}
+                                          </p>
+                                        </div>
                                       </div>
-                                      <div>
-                                        <p className="font-medium text-gray-800">{material.name}</p>
-                                        <p className="text-xs text-gray-500">
-                                          {material.barcode ? `Barcode: ${material.barcode} | ` : ''}
-                                          {material.material_code ? `Code: ${material.material_code} | ` : ''}
-                                          Cost: ${material.unit_cost?.toFixed(2) || '0.00'}
-                                        </p>
+                                      <div className="text-xs text-green-600 font-medium">
+                                        Select
                                       </div>
-                                    </div>
-                                    <div className="text-xs text-green-600 font-medium">
-                                      Select
                                     </div>
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )}
