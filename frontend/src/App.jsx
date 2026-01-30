@@ -71,6 +71,8 @@ import AddRepairMaterial from "./components/MaterialRepair/AddRepairMaterial";
 import MaterialRepair from "./components/MaterialRepair/MaterialRepair";
 import AddMaterialScrapRecord from "./components/ScrapRecord/AddMaterialScrapRecord";
 import MaterialScrapRecord from "./components/ScrapRecord/MaterialScrapRecord";
+import AddAccount from "./components/Accounts/AddAccount";
+import AllAccounts from "./components/Accounts/AllAccounts";
 
 const AuthContext = createContext(null);
 
@@ -174,6 +176,10 @@ function App() {
             <Route path="/users/all" element={<AllUser />} />
             <Route path="/users/create" element={<CreateUser />} />
             <Route path="/settings" element={<Settings />} />
+
+            <Route path="/addaccount" element={<AddAccount />} />
+            <Route path="/allaccounts" element={<AllAccounts />} />
+
 
             
             <Route path="/scraprecord" element={<ScrapRecord />} />

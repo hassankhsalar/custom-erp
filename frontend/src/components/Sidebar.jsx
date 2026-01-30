@@ -11,7 +11,10 @@ import {
   UserPlus, Building, Shield,
   Bell, HelpCircle, Moon,
   Wrench,
-  Recycle
+  Recycle,
+  BookA,
+  NotebookPen,
+  TableProperties
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -176,6 +179,17 @@ const Sidebar = () => {
       subItems: [
         { name: 'All Shop', path: '/shop/all', icon: <ShoppingBag size={16} /> },
         { name: 'Add Shop', path: '/shop/add', icon: <Store size={16} /> }
+      ]
+    },
+    {
+      name: 'Accounts',
+      icon: <BookA color='white' size={18} />,
+      color: 'from-indigo-500 to-blue-500',
+      bgColor: 'bg-gradient-to-r from-indigo-50 to-blue-100/50',
+      textColor: 'text-indigo-700',
+      subItems: [
+        { name: 'Add Account', path: '/addaccount', icon: <NotebookPen size={16} /> },
+        { name: 'Account List', path: '/allaccounts', icon: <TableProperties size={16} /> },
       ]
     },
     {

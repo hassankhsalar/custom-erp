@@ -21,6 +21,9 @@ model User {
   profileId   Int?     @unique
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  transactions   Transactions[]
+  cashRegisterWithdraw  CashRegisterWithdraw[]
+  cashRegisterTransaction  CashRegisterTransaction[]
 }
 
 model Profile {
@@ -215,6 +218,7 @@ model Purchase {
   store      Store?   @relation(fields: [storeId], references: [id])
   grandTotal  Float
   purchaseItems PurchaseItem[]
+  transactions Transactions[]
 
   @@index([destinationType])
   @@index([destinationId])
@@ -256,7 +260,7 @@ model Sale {
   saleReturns SaleReturn[]
   isReturned  Boolean      @default(false)
   returnedAt  DateTime?
-
+  transactions Transactions[]
   
   @@index([shopId])
 }
@@ -319,6 +323,7 @@ model Shop {
   sales         Sale[]
   saleReturns   SaleReturn[]
   storeToShopTransfer StoreToShopTransfer[]
+  cashRegisterTransaction  CashRegisterTransaction[]
 }
 
 model ShopProduct {
@@ -558,11 +563,111 @@ model ScrapMaterial {
 model Accounts {
   id          Int       @id @default(autoincrement())
   name        String
-  accountNo   Int
-  balance     Float?
-  isDefault   Boolean   @default(false)
+  account_number   String    @unique
+  balance     Float     @default(0)
+  status      String
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  transactions Transactions[]
 
+  @@index([createdAt])
+}
+
+model CashRegister {
+  id          Int       @id @default(autoincrement())
+  name        String
+  status      String
+  cash_in_hand Float
+  last_opened DateTime?
+  last_closed DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  transactions  Transactions[]
+  cashRegisterWithdraw CashRegisterWithdraw[]
+  cashRegisterTransaction  CashRegisterTransaction[]
+  @@index([createdAt])
+}
+
+model CashRegisterTransaction {
+  id              Int       @id @default(autoincrement())
+
+  cashRegisterId  Int
+  cashRegister    CashRegister @relation(fields: [cashRegisterId], references: [id])
+
+  opening_at      DateTime
+  closing_at      DateTime?
+  starting_cash   Float
+  ending_cash     Float?
+
+  shopId          Int
+  shop            Shop @relation(fields: [shopId], references: [id])
+
+  userId          Int
+  user            User @relation(fields: [userId], references: [id])
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([cashRegisterId])
+  @@index([shopId])
+  @@index([userId])
+}
+
+model CashRegisterWithdraw {
+  id              Int       @id @default(autoincrement())
+
+  time            DateTime
+  amount          Float
+
+  cashRegisterId  Int?
+  cashRegister    CashRegister? @relation(fields: [cashRegisterId], references: [id])
+
+  userId          Int?
+  user            User? @relation(fields: [userId], references: [id])
+
+  note            String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([cashRegisterId])
+  @@index([userId])
+  @@index([time])
+}
+
+
+model Transactions {
+  id                       Int       @id @default(autoincrement())
+  reference                String    @unique
+
+  createdById              Int
+  createdBy                User      @relation(fields: [createdById], references: [id])
+
+  cashRegisterId           Int?
+  cashRegister             CashRegister? @relation(fields: [cashRegisterId], references: [id])
+
+  accountId                Int
+  account                  Accounts  @relation(fields: [accountId], references: [id])
+
+  saleId                   Int?
+  sale                     Sale?     @relation(fields: [saleId], references: [id])
+
+  purchaseId               Int?
+  purchase                 Purchase? @relation(fields: [purchaseId], references: [id])
+
+  purpose                  String
+  amount                   Float
+  payment_method           String
+  current_account_balance  Float
+  note                     String?
+
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@index([createdById])
+  @@index([cashRegisterId])
+  @@index([accountId])
+  @@index([saleId])
+  @@index([purchaseId])
   @@index([createdAt])
 }

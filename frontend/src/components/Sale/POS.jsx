@@ -491,7 +491,7 @@ export default function ShopPOS() {
                           {/* Image Section */}
                           <div className="flex-shrink-0">
                             {imageUrl ? (
-                              <div className="w-16 h-16 rounded-lg overflow-hidden border border-gray-200 bg-white">
+                              <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 bg-white">
                                 <img 
                                   src={imageUrl} 
                                   alt={item.name}
@@ -528,7 +528,7 @@ export default function ShopPOS() {
                                   {item.barcode && <span className="ml-2">| {item.barcode}</span>}
                                 </div>
                                 <div className="flex items-center mt-2">
-                                  <span className={`text-sm font-medium ${isLowStock ? 'text-amber-600' : 'text-gray-700'}`}>
+                                  <span className={`text-xs font-medium ${isLowStock ? 'text-amber-600' : 'text-gray-700'}`}>
                                     Stock: {item.shop_stock} {item.unit && `(${item.unit})`}
                                   </span>
                                   {isLowStock && !isOutOfStock && (
@@ -565,6 +565,43 @@ export default function ShopPOS() {
               )}
             </div>
 
+
+            {/* Customer & Payment Card */}
+            <div className="bg-white rounded-xl shadow-md p-5 space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <span className="text-purple-600"><UserRound size={42} /></span>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-800">Customer & Payment</h3>
+                  <p className="text-sm text-gray-500">Optional customer details</p>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Customer (Optional)</label>
+                <input
+                  type="text"
+                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
+                  placeholder="Enter customer name"
+                  value={customer}
+                  onChange={(e) => setCustomer(e.target.value)}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
+                <select
+                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
+                  value={paymentType}
+                  onChange={(e) => setPaymentType(e.target.value)}
+                >
+                  <option value="cash">💵 Cash</option>
+                  <option value="card">💳 Card</option>
+                  <option value="mobile">📱 Mobile Payment</option>
+                </select>
+              </div>
+            </div>
             {/* Stock Alerts Card */}
             {(lowStockItems.length > 0 || outOfStockItems.length > 0) && (
               <div className="bg-white rounded-xl shadow-md p-3">
@@ -619,43 +656,6 @@ export default function ShopPOS() {
                 )}
               </div>
             )}
-
-            {/* Customer & Payment Card */}
-            <div className="bg-white rounded-xl shadow-md p-5 space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <span className="text-purple-600"><UserRound size={42} /></span>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-800">Customer & Payment</h3>
-                  <p className="text-sm text-gray-500">Optional customer details</p>
-                </div>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Customer (Optional)</label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
-                  placeholder="Enter customer name"
-                  value={customer}
-                  onChange={(e) => setCustomer(e.target.value)}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                <select
-                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
-                  value={paymentType}
-                  onChange={(e) => setPaymentType(e.target.value)}
-                >
-                  <option value="cash">💵 Cash</option>
-                  <option value="card">💳 Card</option>
-                  <option value="mobile">📱 Mobile Payment</option>
-                </select>
-              </div>
-            </div>
           </div>
 
           {/* Middle Column: Cart Items */}
