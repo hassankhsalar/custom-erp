@@ -190,6 +190,7 @@ const Sidebar = () => {
       subItems: [
         { name: 'Add Account', path: '/addaccount', icon: <NotebookPen size={16} /> },
         { name: 'Account List', path: '/allaccounts', icon: <TableProperties size={16} /> },
+        { name: 'Assign Account', path: '/assignaccount', icon: <TableProperties size={16} /> }
       ]
     },
     {
