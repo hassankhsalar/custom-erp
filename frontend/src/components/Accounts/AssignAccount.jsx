@@ -32,8 +32,12 @@ import {
   Shield,
   Key
 } from "lucide-react";
+import { useCurrentUser } from "../../hooks/useCurrentUser";
 
 export default function AssignAccount() {
+
+  const {currentUser} = useCurrentUser();
+
   const [entities, setEntities] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,7 +59,6 @@ export default function AssignAccount() {
     unassignedEntities: 0,
     totalBalance: 0
   });
-
   // Fetch data on component mount
   useEffect(() => {
     fetchData();
@@ -152,8 +155,7 @@ export default function AssignAccount() {
     }
 
     try {
-      // In a real app, you would get the current user's ID from auth context
-      const assignedById = 1; // Replace with actual user ID from auth
+      const assignedById = currentUser?.id; // user ID from auth
 
       const res = await fetch("http://localhost:3001/api/assign-account/assign", {
         method: "POST",

@@ -25,6 +25,7 @@ model User {
   cashRegisterWithdraw  CashRegisterWithdraw[]
   cashRegisterTransaction  CashRegisterTransaction[]
   entityAccount             EntityAccount[]
+  cashRegisterAssignment    CashRegisterAssignment[]
 }
 
 model Profile {
@@ -52,19 +53,40 @@ model Accounts {
   @@index([createdAt])
 }
 
+model CashRegisterAssignment {
+  id                Int            @id @default(autoincrement())
+  entityType        String         // "store", "shop", "factory"
+  entityId          Int            // ID of the entity (store, shop, or factory)
+  cashRegisterId    Int
+  cashRegister      CashRegister   @relation(fields: [cashRegisterId], references: [id])
+  assignedAt        DateTime       @default(now())
+  assignedById      Int?
+  assignedBy        User?          @relation(fields: [assignedById], references: [id])
+  isActive          Boolean        @default(true)
+  notes             String?
+  
+  @@unique([entityType, entityId, cashRegisterId])
+  @@index([entityType, entityId])
+  @@index([cashRegisterId])
+  @@index([assignedAt])
+  @@index([isActive])
+}
+
 model CashRegister {
   id          Int       @id @default(autoincrement())
   name        String
   status      String
-  cash_in_hand Float
+  cash_in_hand Float              @default(0)
   last_opened DateTime?
   last_closed DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
   transactions  Transactions[]
   cashRegisterWithdraw CashRegisterWithdraw[]
   cashRegisterTransaction  CashRegisterTransaction[]
+  assignments       CashRegisterAssignment[]
   @@index([createdAt])
+  @@index([status])
 }
 
 model CashRegisterTransaction {

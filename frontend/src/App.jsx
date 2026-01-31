@@ -74,6 +74,8 @@ import MaterialScrapRecord from "./components/ScrapRecord/MaterialScrapRecord";
 import AddAccount from "./components/Accounts/AddAccount";
 import AllAccounts from "./components/Accounts/AllAccounts";
 import AssignAccount from "./components/Accounts/AssignAccount";
+import CashRegisterAssign from "./components/Accounts/CashRegisterAssign";
+import AddCashRegister from "./components/Accounts/AddCashRegister";
 
 const AuthContext = createContext(null);
 
@@ -181,6 +183,8 @@ function App() {
             <Route path="/addaccount" element={<AddAccount />} />
             <Route path="/allaccounts" element={<AllAccounts />} />
             <Route path="/assignaccount" element={<AssignAccount />} />
+            <Route path="/cashregisterassign" element={<CashRegisterAssign />} />
+            <Route path="/addcashregister" element={<AddCashRegister />} />
 
 
             

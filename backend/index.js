@@ -137,6 +137,8 @@ const scrapMaterialsRoutes = require('./routes/scrapMaterialsRoutes');
 const materialScrapRoutes = require('./routes/materialScrapRoutes');
 const accountRoutes = require('./routes/accountRoutes');
 const assignAccountRoutes = require('./routes/assignAccountRoutes');
+const cashRegisterAssignRoutes = require('./routes/cashRegisterAssignRoutes');
+const cashRegisterRoutes = require('./routes/cashRegisterRoutes');
 
 const uploadRoutes = require('./routes/uploadRoutes');
 
@@ -165,6 +167,8 @@ app.use('/api/materials-scrap-records', materialScrapRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/assign-account', assignAccountRoutes);
+app.use('/api/cash-register-assign', cashRegisterAssignRoutes);
+app.use('/api/cash-registers', cashRegisterRoutes);
 
 // serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));
