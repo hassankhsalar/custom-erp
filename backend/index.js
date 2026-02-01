@@ -139,6 +139,9 @@ const accountRoutes = require('./routes/accountRoutes');
 const assignAccountRoutes = require('./routes/assignAccountRoutes');
 const cashRegisterAssignRoutes = require('./routes/cashRegisterAssignRoutes');
 const cashRegisterRoutes = require('./routes/cashRegisterRoutes');
+const assignUserRoutes = require('./routes/assignUserRoutes');
+const permissionRoutes = require('./routes/permissionRoutes');
+const userPermissionRoutes = require('./routes/userPermissionRoutes');
 
 const uploadRoutes = require('./routes/uploadRoutes');
 
@@ -169,6 +172,9 @@ app.use('/api/accounts', accountRoutes);
 app.use('/api/assign-account', assignAccountRoutes);
 app.use('/api/cash-register-assign', cashRegisterAssignRoutes);
 app.use('/api/cash-registers', cashRegisterRoutes);
+app.use('/api/assign-user', assignUserRoutes);
+app.use('/api/permissions', permissionRoutes);
+app.use('/api/users', userPermissionRoutes);
 
 // serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));

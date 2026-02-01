@@ -76,6 +76,9 @@ import AllAccounts from "./components/Accounts/AllAccounts";
 import AssignAccount from "./components/Accounts/AssignAccount";
 import CashRegisterAssign from "./components/Accounts/CashRegisterAssign";
 import AddCashRegister from "./components/Accounts/AddCashRegister";
+import AssignUser from "./components/Users/AssignUser";
+import AllAssignedUsers from "./components/Users/AllAssignedUsers";
+import PermissionsManagement from "./components/Permissions/PermissionsManagement";
 
 const AuthContext = createContext(null);
 
@@ -186,6 +189,11 @@ function App() {
             <Route path="/cashregisterassign" element={<CashRegisterAssign />} />
             <Route path="/addcashregister" element={<AddCashRegister />} />
 
+            
+            <Route path="/assignuser" element={<AssignUser />} />
+            <Route path="/assignedusers" element={<AllAssignedUsers />} />
+            
+            <Route path="/managepermissions" element={<PermissionsManagement />} />
 
             
             <Route path="/scraprecord" element={<ScrapRecord />} />

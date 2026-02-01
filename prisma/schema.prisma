@@ -16,7 +16,8 @@ model User {
   name        String?
   password    String
   role        Role     @default(USER)
-  permissions Json?    //@default("{}") 
+  permissionId  Int?
+  permission    Permission?  @relation(fields: [permissionId], references: [id])
   profile     Profile? @relation(fields: [profileId], references: [id])
   profileId   Int?     @unique
   createdAt        DateTime @default(now())
@@ -26,6 +27,7 @@ model User {
   cashRegisterTransaction  CashRegisterTransaction[]
   entityAccount             EntityAccount[]
   cashRegisterAssignment    CashRegisterAssignment[]
+  userAssociate              UserAssociate[]
 }
 
 model Profile {
@@ -37,6 +39,33 @@ model Profile {
 enum Role {
   USER
   ADMIN
+}
+
+model Permission {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique 
+  permissions Json  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  
+  users       User[]
+  
+  @@index([name])
+}
+
+
+model UserAssociate {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  user           User     @relation(fields: [userId], references: [id])
+  associateName  String   // "store", "shop", "factory", "cashRegister", "account"
+  associateId    Int      // ID of the specific entity
+  
+
+  @@unique([userId, associateName, associateId])
+  @@index([userId])
+  @@index([associateName, associateId])
 }
 
 model Accounts {

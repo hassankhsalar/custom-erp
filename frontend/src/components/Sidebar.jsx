@@ -217,7 +217,10 @@ const Sidebar = () => {
       textColor: 'text-cyan-700',
       subItems: [
         { name: 'All User', path: '/users/all', icon: <Users size={16} /> },
-        { name: 'Create User', path: '/users/create', icon: <UserPlus size={16} /> }
+        { name: 'Create User', path: '/users/create', icon: <UserPlus size={16} /> },
+        { name: 'Assign User', path: '/assignuser', icon: <UserPlus size={16} /> },
+        { name: 'Assigned List', path: '/assignedusers', icon: <UserPlus size={16} /> },
+        { name: 'Role & Permissions', path: '/managepermissions', icon: <UserPlus size={16} /> }
       ]
     },
     {
