@@ -4,6 +4,19 @@ const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
+  // Create a default permission
+  const defaultPermission = await prisma.permission.upsert({
+    where: { name: 'default' },
+    update: {},
+    create: {
+      name: 'default',
+      permissions: {
+        "dashboard": ["read"],
+        "profile": ["read", "write"]
+      },
+    },
+  });
+
   const adminPassword = await bcrypt.hash('asd123', 10);
   const admin = await prisma.user.upsert({
     where: { email: 'admin@example.com' },
@@ -12,7 +25,7 @@ async function main() {
       email: 'admin@example.com',
       name: 'Admin',
       password: adminPassword,
-      role: 'ADMIN',
+      permissionId: defaultPermission.id,
     },
   });
 
@@ -24,11 +37,7 @@ async function main() {
       email: 'user@example.com',
       name: 'User',
       password: userPassword,
-      role: 'USER',
-      permissions: {
-        "dashboard": ["read"],
-        "profile": ["read", "write"]
-      }
+      permissionId: defaultPermission.id,
     },
   });
 
@@ -140,7 +149,6 @@ async function main() {
     data: {
       reference: "PUR-001",
       supplierId: supplier.id,
-      storeId: store.id,
       destinationType: 'store',
       destinationId: store.id,
       grandTotal: 30000,
