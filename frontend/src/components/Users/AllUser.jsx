@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
-import { Users, UserPlus, Edit, Trash2, Save, X, Building, Store, ShoppingCart, Plus, Minus } from 'lucide-react';
+import { Users, UserPlus, Edit, Trash2, Save, X, Building, Store, ShoppingCart, Plus, Minus, Key, Shield, Mail, User as UserIcon } from 'lucide-react';
 
 const AllUser = () => {
   const [users, setUsers] = useState([]);
@@ -17,7 +17,7 @@ const AllUser = () => {
     email: '',
     role: 'USER',
     permissions: {
-      locations: [] // Structured under 'locations' array
+      locations: []
     }
   });
   const [updateLoading, setUpdateLoading] = useState(false);
@@ -88,7 +88,6 @@ const AllUser = () => {
     }));
   };
 
-  // Add new location permission
   const addLocationPermission = () => {
     setEditForm(prev => ({
       ...prev,
@@ -112,7 +111,6 @@ const AllUser = () => {
     }));
   };
 
-  // Remove location permission
   const removeLocationPermission = (index) => {
     setEditForm(prev => ({
       ...prev,
@@ -123,7 +121,6 @@ const AllUser = () => {
     }));
   };
 
-  // Handle location type and ID change
   const handleLocationChange = (index, field, value) => {
     setEditForm(prev => {
       const updatedLocations = [...(prev.permissions.locations || [])];
@@ -167,7 +164,6 @@ const AllUser = () => {
     });
   };
 
-  // Handle permission change for specific location
   const handleLocationPermissionChange = (index, permission, checked) => {
     setEditForm(prev => {
       const updatedLocations = [...(prev.permissions.locations || [])];
@@ -203,7 +199,6 @@ const AllUser = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Update the user in the local state
       setUsers(prev => prev.map(user => 
         user.id === selectedUser.id ? response.data.user : user
       ));
@@ -228,7 +223,6 @@ const AllUser = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      // Remove user from local state
       setUsers(prev => prev.filter(user => user.id !== userId));
     } catch (error) {
       console.error('Error deleting user:', error);
@@ -236,7 +230,6 @@ const AllUser = () => {
     }
   };
 
-  // Get location options based on type
   const getLocationOptions = (type) => {
     switch (type) {
       case 'factory':
@@ -250,7 +243,6 @@ const AllUser = () => {
     }
   };
 
-  // Get location icon based on type
   const getLocationIcon = (type) => {
     switch (type) {
       case 'factory':
@@ -264,194 +256,291 @@ const AllUser = () => {
     }
   };
 
-  // Get location permissions from the permissions object
   const getLocationPermissions = (permissions) => {
     return permissions?.locations || [];
   };
 
-  if (loading) return <div className="container mx-auto p-6">Loading users...</div>;
+  if (loading) return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
+      <div className="glass-card p-8 text-center">
+        <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        <p className="mt-4 text-gray-600">Loading users...</p>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold flex items-center">
-          <Users className="mr-2" />
-          User Management
-        </h1>
-        <Link 
-          to="/users/create" 
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded flex items-center"
-        >
-          <UserPlus size={18} className="mr-2" />
-          Add New User
-        </Link>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50 p-4 md:p-6">
+      {/* Header Section */}
+      <div className="glass-card p-6 mb-6 border border-white/20 backdrop-blur-xl">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex items-center">
+            <div className="glass-icon p-3 rounded-xl mr-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+              <Users className="text-blue-600" size={28} />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                User Management
+              </h1>
+              <p className="text-gray-600 mt-1">Manage user permissions and access</p>
+            </div>
+          </div>
+          <Link 
+            to="/users/create" 
+            className="glass-button group bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 px-6 rounded-xl flex items-center transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25"
+          >
+            <UserPlus size={20} className="mr-2 group-hover:scale-110 transition-transform" />
+            Add New User
+          </Link>
+        </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <table className="min-w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Assigned Locations</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {users.map((user) => {
-              const locationPermissions = getLocationPermissions(user.permissions);
-              
-              return (
-                <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">{user.email}</td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      user.role === 'ADMIN' ? 'bg-purple-100 text-purple-800' :
-                      'bg-green-100 text-green-800'
-                    }`}>
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    {locationPermissions.length > 0 ? (
-                      <div className="space-y-1">
-                        {locationPermissions.map((location, index) => (
-                          <div key={index} className="flex items-center">
-                            {getLocationIcon(location.type)}
-                            <span className="ml-1">{location.name}</span>
-                            <span className="ml-2 text-xs text-gray-400">
-                              ({Object.keys(location.permissions || {}).filter(p => location.permissions[p]).join(', ')})
-                            </span>
-                          </div>
-                        ))}
+      {/* Users Table */}
+      <div className="glass-card overflow-hidden border border-white/20 backdrop-blur-xl">
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead>
+              <tr className="bg-gradient-to-r from-gray-50/50 to-gray-100/50 backdrop-blur-sm">
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b border-white/20">
+                  <div className="flex items-center">
+                    <UserIcon size={16} className="mr-2" />
+                    Name
+                  </div>
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b border-white/20">
+                  <div className="flex items-center">
+                    <Mail size={16} className="mr-2" />
+                    Email
+                  </div>
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b border-white/20">
+                  <div className="flex items-center">
+                    <Shield size={16} className="mr-2" />
+                    Role
+                  </div>
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b border-white/20">
+                  <div className="flex items-center">
+                    <Key size={16} className="mr-2" />
+                    Assigned Locations
+                  </div>
+                </th>
+                <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b border-white/20">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {users.map((user) => {
+                const locationPermissions = getLocationPermissions(user.permissions);
+                
+                return (
+                  <tr key={user.id} className="hover:bg-white/10 transition-colors duration-200">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center">
+                        <div className="glass-icon-sm p-2 rounded-lg mr-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+                          <UserIcon size={16} className="text-blue-600" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-gray-900">{user.name}</div>
+                        </div>
                       </div>
-                    ) : (
-                      <span className="text-gray-400">Not assigned</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium">
-                    <button 
-                      onClick={() => openEditModal(user)}
-                      className="text-blue-600 hover:text-blue-900 mr-3"
-                    >
-                      <Edit size={16} />
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteUser(user.id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-600 flex items-center">
+                        <Mail size={14} className="mr-2 text-gray-400" />
+                        {user.email}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                        user.role === 'ADMIN' 
+                          ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-700 border border-purple-200/50' 
+                          : 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-700 border border-green-200/50'
+                      }`}>
+                        {user.role === 'ADMIN' && <Shield size={12} className="mr-1" />}
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {locationPermissions.length > 0 ? (
+                        <div className="space-y-2">
+                          {locationPermissions.map((location, index) => (
+                            <div key={index} className="flex items-center glass-tag px-3 py-1.5 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
+                              <div className="glass-icon-xs p-1.5 rounded-md mr-2 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+                                {getLocationIcon(location.type)}
+                              </div>
+                              <span className="font-medium">{location.name}</span>
+                              <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100/50 text-gray-600">
+                                {Object.keys(location.permissions || {}).filter(p => location.permissions[p]).join(', ')}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-gray-400 italic flex items-center">
+                          <Minus size={14} className="mr-1" />
+                          Not assigned
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-2">
+                        <button 
+                          onClick={() => openEditModal(user)}
+                          className="glass-icon-button p-2 rounded-lg bg-gradient-to-r from-blue-500/10 to-blue-600/10 hover:from-blue-500/20 hover:to-blue-600/20 text-blue-600 hover:text-blue-700 transition-all duration-200"
+                          title="Edit User"
+                        >
+                          <Edit size={18} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="glass-icon-button p-2 rounded-lg bg-gradient-to-r from-red-500/10 to-red-600/10 hover:from-red-500/20 hover:to-red-600/20 text-red-600 hover:text-red-700 transition-all duration-200"
+                          title="Delete User"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Edit User Modal */}
       {editModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold flex items-center">
-                  <Edit className="mr-2" />
-                  Edit User
-                </h2>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="glass-modal max-w-4xl w-full max-h-[90vh] overflow-y-auto rounded-2xl border border-white/20 backdrop-blur-xl shadow-2xl">
+            <div className="p-6 md:p-8">
+              {/* Modal Header */}
+              <div className="flex justify-between items-center mb-6 pb-4 border-b border-white/20">
+                <div className="flex items-center">
+                  <div className="glass-icon p-3 rounded-xl mr-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+                    <Edit className="text-blue-600" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      Edit User
+                    </h2>
+                    <p className="text-gray-600 text-sm">Update user details and permissions</p>
+                  </div>
+                </div>
                 <button
                   onClick={closeEditModal}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="glass-icon-button p-2 rounded-lg hover:bg-red-500/10 hover:text-red-600 transition-colors"
                 >
                   <X size={24} />
                 </button>
               </div>
 
-              <form onSubmit={handleUpdateUser} className="space-y-6">
+              {/* Form */}
+              <form onSubmit={handleUpdateUser} className="space-y-8">
                 {/* Basic Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Name</label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={editForm.name}
-                      onChange={handleEditInputChange}
-                      className="w-full p-2 border border-gray-300 rounded"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Email</label>
-                    <input
-                      type="email"
-                      name="email"
-                      value={editForm.email}
-                      onChange={handleEditInputChange}
-                      className="w-full p-2 border border-gray-300 rounded"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Role</label>
-                    <select
-                      name="role"
-                      value={editForm.role}
-                      onChange={handleEditInputChange}
-                      className="w-full p-2 border border-gray-300 rounded"
-                    >
-                      <option value="USER">User</option>
-                      <option value="ADMIN">Admin</option>
-                    </select>
+                <div className="glass-section p-6 rounded-xl border border-white/20 bg-gradient-to-br from-white/30 to-white/10">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center text-gray-800">
+                    <UserIcon size={20} className="mr-2 text-blue-600" />
+                    Basic Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-gray-700">Name</label>
+                      <input
+                        type="text"
+                        name="name"
+                        value={editForm.name}
+                        onChange={handleEditInputChange}
+                        className="glass-input w-full p-3 rounded-lg border border-white/30 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-gray-700">Email</label>
+                      <input
+                        type="email"
+                        name="email"
+                        value={editForm.email}
+                        onChange={handleEditInputChange}
+                        className="glass-input w-full p-3 rounded-lg border border-white/30 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-gray-700">Role</label>
+                      <select
+                        name="role"
+                        value={editForm.role}
+                        onChange={handleEditInputChange}
+                        className="glass-input w-full p-3 rounded-lg border border-white/30 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                      >
+                        <option value="USER">User</option>
+                        <option value="ADMIN">Admin</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
                 {/* Location Permissions */}
-                <div className="border rounded-lg p-4 bg-gray-50">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold flex items-center">
-                      <Building className="mr-2" />
-                      Location Permissions
-                    </h3>
+                <div className="glass-section p-6 rounded-xl border border-white/20 bg-gradient-to-br from-white/30 to-white/10">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                    <div>
+                      <h3 className="text-lg font-semibold flex items-center text-gray-800">
+                        <Building className="mr-2 text-blue-600" size={20} />
+                        Location Permissions
+                      </h3>
+                      <p className="text-gray-600 text-sm mt-1">Assign specific location access permissions</p>
+                    </div>
                     <button
                       type="button"
                       onClick={addLocationPermission}
-                      className="bg-blue-500 hover:bg-blue-700 text-white px-3 py-1 rounded flex items-center text-sm"
+                      className="glass-button mt-4 md:mt-0 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2.5 rounded-lg flex items-center transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25"
                     >
-                      <Plus size={16} className="mr-1" />
+                      <Plus size={18} className="mr-2" />
                       Add Location
                     </button>
                   </div>
                   
                   {(!editForm.permissions.locations || editForm.permissions.locations.length === 0) ? (
-                    <p className="text-gray-500 text-center py-4">No location permissions assigned</p>
+                    <div className="text-center py-8">
+                      <div className="glass-icon p-4 rounded-full inline-flex mb-4 bg-gradient-to-r from-gray-100/50 to-gray-200/50">
+                        <Key className="text-gray-400" size={24} />
+                      </div>
+                      <p className="text-gray-500">No location permissions assigned</p>
+                      <p className="text-gray-400 text-sm mt-1">Click "Add Location" to assign permissions</p>
+                    </div>
                   ) : (
                     <div className="space-y-4">
                       {editForm.permissions.locations.map((location, index) => (
-                        <div key={index} className="border rounded p-4 bg-white">
-                          <div className="flex justify-between items-start mb-3">
-                            <h4 className="font-medium">Location Permission #{index + 1}</h4>
+                        <div key={index} className="glass-card-inner p-4 rounded-xl border border-white/30 bg-white/40 backdrop-blur-sm">
+                          <div className="flex justify-between items-start mb-4">
+                            <div className="flex items-center">
+                              <div className="glass-icon-sm p-2 rounded-lg mr-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+                                {getLocationIcon(location.type)}
+                              </div>
+                              <div>
+                                <h4 className="font-semibold text-gray-800">Location Permission #{index + 1}</h4>
+                                <p className="text-gray-600 text-sm">Type: <span className="capitalize">{location.type}</span></p>
+                              </div>
+                            </div>
                             <button
                               type="button"
                               onClick={() => removeLocationPermission(index)}
-                              className="text-red-500 hover:text-red-700"
+                              className="glass-icon-button p-2 rounded-lg hover:bg-red-500/10 hover:text-red-600 transition-colors"
+                              title="Remove Location"
                             >
-                              <Minus size={16} />
+                              <Minus size={18} />
                             </button>
                           </div>
                           
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div>
-                              <label className="block text-sm font-medium mb-2">Location Type</label>
+                              <label className="block text-sm font-medium mb-2 text-gray-700">Location Type</label>
                               <select
                                 value={location.type}
                                 onChange={(e) => handleLocationChange(index, 'type', e.target.value)}
-                                className="w-full p-2 border border-gray-300 rounded"
+                                className="glass-input w-full p-3 rounded-lg border border-white/30 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
                               >
                                 <option value="factory">Factory</option>
                                 <option value="store">Store</option>
@@ -460,11 +549,11 @@ const AllUser = () => {
                             </div>
                             
                             <div>
-                              <label className="block text-sm font-medium mb-2">Location</label>
+                              <label className="block text-sm font-medium mb-2 text-gray-700">Location</label>
                               <select
                                 value={location.id || ''}
                                 onChange={(e) => handleLocationChange(index, 'id', e.target.value)}
-                                className="w-full p-2 border border-gray-300 rounded"
+                                className="glass-input w-full p-3 rounded-lg border border-white/30 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
                               >
                                 <option value="">Select {location.type}</option>
                                 {getLocationOptions(location.type).map(loc => (
@@ -478,18 +567,20 @@ const AllUser = () => {
 
                           {/* Location-specific Permissions */}
                           {location.id && (
-                            <div className="border-t pt-3">
-                              <label className="block text-sm font-medium mb-2">Permissions for {location.name}</label>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                            <div className="glass-section-inner p-4 rounded-lg border border-white/20 bg-white/30 mt-4">
+                              <label className="block text-sm font-semibold mb-3 text-gray-800">
+                                Permissions for <span className="text-blue-600">{location.name}</span>
+                              </label>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 {['create', 'read', 'update', 'delete'].map(permission => (
-                                  <label key={permission} className="flex items-center">
+                                  <label key={permission} className="glass-checkbox flex items-center p-3 rounded-lg border border-white/30 bg-white/40 hover:bg-white/60 transition-colors cursor-pointer">
                                     <input
                                       type="checkbox"
                                       checked={location.permissions[permission] || false}
                                       onChange={(e) => handleLocationPermissionChange(index, permission, e.target.checked)}
-                                      className="mr-2"
+                                      className="mr-3 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500/50"
                                     />
-                                    <span className="text-sm capitalize">{permission}</span>
+                                    <span className="text-sm font-medium capitalize text-gray-700">{permission}</span>
                                   </label>
                                 ))}
                               </div>
@@ -502,21 +593,26 @@ const AllUser = () => {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex justify-end space-x-3 pt-4 border-t">
+                <div className="flex flex-col md:flex-row justify-end space-y-3 md:space-y-0 md:space-x-4 pt-6 border-t border-white/20">
                   <button
                     type="button"
                     onClick={closeEditModal}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+                    className="glass-button px-6 py-3 border border-gray-300/50 text-gray-700 rounded-lg hover:bg-gray-50/50 transition-all duration-300"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={updateLoading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-400 flex items-center"
+                    className="glass-button px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-gray-700 rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25 flex items-center justify-center"
                   >
-                    <Save size={16} className="mr-2" />
-                    {updateLoading ? 'Updating...' : 'Update User'}
+                    <Save size={18} className="mr-2" />
+                    {updateLoading ? (
+                      <>
+                        <span className="inline-block animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></span>
+                        Updating...
+                      </>
+                    ) : 'Update User'}
                   </button>
                 </div>
               </form>

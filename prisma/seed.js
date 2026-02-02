@@ -32,8 +32,7 @@ async function main() {
     },
   });
 
-
-   // --- FACTORY ---
+  // --- FACTORY ---
   const factory = await prisma.factory.create({
     data: {
       name: "Main Factory",
@@ -76,9 +75,9 @@ async function main() {
   // --- MATERIALS ---
   const materials = await prisma.material.createMany({
     data: [
-      { name: "Steel Rod", unit: "kg", unit_cost: 100 },
-      { name: "Plastic Sheet", unit: "kg", unit_cost: 50 },
-      { name: "Paint", unit: "liter", unit_cost: 120 },
+      { name: "Steel Rod", brand: "bsrm", description: "long lasting", barcode: "SR-0120", unit: "kg", unit_cost: 100, sale_price: 120, current_stock: 100 },
+      { name: "Plastic Sheet", brand: "rfl", description: "strong plastic", barcode: "PS-0130", unit: "kg", unit_cost: 50, sale_price: 60, current_stock: 200 },
+      { name: "Paint", brand: "berger", description: "long lasting paint", barcode: "P-0120", unit: "liter", unit_cost: 120, sale_price: 130, current_stock: 50 },
     ],
   });
 
@@ -142,6 +141,8 @@ async function main() {
       reference: "PUR-001",
       supplierId: supplier.id,
       storeId: store.id,
+      destinationType: 'store',
+      destinationId: store.id,
       grandTotal: 30000,
       purchaseItems: {
         create: [
@@ -162,7 +163,7 @@ async function main() {
     },
   });
 
-  // --- SALE ---
+  // --- SALE --- (FIXED)
   const sale = await prisma.sale.create({
     data: {
       reference: "SAL-001",
@@ -175,13 +176,17 @@ async function main() {
       saleItems: {
         create: [
           {
-            productId: product1.id,
+            product: {
+              connect: { id: product1.id }
+            },
             quantity: 2,
             unitPrice: 1200,
             totalPrice: 2400,
           },
           {
-            productId: product2.id,
+            product: {
+              connect: { id: product2.id }
+            },
             quantity: 1,
             unitPrice: 600,
             totalPrice: 600,
@@ -191,9 +196,70 @@ async function main() {
     },
   });
 
+  // Create some more test sales
+  const sale2 = await prisma.sale.create({
+    data: {
+      reference: "SAL-002",
+      shopId: shop.id,
+      customer: "Jane Smith",
+      totalAmount: 1800,
+      discount: 100,
+      grandTotal: 1700,
+      paymentType: "card",
+      saleItems: {
+        create: [
+          {
+            product: {
+              connect: { id: product1.id }
+            },
+            quantity: 1,
+            unitPrice: 1200,
+            totalPrice: 1200,
+          },
+          {
+            material: {
+              connect: { id: allMaterials[0].id } // Steel Rod
+            },
+            quantity: 5,
+            unitPrice: 120,
+            totalPrice: 600,
+          },
+        ],
+      },
+    },
+  });
+
+  // Create a sale with material only
+  const sale3 = await prisma.sale.create({
+    data: {
+      reference: "SAL-003",
+      shopId: shop.id,
+      customer: "Walk-in Customer",
+      totalAmount: 360,
+      discount: 0,
+      grandTotal: 360,
+      paymentType: "cash",
+      saleItems: {
+        create: [
+          {
+            material: {
+              connect: { id: allMaterials[2].id } // Paint
+            },
+            quantity: 3,
+            unitPrice: 120,
+            totalPrice: 360,
+          },
+        ],
+      },
+    },
+  });
+
   console.log({ admin, user });
   
   console.log("✅ Seeding completed successfully!");
+  console.log(`Created ${await prisma.sale.count()} sales`);
+  console.log(`Created ${await prisma.saleItem.count()} sale items`);
+  console.log(`Shop ID: ${shop.id} - ready for testing returns`);
 }
 
 main()

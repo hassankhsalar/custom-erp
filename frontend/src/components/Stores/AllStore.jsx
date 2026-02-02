@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
 import StoreProductsModal from './StoreProductsModal';
 import StoreMaterialsModal from './StoreMaterialsModal';
-import { FilePenLine, Trash } from 'lucide-react';
+import { FilePenLine, Trash, Eye, Plus, ChevronLeft, ChevronRight, Store, MapPin, User, Phone, Package, Box } from 'lucide-react';
 
 const AllStore = () => {
   const [stores, setStores] = useState([]);
@@ -68,98 +68,249 @@ const AllStore = () => {
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">All Stores</h1>
-      <Link to="/stores/add" className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4 inline-block">
-        Add New Store
-      </Link>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+      {/* Header with glass effect */}
+      <div className="glass-card rounded-2xl p-6 mb-8 border border-white/30 shadow-xl backdrop-blur-sm">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              All Stores
+            </h1>
+            <p className="text-gray-600 mt-2">Manage your store inventory and details</p>
+          </div>
+          <Link 
+            to="/stores/add" 
+            className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02]"
+          >
+            <Plus size={20} />
+            Add New Store
+          </Link>
+        </div>
+      </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full bg-white">
-          <thead>
-            <tr>
-              <th className="px-4 py-2 border border-gray-300">Name</th>
-              <th className="px-4 py-2 border border-gray-300">Address</th>
-              <th className="px-4 py-2 border border-gray-300">Store Keeper</th>
-              <th className="px-4 py-2 border border-gray-300">Mobile</th>
-              <th className="px-4 py-2 border border-gray-300">Products</th>
-              <th className="px-4 py-2 border border-gray-300">Materials</th>
-              <th className="px-4 py-2 border border-gray-300">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stores.map(store => (
-              <tr key={store.id}>
-                <td className="border border-gray-300 px-4 py-2">{store.name}</td>
-                <td className="border border-gray-300 px-4 py-2">{store.address}</td>
-                <td className="border border-gray-300 px-4 py-2">{store.store_keeper}</td>
-                <td className="border border-gray-300 px-4 py-2">{store.mobile}</td>
-                <td className="border border-gray-300 px-4 py-2">
-                  <button
-                    onClick={() => openProductsModal(store.storeProducts)}
-                    className="bg-blue-500 hover:bg-blue-700 text-white py-1 px-2 rounded text-xs cursor-pointer"
-                  >
-                    View ({store.storeProducts?.length})
-                  </button>
-                </td>
-                <td className="border border-gray-300 px-4 py-2">
-                  <button
-                    onClick={() => openMaterialsModal(store.storeMaterials)}
-                    className="bg-blue-500 hover:bg-blue-700 text-white py-1 px-2 rounded text-xs cursor-pointer"
-                  >
-                    View ({store.storeMaterials?.length})
-                  </button>
-                </td>
-                <td className="border border-gray-300 px-4 py-2 text-xs flex">
-                  <Link
-                    to={`/stores/edit/${store.id}`}
-                    className="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded mr-2"
-                  >
-                    <FilePenLine size={14} />
-                  </Link>
-                  <Link
-                    to={`/stores/details/${store.id}`}
-                    className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-2 rounded mr-2"
-                  >
-                    Details
-                  </Link>
-                  <button
-                    onClick={() => handleDelete(store.id)}
-                    className="bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded"
-                  >
-                    <Trash size={14} />
-                  </button>
-                </td>
+      {/* Stats Cards with glass effect */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="glass-card rounded-xl p-5 border border-white/30 shadow-lg backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm">Total Stores</p>
+              <p className="text-2xl font-bold text-gray-800">Active</p>
+            </div>
+            <div className="p-3 bg-blue-500/10 rounded-lg">
+              <Store className="text-blue-500" size={24} />
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card rounded-xl p-5 border border-white/30 shadow-lg backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm">Store Keepers</p>
+              <p className="text-2xl font-bold text-gray-800">{stores.length}</p>
+            </div>
+            <div className="p-3 bg-green-500/10 rounded-lg">
+              <User className="text-green-500" size={24} />
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card rounded-xl p-5 border border-white/30 shadow-lg backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm">Total Products</p>
+              <p className="text-2xl font-bold text-gray-800">
+                {stores.reduce((sum, store) => sum + (store.storeProducts?.length || 0), 0)}
+              </p>
+            </div>
+            <div className="p-3 bg-purple-500/10 rounded-lg">
+              <Package className="text-purple-500" size={24} />
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card rounded-xl p-5 border border-white/30 shadow-lg backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 text-sm">Total Materials</p>
+              <p className="text-2xl font-bold text-gray-800">
+                {stores.reduce((sum, store) => sum + (store.storeMaterials?.length || 0), 0)}
+              </p>
+            </div>
+            <div className="p-3 bg-orange-500/10 rounded-lg">
+              <Box className="text-orange-500" size={24} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Table Container with glass effect */}
+      <div className="glass-card rounded-2xl border border-white/30 shadow-2xl backdrop-blur-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead>
+              <tr className="bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <div className="flex items-center gap-2">
+                    <Store size={16} />
+                    Store Name
+                  </div>
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <div className="flex items-center gap-2">
+                    <MapPin size={16} />
+                    Address
+                  </div>
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <div className="flex items-center gap-2">
+                    <User size={16} />
+                    Store Keeper
+                  </div>
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  <div className="flex items-center gap-2">
+                    <Phone size={16} />
+                    Mobile
+                  </div>
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Products
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Materials
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-200/50">
+              {stores.map((store, index) => (
+                <tr 
+                  key={store.id} 
+                  className="hover:bg-white/30 transition-colors duration-200"
+                  style={{
+                    animationDelay: `${index * 50}ms`,
+                    animation: 'fadeInUp 0.5s ease forwards'
+                  }}
+                >
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">{store.name}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-600 max-w-xs truncate">{store.address}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{store.store_keeper}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{store.mobile}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <button
+                      onClick={() => openProductsModal(store.storeProducts)}
+                      className="group flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500/10 to-blue-600/10 hover:from-blue-500/20 hover:to-blue-600/20 text-blue-600 hover:text-blue-700 font-medium rounded-lg transition-all duration-300 border border-blue-200 hover:border-blue-300"
+                    >
+                      <Package size={16} />
+                      View ({store.storeProducts?.length || 0})
+                    </button>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <button
+                      onClick={() => openMaterialsModal(store.storeMaterials)}
+                      className="group flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500/10 to-orange-600/10 hover:from-orange-500/20 hover:to-orange-600/20 text-orange-600 hover:text-orange-700 font-medium rounded-lg transition-all duration-300 border border-orange-200 hover:border-orange-300"
+                    >
+                      <Box size={16} />
+                      View ({store.storeMaterials?.length || 0})
+                    </button>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <Link
+                        to={`/stores/edit/${store.id}`}
+                        className="group p-2 bg-gradient-to-r from-green-500/10 to-green-600/10 hover:from-green-500/20 hover:to-green-600/20 text-green-600 hover:text-green-700 rounded-lg transition-all duration-300 border border-green-200 hover:border-green-300 hover:scale-105"
+                        title="Edit"
+                      >
+                        <FilePenLine size={18} />
+                      </Link>
+                      <Link
+                        to={`/stores/details/${store.id}`}
+                        className="group p-2 bg-gradient-to-r from-blue-500/10 to-blue-600/10 hover:from-blue-500/20 hover:to-blue-600/20 text-blue-600 hover:text-blue-700 rounded-lg transition-all duration-300 border border-blue-200 hover:border-blue-300 hover:scale-105"
+                        title="Details"
+                      >
+                        <Eye size={18} />
+                      </Link>
+                      <button
+                        onClick={() => handleDelete(store.id)}
+                        className="group p-2 bg-gradient-to-r from-red-500/10 to-red-600/10 hover:from-red-500/20 hover:to-red-600/20 text-red-600 hover:text-red-700 rounded-lg transition-all duration-300 border border-red-200 hover:border-red-300 hover:scale-105"
+                        title="Delete"
+                      >
+                        <Trash size={18} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination with glass effect */}
+        <div className="glass-card border-t border-white/30 p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              Showing <span className="font-semibold">{stores.length}</span> stores
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="group flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-white/30 hover:bg-white/50 border border-white/30 hover:border-white/50"
+              >
+                <ChevronLeft size={18} />
+                Previous
+              </button>
+              <div className="flex items-center gap-2 mx-4">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const pageNum = Math.max(1, Math.min(currentPage - 2, totalPages - 4)) + i;
+                  if (pageNum > totalPages) return null;
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-10 h-10 rounded-lg transition-all duration-300 ${
+                        currentPage === pageNum
+                          ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
+                          : 'bg-white/30 hover:bg-white/50 text-gray-700'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="group flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-white/30 hover:bg-white/50 border border-white/30 hover:border-white/50"
+              >
+                Next
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="flex justify-center mt-4">
-        <button
-          onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-          disabled={currentPage === 1}
-          className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-l"
-        >
-          Previous
-        </button>
-        <span className="bg-gray-200 text-gray-800 font-bold py-2 px-4">Page {currentPage} of {totalPages}</span>
-        <button
-          onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-          disabled={currentPage === totalPages}
-          className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-r"
-        >
-          Next
-        </button>
-      </div>
-
+      {/* Modals */}
       {showProductsModal && (
         <StoreProductsModal products={currentStoreProducts} onClose={closeProductsModal} />
       )}
       {showMaterialsModal && (
         <StoreMaterialsModal materials={currentStoreMaterials} onClose={closeMaterialsModal} />
       )}
+
+      
     </div>
   );
 };

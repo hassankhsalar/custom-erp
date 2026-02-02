@@ -32,15 +32,23 @@ router.post('/', async (req, res) => {
 
 // Get all products with pagination
 router.get('/', async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
+  const { page = 1, limit = 10, search } = req.query;
   const skip = (page - 1) * limit;
   const take = parseInt(limit);
+  const where = {};
+
+  if (search) {
+    where.name = {
+      contains: search,
+    };
+  }
 
   try {
     const [products, totalCount] = await prisma.$transaction([
       prisma.product.findMany({
         skip,
         take,
+        where,
         include: {
           materials: {
             include: {
@@ -49,7 +57,7 @@ router.get('/', async (req, res) => {
           },
         },
       }),
-      prisma.product.count(),
+      prisma.product.count({ where }),
     ]);
     res.json({ products, totalCount });
   } catch (error) {
@@ -160,6 +168,39 @@ router.get('/store/:storeId', async (req, res) => {
   } catch (error) {
     console.error("❌ Error fetching products for store:", error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// search endpoint:
+router.get('/search', async (req, res) => {
+  const { q } = req.query;
+  
+  try {
+    const products = await prisma.product.findMany({
+      where: {
+        OR: [
+          { name: { contains: q, mode: 'insensitive' } },
+          { barcode: { contains: q, mode: 'insensitive' } },
+          { description: { contains: q, mode: 'insensitive' } }
+        ]
+      },
+      take: 10,
+      select: {
+        id: true,
+        name: true,
+        barcode: true,
+        description: true,
+        cost: true,
+        sale_price: true,
+        stock: true,
+        category: true
+      }
+    });
+    
+    res.json(products);
+  } catch (error) {
+    console.error('Error searching products:', error);
+    res.status(500).json({ error: 'Failed to search products' });
   }
 });
 

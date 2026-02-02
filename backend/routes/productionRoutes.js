@@ -33,7 +33,7 @@ const generateReference = async () => {
 
 // Create a new production
 router.post('/', authenticateToken, async (req, res) => {
-  const { start_date, estimated_end_date, factoryId, status, shipping_cost, products, materials } = req.body;
+  const { start_date, estimated_end_date, factoryId, status, products, materials } = req.body;
 //, attachments removed
   try {
     const reference = await generateReference();
@@ -47,20 +47,17 @@ router.post('/', authenticateToken, async (req, res) => {
           factoryId: parseInt(factoryId),
           status,
           //attachments: attachments ? attachments.join(',') : null, 
-          shipping_cost: shipping_cost ? parseFloat(shipping_cost) : null,
           productionProducts: {
             create: products.map(p => ({
               productId: parseInt(p.productId),
               code: p.code,
               quantity: parseFloat(p.quantity),
               unit_cost: parseFloat(p.unit_cost),
-              moved_to_store: parseFloat(p.moved_to_store || 0),
             })),
           },
           productionMaterials: {
             create: materials.map(m => ({
               materialId: parseInt(m.materialId),
-              storeId: parseInt(m.storeId),
               quantity: parseFloat(m.quantity),
               price: parseFloat(m.price),
             })),
@@ -73,24 +70,24 @@ router.post('/', authenticateToken, async (req, res) => {
       });
 
       for (const material of materials) {
-        const storeMaterial = await prisma.storeMaterial.findUnique({
+        const factoryMaterial = await prisma.factoryMaterial.findUnique({
           where: {
-            store_id_material_id: {
-              store_id: parseInt(material.storeId),
-              material_id: parseInt(material.materialId),
+            factoryId_materialId: {
+              factoryId: parseInt(factoryId),
+              materialId: parseInt(material.materialId),
             }
           }
         });
 
-        if (!storeMaterial || storeMaterial.stock < parseFloat(material.quantity)) {
-          throw new Error(`Not enough stock for material ${material.materialId} in store ${material.storeId}`);
+        if (!factoryMaterial || factoryMaterial.stock < parseFloat(material.quantity)) {
+          throw new Error(`Not enough stock for material ${material.name} in this factory`);
         }
 
-        await prisma.storeMaterial.update({
+        await prisma.factoryMaterial.update({
           where: {
-            store_id_material_id: {
-              store_id: parseInt(material.storeId),
-              material_id: parseInt(material.materialId),
+            factoryId_materialId: {
+              factoryId: parseInt(factoryId),
+              materialId: parseInt(material.materialId),
             }
           },
           data: {
@@ -169,15 +166,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
         productionMaterials: {
           include: {
             material: true,
-            store: true,
           }
         },
-        factoryToStoreTransfers: {
-          include: {
-            product: true,
-            store: true,
-          }
-        }
+
       },
     });
 
@@ -194,7 +185,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // Update a production
 router.put('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { start_date, estimated_end_date, factoryId, status, shipping_cost, products, materials } = req.body;
+  const { start_date, estimated_end_date, factoryId, status, products, materials } = req.body;
 //, attachments
   try {
     const result = await prisma.$transaction(async (prisma) => {
@@ -207,10 +198,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
       // Restore stock for old materials
       if (oldProduction && oldProduction.productionMaterials) {
         for (const material of oldProduction.productionMaterials) {
-          await prisma.storeMaterial.updateMany({
+          await prisma.factoryMaterial.updateMany({
             where: {
-              store_id: material.storeId,
-              material_id: material.materialId,
+              factoryId: oldProduction.factoryId, // Use factoryId from oldProduction
+              materialId: material.materialId,
             },
             data: {
               stock: {
@@ -227,24 +218,24 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
       // Decrement stock for new materials and check for availability
       for (const material of materials) {
-        const storeMaterial = await prisma.storeMaterial.findUnique({
+        const factoryMaterial = await prisma.factoryMaterial.findUnique({
           where: {
-            store_id_material_id: {
-              store_id: parseInt(material.storeId),
-              material_id: parseInt(material.materialId),
+            factoryId_materialId: {
+              factoryId: parseInt(factoryId),
+              materialId: parseInt(material.materialId),
             }
           }
         });
 
-        if (!storeMaterial || storeMaterial.stock < parseFloat(material.quantity)) {
-          throw new Error(`Not enough stock for material ${material.materialId} in store ${material.storeId}`);
+        if (!factoryMaterial || factoryMaterial.stock < parseFloat(material.quantity)) {
+          throw new Error(`Not enough stock for material ${material.materialId} in factory ${factoryId}`);
         }
 
-        await prisma.storeMaterial.update({
+        await prisma.factoryMaterial.update({
           where: {
-            store_id_material_id: {
-              store_id: parseInt(material.storeId),
-              material_id: parseInt(material.materialId),
+            factoryId_materialId: {
+              factoryId: parseInt(factoryId),
+              materialId: parseInt(material.materialId),
             }
           },
           data: {
@@ -264,20 +255,17 @@ router.put('/:id', authenticateToken, async (req, res) => {
           factoryId: parseInt(factoryId),
           status,
           //attachments: attachments ? attachments.join(',') : null,
-          shipping_cost: shipping_cost ? parseFloat(shipping_cost) : null,
           productionProducts: {
             create: products.map(p => ({
               productId: parseInt(p.productId),
               code: p.code,
               quantity: parseFloat(p.quantity),
               unit_cost: parseFloat(p.unit_cost),
-              moved_to_store: parseFloat(p.moved_to_store || 0),
             })),
           },
           productionMaterials: {
             create: materials.map(m => ({
               materialId: parseInt(m.materialId),
-              storeId: parseInt(m.storeId),
               quantity: parseFloat(m.quantity),
               price: parseFloat(m.price),
             })),
@@ -320,7 +308,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 // Change production status
 router.put('/:id/status', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { status, products, materials, transfers } = req.body;
+  const { status, products, materials } = req.body;
 
   try {
     const result = await prisma.$transaction(async (prisma) => {
@@ -331,6 +319,11 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
       });
 
       if (status === 'production_done') {
+        const production = await prisma.production.findUnique({
+          where: { id: parseInt(id) },
+        });
+        const factoryId = production.factoryId;
+        
         // Update products with received and scrap quantities
         for (const p of products) {
           await prisma.productionProducts.update({
@@ -341,8 +334,50 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
               unit_cost: parseFloat(p.unit_cost),
             },
           });
+
+          // Add fine products to factory stock
+          const receivedQuantity = parseFloat(p.received || 0);
+          const scrapQuantity = parseFloat(p.scrap || 0);
+          
+          if (receivedQuantity > 0 || scrapQuantity > 0) {
+            const factoryProduct = await prisma.factoryProduct.findUnique({
+              where: {
+                factoryId_productId: {
+                  factoryId: factoryId,
+                  productId: p.productId,
+                }
+              }
+            });
+
+            if (factoryProduct) {
+              await prisma.factoryProduct.update({
+                where: {
+                  factoryId_productId: {
+                    factoryId: factoryId,
+                    productId: p.productId,
+                  }
+                },
+                data: {
+                  stock: {
+                    increment: receivedQuantity,
+                  },
+                  scrap: scrapQuantity > 0 ? scrapQuantity : factoryProduct.scrap, // Update scrap field
+                },
+              });
+            } else {
+              await prisma.factoryProduct.create({
+                data: {
+                  factoryId: factoryId,
+                  productId: p.productId,
+                  stock: receivedQuantity,
+                  scrap: scrapQuantity,
+                }
+              });
+            }
+          }
         }
-        // Update materials with scrap quantities
+        
+        // Update materials with scrap and fine quantities
         for (const m of materials) {
           await prisma.productionMaterial.update({
             where: { id: m.id },
@@ -350,6 +385,47 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
               scrap: parseFloat(m.scrap),
             },
           });
+
+          const scrapQuantity = parseFloat(m.scrap || 0);
+          const fineQuantity = parseFloat(m.fine || 0);
+          
+          // Add fine materials back to factory stock (restock)
+          if (fineQuantity > 0 || scrapQuantity > 0) {
+            const factoryMaterial = await prisma.factoryMaterial.findUnique({
+              where: {
+                factoryId_materialId: {
+                  factoryId: factoryId,
+                  materialId: m.materialId,
+                }
+              }
+            });
+
+            if (factoryMaterial) {
+              await prisma.factoryMaterial.update({
+                where: {
+                  factoryId_materialId: {
+                    factoryId: factoryId,
+                    materialId: m.materialId,
+                  }
+                },
+                data: {
+                  stock: {
+                    increment: fineQuantity,
+                  },
+                  scrap: scrapQuantity > 0 ? scrapQuantity : factoryMaterial.scrap, // Update scrap field
+                },
+              });
+            } else {
+              await prisma.factoryMaterial.create({
+                data: {
+                  factoryId: factoryId,
+                  materialId: m.materialId,
+                  stock: fineQuantity,
+                  scrap: scrapQuantity,
+                }
+              });
+            }
+          }
         }
       }
 
@@ -360,93 +436,6 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error(`Error updating status for production ${id}:`, error);
     res.status(500).json({ error: `Failed to update status: ${error.message}` });
-  }
-});
-
-// Transfer products to store
-router.post('/:id/transfer', authenticateToken, async (req, res) => {
-  const { id } = req.params;
-  const { transfers } = req.body;
-
-  try {
-    const result = await prisma.$transaction(async (prisma) => {
-      // Handle product transfers
-      for (const transfer of transfers) {
-        // Create transfer record
-        await prisma.factoryToStoreTransfer.create({
-          data: {
-            productionId: parseInt(id),
-            productId: parseInt(transfer.productId),
-            storeId: parseInt(transfer.storeId),
-            quantity: parseFloat(transfer.quantity),
-          },
-        });
-
-        // Update moved_to_store in productionProducts
-        await prisma.productionProducts.update({
-          where: { id: parseInt(transfer.productionProductId) },
-          data: {
-            moved_to_store: {
-              increment: parseFloat(transfer.quantity),
-            },
-          },
-        });
-
-        // Update product stock in store
-        const storeProduct = await prisma.storeProduct.findUnique({
-            where: {
-                store_id_product_id: {
-                    store_id: parseInt(transfer.storeId),
-                    product_id: parseInt(transfer.productId),
-                }
-            }
-        });
-
-        if (storeProduct) {
-            await prisma.storeProduct.update({
-                where: {
-                    store_id_product_id: {
-                        store_id: parseInt(transfer.storeId),
-                        product_id: parseInt(transfer.productId),
-                    }
-                },
-                data: {
-                    stock: {
-                        increment: parseFloat(transfer.quantity),
-                    },
-                },
-            });
-        } else {
-            await prisma.storeProduct.create({
-                data: {
-                    store_id: parseInt(transfer.storeId),
-                    product_id: parseInt(transfer.productId),
-                    stock: parseFloat(transfer.quantity),
-                }
-            });
-        }
-      }
-
-      // Check if all products are transferred and update production status
-      const productionProducts = await prisma.productionProducts.findMany({
-        where: { productionId: parseInt(id) },
-      });
-
-      const allTransferred = productionProducts.every(p => p.moved_to_store >= p.received);
-      const newStatus = allTransferred ? 'transfer_done' : 'partial_transfer';
-
-      const updatedProduction = await prisma.production.update({
-        where: { id: parseInt(id) },
-        data: { status: newStatus },
-      });
-
-      return updatedProduction;
-    });
-
-    res.json(result);
-  } catch (error) {
-    console.error(`Error transferring products for production ${id}:`, error);
-    res.status(500).json({ error: `Failed to transfer products: ${error.message}` });
   }
 });
 

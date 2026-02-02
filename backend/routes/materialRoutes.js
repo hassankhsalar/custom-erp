@@ -19,9 +19,18 @@ router.post('/', async (req, res) => {
 
 // Get all materials
 router.get('/', async (req, res) => {
+  const { search } = req.query;
+  const where = {};
+
+  if (search) {
+    where.name = {
+      contains: search,
+    };
+  }
+
   try {
-    const materials = await prisma.material.findMany();
-    res.json({materials});
+    const materials = await prisma.material.findMany({ where });
+    res.json({ materials });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -48,9 +57,19 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Handle sale_price - can be null
+    const updateData = { ...req.body };
+    if (updateData.sale_price !== undefined) {
+      updateData.sale_price = updateData.sale_price ? parseFloat(updateData.sale_price) : null;
+    }
+    if (updateData.unit_cost !== undefined) {
+      updateData.unit_cost = parseFloat(updateData.unit_cost);
+    }
+
     const material = await prisma.material.update({
       where: { id: parseInt(id) },
-      data: req.body,
+      data: updateData,
     });
     res.json(material);
   } catch (error) {

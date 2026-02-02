@@ -128,6 +128,24 @@ const shopSalesRoutes = require('./routes/shop-sales');
 const storeToShopTransfersRoutes = require('./routes/store-to-shop-transfers');
 const dashboardRoutes = require('./routes/dashboard');
 const userRoutes = require('./routes/users');
+const transferRoutes = require('./routes/transferRoutes');
+const scrapRoutes = require('./routes/scrapRoutes');
+const scrapProductsRoutes = require('./routes/scrapProductsRoutes');
+const productRepairsRoutes = require('./routes/productRepairsRoutes');
+const materialRepairsRoutes = require('./routes/materialRepairsRoutes');
+const scrapMaterialsRoutes = require('./routes/scrapMaterialsRoutes');
+const materialScrapRoutes = require('./routes/materialScrapRoutes');
+const accountRoutes = require('./routes/accountRoutes');
+const assignAccountRoutes = require('./routes/assignAccountRoutes');
+const cashRegisterAssignRoutes = require('./routes/cashRegisterAssignRoutes');
+const cashRegisterRoutes = require('./routes/cashRegisterRoutes');
+const assignUserRoutes = require('./routes/assignUserRoutes');
+const permissionRoutes = require('./routes/permissionRoutes');
+const userPermissionRoutes = require('./routes/userPermissionRoutes');
+
+const uploadRoutes = require('./routes/uploadRoutes');
+
+
 
 app.use('/api/materials', materialRoutes);
 app.use('/api/products', productRoutes);
@@ -142,6 +160,24 @@ app.use('/api/shop-sales', shopSalesRoutes);
 app.use('/api/store-to-shop-transfers', storeToShopTransfersRoutes);
 app.use('/api/dash-board', dashboardRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/transfers', transferRoutes);
+app.use('/api/scrap-records', scrapRoutes);
+app.use('/api/scrap-products', scrapProductsRoutes);
+app.use('/api/product-repairs', productRepairsRoutes);
+app.use('/api/material-repairs', materialRepairsRoutes);
+app.use('/api/scrap-materials', scrapMaterialsRoutes);
+app.use('/api/materials-scrap-records', materialScrapRoutes);
+app.use('/api/uploads', uploadRoutes);
+app.use('/api/accounts', accountRoutes);
+app.use('/api/assign-account', assignAccountRoutes);
+app.use('/api/cash-register-assign', cashRegisterAssignRoutes);
+app.use('/api/cash-registers', cashRegisterRoutes);
+app.use('/api/assign-user', assignUserRoutes);
+app.use('/api/permissions', permissionRoutes);
+app.use('/api/users', userPermissionRoutes);
+
+// serve static files from uploads directory
+app.use('/uploads', express.static('uploads'));
 
 const port = 3001;
 app.listen(port, () => {
