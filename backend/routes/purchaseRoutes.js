@@ -3,15 +3,42 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const router = express.Router();
 
+// Generate unique reference for transactions
+const generateTransactionReference = () => {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 1000);
+  return `TXN-${timestamp}-${random}`;
+};
+
+// Helper function to calculate due amount and status
+const calculatePurchaseStatus = (purchase) => {
+  const grandTotal = parseFloat(purchase.grandTotal) || 0;
+  const paidAmount = parseFloat(purchase.paidAmount) || 0;
+  const dueAmount = Math.max(0, grandTotal - paidAmount);
+  
+  let status = 'pending';
+  if (dueAmount === 0) {
+    status = 'paid';
+  } else if (paidAmount > 0) {
+    status = 'partial';
+  }
+  
+  return { dueAmount, status };
+};
+
 // ➕ Add Purchase (Updated to support both products and materials)
 router.post("/", async (req, res) => {
   try {
     const { 
       supplierId, 
-      storeId, // For backward compatibility
       destinationType = "store", 
       destinationId, 
       grandTotal, 
+      shippingCost = 0,
+      discount = 0,
+      tax = 0,
+      paidAmount = 0,
+      paymentMethod = "cash",
       reference, 
       items 
     } = req.body;
@@ -20,18 +47,14 @@ router.post("/", async (req, res) => {
     let actualDestinationType = destinationType;
     let actualDestinationId = null;
 
-    // Handle both old and new formats
-    if (storeId && !destinationId) {
-      // Old format: storeId provided
-      actualDestinationType = "store";
-      actualDestinationId = parseInt(storeId);
-    } else if (destinationId) {
+    // Handle both old and new formats (remove storeId support gradually)
+    if (destinationId) {
       // New format: destinationId provided
       actualDestinationId = parseInt(destinationId);
       actualDestinationType = destinationType || "store";
     } else {
       return res.status(400).json({ 
-        error: "Either storeId or destinationId is required" 
+        error: "destinationId is required" 
       });
     }
 
@@ -84,24 +107,63 @@ router.post("/", async (req, res) => {
       }
     }
 
-    // Calculate grand total if not provided
-    const calculatedGrandTotal = grandTotal || 
-      items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    // Calculate subtotal from items
+    const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    
+    // Calculate discount amount
+    const discountAmount = (discount / 100) * subtotal;
+    
+    // Calculate amount after discount
+    const amountAfterDiscount = subtotal - discountAmount;
+    
+    // Calculate tax amount
+    const taxAmount = (tax / 100) * amountAfterDiscount;
+    
+    // Calculate final grand total
+    const calculatedGrandTotal = amountAfterDiscount + taxAmount + parseFloat(shippingCost);
+    
+    // Validate that paid amount is not greater than grand total
+    if (parseFloat(paidAmount) > calculatedGrandTotal) {
+      return res.status(400).json({ 
+        error: "Paid amount cannot exceed grand total" 
+      });
+    }
 
-    // Set storeId for backward compatibility (only if destination is a store)
-    const storeIdForBackward = actualDestinationType === "store" ? actualDestinationId : null;
+    // Get the account associated with the destination
+    const entityAccount = await prisma.entityAccount.findFirst({
+      where: {
+        entityType: actualDestinationType,
+        entityId: actualDestinationId,
+        isPrimary: true
+      },
+      include: {
+        account: true
+      }
+    });
+
+    if (!entityAccount) {
+      return res.status(400).json({ 
+        error: `No primary account found for ${actualDestinationType} with ID ${actualDestinationId}` 
+      });
+    }
+
+    // Get current user from request (you may need to adjust this based on your auth setup)
+    const userId = req.user?.userId || 1; // Default to admin if not available
 
     // Create purchase transaction
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Create the purchase with destination tracking
+      // 1. Create the purchase with new fields
       const purchase = await tx.purchase.create({
         data: {
           reference: reference || `PUR-${Date.now()}`,
           supplierId: parseInt(supplierId),
-          storeId: storeIdForBackward, // For backward compatibility
           destinationType: actualDestinationType,
           destinationId: actualDestinationId,
           grandTotal: calculatedGrandTotal,
+          shippingCost: parseFloat(shippingCost),
+          discount: parseFloat(discount),
+          tax: parseFloat(tax),
+          paidAmount: parseFloat(paidAmount),
         },
       });
 
@@ -155,6 +217,32 @@ router.post("/", async (req, res) => {
           return purchaseItem;
         })
       );
+
+      // 4. Create transaction record if paidAmount > 0
+      if (parseFloat(paidAmount) > 0) {
+        // Update account balance
+        const updatedAccount = await tx.accounts.update({
+          where: { id: entityAccount.accountId },
+          data: {
+            balance: { decrement: parseFloat(paidAmount) } // Money going out
+          }
+        });
+
+        // Create transaction record
+        await tx.transactions.create({
+          data: {
+            reference: `TRX-${Date.now()}`,
+            createdById: userId,
+            accountId: entityAccount.accountId,
+            purchaseId: purchase.id,
+            purpose: "Purchase Payment",
+            amount: parseFloat(paidAmount),
+            payment_method: paymentMethod || "cash",
+            current_account_balance: updatedAccount.balance,
+            note: `Payment for purchase ${purchase.reference}`
+          }
+        });
+      }
 
       return { purchase, purchaseItems };
     });
@@ -512,21 +600,35 @@ async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity) {
   });
 }
 
-// 📋 Get all purchases with destination details
-router.get("/", async (req, res) => {
+// GET all purchases with calculated due and status
+router.get('/', async (req, res) => {
   try {
     const purchases = await prisma.purchase.findMany({
+      orderBy: { createdAt: 'desc' },
       include: {
-        supplier: { select: { name: true } },
-        store: { select: { name: true } },
+        supplier: true,
         purchaseItems: {
           include: {
-            product: { select: { name: true, barcode: true, sale_price: true } },
-            material: { select: { name: true, unit: true, unit_cost: true } },
-          },
+            material: true,
+            product: true
+          }
         },
-      },
-      orderBy: { id: "desc" },
+        transactions: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            account: true,
+            createdBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          }
+        },
+        account: true
+        // REMOVED: store, shop, factory - these don't exist as direct relations
+      }
     });
 
     // Fetch destination details for each purchase
@@ -534,81 +636,534 @@ router.get("/", async (req, res) => {
       purchases.map(async (purchase) => {
         let destination = null;
         
-        // If destinationType and destinationId are available, use them
+        // Fetch destination based on destinationType and destinationId
         if (purchase.destinationType && purchase.destinationId) {
-          destination = await getDestinationDetails(
-            purchase.destinationType, 
-            purchase.destinationId
-          );
-        } 
-        // Otherwise fall back to store for backward compatibility
-        else if (purchase.storeId && purchase.store) {
-          destination = {
-            type: "store",
-            id: purchase.storeId,
-            name: purchase.store.name
-          };
+          switch (purchase.destinationType) {
+            case 'store':
+              destination = await prisma.store.findUnique({
+                where: { id: purchase.destinationId },
+                select: { id: true, name: true, address: true }
+              });
+              break;
+            case 'shop':
+              destination = await prisma.shop.findUnique({
+                where: { id: purchase.destinationId },
+                select: { id: true, name: true, address: true }
+              });
+              break;
+            case 'factory':
+              destination = await prisma.factory.findUnique({
+                where: { id: purchase.destinationId },
+                select: { id: true, name: true, address: true }
+              });
+              break;
+          }
         }
+
+        const { dueAmount, status } = calculatePurchaseStatus(purchase);
         
         return {
           ...purchase,
           destination: destination ? {
-            type: purchase.destinationType || "store",
+            type: purchase.destinationType,
             ...destination
-          } : null
+          } : null,
+          dueAmount,
+          status
         };
       })
     );
 
     res.json(purchasesWithDestinations);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    console.error('Error fetching purchases:', error);
+    res.status(500).json({ error: 'Failed to fetch purchases' });
   }
 });
 
-// 📋 Get single purchase with full destination details
-router.get("/:id", async (req, res) => {
+// GET single purchase by ID
+router.get('/:id', async (req, res) => {
   try {
+    const purchaseId = parseInt(req.params.id);
+    
+    if (isNaN(purchaseId)) {
+      return res.status(400).json({ error: 'Invalid purchase ID' });
+    }
+
     const purchase = await prisma.purchase.findUnique({
-      where: { id: parseInt(req.params.id) },
+      where: { id: purchaseId },
       include: {
         supplier: true,
-        store: true,
         purchaseItems: {
           include: {
-            product: true,
             material: true,
-          },
+            product: true
+          }
         },
-      },
+        transactions: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            account: true,
+            createdBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            },
+            cashRegister: true,
+            bankAccount: true
+          }
+        },
+        account: true
+        // REMOVED: store, shop, factory
+      }
     });
 
     if (!purchase) {
-      return res.status(404).json({ error: "Purchase not found" });
+      return res.status(404).json({ error: 'Purchase not found' });
     }
 
-    // Add destination details
+    // Fetch destination details
     let destination = null;
     if (purchase.destinationType && purchase.destinationId) {
-      destination = await getDestinationDetails(
-        purchase.destinationType, 
-        purchase.destinationId
-      );
-    } else if (purchase.storeId && purchase.store) {
-      destination = {
-        type: "store",
-        id: purchase.storeId,
-        name: purchase.store.name,
-        address: purchase.store.address
-      };
+      switch (purchase.destinationType) {
+        case 'store':
+          destination = await prisma.store.findUnique({
+            where: { id: purchase.destinationId },
+            select: { id: true, name: true, address: true }
+          });
+          break;
+        case 'shop':
+          destination = await prisma.shop.findUnique({
+            where: { id: purchase.destinationId },
+            select: { id: true, name: true, address: true }
+          });
+          break;
+        case 'factory':
+          destination = await prisma.factory.findUnique({
+            where: { id: purchase.destinationId },
+            select: { id: true, name: true, address: true }
+          });
+          break;
+      }
     }
 
-    res.json({
+    // Add calculated fields
+    const { dueAmount, status } = calculatePurchaseStatus(purchase);
+    
+    const formattedPurchase = {
       ...purchase,
-      destination
+      destination: destination ? {
+        type: purchase.destinationType,
+        ...destination
+      } : null,
+      dueAmount,
+      status
+    };
+
+    res.json(formattedPurchase);
+  } catch (error) {
+    console.error('Error fetching purchase:', error);
+    res.status(500).json({ error: 'Failed to fetch purchase' });
+  }
+});
+
+// PUT update purchase
+router.put('/:id', async (req, res) => {
+  try {
+    const purchaseId = parseInt(req.params.id);
+    
+    if (isNaN(purchaseId)) {
+      return res.status(400).json({ error: 'Invalid purchase ID' });
+    }
+
+    const { 
+      supplierId, 
+      destinationType, 
+      destinationId, 
+      grandTotal, 
+      shippingCost,
+      discount,
+      tax,
+      items,
+      accountId 
+    } = req.body;
+
+    // Check if purchase exists
+    const existingPurchase = await prisma.purchase.findUnique({
+      where: { id: purchaseId }
     });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    if (!existingPurchase) {
+      return res.status(404).json({ error: 'Purchase not found' });
+    }
+
+    // Check if purchase has payments (cannot edit if paid)
+    if (existingPurchase.paidAmount > 0) {
+      return res.status(400).json({ error: 'Cannot edit purchase with existing payments' });
+    }
+
+    // Update purchase
+    const updatedPurchase = await prisma.$transaction(async (prisma) => {
+      // Delete existing items
+      await prisma.purchaseItem.deleteMany({
+        where: { purchaseId }
+      });
+
+      // Update purchase
+      const purchase = await prisma.purchase.update({
+        where: { id: purchaseId },
+        data: {
+          supplierId: supplierId ? parseInt(supplierId) : existingPurchase.supplierId,
+          destinationType: destinationType || existingPurchase.destinationType,
+          destinationId: destinationId ? parseInt(destinationId) : existingPurchase.destinationId,
+          grandTotal: grandTotal ? parseFloat(grandTotal) : existingPurchase.grandTotal,
+          shippingCost: shippingCost !== undefined ? parseFloat(shippingCost) : existingPurchase.shippingCost,
+          discount: discount !== undefined ? parseFloat(discount) : existingPurchase.discount,
+          tax: tax !== undefined ? parseFloat(tax) : existingPurchase.tax,
+          accountId: accountId ? parseInt(accountId) : existingPurchase.accountId,
+          purchaseItems: {
+            create: items?.map(item => ({
+              materialId: item.itemType === 'material' ? parseInt(item.itemId) : null,
+              productId: item.itemType === 'product' ? parseInt(item.itemId) : null,
+              itemType: item.itemType,
+              quantity: parseFloat(item.quantity),
+              unitPrice: parseFloat(item.unitPrice),
+              totalPrice: parseFloat(item.totalPrice)
+            })) || []
+          }
+        },
+        include: {
+          purchaseItems: {
+            include: {
+              material: true,
+              product: true
+            }
+          },
+          supplier: true,
+          transactions: true
+        }
+      });
+
+      return purchase;
+    });
+
+    // Add calculated fields
+    const { dueAmount, status } = calculatePurchaseStatus(updatedPurchase);
+    
+    res.json({
+      ...updatedPurchase,
+      dueAmount,
+      status
+    });
+  } catch (error) {
+    console.error('Error updating purchase:', error);
+    
+    if (error.code === 'P2025') {
+      return res.status(404).json({ error: 'Purchase not found' });
+    }
+    
+    res.status(400).json({ error: error.message || 'Failed to update purchase' });
+  }
+});
+
+// POST add payment to purchase
+router.post('/:id/payments', async (req, res) => {
+  try {
+    const purchaseId = parseInt(req.params.id);
+    
+    if (isNaN(purchaseId)) {
+      return res.status(400).json({ error: 'Invalid purchase ID' });
+    }
+
+    const { 
+      amount, 
+      payment_method, 
+      accountId, 
+      createdById,
+      bankAccountId,
+      cashRegisterId,
+      note,
+      purpose = 'Purchase Payment'
+    } = req.body;
+
+    // Validate required fields
+    if (!amount || !payment_method || !accountId || !createdById) {
+      return res.status(400).json({ 
+        error: 'Amount, payment method, account ID, and user ID are required' 
+      });
+    }
+
+    const paymentAmount = parseFloat(amount);
+    
+    if (paymentAmount <= 0) {
+      return res.status(400).json({ error: 'Payment amount must be greater than 0' });
+    }
+
+    // Get purchase and account
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: purchaseId }
+    });
+
+    if (!purchase) {
+      return res.status(404).json({ error: 'Purchase not found' });
+    }
+
+    // Get account to update balance
+    const account = await prisma.accounts.findUnique({
+      where: { id: parseInt(accountId) }
+    });
+
+    if (!account) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
+    // Calculate due amount
+    const { dueAmount } = calculatePurchaseStatus(purchase);
+    
+    // Check if payment exceeds due amount
+    if (paymentAmount > dueAmount) {
+      return res.status(400).json({ 
+        error: `Payment amount ($${paymentAmount.toFixed(2)}) exceeds due amount ($${dueAmount.toFixed(2)})` 
+      });
+    }
+
+    // Process payment in transaction
+    const result = await prisma.$transaction(async (prisma) => {
+      // Calculate new paid amount
+      const newPaidAmount = (parseFloat(purchase.paidAmount) || 0) + paymentAmount;
+      
+      // Update purchase paid amount
+      const updatedPurchase = await prisma.purchase.update({
+        where: { id: purchaseId },
+        data: {
+          paidAmount: newPaidAmount
+        }
+      });
+
+      // Update account balance (decrease balance when making payment)
+      const newAccountBalance = (parseFloat(account.balance) || 0) - paymentAmount;
+      
+      await prisma.accounts.update({
+        where: { id: parseInt(accountId) },
+        data: {
+          balance: newAccountBalance
+        }
+      });
+
+      // Create transaction record
+      const transaction = await prisma.transactions.create({
+        data: {
+          reference: generateTransactionReference(),
+          createdById: parseInt(createdById),
+          cashRegisterId: cashRegisterId ? parseInt(cashRegisterId) : null,
+          bankAccountId: bankAccountId ? parseInt(bankAccountId) : null,
+          accountId: parseInt(accountId),
+          purchaseId: purchaseId,
+          purpose: purpose,
+          added_to_account: true,
+          amount: paymentAmount,
+          payment_method: payment_method,
+          current_account_balance: newAccountBalance,
+          note: note || `Payment for purchase ${purchase.reference}`
+        }
+      });
+
+      return {
+        purchase: updatedPurchase,
+        transaction,
+        accountBalance: newAccountBalance
+      };
+    });
+
+    // Calculate updated status
+    const updatedPurchase = await prisma.purchase.findUnique({
+      where: { id: purchaseId },
+      include: {
+        transactions: {
+          orderBy: { createdAt: 'desc' }
+        }
+      }
+    });
+
+    const { dueAmount: updatedDueAmount, status } = calculatePurchaseStatus(updatedPurchase);
+
+    res.json({
+      success: true,
+      message: 'Payment recorded successfully',
+      purchase: {
+        ...updatedPurchase,
+        dueAmount: updatedDueAmount,
+        status
+      },
+      transaction: result.transaction,
+      newAccountBalance: result.accountBalance
+    });
+
+  } catch (error) {
+    console.error('Error recording payment:', error);
+    res.status(500).json({ error: error.message || 'Failed to record payment' });
+  }
+});
+
+// GET payment history for a purchase
+router.get('/:id/payments', async (req, res) => {
+  try {
+    const purchaseId = parseInt(req.params.id);
+    
+    if (isNaN(purchaseId)) {
+      return res.status(400).json({ error: 'Invalid purchase ID' });
+    }
+
+    // Check if purchase exists
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: purchaseId }
+    });
+
+    if (!purchase) {
+      return res.status(404).json({ error: 'Purchase not found' });
+    }
+
+    // Get all transactions for this purchase
+    const transactions = await prisma.transactions.findMany({
+      where: { purchaseId: purchaseId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        account: true,
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        cashRegister: true,
+        bankAccount: true
+      }
+    });
+
+    // Calculate payment summary
+    const totalPaid = transactions.reduce((sum, txn) => sum + (parseFloat(txn.amount) || 0), 0);
+    const { dueAmount, status } = calculatePurchaseStatus(purchase);
+
+    res.json({
+      purchase: {
+        ...purchase,
+        dueAmount,
+        status
+      },
+      payments: transactions,
+      summary: {
+        totalAmount: parseFloat(purchase.grandTotal) || 0,
+        totalPaid,
+        dueAmount,
+        status
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching payments:', error);
+    res.status(500).json({ error: 'Failed to fetch payment history' });
+  }
+});
+
+// DELETE purchase (only if no payments made)
+router.delete('/:id', async (req, res) => {
+  try {
+    const purchaseId = parseInt(req.params.id);
+    
+    if (isNaN(purchaseId)) {
+      return res.status(400).json({ error: 'Invalid purchase ID' });
+    }
+
+    // Check if purchase exists
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: purchaseId }
+    });
+
+    if (!purchase) {
+      return res.status(404).json({ error: 'Purchase not found' });
+    }
+
+    // Check if purchase has payments
+    if (purchase.paidAmount > 0) {
+      return res.status(400).json({ 
+        error: 'Cannot delete purchase with existing payments. Refund payments first.' 
+      });
+    }
+
+    // Delete in transaction
+    await prisma.$transaction(async (prisma) => {
+      // Delete purchase items first
+      await prisma.purchaseItem.deleteMany({
+        where: { purchaseId: purchaseId }
+      });
+
+      // Delete any transactions linked to this purchase
+      await prisma.transactions.deleteMany({
+        where: { purchaseId: purchaseId }
+      });
+
+      // Delete the purchase
+      await prisma.purchase.delete({
+        where: { id: purchaseId }
+      });
+    });
+
+    res.json({
+      success: true,
+      message: 'Purchase deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Error deleting purchase:', error);
+    
+    if (error.code === 'P2025') {
+      return res.status(404).json({ error: 'Purchase not found' });
+    }
+    
+    res.status(500).json({ error: error.message || 'Failed to delete purchase' });
+  }
+});
+
+// GET purchase statistics
+router.get('/stats/summary', async (req, res) => {
+  try {
+    const purchases = await prisma.purchase.findMany({
+      include: {
+        transactions: true
+      }
+    });
+
+    // Calculate statistics
+    const totalPurchases = purchases.length;
+    const totalAmount = purchases.reduce((sum, p) => sum + (parseFloat(p.grandTotal) || 0), 0);
+    const totalPaid = purchases.reduce((sum, p) => sum + (parseFloat(p.paidAmount) || 0), 0);
+    const totalDue = totalAmount - totalPaid;
+
+    // Count by status
+    const statusCounts = purchases.reduce((acc, purchase) => {
+      const { status } = calculatePurchaseStatus(purchase);
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+
+    res.json({
+      totalPurchases,
+      totalAmount,
+      totalPaid,
+      totalDue,
+      statusCounts,
+      summary: {
+        paidPercentage: totalAmount > 0 ? (totalPaid / totalAmount * 100).toFixed(2) : 0,
+        duePercentage: totalAmount > 0 ? (totalDue / totalAmount * 100).toFixed(2) : 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching purchase stats:', error);
+    res.status(500).json({ error: 'Failed to fetch purchase statistics' });
   }
 });
 

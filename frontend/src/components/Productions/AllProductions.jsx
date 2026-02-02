@@ -19,7 +19,8 @@ import {
   Clock,
   AlertCircle,
   X,
-  Save
+  Save,
+  Image as ImageIcon
 } from 'lucide-react';
 
 const AllProductions = () => {
@@ -72,33 +73,33 @@ const AllProductions = () => {
   };
 
   const openModal = async (type, production) => {
-    let productionData = production;
-    if (type === 'details') {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await axios.get(`${API_ROUTES.PRODUCTIONS}/${production.id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        productionData = response.data;
-      } catch (error) {
-        console.error('Error fetching production details:', error);
-        return;
-      }
+  let productionData = production;
+  if (type === 'details') {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_ROUTES.PRODUCTIONS}/${production.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      productionData = response.data;
+    } catch (error) {
+      console.error('Error fetching production details:', error);
+      return;
     }
-    
-    setModal({ isOpen: true, type, data: productionData });
+  }
+  
+  setModal({ isOpen: true, type, data: productionData });
 
-    if (type === 'updateStatus') {
-      setSelectedStatus(production.status);
-      if (production.status === 'production_done') {
-          setEditableProducts(production.productionProducts.map(p => ({...p, received: p.quantity, scrap: 0})))
-          setEditableMaterials(production.productionMaterials.map(m => ({...m, scrap: 0})))
-      } else {
-          setEditableProducts(production.productionProducts);
-          setEditableMaterials(production.productionMaterials);
-      }
+  if (type === 'updateStatus') {
+    setSelectedStatus(production.status);
+    if (production.status === 'production_done') {
+        setEditableProducts(production.productionProducts.map(p => ({...p, received: p.quantity, scrap: 0})))
+        setEditableMaterials(production.productionMaterials.map(m => ({...m, scrap: 0, fine: 0}))) // Initialize fine
+    } else {
+        setEditableProducts(production.productionProducts);
+        setEditableMaterials(production.productionMaterials.map(m => ({...m, fine: 0}))); // Initialize fine
     }
-  };
+  }
+};
 
   const closeModal = () => {
     setModal({ isOpen: false, type: null, data: null });
@@ -130,8 +131,39 @@ const AllProductions = () => {
   }
 
   const handleMaterialEdit = (index, field, value) => {
-    setEditableMaterials(prev => prev.map((m, i) => i === index ? {...m, [field]: value} : m));
-  }
+  setEditableMaterials(prev => {
+    const newMaterials = [...prev];
+    const material = { ...newMaterials[index] };
+    
+    // Ensure scrap + fine doesn't exceed original quantity
+    if (field === 'scrap' || field === 'fine') {
+      const scrapValue = field === 'scrap' ? parseFloat(value) || 0 : material.scrap || 0;
+      const fineValue = field === 'fine' ? parseFloat(value) || 0 : material.fine || 0;
+      const maxAllowed = material.quantity;
+      
+      // If sum exceeds quantity, adjust the other field
+      if (scrapValue + fineValue > maxAllowed) {
+        if (field === 'scrap') {
+          material.fine = Math.max(0, maxAllowed - scrapValue);
+        } else {
+          material.scrap = Math.max(0, maxAllowed - fineValue);
+        }
+      }
+    }
+    
+    material[field] = value;
+    newMaterials[index] = material;
+    return newMaterials;
+  });
+}
+
+  // Helper function to get image URL
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    if (imagePath.startsWith('/uploads/')) return `http://localhost:3001${imagePath}`;
+    return `http://localhost:3001/uploads/${imagePath}`;
+  };
 
   // Get status color and icon
   const getStatusConfig = (status) => {
@@ -520,20 +552,49 @@ const AllProductions = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {modal.data.productionProducts.map(p => (
-                          <tr key={p.id} className="border-t border-white/50 hover:bg-white/30">
-                            <td className="p-3 font-medium">{p.product.name}</td>
-                            <td className="p-3 text-gray-600">{p.code}</td>
-                            <td className="p-3 font-medium">{p.quantity}</td>
-                            {['production_done'].includes(modal.data.status) && (
-                              <>
-                                <td className="p-3 text-green-600 font-medium">{p.received}</td>
-                                <td className="p-3 text-red-600 font-medium">{p.scrap}</td>
-                                <td className="p-3 font-bold">${p.unit_cost?.toFixed(2)}</td>
-                              </>
-                            )}
-                          </tr>
-                        ))}
+                        {modal.data.productionProducts.map(p => {
+                          const productImage = p.product?.image || p.product?.photo || p.product?.thumbnail;
+                          const imageUrl = productImage ? getImageUrl(productImage) : null;
+                          
+                          return (
+                            <tr key={p.id} className="border-t border-white/50 hover:bg-white/30">
+                              <td className="p-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 bg-gray-50">
+                                    {imageUrl ? (
+                                      <img 
+                                        src={imageUrl} 
+                                        alt={p.product.name}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                          e.target.style.display = 'none';
+                                          e.target.parentElement.innerHTML = '<div class="w-full h-full bg-gray-100 flex items-center justify-center"><ImageIcon size={14} class="text-gray-400" /></div>';
+                                        }}
+                                      />
+                                    ) : (
+                                      <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                                        <ImageIcon size={14} className="text-gray-400" />
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <span className="font-medium block">{p.product.name}</span>
+                                    <span className="text-xs text-gray-500">{p.product.category || 'No category'}</span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="p-3 text-gray-600">{p.code}</td>
+                              <td className="p-3 font-medium">{p.quantity}</td>
+                              {['production_done'].includes(modal.data.status) && (
+                                <>
+                                  <td className="p-3 text-green-600 font-medium">{p.received}</td>
+                                  <td className="p-3 text-red-600 font-medium">{p.scrap}</td>
+                                  <td className="p-3 font-bold">${p.unit_cost?.toFixed(2)}</td>
+                                </>
+                              )}
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -649,53 +710,74 @@ const AllProductions = () => {
                           <tr>
                             <th className="p-3 text-left font-medium text-gray-700">Product</th>
                             <th className="p-3 text-left font-medium text-gray-700">Quantity</th>
-                            <th className="p-3 text-left font-medium text-gray-700">Received</th>
-                            <th className="p-3 text-left font-medium text-gray-700">Scrap</th>
+                            <th className="p-3 text-left font-medium text-gray-700">Fine Products</th>
+                            <th className="p-3 text-left font-medium text-gray-700">Defect</th>
                             <th className="p-3 text-left font-medium text-gray-700">Cost</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {editableProducts.map((p, i) => (
-                            <tr key={p.id} className="border-t border-white/50">
-                              <td className="p-3">
-                                <div className="flex items-center gap-2">
-                                  <Package size={14} className="text-blue-500" />
-                                  <span className="font-medium">{p.product.name}</span>
-                                </div>
-                              </td>
-                              <td className="p-3 text-gray-600">{p.quantity}</td>
-                              <td className="p-3">
-                                <input
-                                  type="number"
-                                  value={p.received}
-                                  onChange={(e) => handleProductEdit(i, 'received', e.target.value)}
-                                  className="w-20 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                                  min="0"
-                                  max={p.quantity}
-                                />
-                              </td>
-                              <td className="p-3">
-                                <input
-                                  type="number"
-                                  value={p.scrap}
-                                  onChange={(e) => handleProductEdit(i, 'scrap', e.target.value)}
-                                  className="w-20 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30"
-                                  min="0"
-                                  max={p.quantity}
-                                />
-                              </td>
-                              <td className="p-3">
-                                <input
-                                  type="number"
-                                  value={p.unit_cost}
-                                  onChange={(e) => handleProductEdit(i, 'unit_cost', e.target.value)}
-                                  className="w-24 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/30"
-                                  step="0.01"
-                                  min="0"
-                                />
-                              </td>
-                            </tr>
-                          ))}
+                          {editableProducts.map((p, i) => {
+                            const productImage = p.product?.image || p.product?.photo || p.product?.thumbnail;
+                            const imageUrl = productImage ? getImageUrl(productImage) : null;
+                            
+                            return (
+                              <tr key={p.id} className="border-t border-white/50">
+                                <td className="p-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 bg-gray-50">
+                                      {imageUrl ? (
+                                        <img 
+                                          src={imageUrl} 
+                                          alt={p.product.name}
+                                          className="w-full h-full object-cover"
+                                          onError={(e) => {
+                                            e.target.style.display = 'none';
+                                            e.target.parentElement.innerHTML = '<div class="w-full h-full bg-gray-100 flex items-center justify-center"><ImageIcon size={12} class="text-gray-400" /></div>';
+                                          }}
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                                          <ImageIcon size={12} className="text-gray-400" />
+                                        </div>
+                                      )}
+                                    </div>
+                                    <span className="font-medium">{p.product.name}</span>
+                                  </div>
+                                </td>
+                                <td className="p-3 text-gray-600">{p.quantity}</td>
+                                <td className="p-3">
+                                  <input
+                                    type="number"
+                                    value={p.received}
+                                    onChange={(e) => handleProductEdit(i, 'received', e.target.value)}
+                                    className="w-20 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                    min="0"
+                                    max={p.quantity}
+                                  />
+                                </td>
+                                <td className="p-3">
+                                  <input
+                                    type="number"
+                                    value={p.scrap}
+                                    onChange={(e) => handleProductEdit(i, 'scrap', e.target.value)}
+                                    className="w-20 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30"
+                                    min="0"
+                                    max={p.quantity}
+                                  />
+                                </td>
+                                <td className="p-3">
+                                  <input
+                                    type="number"
+                                    value={p.unit_cost}
+                                    onChange={(e) => handleProductEdit(i, 'unit_cost', e.target.value)}
+                                    className="w-24 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/30"
+                                    step="0.01"
+                                    min="0"
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -712,6 +794,7 @@ const AllProductions = () => {
                           <tr>
                             <th className="p-3 text-left font-medium text-gray-700">Material</th>
                             <th className="p-3 text-left font-medium text-gray-700">Quantity</th>
+                            <th className="p-3 text-left font-medium text-gray-700">Fine materials</th>
                             <th className="p-3 text-left font-medium text-gray-700">Scrap</th>
                           </tr>
                         </thead>
@@ -725,6 +808,16 @@ const AllProductions = () => {
                                 </div>
                               </td>
                               <td className="p-3 text-gray-600">{m.quantity}</td>
+                              <td className="p-3">
+                                <input
+                                  type="number"
+                                  value={m.fine || 0} // Add fine field
+                                  onChange={(e) => handleMaterialEdit(i, 'fine', e.target.value)}
+                                  className="w-20 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/30"
+                                  min="0"
+                                  max={m.quantity}
+                                />
+                              </td>
                               <td className="p-3">
                                 <input
                                   type="number"

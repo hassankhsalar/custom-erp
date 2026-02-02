@@ -323,6 +323,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
           where: { id: parseInt(id) },
         });
         const factoryId = production.factoryId;
+        
         // Update products with received and scrap quantities
         for (const p of products) {
           await prisma.productionProducts.update({
@@ -335,7 +336,10 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
           });
 
           // Add fine products to factory stock
-          if (p.received > 0) {
+          const receivedQuantity = parseFloat(p.received || 0);
+          const scrapQuantity = parseFloat(p.scrap || 0);
+          
+          if (receivedQuantity > 0 || scrapQuantity > 0) {
             const factoryProduct = await prisma.factoryProduct.findUnique({
               where: {
                 factoryId_productId: {
@@ -355,8 +359,9 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
                 },
                 data: {
                   stock: {
-                    increment: parseFloat(p.received),
+                    increment: receivedQuantity,
                   },
+                  scrap: scrapQuantity > 0 ? scrapQuantity : factoryProduct.scrap, // Update scrap field
                 },
               });
             } else {
@@ -364,13 +369,15 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
                 data: {
                   factoryId: factoryId,
                   productId: p.productId,
-                  stock: parseFloat(p.received),
+                  stock: receivedQuantity,
+                  scrap: scrapQuantity,
                 }
               });
             }
           }
         }
-        // Update materials with scrap quantities
+        
+        // Update materials with scrap and fine quantities
         for (const m of materials) {
           await prisma.productionMaterial.update({
             where: { id: m.id },
@@ -378,6 +385,47 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
               scrap: parseFloat(m.scrap),
             },
           });
+
+          const scrapQuantity = parseFloat(m.scrap || 0);
+          const fineQuantity = parseFloat(m.fine || 0);
+          
+          // Add fine materials back to factory stock (restock)
+          if (fineQuantity > 0 || scrapQuantity > 0) {
+            const factoryMaterial = await prisma.factoryMaterial.findUnique({
+              where: {
+                factoryId_materialId: {
+                  factoryId: factoryId,
+                  materialId: m.materialId,
+                }
+              }
+            });
+
+            if (factoryMaterial) {
+              await prisma.factoryMaterial.update({
+                where: {
+                  factoryId_materialId: {
+                    factoryId: factoryId,
+                    materialId: m.materialId,
+                  }
+                },
+                data: {
+                  stock: {
+                    increment: fineQuantity,
+                  },
+                  scrap: scrapQuantity > 0 ? scrapQuantity : factoryMaterial.scrap, // Update scrap field
+                },
+              });
+            } else {
+              await prisma.factoryMaterial.create({
+                data: {
+                  factoryId: factoryId,
+                  materialId: m.materialId,
+                  stock: fineQuantity,
+                  scrap: scrapQuantity,
+                }
+              });
+            }
+          }
         }
       }
 

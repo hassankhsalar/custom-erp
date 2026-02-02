@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Plus, Trash2, Package, Tag, Truck, Building2, Store, Factory, ShoppingBag, Check } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Plus, Trash2, Package, Tag, Truck, Building2, Store, Factory, ShoppingBag, Check, Image as ImageIcon, ChevronDown, CreditCard, DollarSign, Percent, Truck as ShippingIcon } from "lucide-react";
 
 export default function NewPurchase() {
   const [materials, setMaterials] = useState([]);
@@ -24,11 +24,43 @@ export default function NewPurchase() {
     supplierId: "",
     destinationType: "store",
     destinationId: "",
+    shippingCost: "0",
+    discount: "0",
+    tax: "0",
+    paidAmount: "0",
+    paymentMethod: "cash",
     grandTotal: 0,
     reference: `PUR-${Date.now()}`
   });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [openDropdownIndex, setOpenDropdownIndex] = useState(null);
+  
+  // Financial breakdown state
+  const [financialBreakdown, setFinancialBreakdown] = useState({
+    subtotal: 0,
+    discountAmount: 0,
+    amountAfterDiscount: 0,
+    taxAmount: 0,
+    shippingCost: 0,
+    grandTotal: 0,
+    balance: 0
+  });
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (openDropdownIndex !== null) {
+        const dropdown = document.getElementById(`item-dropdown-${openDropdownIndex}`);
+        if (dropdown && !dropdown.contains(event.target)) {
+          setOpenDropdownIndex(null);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [openDropdownIndex]);
 
   useEffect(() => {
     fetchMaterials();
@@ -115,14 +147,52 @@ export default function NewPurchase() {
     }
   };
 
-  // Update grand total whenever purchase items change
+  // Calculate subtotal from purchase items
   useEffect(() => {
-    const grandTotal = purchaseItems.reduce((sum, item) => sum + item.total, 0);
+    const subtotal = purchaseItems.reduce((sum, item) => sum + item.total, 0);
+    const discountPercent = parseFloat(form.discount) || 0;
+    const taxPercent = parseFloat(form.tax) || 0;
+    const shippingCost = parseFloat(form.shippingCost) || 0;
+    
+    // Calculate discount amount
+    const discountAmount = (discountPercent / 100) * subtotal;
+    
+    // Calculate amount after discount
+    const amountAfterDiscount = subtotal - discountAmount;
+    
+    // Calculate tax amount
+    const taxAmount = (taxPercent / 100) * amountAfterDiscount;
+    
+    // Calculate grand total
+    const grandTotal = amountAfterDiscount + taxAmount + shippingCost;
+    
+    // Calculate balance
+    const paidAmount = parseFloat(form.paidAmount) || 0;
+    const balance = grandTotal - paidAmount;
+    
+    setFinancialBreakdown({
+      subtotal,
+      discountAmount,
+      amountAfterDiscount,
+      taxAmount,
+      shippingCost,
+      grandTotal,
+      balance
+    });
+    
     setForm(prev => ({ ...prev, grandTotal }));
-  }, [purchaseItems]);
+  }, [purchaseItems, form.discount, form.tax, form.shippingCost, form.paidAmount]);
 
   const handleFormChange = (e) => {
     const { name, value } = e.target;
+    
+    // Validate numeric inputs
+    if (["shippingCost", "discount", "tax", "paidAmount"].includes(name)) {
+      if (value && (isNaN(value) || parseFloat(value) < 0)) {
+        return;
+      }
+    }
+    
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
@@ -161,6 +231,7 @@ export default function NewPurchase() {
     updatedItems[index].total = 0;
     
     setPurchaseItems(updatedItems);
+    setOpenDropdownIndex(null);
   };
 
   const handleItemChange = (index, field, value) => {
@@ -229,6 +300,7 @@ export default function NewPurchase() {
     if (purchaseItems.length > 1) {
       const updatedItems = purchaseItems.filter((_, i) => i !== index);
       setPurchaseItems(updatedItems);
+      setOpenDropdownIndex(null);
     }
   };
 
@@ -239,17 +311,19 @@ export default function NewPurchase() {
       return {
         name: material?.name || "",
         unit: material?.unit || "",
-        standardPrice: material?.unit_cost || 0
+        standardPrice: material?.unit_cost || 0,
+        image: material?.image || material?.photo || null
       };
     } else if (item.itemType === "product" && item.productId) {
       const product = products.find(p => p.id === parseInt(item.productId));
       return {
         name: product?.name || "",
         unit: "unit",
-        standardPrice: product?.cost || 0
+        standardPrice: product?.cost || 0,
+        image: product?.image || product?.photo || product?.thumbnail || null
       };
     }
-    return { name: "", unit: "", standardPrice: 0 };
+    return { name: "", unit: "", standardPrice: 0, image: null };
   };
 
   const handleItemSelect = (index, itemType, itemId) => {
@@ -280,6 +354,11 @@ export default function NewPurchase() {
     }
     
     setPurchaseItems(updatedItems);
+    setOpenDropdownIndex(null);
+  };
+
+  const toggleDropdown = (index) => {
+    setOpenDropdownIndex(openDropdownIndex === index ? null : index);
   };
 
   const handleSubmit = async (e) => {
@@ -311,12 +390,31 @@ export default function NewPurchase() {
       return;
     }
 
+    // Validate paid amount
+    const paidAmount = parseFloat(form.paidAmount) || 0;
+    if (paidAmount > financialBreakdown.grandTotal) {
+      setMessage("❌ Paid amount cannot exceed grand total");
+      setLoading(false);
+      return;
+    }
+
     try {
+      const token = localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token && { "Authorization": `Bearer ${token}` })
+      };
+
       const payload = {
         supplierId: parseInt(form.supplierId),
         destinationType: form.destinationType,
         destinationId: parseInt(form.destinationId),
-        grandTotal: form.grandTotal,
+        shippingCost: parseFloat(form.shippingCost) || 0,
+        discount: parseFloat(form.discount) || 0,
+        tax: parseFloat(form.tax) || 0,
+        paidAmount: paidAmount,
+        paymentMethod: form.paymentMethod,
+        grandTotal: financialBreakdown.grandTotal,
         reference: form.reference,
         items: validItems.map(item => ({
           itemType: item.itemType,
@@ -329,18 +427,23 @@ export default function NewPurchase() {
 
       const res = await fetch("http://localhost:3001/api/purchases", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload),
       });
         
       const data = await res.json();
       if (res.ok) {
-        setMessage("✅ Purchase added successfully!");
+        setMessage("✅ Purchase created successfully with transaction!");
         // Reset form
         setForm({
           supplierId: "",
           destinationType: "store",
           destinationId: "",
+          shippingCost: "0",
+          discount: "0",
+          tax: "0",
+          paidAmount: "0",
+          paymentMethod: "cash",
           grandTotal: 0,
           reference: `PUR-${Date.now()}`
         });
@@ -356,11 +459,20 @@ export default function NewPurchase() {
           materialUnitPrice: 0,
           productCost: 0
         }]);
+        setFinancialBreakdown({
+          subtotal: 0,
+          discountAmount: 0,
+          amountAfterDiscount: 0,
+          taxAmount: 0,
+          shippingCost: 0,
+          grandTotal: 0,
+          balance: 0
+        });
       } else {
-        setMessage(`❌ ${data.error || data.message || "Failed to add purchase"}`);
+        setMessage(`❌ ${data.error || data.message || "Failed to create purchase"}`);
       }
     } catch (error) {
-      setMessage("❌ Failed to add purchase: " + error.message);
+      setMessage("❌ Failed to create purchase: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -376,6 +488,24 @@ export default function NewPurchase() {
     }
   };
 
+  // Helper function to get image URL
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    if (imagePath.startsWith('/uploads/')) return `http://localhost:3001${imagePath}`;
+    return `http://localhost:3001/uploads/${imagePath}`;
+  };
+
+  // Get filtered items for dropdown
+  const getDropdownItems = (index) => {
+    const item = purchaseItems[index];
+    if (item.itemType === "material") {
+      return materials;
+    } else {
+      return products;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
       {/* Background decorative elements */}
@@ -384,7 +514,7 @@ export default function NewPurchase() {
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-300/20 rounded-full blur-3xl"></div>
       </div>
 
-      <div className="relative max-w-6xl mx-auto">
+      <div className="relative max-w-6xl xl:max-w-full">
         {/* Header Card */}
         <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-blue-100/50 mb-6 p-6">
           <div className="flex items-center justify-between">
@@ -514,9 +644,142 @@ export default function NewPurchase() {
                 </div>
               </div>
             </div>
+
+            {/* Financial Details Card */}
+            <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <DollarSign className="text-purple-600" size={20} />
+                </div>
+                Financial Details
+              </h2>
+              <div className="space-y-4">
+                {/* Shipping Cost */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <ShippingIcon size={16} className="text-gray-500" />
+                    Shipping Cost ($)
+                  </label>
+                  <input
+                    type="number"
+                    name="shippingCost"
+                    min="0"
+                    step="0.01"
+                    value={form.shippingCost}
+                    onChange={handleFormChange}
+                    className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                  />
+                </div>
+
+                {/* Discount */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <Percent size={16} className="text-gray-500" />
+                    Discount (%)
+                  </label>
+                  <input
+                    type="number"
+                    name="discount"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={form.discount}
+                    onChange={handleFormChange}
+                    className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                  />
+                </div>
+
+                {/* Tax */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <Percent size={16} className="text-gray-500" />
+                    Tax (%)
+                  </label>
+                  <input
+                    type="number"
+                    name="tax"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={form.tax}
+                    onChange={handleFormChange}
+                    className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                  />
+                </div>
+
+                {/* Payment Details */}
+                <div className="pt-4 border-t border-gray-200/50">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">Payment</h3>
+                  
+                  {/* Payment Method */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <CreditCard size={16} className="text-gray-500" />
+                      Payment Method
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {["cash", "card", "bank_transfer", "check"].map((method) => (
+                        <button
+                          key={method}
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, paymentMethod: method }))}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium capitalize transition-all duration-300 ${
+                            form.paymentMethod === method
+                              ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md"
+                              : "bg-white/60 text-gray-600 hover:bg-white/80"
+                          }`}
+                        >
+                          {method.replace('_', ' ')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Paid Amount */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Paid Amount ($)
+                    </label>
+                    <input
+                      type="number"
+                      name="paidAmount"
+                      min="0"
+                      step="0.01"
+                      max={financialBreakdown.grandTotal}
+                      value={form.paidAmount}
+                      onChange={handleFormChange}
+                      className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Max: ${financialBreakdown.grandTotal.toFixed(2)}
+                    </p>
+                  </div>
+
+                  {/* Balance Display */}
+                  {financialBreakdown.balance > 0 && (
+                    <div className="mt-4 p-3 bg-yellow-50/50 border border-yellow-200/50 rounded-lg">
+                      <p className="text-sm font-medium text-yellow-800">
+                        Balance Due: <span className="font-bold">${financialBreakdown.balance.toFixed(2)}</span>
+                      </p>
+                      <p className="text-xs text-yellow-600 mt-1">
+                        This amount will be recorded as payable
+                      </p>
+                    </div>
+                  )}
+
+                  {financialBreakdown.balance === 0 && parseFloat(form.paidAmount) > 0 && (
+                    <div className="mt-4 p-3 bg-green-50/50 border border-green-200/50 rounded-lg">
+                      <p className="text-sm font-medium text-green-800">
+                        ✅ Fully Paid
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Right Column - Items */}
+          {/* Right Column - Items & Summary */}
           <div className="lg:col-span-2">
             <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
               <div className="flex items-center justify-between mb-6">
@@ -541,6 +804,7 @@ export default function NewPurchase() {
                   const itemDetails = getItemDetails(item);
                   const standardPrice = itemDetails.standardPrice;
                   const currentPrice = parseFloat(item.unitPrice) || 0;
+                  const dropdownItems = getDropdownItems(index);
                   
                   return (
                     <div key={index} className="backdrop-blur-sm bg-white/50 border border-white/60 rounded-xl p-5 shadow-lg">
@@ -598,53 +862,179 @@ export default function NewPurchase() {
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {/* Item Selection */}
-                        <div>
+                        {/* Item Selection with Card Style Dropdown */}
+                        <div className="relative" id={`item-dropdown-${index}`}>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
                             {item.itemType === "material" ? "Material" : "Product"} *
                           </label>
-                          <div className="relative">
-                            <select
-                              value={item.itemType === "material" ? item.materialId : item.productId}
-                              onChange={(e) => {
-                                if (item.itemType === "material") {
-                                  handleItemChange(index, 'materialId', e.target.value);
-                                } else {
-                                  handleItemChange(index, 'productId', e.target.value);
-                                }
-                              }}
-                              onBlur={() => {
-                                if (item.itemType === "material") {
-                                  handleItemSelect(index, "material", item.materialId);
-                                } else {
-                                  handleItemSelect(index, "product", item.productId);
-                                }
-                              }}
-                              required
-                              className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 appearance-none"
-                            >
-                              <option value="">
+                          
+                          {/* Custom dropdown trigger */}
+                          <button
+                            type="button"
+                            onClick={() => toggleDropdown(index)}
+                            className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 flex items-center justify-between text-left"
+                          >
+                            {itemDetails.name ? (
+                              <div className="flex items-center gap-2">
+                                {itemDetails.image ? (
+                                  <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200">
+                                    <img 
+                                      src={getImageUrl(itemDetails.image)} 
+                                      alt={itemDetails.name}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.parentElement.innerHTML = '<div class="w-full h-full bg-gray-100 flex items-center justify-center"><ImageIcon size={14} class="text-gray-400" /></div>';
+                                      }}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 border border-gray-200">
+                                    <ImageIcon size={14} className="text-gray-400" />
+                                  </div>
+                                )}
+                                <div>
+                                  <p className="font-medium text-gray-800 truncate max-w-[120px]">{itemDetails.name}</p>
+                                  <p className="text-xs text-gray-500">
+                                    {item.itemType === "material" 
+                                      ? `$${standardPrice.toFixed(2)}/${itemDetails.unit}`
+                                      : `Cost: $${standardPrice.toFixed(2)}`
+                                    }
+                                  </p>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-500">
                                 -- Select {item.itemType === "material" ? "Material" : "Product"} --
-                              </option>
-                              {item.itemType === "material" ? (
-                                materials.map((m) => (
-                                  <option key={m.id} value={m.id}>
-                                    {m.name} ({m.unit}) - ${m.unit_cost}/unit
-                                  </option>
-                                ))
-                              ) : (
-                                products.map((p) => (
-                                  <option key={p.id} value={p.id}>
-                                    {p.name} - Cost: ${p.cost}
-                                  </option>
-                                ))
-                              )}
-                            </select>
-                          </div>
+                              </span>
+                            )}
+                            <ChevronDown size={20} className={`text-gray-400 transition-transform duration-300 ${openDropdownIndex === index ? 'rotate-180' : ''}`} />
+                          </button>
+
+                          {/* Card Style Dropdown */}
+                          {openDropdownIndex === index && (
+                            <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200/80 rounded-xl shadow-2xl shadow-blue-100/50 backdrop-blur-xl">
+                              <div className="p-3 border-b border-gray-100">
+                                <div className="relative">
+                                  <input
+                                    type="text"
+                                    placeholder={`Search ${item.itemType === "material" ? "materials" : "products"}...`}
+                                    className="w-full px-4 py-2 bg-gray-50/80 border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-sm"
+                                  />
+                                </div>
+                              </div>
+                              
+                              <div className="max-h-64 overflow-y-auto">
+                                {dropdownItems.length === 0 ? (
+                                  <div className="p-4 text-center text-gray-500">
+                                    No {item.itemType === "material" ? "materials" : "products"} available
+                                  </div>
+                                ) : (
+                                  dropdownItems.map((dropdownItem) => {
+                                    const itemImage = getImageUrl(
+                                      item.itemType === "material" 
+                                        ? dropdownItem.image || dropdownItem.photo
+                                        : dropdownItem.image || dropdownItem.photo || dropdownItem.thumbnail
+                                    );
+                                    const isSelected = item.itemType === "material" 
+                                      ? item.materialId === dropdownItem.id.toString()
+                                      : item.productId === dropdownItem.id.toString();
+                                    
+                                    return (
+                                      <div
+                                        key={dropdownItem.id}
+                                        onClick={() => {
+                                          if (item.itemType === "material") {
+                                            handleItemChange(index, 'materialId', dropdownItem.id.toString());
+                                            handleItemSelect(index, "material", dropdownItem.id.toString());
+                                          } else {
+                                            handleItemChange(index, 'productId', dropdownItem.id.toString());
+                                            handleItemSelect(index, "product", dropdownItem.id.toString());
+                                          }
+                                        }}
+                                        className={`p-3 border-b border-gray-100/50 last:border-b-0 cursor-pointer transition-all duration-200 hover:bg-blue-50/50 ${isSelected ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''}`}
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          {/* Item Image */}
+                                          <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 bg-gray-50">
+                                            {itemImage ? (
+                                              <img 
+                                                src={itemImage} 
+                                                alt={dropdownItem.name}
+                                                className="w-full h-full object-cover"
+                                                onError={(e) => {
+                                                  e.target.style.display = 'none';
+                                                  e.target.parentElement.innerHTML = '<div class="w-full h-full bg-gray-100 flex items-center justify-center"><ImageIcon size={18} class="text-gray-400" /></div>';
+                                                }}
+                                              />
+                                            ) : (
+                                              <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                                                <ImageIcon size={18} className="text-gray-400" />
+                                              </div>
+                                            )}
+                                          </div>
+                                          
+                                          {/* Item Details */}
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between">
+                                              <h4 className="font-medium text-gray-800 truncate">
+                                                {dropdownItem.name}
+                                              </h4>
+                                              <span className={`text-sm font-medium px-2 py-0.5 rounded ${isSelected ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
+                                                {item.itemType === "material" ? dropdownItem.unit : "unit"}
+                                              </span>
+                                            </div>
+                                            
+                                            <div className="flex items-center justify-between mt-1">
+                                              <p className="text-sm text-gray-600 truncate">
+                                                {item.itemType === "material" 
+                                                  ? `Unit Cost: $${(dropdownItem.unit_cost || 0).toFixed(2)}`
+                                                  : `Cost: $${(dropdownItem.cost || 0).toFixed(2)}`
+                                                }
+                                              </p>
+                                              
+                                              {item.itemType === "material" && dropdownItem.stock_quantity !== undefined && (
+                                                <p className="text-xs text-gray-500">
+                                                  Stock: {dropdownItem.stock_quantity}
+                                                </p>
+                                              )}
+                                            </div>
+                                            
+                                            if (dropdownItem.code) {
+                                              <p className="text-xs text-gray-500 mt-1">
+                                                Code: {dropdownItem.code}
+                                              </p>
+                                            }
+                                          </div>
+                                          
+                                          {/* Selection Indicator */}
+                                          {isSelected && (
+                                            <div className="flex-shrink-0">
+                                              <Check size={16} className="text-blue-500" />
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                                )}
+                              </div>
+                              
+                              <div className="p-3 border-t border-gray-100 bg-gray-50/50 rounded-b-xl">
+                                <p className="text-xs text-gray-500 text-center">
+                                  Showing {dropdownItems.length} {item.itemType === "material" ? "materials" : "products"}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                          
                           {itemDetails.name && (
-                            <p className="mt-2 text-xs text-gray-600">
-                              Selected: <span className="font-medium">{itemDetails.name}</span>
-                            </p>
+                            <div className="mt-2">
+                              <p className="text-xs text-gray-600">
+                                Selected: <span className="font-medium">{itemDetails.name}</span>
+                                {itemDetails.unit && ` (${itemDetails.unit})`}
+                              </p>
+                            </div>
                           )}
                         </div>
 
@@ -728,18 +1118,108 @@ export default function NewPurchase() {
                 })}
               </div>
 
-              {/* Grand Total */}
+              {/* Financial Summary */}
               <div className="mt-8 pt-6 border-t border-white/50">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Items: {purchaseItems.length}</p>
-                    <p className="text-lg font-semibold text-gray-800">Grand Total</p>
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <DollarSign className="text-blue-600" size={20} />
                   </div>
-                  <div className="text-right">
-                    <div className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                      ${form.grandTotal.toFixed(2)}
+                  Financial Summary
+                </h3>
+                
+                <div className="space-y-3">
+                  {/* Subtotal */}
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-gray-600">Subtotal</span>
+                    <span className="font-medium">${financialBreakdown.subtotal.toFixed(2)}</span>
+                  </div>
+                  
+                  {/* Discount */}
+                  {financialBreakdown.discountAmount > 0 && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <Percent size={14} className="text-gray-500" />
+                        <span className="text-gray-600">Discount ({form.discount}%)</span>
+                      </div>
+                      <span className="font-medium text-red-600">-${financialBreakdown.discountAmount.toFixed(2)}</span>
                     </div>
-                    <p className="text-sm text-gray-600 mt-1">Including all items and taxes</p>
+                  )}
+                  
+                  {/* Amount After Discount */}
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-gray-600">Amount After Discount</span>
+                    <span className="font-medium">${financialBreakdown.amountAfterDiscount.toFixed(2)}</span>
+                  </div>
+                  
+                  {/* Tax */}
+                  {financialBreakdown.taxAmount > 0 && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <Percent size={14} className="text-gray-500" />
+                        <span className="text-gray-600">Tax ({form.tax}%)</span>
+                      </div>
+                      <span className="font-medium text-yellow-600">+${financialBreakdown.taxAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  
+                  {/* Shipping */}
+                  {financialBreakdown.shippingCost > 0 && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <ShippingIcon size={14} className="text-gray-500" />
+                        <span className="text-gray-600">Shipping Cost</span>
+                      </div>
+                      <span className="font-medium text-blue-600">+${financialBreakdown.shippingCost.toFixed(2)}</span>
+                    </div>
+                  )}
+                  
+                  {/* Grand Total */}
+                  <div className="flex justify-between items-center py-3 border-t border-gray-200 mt-2">
+                    <span className="text-lg font-semibold text-gray-800">Grand Total</span>
+                    <span className="text-2xl font-bold text-blue-700">${financialBreakdown.grandTotal.toFixed(2)}</span>
+                  </div>
+                  
+                  {/* Paid Amount */}
+                  {parseFloat(form.paidAmount) > 0 && (
+                    <div className="flex justify-between items-center py-2 bg-green-50/50 rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <CreditCard size={14} className="text-green-600" />
+                        <span className="text-gray-600">Paid Amount</span>
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                          {form.paymentMethod}
+                        </span>
+                      </div>
+                      <span className="font-bold text-green-700">${parseFloat(form.paidAmount).toFixed(2)}</span>
+                    </div>
+                  )}
+                  
+                  {/* Balance */}
+                  {financialBreakdown.balance > 0 && (
+                    <div className="flex justify-between items-center py-2 bg-yellow-50/50 rounded-lg p-3">
+                      <span className="text-gray-600">Balance Due</span>
+                      <span className="font-bold text-yellow-700">${financialBreakdown.balance.toFixed(2)}</span>
+                    </div>
+                  )}
+                  
+                  {/* Payment Status */}
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-gray-600">Payment Status</p>
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        financialBreakdown.balance === 0 
+                          ? "bg-green-100 text-green-800" 
+                          : financialBreakdown.balance === financialBreakdown.grandTotal
+                          ? "bg-red-100 text-red-800"
+                          : "bg-yellow-100 text-yellow-800"
+                      }`}>
+                        {financialBreakdown.balance === 0 
+                          ? "Fully Paid" 
+                          : financialBreakdown.balance === financialBreakdown.grandTotal
+                          ? "Unpaid"
+                          : "Partial Payment"
+                        }
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

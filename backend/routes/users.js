@@ -7,7 +7,7 @@ const router = express.Router();
 // Create new user
 router.post("/", async (req, res) => {
   try {
-    const { email, name, password, role } = req.body;
+    const { email, name, password, role, permissionId } = req.body;
 
     // Validate required fields
     if (!email || !name || !password) {
@@ -29,24 +29,42 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Invalid role" });
     }
 
+    // Check if permission exists if provided
+    if (permissionId) {
+      const permission = await prisma.permission.findUnique({
+        where: { id: parseInt(permissionId) }
+      });
+      
+      if (!permission) {
+        return res.status(400).json({ error: "Permission not found" });
+      }
+    }
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Create user with empty permissions
+    // Create user
     const user = await prisma.user.create({
       data: {
         email,
         name,
         password: hashedPassword,
         role,
-        permissions: {} // Empty object by default
+        permissionId: permissionId ? parseInt(permissionId) : null
       },
       select: {
         id: true,
         email: true,
         name: true,
         role: true,
-        permissions: true
+        permission: {
+          select: {
+            id: true,
+            name: true,
+            permissions: true
+          }
+        },
+        profile: true
       }
     });
 
@@ -65,22 +83,31 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, role, permissions } = req.body;
+    const { name, email, role, permissionId } = req.body;
 
     // Validate required fields
     if (!name || !email) {
       return res.status(400).json({ error: "Name and email are required" });
     }
 
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({
+      where: { id: parseInt(id) }
+    });
+
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
     // Check if email already exists for other users
-    const existingUser = await prisma.user.findFirst({
+    const emailConflict = await prisma.user.findFirst({
       where: {
         email,
         NOT: { id: parseInt(id) }
       }
     });
 
-    if (existingUser) {
+    if (emailConflict) {
       return res.status(400).json({ error: "Email already exists" });
     }
 
@@ -90,36 +117,17 @@ router.put("/:id", async (req, res) => {
       return res.status(400).json({ error: "Invalid role" });
     }
 
-    // Validate permissions structure if provided
-    if (permissions && typeof permissions === 'object') {
-      // Validate locations array structure
-      if (permissions.locations && Array.isArray(permissions.locations)) {
-        for (const location of permissions.locations) {
-          if (!location.type || !location.id || !location.name) {
-            return res.status(400).json({ 
-              error: "Each location must have type, id, and name" 
-            });
-          }
-
-          if (!['factory', 'store', 'shop'].includes(location.type)) {
-            return res.status(400).json({ 
-              error: "Location type must be factory, store, or shop" 
-            });
-          }
-
-          if (!location.permissions || typeof location.permissions !== 'object') {
-            return res.status(400).json({ 
-              error: "Each location must have permissions object" 
-            });
-          }
-
-          // Ensure all CRUD permissions are boolean
-          const validPermissions = ['create', 'read', 'update', 'delete'];
-          for (const perm of validPermissions) {
-            if (typeof location.permissions[perm] !== 'boolean') {
-              location.permissions[perm] = false;
-            }
-          }
+    // Check if permission exists if provided
+    if (permissionId !== undefined) {
+      if (permissionId === null) {
+        // Allow null to remove permission
+      } else {
+        const permission = await prisma.permission.findUnique({
+          where: { id: parseInt(permissionId) }
+        });
+        
+        if (!permission) {
+          return res.status(400).json({ error: "Permission not found" });
         }
       }
     }
@@ -131,20 +139,23 @@ router.put("/:id", async (req, res) => {
         name,
         email,
         role,
-        permissions: permissions || { locations: [] }
+        permissionId: permissionId !== undefined ? (permissionId ? parseInt(permissionId) : null) : existingUser.permissionId
       },
       select: {
         id: true,
         email: true,
         name: true,
         role: true,
-        permissions: true,
-        profile: {
+        permission: {
           select: {
             id: true,
-            bio: true
+            name: true,
+            permissions: true
           }
-        }
+        },
+        profile: true,
+        createdAt: true,
+        updatedAt: true
       }
     });
 
@@ -173,20 +184,25 @@ router.get("/", async (req, res) => {
         email: true,
         name: true,
         role: true,
-        permissions: true,
-        profile: {
+        permission: {
           select: {
             id: true,
-            bio: true
+            name: true,
+            permissions: true
           }
         },
+        profile: true,
         createdAt: true,
         updatedAt: true
       },
+      orderBy: {
+        createdAt: 'desc'
+      }
     });
 
     res.json(users);
   } catch (err) {
+    console.error("Get users error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -203,13 +219,14 @@ router.get("/:id", async (req, res) => {
         email: true,
         name: true,
         role: true,
-        permissions: true,
-        profile: {
+        permission: {
           select: {
             id: true,
-            bio: true
+            name: true,
+            permissions: true
           }
         },
+        profile: true,
         createdAt: true,
         updatedAt: true
       }
@@ -221,6 +238,7 @@ router.get("/:id", async (req, res) => {
 
     res.json(user);
   } catch (err) {
+    console.error("Get user error:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -246,44 +264,6 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// Get users by location type and ID
-router.get("/location/:type/:id", async (req, res) => {
-  try {
-    const { type, id } = req.params;
-    const locationId = parseInt(id);
-
-    if (!['factory', 'store', 'shop'].includes(type)) {
-      return res.status(400).json({ error: "Invalid location type" });
-    }
-
-    const allUsers = await prisma.user.findMany({
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        permissions: true,
-      }
-    });
-
-    // Filter users who have this location in their permissions
-    const users = allUsers.filter(user => {
-      if (!user.permissions || typeof user.permissions !== 'object') {
-        return false;
-      }
-      
-      return Object.values(user.permissions).some(location => 
-        location.type === type && location.id === locationId
-      );
-    });
-
-    res.json(users);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
 // Get user by email
 router.get("/email/:email", async (req, res) => {
   try {
@@ -296,13 +276,14 @@ router.get("/email/:email", async (req, res) => {
         email: true,
         name: true,
         role: true,
-        permissions: true,
-        profile: {
+        permission: {
           select: {
             id: true,
-            bio: true
+            name: true,
+            permissions: true
           }
         },
+        profile: true,
         createdAt: true,
         updatedAt: true
       }
@@ -314,7 +295,156 @@ router.get("/email/:email", async (req, res) => {
 
     res.json(user);
   } catch (err) {
+    console.error("Get user by email error:", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Assign/update permission for a user
+router.put("/:userId/permission", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { permissionId } = req.body;
+
+    // Check if user exists
+    const user = await prisma.user.findUnique({
+      where: { id: parseInt(userId) }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // If permissionId is provided, check if permission exists
+    if (permissionId !== undefined && permissionId !== null) {
+      const permission = await prisma.permission.findUnique({
+        where: { id: parseInt(permissionId) }
+      });
+
+      if (!permission) {
+        return res.status(404).json({ error: "Permission not found" });
+      }
+    }
+
+    // Update user's permission
+    const updatedUser = await prisma.user.update({
+      where: { id: parseInt(userId) },
+      data: {
+        permissionId: permissionId === null ? null : parseInt(permissionId)
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        permission: {
+          select: {
+            id: true,
+            name: true,
+            permissions: true
+          }
+        },
+        profile: true
+      }
+    });
+
+    res.json(updatedUser);
+  } catch (error) {
+    console.error("Error updating user permission:", error);
+    res.status(500).json({ error: "Failed to update user permission" });
+  }
+});
+
+// Get user's permissions
+router.get("/:userId/permissions", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await prisma.user.findUnique({
+      where: { id: parseInt(userId) },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        permission: {
+          select: {
+            id: true,
+            name: true,
+            permissions: true
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Return permissions array or empty array
+    const permissions = user.permission?.permissions || [];
+    res.json({ 
+      userId: user.id,
+      userName: user.name,
+      permissionName: user.permission?.name,
+      permissions: permissions
+    });
+  } catch (error) {
+    console.error("Error fetching user permissions:", error);
+    res.status(500).json({ error: "Failed to fetch user permissions" });
+  }
+});
+
+// Check if user has specific permission
+router.get("/:userId/has-permission/:permission", async (req, res) => {
+  try {
+    const { userId, permission } = req.params;
+
+    const user = await prisma.user.findUnique({
+      where: { id: parseInt(userId) },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        permission: {
+          select: {
+            id: true,
+            name: true,
+            permissions: true
+          }
+        }
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Admin users have all permissions
+    if (user.role === 'ADMIN') {
+      return res.json({ 
+        hasPermission: true, 
+        isAdmin: true,
+        userId: user.id,
+        userName: user.name
+      });
+    }
+
+    // Check if user has permission
+    const userPermissions = user.permission?.permissions || [];
+    const hasPermission = Array.isArray(userPermissions) 
+      ? userPermissions.includes(permission)
+      : false;
+
+    res.json({ 
+      hasPermission,
+      isAdmin: false,
+      userId: user.id,
+      userName: user.name,
+      permissionName: user.permission?.name
+    });
+  } catch (error) {
+    console.error("Error checking permission:", error);
+    res.status(500).json({ error: "Failed to check permission" });
   }
 });
 

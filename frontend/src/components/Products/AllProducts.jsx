@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES } from '../../config';
-import { Pen, Trash2 } from 'lucide-react';
+import { Pen, Trash2, Image as ImageIcon } from 'lucide-react';
 
 const AllProducts = () => {
   const [products, setProducts] = useState([]);
@@ -11,6 +11,25 @@ const AllProducts = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [expandedProductId, setExpandedProductId] = useState(null);
 
+  // Function to get full image URL
+  const getImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  
+  // If the image path already starts with http, return as is
+  if (imagePath.startsWith('http')) return imagePath;
+  
+  // Your server runs on port 3001
+  const baseUrl = 'http://localhost:3001';
+  
+  // Check if the path already has /uploads prefix
+  if (imagePath.startsWith('/uploads')) {
+    // Already has the correct path structure
+    return `${baseUrl}${imagePath}`;
+  } else {
+    // If somehow the path doesn't have /uploads prefix, add it
+    return `${baseUrl}/uploads/${imagePath}`;
+  }
+};
   useEffect(() => {
     const fetchProducts = async () => {
       try {
@@ -83,6 +102,7 @@ const AllProducts = () => {
             <table className="min-w-full">
               <thead className="bg-gradient-to-r from-gray-800 to-gray-700 text-white">
                 <tr>
+                  <th className="py-4 px-6 text-left font-medium text-sm uppercase tracking-wider">Image</th>
                   <th className="py-4 px-6 text-left font-medium text-sm uppercase tracking-wider">Product Details</th>
                   <th className="py-4 px-6 text-left font-medium text-sm uppercase tracking-wider">Sale Price</th>
                   <th className="py-4 px-6 text-left font-medium text-sm uppercase tracking-wider">Wholesale Price</th>
@@ -94,13 +114,50 @@ const AllProducts = () => {
               <tbody className="divide-y divide-gray-200/50">
                 {products.map((product, index) => {
                   const stockStatus = getStockStatus(product.stock);
+                  const imageUrl = getImageUrl(product.image);
+                  console.log('Product:', product.name, 'Image URL:', imageUrl, 'Original path:', product.image); // Debug log
+                  
                   return (
                     <React.Fragment key={product.id}>
                       <tr className={`${index % 2 === 0 ? 'bg-gray-50/30' : 'bg-white/30'} hover:bg-gray-100/50 transition-colors duration-150`}>
                         <td className="py-4 px-6">
+                          <div className="flex items-center justify-center">
+                            {imageUrl ? (
+                              <div className="w-18 h-18 rounded-lg overflow-hidden border border-gray-200/50 bg-white shadow-sm group relative">
+                                <img 
+                                  src={imageUrl} 
+                                  alt={product.name}
+                                  className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                                  onError={(e) => {
+                                    console.error('Error loading image:', imageUrl);
+                                    e.target.style.display = 'none';
+                                    const parent = e.target.parentElement;
+                                    parent.innerHTML = `
+                                      <div class="w-full h-full flex items-center justify-center bg-gray-100">
+                                        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                      </div>
+                                    `;
+                                  }}
+                                  onLoad={() => console.log('Image loaded successfully:', imageUrl)}
+                                />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200"></div>
+                              </div>
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg border border-gray-200/50 bg-gray-50 flex items-center justify-center shadow-sm">
+                                <ImageIcon className="w-6 h-6 text-gray-400" />
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-4 px-6">
                           <div className="flex items-center space-x-3">
                             <div className="flex-1">
                               <h3 className="font-medium text-gray-900">{product.name}</h3>
+                              {product.description && (
+                                <p className="text-sm text-gray-600 mt-1 line-clamp-1">{product.description}</p>
+                              )}
                             </div>
                             <button 
                               onClick={() => toggleMaterials(product.id)}
@@ -148,7 +205,7 @@ const AllProducts = () => {
                       {/* Expanded Materials Section */}
                       {expandedProductId === product.id && (
                         <tr className="bg-blue-50/30 border-t border-blue-100/50">
-                          <td colSpan="6" className="py-6 px-6">
+                          <td colSpan="7" className="py-6 px-6">
                             <div className="backdrop-blur-sm bg-white/50 rounded-lg p-4 border border-white/40">
                               <h4 className="font-medium text-gray-800 mb-3 flex items-center">
                                 <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
