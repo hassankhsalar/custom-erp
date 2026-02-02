@@ -458,7 +458,7 @@ export default function PermissionsManagement() {
               }`}
             >
               <UserCheck size={20} />
-              Assign to Users
+              Assign Role to Users
             </button>
           </div>
         </div>

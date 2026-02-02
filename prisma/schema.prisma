@@ -24,7 +24,7 @@ model User {
   updatedAt        DateTime @updatedAt
   transactions   Transactions[]
   cashRegisterWithdraw  CashRegisterWithdraw[]
-  cashRegisterTransaction  CashRegisterTransaction[]
+  cashRegisterTransaction  CashRegisterRecord[]
   entityAccount             EntityAccount[]
   cashRegisterAssignment    CashRegisterAssignment[]
   userAssociate              UserAssociate[]
@@ -78,9 +78,21 @@ model Accounts {
   updatedAt   DateTime  @updatedAt
   transactions Transactions[]
   entityAssignments EntityAccount[]
+  purchase     Purchase[]
 
   @@index([createdAt])
 }
+
+model BankAccount {
+  id                   Int       @id @default(autoincrement())
+  name                String
+  account_number      String    @unique
+  starting_balance    Float     @default(0)
+  current_balance     Float     @default(0)
+  withdraw_charge     Float?
+  transactions        Transactions[]
+}
+
 
 model CashRegisterAssignment {
   id                Int            @id @default(autoincrement())
@@ -112,13 +124,13 @@ model CashRegister {
   updatedAt   DateTime            @updatedAt
   transactions  Transactions[]
   cashRegisterWithdraw CashRegisterWithdraw[]
-  cashRegisterTransaction  CashRegisterTransaction[]
+  cashRegisterTransaction  CashRegisterRecord[]
   assignments       CashRegisterAssignment[]
   @@index([createdAt])
   @@index([status])
 }
 
-model CashRegisterTransaction {
+model CashRegisterRecord {
   id              Int       @id @default(autoincrement())
 
   cashRegisterId  Int
@@ -176,6 +188,9 @@ model Transactions {
   cashRegisterId           Int?
   cashRegister             CashRegister? @relation(fields: [cashRegisterId], references: [id])
 
+  bankAccountId           Int?
+  bankAccount             BankAccount?   @relation(fields: [bankAccountId], references: [id])
+
   accountId                Int
   account                  Accounts  @relation(fields: [accountId], references: [id])
 
@@ -185,10 +200,11 @@ model Transactions {
   purchaseId               Int?
   purchase                 Purchase? @relation(fields: [purchaseId], references: [id])
 
-  purpose                  String
-  amount                   Float
-  payment_method           String
-  current_account_balance  Float
+  purpose                  String?
+  added_to_account         Boolean?
+  amount                   Float?
+  payment_method           String?
+  current_account_balance  Float?
   note                     String?
 
   createdAt                DateTime  @default(now())
@@ -320,7 +336,6 @@ model Store {
   mobile                  String?
   storeMaterials          StoreMaterial[]
   storeProducts           StoreProduct[]
-  purchases               Purchase[]
   storeToShopTransfer     StoreToShopTransfer[]
   //sales                   Sale[]
   //saleReturns             SaleReturn[]
@@ -392,15 +407,20 @@ model Purchase {
   id         Int      @id @default(autoincrement())
   reference   String?       @unique
   supplierId Int
-  storeId    Int?
   destinationType String? // New: "store", "shop", "factory"
   destinationId   Int?    // New: ID of store/shop/factory
   supplier   Supplier @relation(fields: [supplierId], references: [id], name: "SupplierPurchases")
   createdAt  DateTime @default(now())
-  store      Store?   @relation(fields: [storeId], references: [id])
-  grandTotal  Float
+  grandTotal   Float
+  paidAmount   Float     @default(0)
+  shippingCost Float?
+  discount     Float?
+  tax          Float?
   purchaseItems PurchaseItem[]
   transactions Transactions[]
+
+  accountId       Int?          
+  account         Accounts?     @relation(fields: [accountId], references: [id])
 
   @@index([destinationType])
   @@index([destinationId])
@@ -505,7 +525,7 @@ model Shop {
   sales         Sale[]
   saleReturns   SaleReturn[]
   storeToShopTransfer StoreToShopTransfer[]
-  cashRegisterTransaction  CashRegisterTransaction[]
+  cashRegisterRecord  CashRegisterRecord[]
 }
 
 model ShopProduct {

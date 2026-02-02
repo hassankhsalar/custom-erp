@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Plus, Trash2, Package, Tag, Truck, Building2, Store, Factory, ShoppingBag, Check, Image as ImageIcon, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Package, Tag, Truck, Building2, Store, Factory, ShoppingBag, Check, Image as ImageIcon, ChevronDown, CreditCard, DollarSign, Percent, Truck as ShippingIcon } from "lucide-react";
 
 export default function NewPurchase() {
   const [materials, setMaterials] = useState([]);
@@ -24,12 +24,28 @@ export default function NewPurchase() {
     supplierId: "",
     destinationType: "store",
     destinationId: "",
+    shippingCost: "0",
+    discount: "0",
+    tax: "0",
+    paidAmount: "0",
+    paymentMethod: "cash",
     grandTotal: 0,
     reference: `PUR-${Date.now()}`
   });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [openDropdownIndex, setOpenDropdownIndex] = useState(null);
+  
+  // Financial breakdown state
+  const [financialBreakdown, setFinancialBreakdown] = useState({
+    subtotal: 0,
+    discountAmount: 0,
+    amountAfterDiscount: 0,
+    taxAmount: 0,
+    shippingCost: 0,
+    grandTotal: 0,
+    balance: 0
+  });
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -131,14 +147,52 @@ export default function NewPurchase() {
     }
   };
 
-  // Update grand total whenever purchase items change
+  // Calculate subtotal from purchase items
   useEffect(() => {
-    const grandTotal = purchaseItems.reduce((sum, item) => sum + item.total, 0);
+    const subtotal = purchaseItems.reduce((sum, item) => sum + item.total, 0);
+    const discountPercent = parseFloat(form.discount) || 0;
+    const taxPercent = parseFloat(form.tax) || 0;
+    const shippingCost = parseFloat(form.shippingCost) || 0;
+    
+    // Calculate discount amount
+    const discountAmount = (discountPercent / 100) * subtotal;
+    
+    // Calculate amount after discount
+    const amountAfterDiscount = subtotal - discountAmount;
+    
+    // Calculate tax amount
+    const taxAmount = (taxPercent / 100) * amountAfterDiscount;
+    
+    // Calculate grand total
+    const grandTotal = amountAfterDiscount + taxAmount + shippingCost;
+    
+    // Calculate balance
+    const paidAmount = parseFloat(form.paidAmount) || 0;
+    const balance = grandTotal - paidAmount;
+    
+    setFinancialBreakdown({
+      subtotal,
+      discountAmount,
+      amountAfterDiscount,
+      taxAmount,
+      shippingCost,
+      grandTotal,
+      balance
+    });
+    
     setForm(prev => ({ ...prev, grandTotal }));
-  }, [purchaseItems]);
+  }, [purchaseItems, form.discount, form.tax, form.shippingCost, form.paidAmount]);
 
   const handleFormChange = (e) => {
     const { name, value } = e.target;
+    
+    // Validate numeric inputs
+    if (["shippingCost", "discount", "tax", "paidAmount"].includes(name)) {
+      if (value && (isNaN(value) || parseFloat(value) < 0)) {
+        return;
+      }
+    }
+    
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
@@ -336,12 +390,31 @@ export default function NewPurchase() {
       return;
     }
 
+    // Validate paid amount
+    const paidAmount = parseFloat(form.paidAmount) || 0;
+    if (paidAmount > financialBreakdown.grandTotal) {
+      setMessage("❌ Paid amount cannot exceed grand total");
+      setLoading(false);
+      return;
+    }
+
     try {
+      const token = localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token && { "Authorization": `Bearer ${token}` })
+      };
+
       const payload = {
         supplierId: parseInt(form.supplierId),
         destinationType: form.destinationType,
         destinationId: parseInt(form.destinationId),
-        grandTotal: form.grandTotal,
+        shippingCost: parseFloat(form.shippingCost) || 0,
+        discount: parseFloat(form.discount) || 0,
+        tax: parseFloat(form.tax) || 0,
+        paidAmount: paidAmount,
+        paymentMethod: form.paymentMethod,
+        grandTotal: financialBreakdown.grandTotal,
         reference: form.reference,
         items: validItems.map(item => ({
           itemType: item.itemType,
@@ -354,18 +427,23 @@ export default function NewPurchase() {
 
       const res = await fetch("http://localhost:3001/api/purchases", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload),
       });
         
       const data = await res.json();
       if (res.ok) {
-        setMessage("✅ Purchase added successfully!");
+        setMessage("✅ Purchase created successfully with transaction!");
         // Reset form
         setForm({
           supplierId: "",
           destinationType: "store",
           destinationId: "",
+          shippingCost: "0",
+          discount: "0",
+          tax: "0",
+          paidAmount: "0",
+          paymentMethod: "cash",
           grandTotal: 0,
           reference: `PUR-${Date.now()}`
         });
@@ -381,11 +459,20 @@ export default function NewPurchase() {
           materialUnitPrice: 0,
           productCost: 0
         }]);
+        setFinancialBreakdown({
+          subtotal: 0,
+          discountAmount: 0,
+          amountAfterDiscount: 0,
+          taxAmount: 0,
+          shippingCost: 0,
+          grandTotal: 0,
+          balance: 0
+        });
       } else {
-        setMessage(`❌ ${data.error || data.message || "Failed to add purchase"}`);
+        setMessage(`❌ ${data.error || data.message || "Failed to create purchase"}`);
       }
     } catch (error) {
-      setMessage("❌ Failed to add purchase: " + error.message);
+      setMessage("❌ Failed to create purchase: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -557,9 +644,142 @@ export default function NewPurchase() {
                 </div>
               </div>
             </div>
+
+            {/* Financial Details Card */}
+            <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <DollarSign className="text-purple-600" size={20} />
+                </div>
+                Financial Details
+              </h2>
+              <div className="space-y-4">
+                {/* Shipping Cost */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <ShippingIcon size={16} className="text-gray-500" />
+                    Shipping Cost ($)
+                  </label>
+                  <input
+                    type="number"
+                    name="shippingCost"
+                    min="0"
+                    step="0.01"
+                    value={form.shippingCost}
+                    onChange={handleFormChange}
+                    className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                  />
+                </div>
+
+                {/* Discount */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <Percent size={16} className="text-gray-500" />
+                    Discount (%)
+                  </label>
+                  <input
+                    type="number"
+                    name="discount"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={form.discount}
+                    onChange={handleFormChange}
+                    className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                  />
+                </div>
+
+                {/* Tax */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <Percent size={16} className="text-gray-500" />
+                    Tax (%)
+                  </label>
+                  <input
+                    type="number"
+                    name="tax"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={form.tax}
+                    onChange={handleFormChange}
+                    className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                  />
+                </div>
+
+                {/* Payment Details */}
+                <div className="pt-4 border-t border-gray-200/50">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">Payment</h3>
+                  
+                  {/* Payment Method */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <CreditCard size={16} className="text-gray-500" />
+                      Payment Method
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {["cash", "card", "bank_transfer", "check"].map((method) => (
+                        <button
+                          key={method}
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, paymentMethod: method }))}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium capitalize transition-all duration-300 ${
+                            form.paymentMethod === method
+                              ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md"
+                              : "bg-white/60 text-gray-600 hover:bg-white/80"
+                          }`}
+                        >
+                          {method.replace('_', ' ')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Paid Amount */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Paid Amount ($)
+                    </label>
+                    <input
+                      type="number"
+                      name="paidAmount"
+                      min="0"
+                      step="0.01"
+                      max={financialBreakdown.grandTotal}
+                      value={form.paidAmount}
+                      onChange={handleFormChange}
+                      className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Max: ${financialBreakdown.grandTotal.toFixed(2)}
+                    </p>
+                  </div>
+
+                  {/* Balance Display */}
+                  {financialBreakdown.balance > 0 && (
+                    <div className="mt-4 p-3 bg-yellow-50/50 border border-yellow-200/50 rounded-lg">
+                      <p className="text-sm font-medium text-yellow-800">
+                        Balance Due: <span className="font-bold">${financialBreakdown.balance.toFixed(2)}</span>
+                      </p>
+                      <p className="text-xs text-yellow-600 mt-1">
+                        This amount will be recorded as payable
+                      </p>
+                    </div>
+                  )}
+
+                  {financialBreakdown.balance === 0 && parseFloat(form.paidAmount) > 0 && (
+                    <div className="mt-4 p-3 bg-green-50/50 border border-green-200/50 rounded-lg">
+                      <p className="text-sm font-medium text-green-800">
+                        ✅ Fully Paid
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Right Column - Items */}
+          {/* Right Column - Items & Summary */}
           <div className="lg:col-span-2">
             <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
               <div className="flex items-center justify-between mb-6">
@@ -780,11 +1000,11 @@ export default function NewPurchase() {
                                               )}
                                             </div>
                                             
-                                            {dropdownItem.code && (
+                                            if (dropdownItem.code) {
                                               <p className="text-xs text-gray-500 mt-1">
                                                 Code: {dropdownItem.code}
                                               </p>
-                                            )}
+                                            }
                                           </div>
                                           
                                           {/* Selection Indicator */}
@@ -898,18 +1118,108 @@ export default function NewPurchase() {
                 })}
               </div>
 
-              {/* Grand Total */}
+              {/* Financial Summary */}
               <div className="mt-8 pt-6 border-t border-white/50">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Items: {purchaseItems.length}</p>
-                    <p className="text-lg font-semibold text-gray-800">Grand Total</p>
+                <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <DollarSign className="text-blue-600" size={20} />
                   </div>
-                  <div className="text-right">
-                    <div className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                      ${form.grandTotal.toFixed(2)}
+                  Financial Summary
+                </h3>
+                
+                <div className="space-y-3">
+                  {/* Subtotal */}
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-gray-600">Subtotal</span>
+                    <span className="font-medium">${financialBreakdown.subtotal.toFixed(2)}</span>
+                  </div>
+                  
+                  {/* Discount */}
+                  {financialBreakdown.discountAmount > 0 && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <Percent size={14} className="text-gray-500" />
+                        <span className="text-gray-600">Discount ({form.discount}%)</span>
+                      </div>
+                      <span className="font-medium text-red-600">-${financialBreakdown.discountAmount.toFixed(2)}</span>
                     </div>
-                    <p className="text-sm text-gray-600 mt-1">Including all items and taxes</p>
+                  )}
+                  
+                  {/* Amount After Discount */}
+                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span className="text-gray-600">Amount After Discount</span>
+                    <span className="font-medium">${financialBreakdown.amountAfterDiscount.toFixed(2)}</span>
+                  </div>
+                  
+                  {/* Tax */}
+                  {financialBreakdown.taxAmount > 0 && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <Percent size={14} className="text-gray-500" />
+                        <span className="text-gray-600">Tax ({form.tax}%)</span>
+                      </div>
+                      <span className="font-medium text-yellow-600">+${financialBreakdown.taxAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  
+                  {/* Shipping */}
+                  {financialBreakdown.shippingCost > 0 && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <ShippingIcon size={14} className="text-gray-500" />
+                        <span className="text-gray-600">Shipping Cost</span>
+                      </div>
+                      <span className="font-medium text-blue-600">+${financialBreakdown.shippingCost.toFixed(2)}</span>
+                    </div>
+                  )}
+                  
+                  {/* Grand Total */}
+                  <div className="flex justify-between items-center py-3 border-t border-gray-200 mt-2">
+                    <span className="text-lg font-semibold text-gray-800">Grand Total</span>
+                    <span className="text-2xl font-bold text-blue-700">${financialBreakdown.grandTotal.toFixed(2)}</span>
+                  </div>
+                  
+                  {/* Paid Amount */}
+                  {parseFloat(form.paidAmount) > 0 && (
+                    <div className="flex justify-between items-center py-2 bg-green-50/50 rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <CreditCard size={14} className="text-green-600" />
+                        <span className="text-gray-600">Paid Amount</span>
+                        <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                          {form.paymentMethod}
+                        </span>
+                      </div>
+                      <span className="font-bold text-green-700">${parseFloat(form.paidAmount).toFixed(2)}</span>
+                    </div>
+                  )}
+                  
+                  {/* Balance */}
+                  {financialBreakdown.balance > 0 && (
+                    <div className="flex justify-between items-center py-2 bg-yellow-50/50 rounded-lg p-3">
+                      <span className="text-gray-600">Balance Due</span>
+                      <span className="font-bold text-yellow-700">${financialBreakdown.balance.toFixed(2)}</span>
+                    </div>
+                  )}
+                  
+                  {/* Payment Status */}
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-gray-600">Payment Status</p>
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        financialBreakdown.balance === 0 
+                          ? "bg-green-100 text-green-800" 
+                          : financialBreakdown.balance === financialBreakdown.grandTotal
+                          ? "bg-red-100 text-red-800"
+                          : "bg-yellow-100 text-yellow-800"
+                      }`}>
+                        {financialBreakdown.balance === 0 
+                          ? "Fully Paid" 
+                          : financialBreakdown.balance === financialBreakdown.grandTotal
+                          ? "Unpaid"
+                          : "Partial Payment"
+                        }
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
