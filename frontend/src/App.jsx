@@ -63,6 +63,22 @@ import ShopToFactory from "./components/Transfer/ShopToFactory";
 import Navbar from "./components/Navbar";
 import Notifications from "./components/Notifications";
 import UserProfile from "./components/UserProfile";
+import ScrapRecord from "./components/ScrapRecord/ScrapRecord";
+import ProductRepair from "./components/ProductRepair/ProductRepair";
+import AddScrapRecord from "./components/ScrapRecord/AddScrapRecord";
+import AddRepairProduct from "./components/ProductRepair/AddRepairProduct";
+import AddRepairMaterial from "./components/MaterialRepair/AddRepairMaterial";
+import MaterialRepair from "./components/MaterialRepair/MaterialRepair";
+import AddMaterialScrapRecord from "./components/ScrapRecord/AddMaterialScrapRecord";
+import MaterialScrapRecord from "./components/ScrapRecord/MaterialScrapRecord";
+import AddAccount from "./components/Accounts/AddAccount";
+import AllAccounts from "./components/Accounts/AllAccounts";
+import AssignAccount from "./components/Accounts/AssignAccount";
+import CashRegisterAssign from "./components/Accounts/CashRegisterAssign";
+import AddCashRegister from "./components/Accounts/AddCashRegister";
+import AssignUser from "./components/Users/AssignUser";
+import AllAssignedUsers from "./components/Users/AllAssignedUsers";
+import PermissionsManagement from "./components/Permissions/PermissionsManagement";
 
 const AuthContext = createContext(null);
 
@@ -97,14 +113,15 @@ const PrivateRoute = () => {
 // Layout component for authenticated users
 const AuthenticatedLayout = () => {
   return (
-    <div className="">
-      <div className="h-25 w-full mx-auto">
-        <Navbar />
-      </div>
-      <div className="flex">
-        <div>
+    <div className="flex">
+      
+      <div>
           <Sidebar />
         </div>
+      <div className="">
+        <div className="h-25 w-full mx-auto">
+        <Navbar />
+      </div>
         <div style={{ flexGrow: 1, padding: "0px" }}>
           <Outlet /> {/* This is where nested routes will render */}
         </div>
@@ -165,6 +182,32 @@ function App() {
             <Route path="/users/all" element={<AllUser />} />
             <Route path="/users/create" element={<CreateUser />} />
             <Route path="/settings" element={<Settings />} />
+
+            <Route path="/addaccount" element={<AddAccount />} />
+            <Route path="/allaccounts" element={<AllAccounts />} />
+            <Route path="/assignaccount" element={<AssignAccount />} />
+            <Route path="/cashregisterassign" element={<CashRegisterAssign />} />
+            <Route path="/addcashregister" element={<AddCashRegister />} />
+
+            
+            <Route path="/assignuser" element={<AssignUser />} />
+            <Route path="/assignedusers" element={<AllAssignedUsers />} />
+            
+            <Route path="/managepermissions" element={<PermissionsManagement />} />
+
+            
+            <Route path="/scraprecord" element={<ScrapRecord />} />
+            <Route path="/addscraprecord" element={<AddScrapRecord />} />
+
+            <Route path="/materialscraprecord" element={<MaterialScrapRecord />} />
+            <Route path="/addmaterialscraprecord" element={<AddMaterialScrapRecord />} />
+
+            <Route path="/productrepair" element={<ProductRepair />} />
+            <Route path="/addrepairproduct" element={<AddRepairProduct />} />
+
+            <Route path="/materialrepair" element={<MaterialRepair />} />
+            <Route path="/addrepairmaterial" element={<AddRepairMaterial />} />
+
             <Route path="/transfers" element={<TransferManagement />} />
             <Route path="/transfer/add" element={<AddTransfer />} />
             <Route path="/transfer/store-to-store" element={<StoreToStore />} />

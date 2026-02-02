@@ -16,11 +16,18 @@ model User {
   name        String?
   password    String
   role        Role     @default(USER)
-  permissions Json?    //@default("{}") 
+  permissionId  Int?
+  permission    Permission?  @relation(fields: [permissionId], references: [id])
   profile     Profile? @relation(fields: [profileId], references: [id])
   profileId   Int?     @unique
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  transactions   Transactions[]
+  cashRegisterWithdraw  CashRegisterWithdraw[]
+  cashRegisterTransaction  CashRegisterRecord[]
+  entityAccount             EntityAccount[]
+  cashRegisterAssignment    CashRegisterAssignment[]
+  userAssociate              UserAssociate[]
 }
 
 model Profile {
@@ -32,6 +39,200 @@ model Profile {
 enum Role {
   USER
   ADMIN
+}
+
+model Permission {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique 
+  permissions Json  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  
+  users       User[]
+  
+  @@index([name])
+}
+
+
+model UserAssociate {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  user           User     @relation(fields: [userId], references: [id])
+  associateName  String   // "store", "shop", "factory", "cashRegister", "account"
+  associateId    Int      // ID of the specific entity
+  
+
+  @@unique([userId, associateName, associateId])
+  @@index([userId])
+  @@index([associateName, associateId])
+}
+
+model Accounts {
+  id          Int       @id @default(autoincrement())
+  name        String
+  account_number   String    @unique
+  balance     Float     @default(0)
+  status      String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  transactions Transactions[]
+  entityAssignments EntityAccount[]
+  purchase     Purchase[]
+
+  @@index([createdAt])
+}
+
+model BankAccount {
+  id                   Int       @id @default(autoincrement())
+  name                String
+  account_number      String    @unique
+  starting_balance    Float     @default(0)
+  current_balance     Float     @default(0)
+  withdraw_charge     Float?
+  transactions        Transactions[]
+}
+
+
+model CashRegisterAssignment {
+  id                Int            @id @default(autoincrement())
+  entityType        String         // "store", "shop", "factory"
+  entityId          Int            // ID of the entity (store, shop, or factory)
+  cashRegisterId    Int
+  cashRegister      CashRegister   @relation(fields: [cashRegisterId], references: [id])
+  assignedAt        DateTime       @default(now())
+  assignedById      Int?
+  assignedBy        User?          @relation(fields: [assignedById], references: [id])
+  isActive          Boolean        @default(true)
+  notes             String?
+  
+  @@unique([entityType, entityId, cashRegisterId])
+  @@index([entityType, entityId])
+  @@index([cashRegisterId])
+  @@index([assignedAt])
+  @@index([isActive])
+}
+
+model CashRegister {
+  id          Int       @id @default(autoincrement())
+  name        String
+  status      String
+  cash_in_hand Float              @default(0)
+  last_opened DateTime?
+  last_closed DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  transactions  Transactions[]
+  cashRegisterWithdraw CashRegisterWithdraw[]
+  cashRegisterTransaction  CashRegisterRecord[]
+  assignments       CashRegisterAssignment[]
+  @@index([createdAt])
+  @@index([status])
+}
+
+model CashRegisterRecord {
+  id              Int       @id @default(autoincrement())
+
+  cashRegisterId  Int
+  cashRegister    CashRegister @relation(fields: [cashRegisterId], references: [id])
+
+  opening_at      DateTime
+  closing_at      DateTime?
+  starting_cash   Float
+  ending_cash     Float?
+
+  shopId          Int
+  shop            Shop @relation(fields: [shopId], references: [id])
+
+  userId          Int
+  user            User @relation(fields: [userId], references: [id])
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([cashRegisterId])
+  @@index([shopId])
+  @@index([userId])
+}
+
+model CashRegisterWithdraw {
+  id              Int       @id @default(autoincrement())
+
+  time            DateTime
+  amount          Float
+
+  cashRegisterId  Int?
+  cashRegister    CashRegister? @relation(fields: [cashRegisterId], references: [id])
+
+  userId          Int?
+  user            User? @relation(fields: [userId], references: [id])
+
+  note            String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([cashRegisterId])
+  @@index([userId])
+  @@index([time])
+}
+
+
+model Transactions {
+  id                       Int       @id @default(autoincrement())
+  reference                String    @unique
+
+  createdById              Int
+  createdBy                User      @relation(fields: [createdById], references: [id])
+
+  cashRegisterId           Int?
+  cashRegister             CashRegister? @relation(fields: [cashRegisterId], references: [id])
+
+  bankAccountId           Int?
+  bankAccount             BankAccount?   @relation(fields: [bankAccountId], references: [id])
+
+  accountId                Int
+  account                  Accounts  @relation(fields: [accountId], references: [id])
+
+  saleId                   Int?
+  sale                     Sale?     @relation(fields: [saleId], references: [id])
+
+  purchaseId               Int?
+  purchase                 Purchase? @relation(fields: [purchaseId], references: [id])
+
+  purpose                  String?
+  added_to_account         Boolean?
+  amount                   Float?
+  payment_method           String?
+  current_account_balance  Float?
+  note                     String?
+
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@index([createdById])
+  @@index([cashRegisterId])
+  @@index([accountId])
+  @@index([saleId])
+  @@index([purchaseId])
+  @@index([createdAt])
+}
+
+model EntityAccount {
+  id          Int       @id @default(autoincrement())
+  entityType  String    // "store", "shop", "factory"
+  entityId    Int       
+  accountId   Int
+  account     Accounts  @relation(fields: [accountId], references: [id])
+  isPrimary   Boolean   @default(false)
+  assignedAt  DateTime  @default(now())
+  assignedById Int?
+  assignedBy  User?     @relation(fields: [assignedById], references: [id])
+
+  @@unique([entityType, entityId, accountId])
+  @@index([entityType, entityId])
+  @@index([accountId])
+  @@index([assignedAt])
 }
 
 model Material {
@@ -57,6 +258,8 @@ model Material {
   factoryMaterials    FactoryMaterial[]
   saleItem            SaleItem[]
   saleReturnItem      SaleReturnItem[]
+  materialRepairItem  MaterialRepairItem[]
+  ScrapMaterial       ScrapMaterial[]
 }
 
 model Product {
@@ -82,6 +285,8 @@ model Product {
   storeToShopTransferItem StoreToShopTransferItem[]
   factoryProducts         FactoryProduct[]
   purchaseItem            PurchaseItem[]
+  productRepairItem       ProductRepairItem[]
+  scrapProduct            ScrapProduct[]
 }
 
 model ProductMaterial {
@@ -131,7 +336,6 @@ model Store {
   mobile                  String?
   storeMaterials          StoreMaterial[]
   storeProducts           StoreProduct[]
-  purchases               Purchase[]
   storeToShopTransfer     StoreToShopTransfer[]
   //sales                   Sale[]
   //saleReturns             SaleReturn[]
@@ -141,7 +345,7 @@ model StoreMaterial {
   store_id    Int
   material_id Int
   stock       Float @default(0)
-
+  scrap      Int?
   store    Store    @relation(fields: [store_id], references: [id])
   material Material @relation(fields: [material_id], references: [id])
 
@@ -152,7 +356,7 @@ model StoreProduct {
   store_id   Int
   product_id Int
   stock      Float @default(0)
-
+  scrap      Int?
   store   Store   @relation(fields: [store_id], references: [id])
   product Product @relation(fields: [product_id], references: [id])
 
@@ -203,14 +407,20 @@ model Purchase {
   id         Int      @id @default(autoincrement())
   reference   String?       @unique
   supplierId Int
-  storeId    Int?
   destinationType String? // New: "store", "shop", "factory"
   destinationId   Int?    // New: ID of store/shop/factory
   supplier   Supplier @relation(fields: [supplierId], references: [id], name: "SupplierPurchases")
   createdAt  DateTime @default(now())
-  store      Store?   @relation(fields: [storeId], references: [id])
-  grandTotal  Float
+  grandTotal   Float
+  paidAmount   Float     @default(0)
+  shippingCost Float?
+  discount     Float?
+  tax          Float?
   purchaseItems PurchaseItem[]
+  transactions Transactions[]
+
+  accountId       Int?          
+  account         Accounts?     @relation(fields: [accountId], references: [id])
 
   @@index([destinationType])
   @@index([destinationId])
@@ -252,7 +462,7 @@ model Sale {
   saleReturns SaleReturn[]
   isReturned  Boolean      @default(false)
   returnedAt  DateTime?
-
+  transactions Transactions[]
   
   @@index([shopId])
 }
@@ -315,13 +525,14 @@ model Shop {
   sales         Sale[]
   saleReturns   SaleReturn[]
   storeToShopTransfer StoreToShopTransfer[]
+  cashRegisterRecord  CashRegisterRecord[]
 }
 
 model ShopProduct {
   shop_id    Int
   product_id Int
   stock      Float @default(0)
-
+  scrap      Int?
   shop    Shop    @relation(fields: [shop_id], references: [id])
   product Product @relation(fields: [product_id], references: [id])
 
@@ -332,7 +543,7 @@ model ShopMaterial {
   shop_id     Int
   material_id Int
   stock       Float @default(0)
-
+  scrap      Int?
   shop     Shop     @relation(fields: [shop_id], references: [id])
   material Material @relation(fields: [material_id], references: [id])
 
@@ -398,7 +609,7 @@ model FactoryProduct {
   factoryId Int
   productId Int
   stock     Float @default(0)
-
+  scrap      Int?
   factory   Factory @relation(fields: [factoryId], references: [id])
   product   Product @relation(fields: [productId], references: [id])
 
@@ -409,7 +620,7 @@ model FactoryMaterial {
   factoryId  Int
   materialId Int
   stock      Float @default(0)
-
+  scrap      Int?
   factory  Factory  @relation(fields: [factoryId], references: [id])
   material Material @relation(fields: [materialId], references: [id])
 
@@ -429,3 +640,126 @@ model Notification {
   @@index([isRead])
   @@index([createdAt])
 }
+
+model ProductRepair {
+  id              Int       @id @default(autoincrement())
+  destination     String
+  shippingCost    Float
+  document        String?
+  note            String?
+  status          String @default("pending") // pending, in_progress, completed, failed
+  from            String   //store, shop or factory
+  fromId          Int
+  createdAt       DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  productRepairItem  ProductRepairItem[]
+
+  @@index([createdAt])
+}
+
+model ProductRepairItem {
+  id          Int       @id @default(autoincrement())
+  repairId    Int 
+  productId   Int
+  quantity    Float
+  success     Float
+  fail        Float
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  repair      ProductRepair  @relation(fields: [repairId], references: [id])
+  product     Product        @relation(fields: [productId], references: [id])
+
+  @@index([createdAt])
+}
+
+model ScrapProductRecord {
+  id          Int       @id @default(autoincrement())
+  reason      String 
+  note        String
+  totalLoss   Float
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  scrapProduct ScrapProduct[]
+
+  @@index([createdAt])
+}
+
+model ScrapProduct {
+  id          Int       @id @default(autoincrement())
+  scrapProductRecordId  Int
+  productId   Int      
+  quantity    Float
+  lossPerUnit Float
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  record      ScrapProductRecord @relation(fields: [scrapProductRecordId], references: [id])
+  product     Product            @relation(fields: [productId], references: [id])
+
+  @@index([createdAt])
+}
+
+
+model MaterialRepair {
+  id              Int       @id @default(autoincrement())
+  destination     String
+  shippingCost    Float
+  document        String?
+  note            String?
+  status          String @default("pending") // pending, in_progress, completed, failed
+  from            String   //store, shop or factory
+  fromId          Int
+  createdAt       DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  materialRepairItem  MaterialRepairItem[]
+
+  @@index([createdAt])
+}
+
+model MaterialRepairItem {
+  id          Int       @id @default(autoincrement())
+  repairId    Int 
+  materialId   Int
+  quantity    Float
+  success     Float
+  fail        Float
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  repair      MaterialRepair  @relation(fields: [repairId], references: [id])
+  material     Material        @relation(fields: [materialId], references: [id])
+
+  @@index([createdAt])
+}
+
+model ScrapMaterialRecord {
+  id          Int       @id @default(autoincrement())
+  reason      String 
+  note        String
+  totalLoss   Float
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  scrapMaterial ScrapMaterial[]
+
+  @@index([createdAt])
+}
+
+model ScrapMaterial {
+  id          Int       @id @default(autoincrement())
+  scrapMaterialRecordId  Int
+  materialId   Int      
+  quantity    Float
+  lossPerUnit Float
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  record       ScrapMaterialRecord @relation(fields: [scrapMaterialRecordId], references: [id])
+  material     Material            @relation(fields: [materialId], references: [id])
+
+  @@index([createdAt])
+}
+
+

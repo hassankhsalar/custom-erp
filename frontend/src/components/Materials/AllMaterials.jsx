@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES } from '../../config';
+import { Image as ImageIcon } from 'lucide-react';
 
 const AllMaterials = () => {
   const [materials, setMaterials] = useState([]);
@@ -21,6 +22,26 @@ const AllMaterials = () => {
     };
     fetchMaterials();
   }, []);
+
+  // Function to get full image URL (same as AllProducts)
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    
+    // If the image path already starts with http, return as is
+    if (imagePath.startsWith('http')) return imagePath;
+    
+    // Your server runs on port 3001
+    const baseUrl = 'http://localhost:3001';
+    
+    // Check if the path already has /uploads prefix
+    if (imagePath.startsWith('/uploads')) {
+      // Already has the correct path structure
+      return `${baseUrl}${imagePath}`;
+    } else {
+      // If somehow the path doesn't have /uploads prefix, add it
+      return `${baseUrl}/uploads/${imagePath}`;
+    }
+  };
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this material?')) {
@@ -81,6 +102,7 @@ const AllMaterials = () => {
               <table className="min-w-full">
                 <thead className="bg-gradient-to-r from-gray-800 to-gray-700 text-white">
                   <tr>
+                    <th className="py-4 px-6 text-left font-medium text-sm uppercase tracking-wider">Image</th>
                     <th className="py-4 px-6 text-left font-medium text-sm uppercase tracking-wider">Name</th>
                     <th className="py-4 px-6 text-left font-medium text-sm uppercase tracking-wider">Brand</th>
                     <th className="py-4 px-6 text-left font-medium text-sm uppercase tracking-wider">Unit</th>
@@ -94,11 +116,44 @@ const AllMaterials = () => {
                 <tbody className="divide-y divide-gray-200/50">
                   {materials.map((material, index) => {
                     const stockStatus = getStockStatus(material.current_stock, material.alert_quantity);
+                    const imageUrl = getImageUrl(material.image);
+                    
                     return (
                       <tr 
                         key={material.id} 
                         className={`${index % 2 === 0 ? 'bg-gray-50/30' : 'bg-white/30'} hover:bg-gray-100/50 transition-colors duration-150`}
                       >
+                        <td className="py-4 px-6">
+                          <div className="flex items-center justify-center">
+                            {imageUrl ? (
+                              <div className="w-18 h-18 rounded-lg overflow-hidden border border-gray-200/50 bg-white shadow-sm group relative">
+                                <img 
+                                  src={imageUrl} 
+                                  alt={material.name}
+                                  className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                                  onError={(e) => {
+                                    console.error('Error loading image:', imageUrl);
+                                    e.target.style.display = 'none';
+                                    const parent = e.target.parentElement;
+                                    parent.innerHTML = `
+                                      <div class="w-full h-full flex items-center justify-center bg-gray-100">
+                                        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                      </div>
+                                    `;
+                                  }}
+                                  onLoad={() => console.log('Image loaded successfully:', imageUrl)}
+                                />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200"></div>
+                              </div>
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg border border-gray-200/50 bg-gray-50 flex items-center justify-center shadow-sm">
+                                <ImageIcon className="w-6 h-6 text-gray-400" />
+                              </div>
+                            )}
+                          </div>
+                        </td>
                         <td className="py-4 px-6">
                           <div className="flex items-center space-x-3">
                             <div className="flex-1 min-w-0">

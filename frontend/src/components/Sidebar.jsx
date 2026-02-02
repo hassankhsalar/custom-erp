@@ -9,7 +9,12 @@ import {
   FileText, ClipboardList, CreditCard,
   Box, Warehouse, ShoppingBag,
   UserPlus, Building, Shield,
-  Bell, HelpCircle, Moon
+  Bell, HelpCircle, Moon,
+  Wrench,
+  Recycle,
+  BookA,
+  NotebookPen,
+  TableProperties
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -100,6 +105,35 @@ const Sidebar = () => {
         { name: 'Create Product', path: '/products/create', icon: <Package size={16} /> }
       ]
     },
+
+    
+    {
+      name: 'Repair',
+      icon: <Wrench color='white' size={18} />,
+      color: 'from-cyan-500 to-blue-500',
+      bgColor: 'bg-gradient-to-r from-pink-50 to-rose-100/50',
+      textColor: 'text-pink-700',
+      subItems: [
+        { name: 'Repaired Products', path: '/productrepair', icon: <Box size={16} /> },
+        { name: 'Repair Product', path: '/addrepairproduct', icon: <Box size={16} /> },
+        { name: 'Repaired Materials', path: '/materialrepair', icon: <Package size={16} /> },
+        { name: 'Repair Materials', path: '/addrepairmaterial', icon: <Package size={16} /> },
+      ] 
+    },
+
+    
+    {
+      name: 'Scrap Record',
+      icon: <Recycle color='white' size={18} />,
+      color: 'from-red-500 to-rose-500',
+      bgColor: 'bg-gradient-to-r from-pink-50 to-rose-100/50',
+      textColor: 'text-pink-700',
+      subItems: [
+        { name: 'Products Scrap Records', path: '/scraprecord', icon: <Box size={16} /> },
+        { name: 'Material Scrap Records', path: '/materialscraprecord', icon: <Package size={16} /> },
+      ] 
+    },
+
     {
       name: 'Materials',
       icon: <Layers color='white' size={18} />,
@@ -148,6 +182,20 @@ const Sidebar = () => {
       ]
     },
     {
+      name: 'Accounts',
+      icon: <BookA color='white' size={18} />,
+      color: 'from-indigo-500 to-blue-500',
+      bgColor: 'bg-gradient-to-r from-indigo-50 to-blue-100/50',
+      textColor: 'text-indigo-700',
+      subItems: [
+        { name: 'Add Account', path: '/addaccount', icon: <NotebookPen size={16} /> },
+        { name: 'Account List', path: '/allaccounts', icon: <TableProperties size={16} /> },
+        { name: 'Assign Account', path: '/assignaccount', icon: <TableProperties size={16} /> },
+        { name: 'Assign CashRegister', path: '/cashregisterassign', icon: <TableProperties size={16} /> },
+        { name: 'Add CashRegister', path: '/addcashregister', icon: <TableProperties size={16} /> },
+      ]
+    },
+    {
       name: 'Report',
       icon: <BarChart3 color='white' size={18} />,
       color: 'from-lime-500 to-green-500',
@@ -169,7 +217,10 @@ const Sidebar = () => {
       textColor: 'text-cyan-700',
       subItems: [
         { name: 'All User', path: '/users/all', icon: <Users size={16} /> },
-        { name: 'Create User', path: '/users/create', icon: <UserPlus size={16} /> }
+        { name: 'Create User', path: '/users/create', icon: <UserPlus size={16} /> },
+        { name: 'Assign User', path: '/assignuser', icon: <UserPlus size={16} /> },
+        { name: 'Assigned List', path: '/assignedusers', icon: <UserPlus size={16} /> },
+        { name: 'Role & Permissions', path: '/managepermissions', icon: <UserPlus size={16} /> }
       ]
     },
     {

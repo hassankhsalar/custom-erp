@@ -36,8 +36,26 @@ export const API_ROUTES = {
   STORE_TO_SHOP_TRANSFERS_SHOPS: `${API_BASE_URL}/store-to-shop-transfers/shops`,
   STORE_TO_SHOP_TRANSFER_STATUS: (id) => `${API_BASE_URL}/store-to-shop-transfers/${id}/status`,
 
+  //scrap
+  SCRAP_RECORDS: `${API_BASE_URL}/scrap-records`,
+  MATERIAL_SCRAP_RECORDS: `${API_BASE_URL}/materials-scrap-records`,
+  
+  // Add this new route for fetching scrap products by location
+  SCRAP_PRODUCTS: `${API_BASE_URL}/scrap-products`,
+  
+  // Add product repair routes
+  PRODUCT_REPAIRS: `${API_BASE_URL}/product-repairs`,
   
   DASHBOARD2: 'http://localhost:3001/api/dash-board',
+
+   // Material repair routes
+  MATERIAL_REPAIRS: `${API_BASE_URL}/material-repairs`,
+  
+  // Scrap materials route
+  SCRAP_MATERIALS: `${API_BASE_URL}/scrap-materials`,
+
+  //Image file uploads
+  UPLOADS: `${API_BASE_URL}/uploads`,
 
 
   //user routes
