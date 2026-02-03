@@ -112,6 +112,7 @@ const AddTransfer = () => {
       await axios.post(API_ROUTES.TRANSFERS, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${token}`,
         },
       });
       alert('Transfer created successfully');

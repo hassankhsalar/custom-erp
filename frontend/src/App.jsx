@@ -80,23 +80,29 @@ import AssignUser from "./components/Users/AssignUser";
 import AllAssignedUsers from "./components/Users/AllAssignedUsers";
 import PermissionsManagement from "./components/Permissions/PermissionsManagement";
 
+import { useCurrentUser } from "./hooks/useCurrentUser";
+
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("token"));
+  const { currentUser, loading, error, refetch } = useCurrentUser();
 
   const login = (newToken) => {
     setToken(newToken);
     localStorage.setItem("token", newToken);
+    refetch(); // Refetch user data after login
   };
 
   const logout = () => {
     setToken(null);
     localStorage.removeItem("token");
+    localStorage.removeItem("userEmail"); // Clear user email on logout
+    // Optionally, clear currentUser state here if needed
   };
 
   return (
-    <AuthContext.Provider value={{ token, login, logout }}>
+    <AuthContext.Provider value={{ token, login, logout, currentUser, loading, error, refetch }}>
       {children}
     </AuthContext.Provider>
   );

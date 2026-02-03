@@ -23,6 +23,10 @@ async function main() {
   console.log('Creating products...');
   const products = await createProducts();
 
+  // Create shops
+  console.log('Creating shops...');
+  const shops = await createShops();
+
   // Create product materials relationships
   console.log('Creating product materials...');
   await createProductMaterials(products, materials);
@@ -33,7 +37,7 @@ async function main() {
 
   // Create sales
   console.log('Creating sales...');
-  await createSales(stores, products);
+  await createSales(shops, products);
 
   console.log('✅ Seed completed successfully!');
 }
@@ -58,6 +62,7 @@ async function clearExistingData() {
     'Material',
     'Store',
     'Supplier',
+    'Shop',
     'Factory'
   ];
 
@@ -72,171 +77,180 @@ async function clearExistingData() {
 }
 
 async function createSuppliers() {
-  const suppliers = await prisma.supplier.createManyAndReturn({
-    data: [
-      {
-        name: 'ABC Steel Suppliers',
-        mobile: '+1234567890',
-        address: '123 Industrial Area, City',
-      },
-      {
-        name: 'XYZ Metal Works',
-        mobile: '+0987654321',
-        address: '456 Commercial Zone, Town',
-      },
-      {
-        name: 'Global Hardware Ltd',
-        mobile: '+1122334455',
-        address: '789 Business District, Metro',
-      },
-    ],
-  });
-  return suppliers;
+  const suppliersData = [
+    {
+      name: 'ABC Steel Suppliers',
+      mobile: '+1234567890',
+      address: '123 Industrial Area, City',
+    },
+    {
+      name: 'XYZ Metal Works',
+      mobile: '+0987654321',
+      address: '456 Commercial Zone, Town',
+    },
+    {
+      name: 'Global Hardware Ltd',
+      mobile: '+1122334455',
+      address: '789 Business District, Metro',
+    },
+  ];
+  await prisma.supplier.createMany({ data: suppliersData, skipDuplicates: true });
+  return await prisma.supplier.findMany({ where: { name: { in: suppliersData.map(s => s.name) } } });
 }
 
 async function createStores() {
-  const stores = await prisma.store.createManyAndReturn({
-    data: [
-      {
-        name: 'Main Store - Downtown',
-        address: '123 Main Street, Downtown',
-        store_keeper: 'John Smith',
-        mobile: '+1112223333',
-      },
-      {
-        name: 'Branch Store - Uptown',
-        address: '456 Uptown Avenue',
-        store_keeper: 'Sarah Johnson',
-        mobile: '+4445556666',
-      },
-      {
-        name: 'Warehouse - Industrial Area',
-        address: '789 Industrial Zone',
-        store_keeper: 'Mike Wilson',
-        mobile: '+7778889999',
-      },
-    ],
-  });
-  return stores;
+  const storesData = [
+    {
+      name: 'Main Store - Downtown',
+      address: '123 Main Street, Downtown',
+      store_keeper: 'John Smith',
+      mobile: '+1112223333',
+    },
+    {
+      name: 'Branch Store - Uptown',
+      address: '456 Uptown Avenue',
+      store_keeper: 'Sarah Johnson',
+      mobile: '+4445556666',
+    },
+    {
+      name: 'Warehouse - Industrial Area',
+      address: '789 Industrial Zone',
+      store_keeper: 'Mike Wilson',
+      mobile: '+7778889999',
+    },
+  ];
+  await prisma.store.createMany({ data: storesData, skipDuplicates: true });
+  return await prisma.store.findMany({ where: { name: { in: storesData.map(s => s.name) } } });
+}
+
+async function createShops() {
+  const shopsData = [
+    {
+      name: 'BSP Retail Shop',
+      address: 'Banani, Dhaka',
+      shop_keeper: 'Rahim',
+      mobile: '01733333333',
+    },
+  ];
+  await prisma.shop.createMany({ data: shopsData, skipDuplicates: true });
+  return await prisma.shop.findMany({ where: { name: { in: shopsData.map(s => s.name) } } });
 }
 
 async function createMaterials() {
-  const materials = await prisma.material.createManyAndReturn({
-    data: [
-      {
-        name: 'Steel Rod 10mm',
-        description: 'High tensile steel rod 10mm diameter',
-        brand: 'Tata Steel',
-        barcode: 'MAT001001',
-        unit: 'kg',
-        unit_cost: 85.50,
-        current_stock: 1500,
-      },
-      {
-        name: 'Steel Rod 12mm',
-        description: 'High tensile steel rod 12mm diameter',
-        brand: 'Tata Steel',
-        barcode: 'MAT001002',
-        unit: 'kg',
-        unit_cost: 95.75,
-        current_stock: 1200,
-      },
-      {
-        name: 'Cement OPC 53 Grade',
-        description: 'Ordinary Portland Cement 53 Grade',
-        brand: 'UltraTech',
-        barcode: 'MAT002001',
-        unit: 'bag',
-        unit_cost: 380.00,
-        current_stock: 500,
-      },
-      {
-        name: 'River Sand',
-        description: 'Fine aggregate river sand',
-        brand: 'Natural',
-        barcode: 'MAT003001',
-        unit: 'cubic meter',
-        unit_cost: 1200.00,
-        current_stock: 200,
-      },
-      {
-        name: 'Coarse Aggregate 20mm',
-        description: '20mm coarse aggregate for concrete',
-        brand: 'Natural',
-        barcode: 'MAT004001',
-        unit: 'cubic meter',
-        unit_cost: 800.00,
-        current_stock: 300,
-      },
-      {
-        name: 'Binding Wire',
-        description: 'GI binding wire for reinforcement',
-        brand: 'Local',
-        barcode: 'MAT005001',
-        unit: 'kg',
-        unit_cost: 65.00,
-        current_stock: 200,
-      },
-      {
-        name: 'Plywood 18mm',
-        description: 'Commercial grade plywood 18mm thick',
-        brand: 'Greenply',
-        barcode: 'MAT006001',
-        unit: 'sheet',
-        unit_cost: 1800.00,
-        current_stock: 100,
-      },
-    ],
-  });
-  return materials;
+  const materialsData = [
+    {
+      name: 'Steel Rod 10mm',
+      description: 'High tensile steel rod 10mm diameter',
+      brand: 'Tata Steel',
+      barcode: 'MAT001001',
+      unit: 'kg',
+      unit_cost: 85.50,
+      current_stock: 1500,
+    },
+    {
+      name: 'Steel Rod 12mm',
+      description: 'High tensile steel rod 12mm diameter',
+      brand: 'Tata Steel',
+      barcode: 'MAT001002',
+      unit: 'kg',
+      unit_cost: 95.75,
+      current_stock: 1200,
+    },
+    {
+      name: 'Cement OPC 53 Grade',
+      description: 'Ordinary Portland Cement 53 Grade',
+      brand: 'UltraTech',
+      barcode: 'MAT002001',
+      unit: 'bag',
+      unit_cost: 380.00,
+      current_stock: 500,
+    },
+    {
+      name: 'River Sand',
+      description: 'Fine aggregate river sand',
+      brand: 'Natural',
+      barcode: 'MAT003001',
+      unit: 'cubic meter',
+      unit_cost: 1200.00,
+      current_stock: 200,
+    },
+    {
+      name: 'Coarse Aggregate 20mm',
+      description: '20mm coarse aggregate for concrete',
+      brand: 'Natural',
+      barcode: 'MAT004001',
+      unit: 'cubic meter',
+      unit_cost: 800.00,
+      current_stock: 300,
+    },
+    {
+      name: 'Binding Wire',
+      description: 'GI binding wire for reinforcement',
+      brand: 'Local',
+      barcode: 'MAT005001',
+      unit: 'kg',
+      unit_cost: 65.00,
+      current_stock: 200,
+    },
+    {
+      name: 'Plywood 18mm',
+      description: 'Commercial grade plywood 18mm thick',
+      brand: 'Greenply',
+      barcode: 'MAT006001',
+      unit: 'sheet',
+      unit_cost: 1800.00,
+      current_stock: 100,
+    },
+  ];
+  await prisma.material.createMany({ data: materialsData, skipDuplicates: true });
+  return await prisma.material.findMany({ where: { barcode: { in: materialsData.map(m => m.barcode) } } });
 }
 
 async function createProducts() {
-  const products = await prisma.product.createManyAndReturn({
-    data: [
-      {
-        name: 'Precast Concrete Slab',
-        description: 'Precast concrete slab for construction',
-        sale_price: 2500.00,
-        wholesale_price: 2200.00,
-        cost: 1800.00,
-        barcode: 'PROD001001',
-        category: 'Construction',
-        stock: 50,
-      },
-      {
-        name: 'Concrete Block',
-        description: 'Standard concrete building block',
-        sale_price: 45.00,
-        wholesale_price: 38.00,
-        cost: 25.00,
-        barcode: 'PROD002001',
-        category: 'Construction',
-        stock: 1000,
-      },
-      {
-        name: 'Steel Gate',
-        description: 'Ornamental steel security gate',
-        sale_price: 8500.00,
-        wholesale_price: 7200.00,
-        cost: 5500.00,
-        barcode: 'PROD003001',
-        category: 'Metal Works',
-        stock: 25,
-      },
-      {
-        name: 'Window Frame',
-        description: 'Steel window frame with fittings',
-        sale_price: 3200.00,
-        wholesale_price: 2800.00,
-        cost: 2100.00,
-        barcode: 'PROD004001',
-        category: 'Metal Works',
-        stock: 40,
-      },
-    ],
-  });
-  return products;
+  const productsData = [
+    {
+      name: 'Precast Concrete Slab',
+      description: 'Precast concrete slab for construction',
+      sale_price: 2500.00,
+      wholesale_price: 2200.00,
+      cost: 1800.00,
+      barcode: 'PROD001001',
+      category: 'Construction',
+      stock: 50,
+    },
+    {
+      name: 'Concrete Block',
+      description: 'Standard concrete building block',
+      sale_price: 45.00,
+      wholesale_price: 38.00,
+      cost: 25.00,
+      barcode: 'PROD002001',
+      category: 'Construction',
+      stock: 1000,
+    },
+    {
+      name: 'Steel Gate',
+      description: 'Ornamental steel security gate',
+      sale_price: 8500.00,
+      wholesale_price: 7200.00,
+      cost: 5500.00,
+      barcode: 'PROD003001',
+      category: 'Metal Works',
+      stock: 25,
+    },
+    {
+      name: 'Window Frame',
+      description: 'Steel window frame with fittings',
+      sale_price: 3200.00,
+      wholesale_price: 2800.00,
+      cost: 2100.00,
+      barcode: 'PROD004001',
+      category: 'Metal Works',
+      stock: 40,
+    },
+  ];
+  await prisma.product.createMany({ data: productsData, skipDuplicates: true });
+  return await prisma.product.findMany({ where: { barcode: { in: productsData.map(p => p.barcode) } } });
 }
 
 async function createProductMaterials(products, materials) {
@@ -299,7 +313,8 @@ async function createPurchases(suppliers, stores, materials) {
     data: {
       reference: 'PUR-2024-001',
       supplierId: suppliers[0].id,
-      storeId: stores[0].id,
+      destinationId: stores[0].id,
+      destinationType: 'store',
       grandTotal: 184250.00,
       purchaseItems: {
         create: [
@@ -331,7 +346,8 @@ async function createPurchases(suppliers, stores, materials) {
     data: {
       reference: 'PUR-2024-002',
       supplierId: suppliers[1].id,
-      storeId: stores[1].id,
+      destinationId: stores[1].id,
+      destinationType: 'store',
       grandTotal: 286000.00,
       purchaseItems: {
         create: [
@@ -363,7 +379,8 @@ async function createPurchases(suppliers, stores, materials) {
     data: {
       reference: 'PUR-2024-003',
       supplierId: suppliers[2].id,
-      storeId: stores[0].id,
+      destinationId: stores[0].id,
+      destinationType: 'store',
       grandTotal: 180000.00,
       purchaseItems: {
         create: [
@@ -381,12 +398,12 @@ async function createPurchases(suppliers, stores, materials) {
   return [purchase1, purchase2, purchase3];
 }
 
-async function createSales(stores, products) {
+async function createSales(shops, products) {
   // Sale 1: Multiple products
   const sale1 = await prisma.sale.create({
     data: {
       reference: 'SALE-2024-001',
-      storeId: stores[0].id,
+      shopId: shops[0].id,
       customer: 'Construction Corp Ltd',
       totalAmount: 38500.00,
       discount: 500.00,
@@ -415,7 +432,7 @@ async function createSales(stores, products) {
   const sale2 = await prisma.sale.create({
     data: {
       reference: 'SALE-2024-002',
-      storeId: stores[1].id,
+      shopId: shops[0].id,
       customer: 'Residential Builder',
       totalAmount: 17000.00,
       discount: 0,

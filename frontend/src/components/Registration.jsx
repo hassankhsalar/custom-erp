@@ -3,13 +3,14 @@ import axios from 'axios';
 
 const Registration = () => {
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:3001/api/register', { email, password, name });
+      await axios.post('http://localhost:3001/api/register', { email, username, password, name });
       // Redirect to login or show success message
     } catch (error) {
       console.error('Registration failed', error);
@@ -28,6 +29,17 @@ const Registration = () => {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Name"
+              className="w-full px-4 py-2 mt-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600"
+            />
+          </div>
+          <div>
+            <label className="text-sm font-bold text-gray-600">Username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Username"
+              required
               className="w-full px-4 py-2 mt-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600"
             />
           </div>
