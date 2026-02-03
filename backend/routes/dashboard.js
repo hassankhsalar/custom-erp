@@ -325,7 +325,7 @@ async function getRecentActivities() {
     prisma.purchase.findMany({
       take: 3,
       orderBy: { createdAt: 'desc' },
-      include: { supplier: true, store: true }
+      include: { supplier: true }
     })
   ]);
 

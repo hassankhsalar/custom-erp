@@ -46,7 +46,7 @@ export const API_ROUTES = {
   // Add product repair routes
   PRODUCT_REPAIRS: `${API_BASE_URL}/product-repairs`,
   
-  DASHBOARD2: 'http://localhost:3001/api/dash-board',
+  DASHBOARD2: `${API_BASE_URL}/dash-board`,
 
    // Material repair routes
   MATERIAL_REPAIRS: `${API_BASE_URL}/material-repairs`,
