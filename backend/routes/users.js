@@ -3,30 +3,34 @@ const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const prisma = new PrismaClient();
 const router = express.Router();
+const cache = require('../cachingService');
 
 // Create new user
 router.post("/", async (req, res) => {
   try {
-    const { email, name, password, role, permissionId } = req.body;
+    const { email, username, name, password, permissionId } = req.body;
 
     // Validate required fields
-    if (!email || !name || !password) {
-      return res.status(400).json({ error: "Email, name, and password are required" });
+    if (!email || !username || !name || !password) {
+      return res.status(400).json({ error: "Email, username, name, and password are required" });
     }
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
+    // Check if user already exists with email
+    const existingUserEmail = await prisma.user.findUnique({
       where: { email }
     });
 
-    if (existingUser) {
+    if (existingUserEmail) {
       return res.status(400).json({ error: "User with this email already exists" });
     }
 
-    // Validate role
-    const validRoles = ['USER', 'ADMIN'];
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({ error: "Invalid role" });
+    // Check if user already exists with username
+    const existingUserUsername = await prisma.user.findUnique({
+      where: { username }
+    });
+
+    if (existingUserUsername) {
+      return res.status(400).json({ error: "User with this username already exists" });
     }
 
     // Check if permission exists if provided
@@ -47,16 +51,16 @@ router.post("/", async (req, res) => {
     const user = await prisma.user.create({
       data: {
         email,
+        username,
         name,
         password: hashedPassword,
-        role,
         permissionId: permissionId ? parseInt(permissionId) : null
       },
       select: {
         id: true,
         email: true,
+        username: true,
         name: true,
-        role: true,
         permission: {
           select: {
             id: true,
@@ -83,11 +87,11 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, role, permissionId } = req.body;
+    const { name, email, username, permissionId } = req.body;
 
     // Validate required fields
-    if (!name || !email) {
-      return res.status(400).json({ error: "Name and email are required" });
+    if (!name || !email || !username) {
+      return res.status(400).json({ error: "Name, email, and username are required" });
     }
 
     // Check if user exists
@@ -111,10 +115,16 @@ router.put("/:id", async (req, res) => {
       return res.status(400).json({ error: "Email already exists" });
     }
 
-    // Validate role
-    const validRoles = ['USER', 'ADMIN'];
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({ error: "Invalid role" });
+    // Check if username already exists for other users
+    const usernameConflict = await prisma.user.findFirst({
+      where: {
+        username,
+        NOT: { id: parseInt(id) }
+      }
+    });
+
+    if (usernameConflict) {
+      return res.status(400).json({ error: "Username already exists" });
     }
 
     // Check if permission exists if provided
@@ -138,14 +148,14 @@ router.put("/:id", async (req, res) => {
       data: {
         name,
         email,
-        role,
+        username,
         permissionId: permissionId !== undefined ? (permissionId ? parseInt(permissionId) : null) : existingUser.permissionId
       },
       select: {
         id: true,
         email: true,
+        username: true,
         name: true,
-        role: true,
         permission: {
           select: {
             id: true,
@@ -158,6 +168,8 @@ router.put("/:id", async (req, res) => {
         updatedAt: true
       }
     });
+
+    cache.del(`user_${id}`);
 
     res.json({
       message: "User updated successfully",
@@ -182,8 +194,8 @@ router.get("/", async (req, res) => {
       select: {
         id: true,
         email: true,
+        username: true,
         name: true,
-        role: true,
         permission: {
           select: {
             id: true,
@@ -211,14 +223,20 @@ router.get("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
+    const cacheKey = `user_${id}`;
+
+    const cachedUser = cache.get(cacheKey);
+    if (cachedUser) {
+      return res.json(cachedUser);
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: parseInt(id) },
       select: {
         id: true,
         email: true,
+        username: true,
         name: true,
-        role: true,
         permission: {
           select: {
             id: true,
@@ -236,6 +254,7 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    cache.set(cacheKey, user);
     res.json(user);
   } catch (err) {
     console.error("Get user error:", err);
@@ -252,6 +271,8 @@ router.delete("/:id", async (req, res) => {
       where: { id: parseInt(id) }
     });
 
+    cache.del(`user_${id}`);
+
     res.json({ message: "User deleted successfully" });
   } catch (err) {
     console.error("Delete user error:", err);
@@ -264,18 +285,18 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// Get user by email
-router.get("/email/:email", async (req, res) => {
+// Get user by username
+router.get("/username/:username", async (req, res) => {
   try {
-    const { email } = req.params;
+    const { username } = req.params;
 
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { username },
       select: {
         id: true,
         email: true,
+        username: true,
         name: true,
-        role: true,
         permission: {
           select: {
             id: true,
@@ -336,7 +357,6 @@ router.put("/:userId/permission", async (req, res) => {
         id: true,
         email: true,
         name: true,
-        role: true,
         permission: {
           select: {
             id: true,
@@ -364,8 +384,8 @@ router.get("/:userId/permissions", async (req, res) => {
       where: { id: parseInt(userId) },
       select: {
         id: true,
+        username: true,
         name: true,
-        role: true,
         permission: {
           select: {
             id: true,
@@ -384,7 +404,7 @@ router.get("/:userId/permissions", async (req, res) => {
     const permissions = user.permission?.permissions || [];
     res.json({ 
       userId: user.id,
-      userName: user.name,
+      username: user.username,
       permissionName: user.permission?.name,
       permissions: permissions
     });
@@ -403,8 +423,8 @@ router.get("/:userId/has-permission/:permission", async (req, res) => {
       where: { id: parseInt(userId) },
       select: {
         id: true,
+        username: true,
         name: true,
-        role: true,
         permission: {
           select: {
             id: true,
@@ -420,12 +440,12 @@ router.get("/:userId/has-permission/:permission", async (req, res) => {
     }
 
     // Admin users have all permissions
-    if (user.role === 'ADMIN') {
+    if (user.permission && user.permission.name === 'admin') {
       return res.json({ 
         hasPermission: true, 
         isAdmin: true,
         userId: user.id,
-        userName: user.name
+        username: user.username
       });
     }
 
@@ -439,7 +459,7 @@ router.get("/:userId/has-permission/:permission", async (req, res) => {
       hasPermission,
       isAdmin: false,
       userId: user.id,
-      userName: user.name,
+      username: user.username,
       permissionName: user.permission?.name
     });
   } catch (error) {

@@ -10,10 +10,36 @@ async function main() {
     update: {},
     create: {
       name: 'default',
-      permissions: {
-        "dashboard": ["read"],
-        "profile": ["read", "write"]
-      },
+      permissions: [
+        "material_create",
+        "material_read",
+        "material_edit",
+        "material_delete",
+        "product_create",
+        "product_read",
+        "product_edit",
+        "product_delete",
+        "production_create",
+        "production_read",
+        "production_edit",
+        "production_delete",
+        "purchase_create",
+        "purchase_read",
+        "purchase_edit",
+        "purchase_delete",
+        "sale_create",
+        "sale_read",
+        "sale_edit",
+        "sale_delete",
+        "transfer_create",
+        "transfer_read",
+        "transfer_edit",
+        "transfer_delete",
+        "report_create",
+        "report_read",
+        "report_edit",
+        "report_delete"
+      ],
     },
   });
 
@@ -23,6 +49,7 @@ async function main() {
     update: {},
     create: {
       email: 'admin@example.com',
+      username: 'adminuser',
       name: 'Admin',
       password: adminPassword,
       permissionId: defaultPermission.id,
@@ -35,6 +62,7 @@ async function main() {
     update: {},
     create: {
       email: 'user@example.com',
+      username: 'regularuser',
       name: 'User',
       password: userPassword,
       permissionId: defaultPermission.id,

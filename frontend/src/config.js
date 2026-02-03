@@ -59,7 +59,7 @@ export const API_ROUTES = {
 
 
   //user routes
-  USERS: 'http://localhost:3001/api/users',
+  USERS: `${API_BASE_URL}/users`,
 };
 
 // &&&&&  indexJs route list for reference &&&&&&&&&&&&&&&&&&&&&&&&&&&
