@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 const Login = () => {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -24,13 +24,15 @@ const Login = () => {
     setLoading(true);
     
     try {
-      const res = await axios.post(API_ROUTES.LOGIN, { email, password });
-      localStorage.setItem('userEmail', email);
+      const res = await axios.post(API_ROUTES.LOGIN, { identifier, password });
+      localStorage.setItem('username', res.data.username);
+      localStorage.setItem('name', res.data.name);
+      localStorage.setItem('email', res.data.email);
       login(res.data.accessToken);
       navigate('/dashboard');
     } catch (error) {
       console.error('Login failed', error);
-      setError('Invalid email or password. Please try again.');
+      setError('Invalid username or password. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -85,21 +87,21 @@ const Login = () => {
 
           {/* Login Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Field */}
+            {/* Username Field */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
                 <Mail size={14} />
-                Email Address
+                Username or Email
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Mail size={18} className="text-gray-400" />
                 </div>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@company.com"
+                  type="text"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="Your username or email"
                   required
                   className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200/50 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-300"
                   disabled={loading}

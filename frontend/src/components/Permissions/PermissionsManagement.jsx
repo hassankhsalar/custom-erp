@@ -240,7 +240,7 @@ export default function PermissionsManagement() {
   const handleCreatePermission = async (e) => {
     e.preventDefault();
     if (!permissionName.trim()) {
-      alert("Please enter a permission name");
+      alert("Please enter a role name");
       return;
     }
 
@@ -478,16 +478,16 @@ export default function PermissionsManagement() {
               </div>
 
               <form onSubmit={handleCreatePermission} className="space-y-6">
-                {/* Permission Name */}
+                {/* Role Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Permission Name
+                    Role Name
                   </label>
                   <input
                     type="text"
                     value={permissionName}
                     onChange={(e) => setPermissionName(e.target.value)}
-                    className="w-full px-4 py-3 rounded-lg border border-white/60 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full px-4 py-3 rounded-lg border border-gray-200 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     placeholder="e.g., Cashier, Manager, Inventory_Manager"
                     required
                   />

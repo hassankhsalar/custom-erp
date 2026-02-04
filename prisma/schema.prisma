@@ -13,9 +13,9 @@ datasource db {
 model User {
   id          Int      @id @default(autoincrement())
   email       String   @unique
+  username    String   @unique
   name        String?
   password    String
-  role        Role     @default(USER)
   permissionId  Int?
   permission    Permission?  @relation(fields: [permissionId], references: [id])
   profile     Profile? @relation(fields: [profileId], references: [id])
@@ -36,10 +36,7 @@ model Profile {
   user User?
 }
 
-enum Role {
-  USER
-  ADMIN
-}
+
 
 model Permission {
   id          Int       @id @default(autoincrement())

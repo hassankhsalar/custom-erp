@@ -14,16 +14,16 @@ export const useCurrentUser = () => {
   const fetchCurrentUser = async () => {
     try {
       setLoading(true);
-      const userEmail = localStorage.getItem('userEmail');
+      const username = localStorage.getItem('username');
       const token = localStorage.getItem('token');
 
-      if (!userEmail || !token) {
-        setError('No user email or token found');
+      if (!username || !token) {
+        setError('No username or token found');
         setLoading(false);
         return;
       }
 
-      const response = await axios.get(`${API_ROUTES.USERS}/email/${userEmail}`, {
+      const response = await axios.get(`${API_ROUTES.USERS}/username/${username}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 

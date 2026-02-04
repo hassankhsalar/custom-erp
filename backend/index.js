@@ -29,13 +29,20 @@ const hasPermission = (permission) => {
   return async (req, res, next) => {
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
+      include: { permission: true },
     });
 
-    if (user.role === 'ADMIN') {
+    if (!user || !user.permission) {
+      return res.status(403).json({ error: 'Forbidden: No permission record found for user' });
+    }
+
+    if (user.permission.name === 'admin' || user.permission.name === 'superadmin') {
       return next();
     }
 
-    if (!user.permissions || !user.permissions[permission]) {
+    const userPermissions = user.permission.permissions;
+
+    if (!userPermissions || !userPermissions.includes(permission)) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -45,28 +52,50 @@ const hasPermission = (permission) => {
 
 // Register a new user
 app.post('/api/register', async (req, res) => {
-  const { email, password, name, role, permissions } = req.body;
+  const { email, password, name, username } = req.body;
   const hashedPassword = await bcrypt.hash(password, 10);
   try {
+    const defaultPermission = await prisma.permission.findUnique({
+      where: { name: 'default' },
+    });
+
+    if (!defaultPermission) {
+      return res.status(500).json({ error: 'Default permission not found.' });
+    }
+
+    const existingUserEmail = await prisma.user.findUnique({ where: { email } });
+    if (existingUserEmail) {
+        return res.status(400).json({ error: 'User with this email already exists' });
+    }
+
+    const existingUserUsername = await prisma.user.findUnique({ where: { username } });
+    if (existingUserUsername) {
+        return res.status(400).json({ error: 'User with this username already exists' });
+    }
+
     const user = await prisma.user.create({
       data: {
         email,
+        username,
         password: hashedPassword,
         name,
-        role: role || 'USER',
-        permissions: permissions || {},
+        permissionId: defaultPermission.id,
       },
     });
     res.json({ user });
   } catch (error) {
-    res.status(400).json({ error: 'User already exists' });
+    res.status(400).json({ error: 'Failed to register user: ' + error.message });
   }
 });
 
 // Login a user
 app.post('/api/login', async (req, res) => {
-  const { email, password } = req.body;
-  const user = await prisma.user.findUnique({ where: { email } });
+  const { identifier, password } = req.body;
+  let user = await prisma.user.findUnique({ where: { username: identifier } });
+
+  if (user == null) {
+    user = await prisma.user.findUnique({ where: { email: identifier } });
+  }
 
   if (user == null) {
     return res.status(400).json({ error: 'Cannot find user' });
@@ -74,7 +103,7 @@ app.post('/api/login', async (req, res) => {
 
   if (await bcrypt.compare(password, user.password)) {
     const accessToken = jwt.sign({ userId: user.id }, JWT_SECRET);
-    res.json({ accessToken });
+    res.json({ accessToken, username: user.username, name: user.name, email: user.email });
   } else {
     res.status(401).json({ error: 'Not Allowed' });
   }

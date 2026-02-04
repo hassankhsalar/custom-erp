@@ -1,13 +1,34 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { CiMenuFries } from "react-icons/ci";
 import logo from "/bspLogo.png";
-import { Bell, CircleUserRound, Home, Zap, Newspaper, Store, Sun, Moon } from "lucide-react";
+import { Bell, CircleUserRound, Home, Zap, Newspaper, Store, Sun, Moon, LogOut } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
+
+import { useAuth } from "../App";
 
 const Navbar = () => {
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [darkMode, setDarkMode] = useState(false);
+    const [isProfileOpen, setProfileOpen] = useState(false);
+    const profileRef = useRef(null);
     const location = useLocation();
+    const { currentUser, loading, error, logout } = useAuth();
+
+    const localUserName = localStorage.getItem('name');
+    const localUserEmail = localStorage.getItem('email');
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (profileRef.current && !profileRef.current.contains(event.target)) {
+                setProfileOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [profileRef]);
+
 
     const navItems = [
         { name: "Dashboard", icon: <Home size={18} />, path: "/dashboard" },
@@ -89,20 +110,58 @@ const Navbar = () => {
                             </div>
                         </Link>
 
-                        {/* User Profile */}
-                        <div className="relative">
+                        {/* User Profile Dropdown */}
+                        <div className="relative" ref={profileRef}>
                             <button
+                                onClick={() => setProfileOpen(!isProfileOpen)}
                                 className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border border-white/30 transition-all duration-300 group backdrop-blur-sm bg-white/80 hover:bg-white/95 hover:translate-y-[-1px] hover:shadow-[0_5px_20px_rgba(59,157,248,0.2)]"
                             >
                                 <div className="p-1.5 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 shadow-[0_4px_12px_rgba(59,157,248,0.3)]">
                                     <CircleUserRound size={20} className="text-white" />
                                 </div>
                                 <div className="text-left hidden md:block">
-                                    <p className="text-sm font-semibold text-gray-800">Admin User</p>
-                                    <p className="text-xs text-gray-500">Administrator</p>
+                                    <p className="text-sm font-semibold text-gray-800">{loading ? "Loading..." : currentUser?.name || localUserName || "Guest"}</p>
+                                    <p className="text-xs text-gray-500">{loading ? "..." : currentUser?.email || localUserEmail || "..."}</p>
                                 </div>
                             </button>
+                            {isProfileOpen && (currentUser || localUserName) && (
+                                <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-xl bg-white/80 backdrop-blur-xl border border-gray-200 shadow-xl focus:outline-none z-500">
+                                    <div className="py-1">
+                                        <div className="px-4 py-3 border-b border-white/20">
+                                            <p className="text-sm font-semibold text-gray-800">{currentUser?.name || localUserName}</p>
+                                            <p className="text-xs text-gray-500 truncate">{currentUser?.email || localUserEmail}</p>
+                                        </div>
+                                        <Link
+                                            to="/profile"
+                                            className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-white/50"
+                                            onClick={() => setProfileOpen(false)}
+                                        >
+                                            <CircleUserRound size={16} />
+                                            <span>Your Profile</span>
+                                        </Link>
+                                        <Link
+                                            to="/settings"
+                                            className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-white/50"
+                                            onClick={() => setProfileOpen(false)}
+                                        >
+                                            <Zap size={16} />
+                                            <span>Settings</span>
+                                        </Link>
+                                        <button
+                                            onClick={() => {
+                                                logout(); // Call the logout function from useAuth
+                                                setProfileOpen(false);
+                                            }}
+                                            className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-white/50 hover:cursor-pointer"
+                                        >
+                                            <LogOut size={16} />
+                                            <span>Logout</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
+
 
                         {/* Mobile Menu Button */}
                         <button
@@ -118,7 +177,7 @@ const Navbar = () => {
 
             {/* Mobile Sidebar */}
             <aside
-                className={`fixed inset-y-0 right-0 w-80 border-l border-white/20 backdrop-blur-xl shadow-2xl z-50 transform transition-transform duration-300 ease-in-out bg-white/90 backdrop-blur-[25px] ${
+                className={`fixed inset-y-0 right-0 w-80 border-l border-white/20 backdrop-blur-xl shadow-2xl z-50 transform transition-transform duration-300 ease-in-out bg-white/90 ${
                     mobileSidebarOpen ? "translate-x-0" : "translate-x-full"
                 } md:hidden`}
             >
@@ -136,7 +195,7 @@ const Navbar = () => {
                         </div>
                         <button
                             onClick={() => setMobileSidebarOpen(false)}
-                            className="p-2 rounded-lg hover:bg-red-500/10 hover:text-red-600 backdrop-blur-sm bg-white/70 border border-white/20 hover:bg-white/90"
+                            className="p-2 rounded-lg hover:text-red-600 backdrop-blur-sm bg-white/70 border border-white/20 hover:bg-white/90"
                         >
                             ✕
                         </button>
