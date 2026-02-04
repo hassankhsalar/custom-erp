@@ -124,7 +124,7 @@ const AuthenticatedLayout = () => {
       <div>
           <Sidebar />
         </div>
-      <div className="">
+      <div className="w-full">
         <div className="h-25 w-full mx-auto">
         <Navbar />
       </div>

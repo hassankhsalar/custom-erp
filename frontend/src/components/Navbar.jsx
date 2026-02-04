@@ -8,7 +8,6 @@ import { useAuth } from "../App";
 
 const Navbar = () => {
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-    const [darkMode, setDarkMode] = useState(false);
     const [isProfileOpen, setProfileOpen] = useState(false);
     const profileRef = useRef(null);
     const location = useLocation();
@@ -33,17 +32,10 @@ const Navbar = () => {
     const navItems = [
         { name: "Dashboard", icon: <Home size={18} />, path: "/dashboard" },
         { name: "All Sales", icon: <Zap size={18} />, path: "/sale/all" },
-        { name: "Reports", icon: <Newspaper size={18} />, path: "/" },
-        { name: "Shops", icon: <Store size={18} />, path: "/shop/all" }
     ];
 
     const isActive = (path) => {
         return location.pathname === path;
-    };
-
-    const toggleTheme = () => {
-        setDarkMode(!darkMode);
-        document.documentElement.classList.toggle('dark');
     };
 
     return (
@@ -57,12 +49,12 @@ const Navbar = () => {
                         <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-white/30 backdrop-blur-md bg-white/90 shadow-[0_4px_12px_rgba(0,0,0,0.05)]">
                             <img src={logo} alt="BSP Logo" className="w-12 h-12 object-contain" />
                         </div>
-                        <div className="hidden md:block">
+                        {/* <div className="hidden md:block">
                             <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                                 BSP
                             </h1>
                             <p className="text-xs text-gray-500">Inventory Management System</p>
-                        </div>
+                        </div> */}
                     </div>
 
                     {/* Desktop Navigation */}
@@ -89,14 +81,7 @@ const Navbar = () => {
                     {/* Action Buttons */}
                     <div className="flex items-center gap-3">
                         
-                        {/* Theme Toggle */}
-                        <button
-                            onClick={toggleTheme}
-                            className="p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 to-amber-600/10 hover:from-amber-500/20 hover:to-amber-600/20 text-amber-600 hover:text-amber-700 transition-all duration-300 backdrop-blur-sm bg-white/70 border border-white/20 hover:bg-white/90 hover:translate-y-[-1px] hover:shadow-[0_5px_15px_rgba(0,0,0,0.1)]"
-                            title="Toggle Theme"
-                        >
-                            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-                        </button>
+                        
 
                         {/* Notifications */}
                         <Link to="/notifications">
