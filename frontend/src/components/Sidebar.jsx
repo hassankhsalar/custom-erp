@@ -112,7 +112,7 @@ const Sidebar = () => {
       icon: <Wrench color='white' size={18} />,
       color: 'from-cyan-500 to-blue-500',
       bgColor: 'bg-gradient-to-r from-pink-50 to-rose-100/50',
-      textColor: 'text-pink-700',
+      textColor: 'text-cyan-700',
       subItems: [
         { name: 'Repaired Products', path: '/productrepair', icon: <Box size={16} /> },
         { name: 'Repair Product', path: '/addrepairproduct', icon: <Box size={16} /> },
@@ -127,7 +127,7 @@ const Sidebar = () => {
       icon: <Recycle color='white' size={18} />,
       color: 'from-red-500 to-rose-500',
       bgColor: 'bg-gradient-to-r from-pink-50 to-rose-100/50',
-      textColor: 'text-pink-700',
+      textColor: 'text-red-700',
       subItems: [
         { name: 'Products Scrap Records', path: '/scraprecord', icon: <Box size={16} /> },
         { name: 'Material Scrap Records', path: '/materialscraprecord', icon: <Package size={16} /> },
