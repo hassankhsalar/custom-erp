@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { 
-  ChevronDown, ChevronRight, 
+  ChevronDown, ChevronRight, ChevronLeft, ChevronRightIcon,
   Home, ShoppingCart, Factory, Package, 
   Layers, Store, Users, Settings, 
   BarChart3, Truck, Database,
@@ -19,6 +19,7 @@ import {
 
 const Sidebar = () => {
   const [openMenus, setOpenMenus] = useState({});
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const { currentUser, loading, error } = useCurrentUser();
 
   const toggleMenu = (menuName) => {
@@ -236,12 +237,23 @@ const Sidebar = () => {
   ];
 
   return (
-    <div className="w-64 bg-gradient-to-br from-white via-gray-50 to-white text-gray-800 p-6 min-h-full shadow-2xl backdrop-blur-sm border-r border-gray-200/50">
+    <div className={`${isCollapsed ? 'w-20' : 'w-64'} bg-gradient-to-br from-white via-gray-50 to-white text-gray-800 p-6 min-h-full shadow-2xl backdrop-blur-sm border-r border-gray-200/50 transition-all duration-300 relative`}>
+      {/* Collapse Toggle Button */}
+      <button
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className="absolute -right-1 top-26 p-1.5 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-all hover:scale-110 z-10"
+      >
+        {isCollapsed ? (
+          <ChevronRight size={16} className="text-gray-600" />
+        ) : (
+          <ChevronLeft size={16} className="text-gray-600" />
+        )}
+      </button>
+
       {/* Sidebar Header */}
       <div className="mb-8">
-      
         {/* User Info Card */}
-        <div className="p-4 rounded-2xl mb-4 bg-gradient-to-r from-white to-gray-50/80 backdrop-blur-sm border border-gray-200/70 shadow-sm">
+        <div className={`p-4 rounded-2xl mb-4 bg-gradient-to-r from-white to-gray-50/80 backdrop-blur-sm border border-gray-200/70 shadow-sm ${isCollapsed ? 'hidden' : ''}`}>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 shadow-sm">
               <Users size={18} className="text-white" />
@@ -266,36 +278,44 @@ const Sidebar = () => {
               <Link
                 to={item.path}
                 className="group flex items-center gap-3 p-3 rounded-xl hover:bg-white/80 hover:border-gray-200/70 border border-transparent transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
+                title={isCollapsed ? item.name : ''}
               >
                 <div className={`p-2 rounded-lg bg-gradient-to-r ${item.color} shadow-sm`}>
                   {item.icon}
                 </div>
-                <span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all`}>
-                  {item.name}
-                </span>
+                {!isCollapsed && (
+                  <span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all`}>
+                    {item.name}
+                  </span>
+                )}
               </Link>
             ) : (
               <>
                 <button
                   onClick={() => toggleMenu(item.name.toLowerCase())}
                   className="group w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/80 hover:border-gray-200/70 border border-transparent transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
+                  title={isCollapsed ? item.name : ''}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-lg bg-gradient-to-r ${item.color} shadow-sm`}>
                       {item.icon}
                     </div>
-                    <span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all`}>
-                      {item.name}
-                    </span>
+                    {!isCollapsed && (
+                      <span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all`}>
+                        {item.name}
+                      </span>
+                    )}
                   </div>
-                  {openMenus[item.name.toLowerCase()] ? (
-                    <ChevronDown size={16} className="text-gray-500 group-hover:text-gray-700 transition-colors" />
-                  ) : (
-                    <ChevronRight size={16} className="text-gray-500 group-hover:text-gray-700 transition-colors" />
+                  {!isCollapsed && (
+                    openMenus[item.name.toLowerCase()] ? (
+                      <ChevronDown size={16} className="text-gray-500 group-hover:text-gray-700 transition-colors" />
+                    ) : (
+                      <ChevronRight size={16} className="text-gray-500 group-hover:text-gray-700 transition-colors" />
+                    )
                   )}
                 </button>
                 
-                {openMenus[item.name.toLowerCase()] && item.subItems && (
+                {!isCollapsed && openMenus[item.name.toLowerCase()] && item.subItems && (
                   <div className="ml-4 mt-2 pl-6 border-l border-gray-200/50 space-y-1">
                     {item.subItems.map((subItem) => (
                       <Link
@@ -319,38 +339,51 @@ const Sidebar = () => {
         ))}
       </nav>
 
-      {/* Quick Actions */}
-      <div className="mt-6 p-3 rounded-xl bg-gradient-to-r from-blue-50/50 to-blue-100/30 border border-blue-200/50">
-        <p className="text-xs font-medium text-blue-700 mb-2">Quick Actions</p>
-        <div className="flex gap-2">
-          <button className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium hover:from-blue-600 hover:to-blue-700 transition-all hover:shadow-md">
-            Add Stock
-          </button>
-          <button className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-medium hover:from-emerald-600 hover:to-green-700 transition-all hover:shadow-md">
-            New Order
-          </button>
+      {/* Quick Actions - Hidden when collapsed */}
+      {!isCollapsed && (
+        <div className="mt-6 p-3 rounded-xl bg-gradient-to-r from-blue-50/50 to-blue-100/30 border border-blue-200/50">
+          <p className="text-xs font-medium text-blue-700 mb-2">Quick Actions</p>
+          <div className="flex gap-2">
+            <button className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium hover:from-blue-600 hover:to-blue-700 transition-all hover:shadow-md">
+              Add Stock
+            </button>
+            <button className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-medium hover:from-emerald-600 hover:to-green-700 transition-all hover:shadow-md">
+              New Order
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Footer Stats */}
-      <div className="mt-8 pt-6 border-t border-gray-200/50">
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="p-3 rounded-xl bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200/50">
-            <p className="text-xs text-gray-600">Active Users</p>
-            <p className="text-lg font-bold text-green-600">24</p>
+      {/* Footer Stats - Hidden when collapsed */}
+      {!isCollapsed && (
+        <div className="mt-8 pt-6 border-t border-gray-200/50">
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="p-3 rounded-xl bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200/50">
+              <p className="text-xs text-gray-600">Active Users</p>
+              <p className="text-lg font-bold text-green-600">24</p>
+            </div>
+            <div className="p-3 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/30 border border-blue-200/50">
+              <p className="text-xs text-gray-600">Today Sales</p>
+              <p className="text-lg font-bold text-blue-600">$12.5K</p>
+            </div>
           </div>
-          <div className="p-3 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/30 border border-blue-200/50">
-            <p className="text-xs text-gray-600">Today Sales</p>
-            <p className="text-lg font-bold text-blue-600">$12.5K</p>
+          
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-gray-500">
+              © 2026 codesbreak
+            </p>
           </div>
         </div>
-        
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-gray-500">
-            © 2026 codesbreak
+      )}
+
+      {/* Collapsed Footer */}
+      {isCollapsed && (
+        <div className="absolute bottom-6 left-0 right-0 flex justify-center">
+          <p className="text-xs text-gray-500 rotate-90 whitespace-nowrap">
+            © 2026
           </p>
         </div>
-      </div>
+      )}
     </div>
   );
 };
