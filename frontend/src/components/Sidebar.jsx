@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { usePermission } from '../hooks/usePermission'; // Import usePermission
 import { 
   ChevronDown, ChevronRight, 
   Home, ShoppingCart, Factory, Package, 
@@ -20,6 +21,7 @@ import {
 const Sidebar = () => {
   const [openMenus, setOpenMenus] = useState({});
   const { currentUser, loading, error } = useCurrentUser();
+  const { hasPermission } = usePermission(); // Initialize usePermission
 
   const toggleMenu = (menuName) => {
     setOpenMenus(prev => ({
@@ -35,7 +37,8 @@ const Sidebar = () => {
       path: '/dashboard',
       color: 'from-blue-500 to-cyan-500',
       bgColor: 'bg-gradient-to-r from-blue-50 to-blue-100/50',
-      textColor: 'text-blue-700'
+      textColor: 'text-blue-700',
+      permissionKey: 'dashboard_read'
     },
     {
       name: 'Sale',
@@ -43,12 +46,13 @@ const Sidebar = () => {
       color: 'from-emerald-500 to-green-500',
       bgColor: 'bg-gradient-to-r from-emerald-50 to-green-100/50',
       textColor: 'text-emerald-700',
+      permissionKey: 'sales_create',
       subItems: [
-        { name: 'POS', path: '/sale/pos', icon: <CreditCard size={16} /> },
-        { name: 'All Sales', path: '/sale/all', icon: <FileText size={16} /> },
-        { name: 'Create Sale', path: '/sale/create', icon: <ShoppingCart size={16} /> },
-        { name: 'Sale Return', path: '/sale/return', icon: <ClipboardList size={16} /> },
-        { name: 'All Sale Returns', path: '/sale/allreturns', icon: <FileText size={16} /> }
+        { name: 'POS', path: '/sale/pos', icon: <CreditCard size={16} />, permissionKey: 'sales_create' },
+        { name: 'All Sales', path: '/sale/all', icon: <FileText size={16} />, permissionKey: 'sales_read' },
+        { name: 'Create Sale', path: '/sale/create', icon: <ShoppingCart size={16} />, permissionKey: 'sales_create' },
+        { name: 'Sale Return', path: '/sale/return', icon: <ClipboardList size={16} />, permissionKey: 'sales_return_create' },
+        { name: 'All Sale Returns', path: '/sale/allreturns', icon: <FileText size={16} />, permissionKey: 'sales_return_read' }
       ]
     },
     {
@@ -57,9 +61,10 @@ const Sidebar = () => {
       color: 'from-amber-500 to-orange-500',
       bgColor: 'bg-gradient-to-r from-amber-50 to-orange-100/50',
       textColor: 'text-amber-700',
+      permissionKey: 'production_read',
       subItems: [
-        { name: 'All Production', path: '/productions/all', icon: <Factory size={16} /> },
-        { name: 'New Production', path: '/productions/new', icon: <Package size={16} /> }
+        { name: 'All Production', path: '/productions/all', icon: <Factory size={16} />, permissionKey: 'production_read' },
+        { name: 'New Production', path: '/productions/new', icon: <Package size={16} />, permissionKey: 'production_create' }
       ]
     },
     {
@@ -68,11 +73,12 @@ const Sidebar = () => {
       color: 'from-violet-500 to-purple-500',
       bgColor: 'bg-gradient-to-r from-violet-50 to-purple-100/50',
       textColor: 'text-violet-700',
+      permissionKey: 'purchases_read',
       subItems: [
-        { name: 'All Purchase', path: '/purchase/all', icon: <Package size={16} /> },
-        { name: 'New Purchase', path: '/purchase/new', icon: <ShoppingCart size={16} /> },
-        { name: 'All Supplier', path: '/purchase/all-supplier', icon: <Users size={16} /> },
-        { name: 'Add Supplier', path: '/purchase/add-supplier', icon: <UserPlus size={16} /> }
+        { name: 'All Purchase', path: '/purchase/all', icon: <Package size={16} />, permissionKey: 'purchases_read' },
+        { name: 'New Purchase', path: '/purchase/new', icon: <ShoppingCart size={16} />, permissionKey: 'purchases_create' },
+        { name: 'All Supplier', path: '/purchase/all-supplier', icon: <Users size={16} />, permissionKey: 'supplier_read' },
+        { name: 'Add Supplier', path: '/purchase/add-supplier', icon: <UserPlus size={16} />, permissionKey: 'supplier_create' }
       ]
     },
     {
@@ -81,17 +87,18 @@ const Sidebar = () => {
       color: 'from-indigo-500 to-blue-500',
       bgColor: 'bg-gradient-to-r from-indigo-50 to-blue-100/50',
       textColor: 'text-indigo-700',
+      permissionKey: 'transfers_read',
       subItems: [
-        { name: 'Add Transfer', path: '/transfer/add', icon: <Truck size={16} /> },
-        { name: 'Store to store transfer', path: '/transfer/store-to-store', icon: <Warehouse size={16} /> },
-        { name: 'Store to factory', path: '/transfer/store-to-factory', icon: <Factory size={16} /> },
-        { name: 'Store to Shop', path: '/transfer/store-to-shop', icon: <ShoppingBag size={16} /> },
-        { name: 'Factory to factory', path: '/transfer/factory-to-factory', icon: <Factory size={16} /> },
-        { name: 'Factory to store', path: '/transfer/factory-to-store', icon: <Warehouse size={16} /> },
-        { name: 'Factory to shop', path: '/transfer/factory-to-shop', icon: <ShoppingBag size={16} /> },
-        { name: 'Shop to shop', path: '/transfer/shop-to-shop', icon: <ShoppingBag size={16} /> },
-        { name: 'Shop to store', path: '/transfer/shop-to-store', icon: <Warehouse size={16} /> },
-        { name: 'Shop to factory', path: '/transfer/shop-to-factory', icon: <Factory size={16} /> }
+        { name: 'Add Transfer', path: '/transfer/add', icon: <Truck size={16} />, permissionKey: 'transfers_create' },
+        { name: 'Store to store transfer', path: '/transfer/store-to-store', icon: <Warehouse size={16} />, permissionKey: 'transfers_read' },
+        { name: 'Store to factory', path: '/transfer/store-to-factory', icon: <Factory size={16} />, permissionKey: 'transfers_read' },
+        { name: 'Store to Shop', path: '/transfer/store-to-shop', icon: <ShoppingBag size={16} />, permissionKey: 'transfers_read' },
+        { name: 'Factory to factory', path: '/transfer/factory-to-factory', icon: <Factory size={16} />, permissionKey: 'transfers_read' },
+        { name: 'Factory to store', path: '/transfer/factory-to-store', icon: <Warehouse size={16} />, permissionKey: 'transfers_read' },
+        { name: 'Factory to shop', path: '/transfer/factory-to-shop', icon: <ShoppingBag size={16} />, permissionKey: 'transfers_read' },
+        { name: 'Shop to shop', path: '/transfer/shop-to-shop', icon: <ShoppingBag size={16} />, permissionKey: 'transfers_read' },
+        { name: 'Shop to store', path: '/transfer/shop-to-store', icon: <Warehouse size={16} />, permissionKey: 'transfers_read' },
+        { name: 'Shop to factory', path: '/transfer/shop-to-factory', icon: <Factory size={16} />, permissionKey: 'transfers_read' }
       ]
     },
     {
@@ -100,9 +107,10 @@ const Sidebar = () => {
       color: 'from-pink-500 to-rose-500',
       bgColor: 'bg-gradient-to-r from-pink-50 to-rose-100/50',
       textColor: 'text-pink-700',
+      permissionKey: 'product_read',
       subItems: [
-        { name: 'All Products', path: '/products/all', icon: <Box size={16} /> },
-        { name: 'Create Product', path: '/products/create', icon: <Package size={16} /> }
+        { name: 'All Products', path: '/products/all', icon: <Box size={16} />, permissionKey: 'product_read' },
+        { name: 'Create Product', path: '/products/create', icon: <Package size={16} />, permissionKey: 'product_create' }
       ]
     },
 
@@ -113,11 +121,12 @@ const Sidebar = () => {
       color: 'from-cyan-500 to-blue-500',
       bgColor: 'bg-gradient-to-r from-pink-50 to-rose-100/50',
       textColor: 'text-cyan-700',
+      permissionKey: 'repairs_read',
       subItems: [
-        { name: 'Repaired Products', path: '/productrepair', icon: <Box size={16} /> },
-        { name: 'Repair Product', path: '/addrepairproduct', icon: <Box size={16} /> },
-        { name: 'Repaired Materials', path: '/materialrepair', icon: <Package size={16} /> },
-        { name: 'Repair Materials', path: '/addrepairmaterial', icon: <Package size={16} /> },
+        { name: 'Repaired Products', path: '/productrepair', icon: <Box size={16} />, permissionKey: 'repairs_read' },
+        { name: 'Repair Product', path: '/addrepairproduct', icon: <Box size={16} />, permissionKey: 'repairs_create' },
+        { name: 'Repaired Materials', path: '/materialrepair', icon: <Package size={16} />, permissionKey: 'repairs_read' },
+        { name: 'Repair Materials', path: '/addrepairmaterial', icon: <Package size={16} />, permissionKey: 'repairs_create' },
       ] 
     },
 
@@ -128,9 +137,10 @@ const Sidebar = () => {
       color: 'from-red-500 to-rose-500',
       bgColor: 'bg-gradient-to-r from-pink-50 to-rose-100/50',
       textColor: 'text-red-700',
+      permissionKey: 'damage_read',
       subItems: [
-        { name: 'Products Scrap Records', path: '/scraprecord', icon: <Box size={16} /> },
-        { name: 'Material Scrap Records', path: '/materialscraprecord', icon: <Package size={16} /> },
+        { name: 'Products Scrap Records', path: '/scraprecord', icon: <Box size={16} />, permissionKey: 'damage_read' },
+        { name: 'Material Scrap Records', path: '/materialscraprecord', icon: <Package size={16} />, permissionKey: 'damage_read' },
       ] 
     },
 
@@ -140,11 +150,12 @@ const Sidebar = () => {
       color: 'from-teal-500 to-emerald-500',
       bgColor: 'bg-gradient-to-r from-teal-50 to-emerald-100/50',
       textColor: 'text-teal-700',
+      permissionKey: 'material_read',
       subItems: [
-        { name: 'All Materials', path: '/materials/all', icon: <Layers size={16} /> },
-        { name: 'Add Material', path: '/materials/add', icon: <Package size={16} /> },
-        { name: 'Scrape Materials', path: '/materials/scrape', icon: <Database size={16} /> },
-        { name: 'Recover Materials', path: '/materials/recover', icon: <Database size={16} /> }
+        { name: 'All Materials', path: '/materials/all', icon: <Layers size={16} />, permissionKey: 'material_read' },
+        { name: 'Add Material', path: '/materials/add', icon: <Package size={16} />, permissionKey: 'material_create' },
+        { name: 'Scrape Materials', path: '/materials/scrape', icon: <Database size={16} />, permissionKey: 'material_scrape' },
+        { name: 'Recover Materials', path: '/materials/recover', icon: <Database size={16} />, permissionKey: 'material_recover' }
       ]
     },
     {
@@ -153,9 +164,10 @@ const Sidebar = () => {
       color: 'from-orange-500 to-red-500',
       bgColor: 'bg-gradient-to-r from-orange-50 to-red-100/50',
       textColor: 'text-orange-700',
+      permissionKey: 'factory_read',
       subItems: [
-        { name: 'All Factory', path: '/factories/all', icon: <Factory size={16} /> },
-        { name: 'Add Factory', path: '/factories/add', icon: <Building size={16} /> }
+        { name: 'All Factory', path: '/factories/all', icon: <Factory size={16} />, permissionKey: 'factory_read' },
+        { name: 'Add Factory', path: '/factories/add', icon: <Building size={16} />, permissionKey: 'factory_create' }
       ]
     },
     {
@@ -164,10 +176,11 @@ const Sidebar = () => {
       color: 'from-sky-500 to-blue-500',
       bgColor: 'bg-gradient-to-r from-sky-50 to-blue-100/50',
       textColor: 'text-sky-700',
+      permissionKey: 'store_read',
       subItems: [
-        { name: 'All Store', path: '/stores/all', icon: <Warehouse size={16} /> },
-        { name: 'Add Store', path: '/stores/add', icon: <Store size={16} /> },
-        { name: 'Manage Transfer', path: '/transfers', icon: <Truck size={16} /> }
+        { name: 'All Store', path: '/stores/all', icon: <Warehouse size={16} />, permissionKey: 'store_read' },
+        { name: 'Add Store', path: '/stores/add', icon: <Store size={16} />, permissionKey: 'store_create' },
+        { name: 'Manage Transfer', path: '/transfers', icon: <Truck size={16} />, permissionKey: 'transfers_read' }
       ]
     },
     {
@@ -176,9 +189,10 @@ const Sidebar = () => {
       color: 'from-fuchsia-500 to-pink-500',
       bgColor: 'bg-gradient-to-r from-fuchsia-50 to-pink-100/50',
       textColor: 'text-fuchsia-700',
+      permissionKey: 'shop_read',
       subItems: [
-        { name: 'All Shop', path: '/shop/all', icon: <ShoppingBag size={16} /> },
-        { name: 'Add Shop', path: '/shop/add', icon: <Store size={16} /> }
+        { name: 'All Shop', path: '/shop/all', icon: <ShoppingBag size={16} />, permissionKey: 'shop_read' },
+        { name: 'Add Shop', path: '/shop/add', icon: <Store size={16} />, permissionKey: 'shop_create' }
       ]
     },
     {
@@ -187,12 +201,13 @@ const Sidebar = () => {
       color: 'from-indigo-500 to-blue-500',
       bgColor: 'bg-gradient-to-r from-indigo-50 to-blue-100/50',
       textColor: 'text-indigo-700',
+      permissionKey: 'account_read',
       subItems: [
-        { name: 'Add Account', path: '/addaccount', icon: <NotebookPen size={16} /> },
-        { name: 'Account List', path: '/allaccounts', icon: <TableProperties size={16} /> },
-        { name: 'Assign Account', path: '/assignaccount', icon: <TableProperties size={16} /> },
-        { name: 'Assign CashRegister', path: '/cashregisterassign', icon: <TableProperties size={16} /> },
-        { name: 'Add CashRegister', path: '/addcashregister', icon: <TableProperties size={16} /> },
+        { name: 'Add Account', path: '/addaccount', icon: <NotebookPen size={16} />, permissionKey: 'account_create' },
+        { name: 'Account List', path: '/allaccounts', icon: <TableProperties size={16} />, permissionKey: 'account_read' },
+        { name: 'Assign Account', path: '/assignaccount', icon: <TableProperties size={16} />, permissionKey: 'account_create' },
+        { name: 'Assign CashRegister', path: '/cashregisterassign', icon: <TableProperties size={16} />, permissionKey: 'account_create' },
+        { name: 'Add CashRegister', path: '/addcashregister', icon: <TableProperties size={16} />, permissionKey: 'cash_register_create' },
       ]
     },
     {
@@ -201,12 +216,13 @@ const Sidebar = () => {
       color: 'from-lime-500 to-green-500',
       bgColor: 'bg-gradient-to-r from-lime-50 to-green-100/50',
       textColor: 'text-lime-700',
+      permissionKey: 'report_read',
       subItems: [
-        { name: 'Sale Report', path: '/report/sale', icon: <BarChart3 size={16} /> },
-        { name: 'Purchase Report', path: '/report/purchase', icon: <BarChart3 size={16} /> },
-        { name: 'Production Report', path: '/report/production', icon: <BarChart3 size={16} /> },
-        { name: 'Wastage Report', path: '/report/wastage', icon: <BarChart3 size={16} /> },
-        { name: 'Scrape Report', path: '/report/scrape', icon: <BarChart3 size={16} /> }
+        { name: 'Sale Report', path: '/report/sale', icon: <BarChart3 size={16} />, permissionKey: 'report_sale_read' },
+        { name: 'Purchase Report', path: '/report/purchase', icon: <BarChart3 size={16} />, permissionKey: 'report_purchase_read' },
+        { name: 'Production Report', path: '/report/production', icon: <BarChart3 size={16} />, permissionKey: 'report_production_read' },
+        { name: 'Wastage Report', path: '/report/wastage', icon: <BarChart3 size={16} />, permissionKey: 'report_wastage_read' },
+        { name: 'Scrape Report', path: '/report/scrape', icon: <BarChart3 size={16} />, permissionKey: 'report_scrape_read' }
       ]
     },
     {
@@ -215,12 +231,13 @@ const Sidebar = () => {
       color: 'from-cyan-500 to-blue-500',
       bgColor: 'bg-gradient-to-r from-cyan-50 to-blue-100/50',
       textColor: 'text-cyan-700',
+      permissionKey: 'user_read',
       subItems: [
-        { name: 'All User', path: '/users/all', icon: <Users size={16} /> },
-        { name: 'Create User', path: '/users/create', icon: <UserPlus size={16} /> },
-        { name: 'Assign User', path: '/assignuser', icon: <UserPlus size={16} /> },
-        { name: 'Assigned List', path: '/assignedusers', icon: <UserPlus size={16} /> },
-        { name: 'Role & Permissions', path: '/managepermissions', icon: <UserPlus size={16} /> }
+        { name: 'All User', path: '/users/all', icon: <Users size={16} />, permissionKey: 'user_read' },
+        { name: 'Create User', path: '/users/create', icon: <UserPlus size={16} />, permissionKey: 'user_create' },
+        { name: 'Assign User', path: '/assignuser', icon: <UserPlus size={16} />, permissionKey: 'user_read' },
+        { name: 'Assigned List', path: '/assignedusers', icon: <UserPlus size={16} />, permissionKey: 'user_associate_create' },
+        { name: 'Role & Permissions', path: '/managepermissions', icon: <UserPlus size={16} />, permissionKey: 'role_create' }
       ]
     },
     {
@@ -229,8 +246,9 @@ const Sidebar = () => {
       color: 'from-gray-500 to-slate-500',
       bgColor: 'bg-gradient-to-r from-gray-50 to-slate-100/50',
       textColor: 'text-gray-700',
+      permissionKey: 'general_settings_edit',
       subItems: [
-        { name: 'Settings', path: '/settings', icon: <Settings size={16} /> }
+        { name: 'Settings', path: '/settings', icon: <Settings size={16} />, permissionKey: 'general_settings_edit' }
       ]
     }
   ];
@@ -251,7 +269,7 @@ const Sidebar = () => {
                 {currentUser?.name || 'Admin User'}
               </p>
               <p className="text-xs text-gray-600">
-                {currentUser?.role || 'Administrator'}
+                {currentUser?.permission?.name || 'Administrator'}
               </p>
             </div>
             <div className="flex gap-1">
@@ -268,63 +286,79 @@ const Sidebar = () => {
 
       {/* Navigation Menu */}
       <nav className="space-y-1">
-        {menuItems.map((item) => (
-          <div key={item.name} className="relative">
-            {item.path ? (
-              <Link
-                to={item.path}
-                className="group flex items-center gap-3 p-3 rounded-xl hover:bg-white/80 hover:border-gray-200/70 border border-transparent transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
-              >
-                <div className={`p-2 rounded-lg bg-gradient-to-r ${item.color} shadow-sm`}>
-                  {item.icon}
-                </div>
-                <span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all`}>
-                  {item.name}
-                </span>
-              </Link>
-            ) : (
-              <>
-                <button
-                  onClick={() => toggleMenu(item.name.toLowerCase())}
-                  className="group w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/80 hover:border-gray-200/70 border border-transparent transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
+        {menuItems.map((item) => {
+          // Determine if the top-level item should be displayed at all
+          const shouldShowTopLevelItem = item.path 
+            ? hasPermission(item.permissionKey) 
+            : (item.subItems && item.subItems.some(subItem => hasPermission(subItem.permissionKey)));
+
+          if (!shouldShowTopLevelItem) {
+            return null;
+          }
+
+          return (
+            <div key={item.name} className="relative">
+              {item.path ? (
+                // Render direct link if path exists
+                <Link
+                  to={item.path}
+                  className="group flex items-center gap-3 p-3 rounded-xl hover:bg-white/80 hover:border-gray-200/70 border border-transparent transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg bg-gradient-to-r ${item.color} shadow-sm`}>
-                      {item.icon}
+                  <div className={`p-2 rounded-lg bg-gradient-to-r ${item.color} shadow-sm`}>
+                    {item.icon}
+                  </div>
+                  <span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all`}>
+                    {item.name}
+                  </span>
+                </Link>
+              ) : (
+                // Render dropdown if subItems exist
+                <>
+                  <button
+                    onClick={() => toggleMenu(item.name.toLowerCase())}
+                    className="group w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/80 hover:border-gray-200/70 border border-transparent transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-lg bg-gradient-to-r ${item.color} shadow-sm`}>
+                        {item.icon}
+                      </div>
+                      <span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all`}>
+                        {item.name}
+                      </span>
                     </div>
-                    <span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all`}>
-                      {item.name}
-                    </span>
-                  </div>
-                  {openMenus[item.name.toLowerCase()] ? (
-                    <ChevronDown size={16} className="text-gray-500 group-hover:text-gray-700 transition-colors" />
-                  ) : (
-                    <ChevronRight size={16} className="text-gray-500 group-hover:text-gray-700 transition-colors" />
+                    {openMenus[item.name.toLowerCase()] ? (
+                      <ChevronDown size={16} className="text-gray-500 group-hover:text-gray-700 transition-colors" />
+                    ) : (
+                      <ChevronRight size={16} className="text-gray-500 group-hover:text-gray-700 transition-colors" />
+                    )}
+                  </button>
+                  
+                  {openMenus[item.name.toLowerCase()] && item.subItems && (
+                    <div className="ml-4 mt-2 pl-6 border-l border-gray-200/50 space-y-1">
+                      {item.subItems.map((subItem) => (
+                        // Conditionally render sub-item
+                        hasPermission(subItem.permissionKey) ? (
+                        <Link
+                          key={subItem.path}
+                          to={subItem.path}
+                          className="group flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50/70 hover:pl-4 transition-all duration-200"
+                        >
+                          <div className="p-1.5 rounded-md bg-gray-100/50 group-hover:bg-white shadow-sm">
+                            {subItem.icon}
+                          </div>
+                          <span className="text-sm text-gray-600 group-hover:text-gray-800 group-hover:font-medium transition-all">
+                            {subItem.name}
+                          </span>
+                        </Link>
+                        ) : null
+                      ))}
+                    </div>
                   )}
-                </button>
-                
-                {openMenus[item.name.toLowerCase()] && item.subItems && (
-                  <div className="ml-4 mt-2 pl-6 border-l border-gray-200/50 space-y-1">
-                    {item.subItems.map((subItem) => (
-                      <Link
-                        key={subItem.path}
-                        to={subItem.path}
-                        className="group flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50/70 hover:pl-4 transition-all duration-200"
-                      >
-                        <div className="p-1.5 rounded-md bg-gray-100/50 group-hover:bg-white shadow-sm">
-                          {subItem.icon}
-                        </div>
-                        <span className="text-sm text-gray-600 group-hover:text-gray-800 group-hover:font-medium transition-all">
-                          {subItem.name}
-                        </span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        ))}
+                </>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
       {/* Quick Actions */}
