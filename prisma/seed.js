@@ -61,7 +61,7 @@ async function main() {
         'brand_read', 'brand_create', 'brand_edit', 'brand_delete',
         'product_category_read', 'product_category_create', 'product_category_edit', 'product_category_delete',
 
-        // Store factory, shop management permissions
+        // Store, factory and shop management permissions
         'factory_create', 'factory_edit', 'factory_delete', 'factory_read',
         'store_create', 'store_edit', 'store_delete', 'store_read',
         'shop_create', 'shop_edit', 'shop_delete', 'shop_read',
@@ -73,9 +73,9 @@ async function main() {
         'bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete',
         'bank_account_deposit', 'bank_account_withdraw',
 
-        // Add account permissions
+        // Add accounts permissions
         'account_read', 'account_create', 'account_edit', 'account_delete',
-        'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement', 'account_balance',
+        'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement',
 
         // Add purchase permissions
         'purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment',

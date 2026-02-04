@@ -660,7 +660,6 @@ export default function PermissionsManagement() {
                     <thead className="bg-gray-100/80">
                       <tr>
                         <th className="p-4 text-left font-medium text-gray-700">Name</th>
-                        <th className="p-4 text-left font-medium text-gray-700">Permissions</th>
                         <th className="p-4 text-left font-medium text-gray-700">Assigned Users</th>
                         <th className="p-4 text-left font-medium text-gray-700">Created</th>
                         <th className="p-4 text-left font-medium text-gray-700">Actions</th>
@@ -668,57 +667,61 @@ export default function PermissionsManagement() {
                     </thead>
                     <tbody>
                       {permissions.map((permission) => (
-                        <tr key={permission.id} className="border-t border-white/50 hover:bg-white/30">
-                          <td className="p-4">
-                            <div className="font-medium text-purple-700">{permission.name}</div>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex flex-wrap gap-2 max-w-md">
-                              {Array.isArray(permission.permissions) ? (
-                                permission.permissions.map((perm, index) => (
-                                  <span
-                                    key={index}
-                                    className="px-3 py-1 bg-gradient-to-r from-blue-100 to-blue-50 text-blue-700 text-xs font-medium rounded-full border border-blue-200"
-                                    title={perm}
-                                  >
-                                    {perm}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-gray-500">No permissions</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className="flex items-center gap-2">
-                              <Users size={16} className="text-gray-500" />
-                              <span className="font-medium">
-                                {permission.users?.length || 0} user{permission.users?.length !== 1 ? 's' : ''}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="p-4 text-gray-600">
-                            {new Date(permission.createdAt).toLocaleDateString()}
-                          </td>
-                          <td className="p-4">
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => handleEditPermission(permission)}
-                                className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
-                                title="Edit"
-                              >
-                                <Edit size={16} />
-                              </button>
-                              <button
-                                onClick={() => handleDeletePermission(permission.id)}
-                                className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                                title="Delete"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                        <>
+                          <tr key={permission.id} className="border-t border-white/50 hover:bg-white/30">
+                            <td className="p-4">
+                              <div className="font-medium text-purple-700">{permission.name}</div>
+                            </td>
+                            <td className="p-4">
+                              <div className="flex items-center gap-2">
+                                <Users size={16} className="text-gray-500" />
+                                <span className="font-medium">
+                                  {permission.users?.length || 0} user{permission.users?.length !== 1 ? 's' : ''}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="p-4 text-gray-600">
+                              {new Date(permission.createdAt).toLocaleDateString()}
+                            </td>
+                            <td className="p-4">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleEditPermission(permission)}
+                                  className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                                  title="Edit"
+                                >
+                                  <Edit size={16} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeletePermission(permission.id)}
+                                  className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="p-4 pb-20" colSpan="4">
+                              <div className="flex flex-wrap gap-2">
+                                {Array.isArray(permission.permissions) ? (
+                                  permission.permissions.map((perm, index) => (
+                                    <span
+                                      key={index}
+                                      className="px-3 py-1 bg-gradient-to-r from-blue-100 to-blue-50 text-blue-700 text-xs font-medium rounded-full border border-blue-200"
+                                      title={perm}
+                                    >
+                                      {perm}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-gray-500">No permissions</span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        </>
                       ))}
                     </tbody>
                   </table>
