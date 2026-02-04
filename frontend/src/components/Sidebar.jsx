@@ -251,16 +251,8 @@ const Sidebar = () => {
                 {currentUser?.name || 'Admin User'}
               </p>
               <p className="text-xs text-gray-600">
-                {currentUser?.role || 'Administrator'}
+                {currentUser?.username || 'Administrator'}
               </p>
-            </div>
-            <div className="flex gap-1">
-              <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors">
-                <Bell size={14} />
-              </button>
-              <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors">
-                <HelpCircle size={14} />
-              </button>
             </div>
           </div>
         </div>
@@ -357,9 +349,6 @@ const Sidebar = () => {
           <p className="text-xs text-gray-500">
             © 2026 codesbreak
           </p>
-          <button className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors">
-            <Moon size={14} />
-          </button>
         </div>
       </div>
     </div>
