@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
-import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon } from "lucide-react";
+import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList } from "lucide-react";
 
 export default function ShopPOS() {
   const [shops, setShops] = useState([]);
@@ -402,22 +402,32 @@ export default function ShopPOS() {
   const outOfStockItems = shopItems.filter(item => item.shop_stock <= 0);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen w-full bg-gray-50 p-4 md:px-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-800 text-white p-4 shadow-lg rounded-md rounded-tl-none">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold flex"> <Store size={42} className="mx-3" /> Shop POS System</h1>
+
+      <div className="glass-card p-6 m-3 md:m-4 border border-white/20 backdrop-blur-xl">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex items-center">
+            <div className="glass-icon p-3 rounded-xl mr-4 bg-gradient-to-r from-emerald-500/10 to-blue-500/10">
+              <ClipboardList className="text-emerald-500" size={38} />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-emerald-500 to-green-500 bg-clip-text text-transparent">
+                All Sales
+              </h1>
+              <p className="text-gray-600 mt-1">Overview of all sales transactions</p>
+            </div>
           </div>
           <div className="mt-2 md:mt-0">
             {shopId && (
-              <div className="text-sm bg-blue-700 px-3 py-1 rounded-full">
+              <div className="text-md bg-gray-300/30 px-3 py-1 rounded-full text-emerald-600">
                 Selected: {shops.find(s => s.id === parseInt(shopId))?.name || "Shop"}
               </div>
             )}
           </div>
         </div>
       </div>
+
 
       {/* Main Content */}
       <div className="max-w-7xl  xl:max-w-full p-4">

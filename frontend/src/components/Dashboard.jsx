@@ -180,20 +180,19 @@ const Dashboard = () => {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <RevenueChart data={dashboardData.sales.monthlyRevenue} />
-        <InventoryChart data={dashboardData.inventory.byCategory} />
+        <LowStockTable data={dashboardData.inventory.lowStock} />
       </div>
 
       {/* Tables Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <TopProductsTable data={dashboardData.sales.topProducts} />
-        <LowStockTable data={dashboardData.inventory.lowStock} />
+        <ShopPerformance data={dashboardData.performance} />
       </div>
 
       {/* Bottom Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TransferStatus data={dashboardData.transfers} />
         <RecentActivity data={dashboardData.recentActivity} />
-        <ShopPerformance data={dashboardData.performance} />
       </div>
     </div>
   );
@@ -303,61 +302,6 @@ const RevenueChart = ({ data }) => (
   </div>
 );
 
-// Inventory Chart Component
-const InventoryChart = ({ data }) => (
-  <div className="glass-card rounded-2xl p-6 backdrop-blur-sm border border-white/40">
-    <div className="flex items-center justify-between mb-6">
-      <div>
-        <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-          <Package className="mr-2 text-purple-600" />
-          Inventory Distribution
-        </h3>
-        <p className="text-sm text-gray-500 mt-1">Value by category</p>
-      </div>
-      <button className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
-        <Eye size={14} />
-        View All
-      </button>
-    </div>
-    <div className="space-y-4">
-      {data.map((item, index) => {
-        const percentage = (item.value / 2000000) * 100;
-        const gradientColors = [
-          'from-blue-500 to-cyan-500',
-          'from-emerald-500 to-green-500',
-          'from-purple-500 to-pink-500',
-          'from-amber-500 to-orange-500',
-          'from-indigo-500 to-blue-500'
-        ];
-        
-        return (
-          <div key={index} className="flex items-center justify-between group hover:bg-white/30 p-2 rounded-lg transition-colors duration-200">
-            <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-lg bg-gradient-to-r ${gradientColors[index % gradientColors.length]} flex items-center justify-center`}>
-                <Package size={14} className="text-white" />
-              </div>
-              <div>
-                <span className="text-sm font-medium text-gray-800">{item.category}</span>
-                <div className="text-xs text-gray-500">${(item.value / 1000).toFixed(0)}K</div>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-32 bg-gray-200/50 rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full bg-gradient-to-r ${gradientColors[index % gradientColors.length]} transition-all duration-1000`}
-                  style={{ width: `${percentage}%` }}
-                ></div>
-              </div>
-              <span className="text-sm font-medium text-gray-800 w-10 text-right">
-                {percentage.toFixed(0)}%
-              </span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  </div>
-);
 
 // Top Products Table Component
 const TopProductsTable = ({ data }) => (
