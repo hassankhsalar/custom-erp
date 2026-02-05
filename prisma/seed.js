@@ -69,13 +69,17 @@ async function main() {
 
         // Add Report permissions
         'general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report',
-        'sales_report', 'purchases_report', 'stock_report', 'transfer_report',
+        'sales_report', 'purchases_report', 'production_report', 'wastage_report', 'stock_report', 'transfer_report',
         'profit_loss_report', 'purchase_sales_report', 'customer_report', 'supplier_report',
         'best_selling_product_report', 'worst_selling_product_report', 'profit_calender_report',
 
 
         // Add user management permissions
         'user_create', 'user_edit', 'user_delete', 'user_read', 'user_activate_deactivate', 'user_logout', 'user_associate_create', 'user_activity_log_read',
+
+        // HRM Management
+        'hrm_settings_edit',
+
 
         // Add role and permission management permissions
         'role_create', 'role_edit', 'role_delete', 'role_read',
@@ -89,7 +93,7 @@ async function main() {
 
 
         // System Management
-        'general_settings_edit', 'company_settings_edit', 
+        'general_settings_edit', 'company_settings_edit', 'notification_read',
         'data_import', 'data_export',
 
       ],

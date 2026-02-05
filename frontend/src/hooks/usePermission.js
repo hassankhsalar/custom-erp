@@ -13,9 +13,19 @@ export const usePermission = () => {
       return true;
     }
 
-    // Check if the requiredPermission is in the user's permissions array
     const userPermissions = currentUser.permission.permissions;
-    return Array.isArray(userPermissions) && userPermissions.includes(requiredPermission);
+
+    if (!Array.isArray(userPermissions)) {
+      return false; // User has no valid permissions array
+    }
+
+    if (typeof requiredPermission === 'string') {
+      return userPermissions.includes(requiredPermission);
+    } else if (Array.isArray(requiredPermission)) {
+      return requiredPermission.some(perm => userPermissions.includes(perm));
+    } else {
+      return false; // Invalid requiredPermission format
+    }
   };
 
   return { hasPermission, loading };
