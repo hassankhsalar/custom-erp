@@ -39,7 +39,7 @@ const Sidebar = () => {
       color: 'from-blue-500 to-cyan-500',
       bgColor: 'bg-gradient-to-r from-blue-50 to-blue-100/50',
       textColor: 'text-blue-700',
-      permissionKey: ['dashboard_read', 'admin']
+      permissionKey: null,
     },
     {
       name: 'Sale',

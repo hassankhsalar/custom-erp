@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { API_ROUTES } from "../config";
 import { useAuth } from '../App';
+import { usePermission } from '../hooks/usePermission';
 import {
   TrendingUp,
   TrendingDown,
@@ -30,6 +31,7 @@ import {
 
 const Dashboard = () => {
   const { token, logout } = useAuth();
+  const { hasPermission } = usePermission();
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState("month");
@@ -143,55 +145,73 @@ const Dashboard = () => {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <KPICard
-          title="Total Revenue"
-          value={dashboardData.kpis.revenue.value}
-          change={dashboardData.kpis.revenue.change}
-          trend={dashboardData.kpis.revenue.trend}
-          icon={<DollarSign className="h-6 w-6" />}
-          color="green"
-        />
-        <KPICard
-          title="Total Sales"
-          value={dashboardData.kpis.sales.value}
-          change={dashboardData.kpis.sales.change}
-          trend={dashboardData.kpis.sales.trend}
-          icon={<ShoppingCart className="h-6 w-6" />}
-          color="blue"
-        />
-        <KPICard
-          title="Inventory Value"
-          value={dashboardData.kpis.inventory.value}
-          change={dashboardData.kpis.inventory.change}
-          trend={dashboardData.kpis.inventory.trend}
-          icon={<Package className="h-6 w-6" />}
-          color="purple"
-        />
-        <KPICard
-          title="Pending Transfers"
-          value={dashboardData.kpis.transfers.value}
-          change={dashboardData.kpis.transfers.change}
-          trend={dashboardData.kpis.transfers.trend}
-          icon={<Truck className="h-6 w-6" />}
-          color="orange"
-        />
-      </div>
+        {hasPermission(['sales_read', 'general_ledger_report', 'profit_loss_report']) && (
+          <KPICard
+            title="Total Revenue"
+            value={dashboardData.kpis.revenue.value}
+            change={dashboardData.kpis.revenue.change}
+            trend={dashboardData.kpis.revenue.trend}
+            icon={<DollarSign className="h-6 w-6" />}
+            color="green"
+          />
+        )}
+        {hasPermission('sales_read') && (
+          <KPICard
+            title="Total Sales"
+            value={dashboardData.kpis.sales.value}
+            change={dashboardData.kpis.sales.change}
+            trend={dashboardData.kpis.sales.trend}
+            icon={<ShoppingCart className="h-6 w-6" />}
+            color="blue"
+          />
+        )}
+        {hasPermission(['material_read', 'product_read', 'stock_report']) && (
+          <KPICard
+            title="Inventory Value"
+            value={dashboardData.kpis.inventory.value}
+            change={dashboardData.kpis.inventory.change}
+            trend={dashboardData.kpis.inventory.trend}
+            icon={<Package className="h-6 w-6" />}
+            color="purple"
+          />
+        )}
+                {hasPermission('transfers_read') && (
+                  <KPICard
+                    title="Pending Transfers"
+                    value={dashboardData.kpis.transfers.value}
+                    change={dashboardData.kpis.transfers.change}
+                    trend={dashboardData.kpis.transfers.trend}
+                    icon={<Truck className="h-6 w-6" />}
+                    color="orange"
+                  />
+                )}
+              </div>
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <RevenueChart data={dashboardData.sales.monthlyRevenue} />
-        <LowStockTable data={dashboardData.inventory.lowStock} />
+        {hasPermission(['sales_read', 'sales_report']) && (
+          <RevenueChart data={dashboardData.sales.monthlyRevenue} />
+        )}
+        {hasPermission(['stock_report', 'material_read', 'product_read']) && (
+          <LowStockTable data={dashboardData.inventory.lowStock} />
+        )}
       </div>
 
       {/* Tables Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <TopProductsTable data={dashboardData.sales.topProducts} />
-        <ShopPerformance data={dashboardData.performance} />
+        {hasPermission(['best_selling_product_report', 'sales_read']) && (
+          <TopProductsTable data={dashboardData.sales.topProducts} />
+        )}
+        {hasPermission(['sales_report', 'shop_read']) && (
+          <ShopPerformance data={dashboardData.performance} />
+        )}
       </div>
 
       {/* Bottom Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <TransferStatus data={dashboardData.transfers} />
+        {hasPermission(['transfer_report', 'transfers_read']) && (
+          <TransferStatus data={dashboardData.transfers} />
+        )}
         <RecentActivity data={dashboardData.recentActivity} />
       </div>
     </div>

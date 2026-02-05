@@ -402,20 +402,19 @@ export default function ShopPOS() {
   const outOfStockItems = shopItems.filter(item => item.shop_stock <= 0);
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 p-4 md:px-6">
+    <div className="min-h-screen w-full bg-gray-50 p-2">
       {/* Header */}
 
-      <div className="glass-card p-6 m-3 md:m-4 border border-white/20 backdrop-blur-xl">
+      <div className="glass-card m-3 md:m-4 border border-white/20 backdrop-blur-xl">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center">
             <div className="glass-icon p-3 rounded-xl mr-4 bg-gradient-to-r from-emerald-500/10 to-blue-500/10">
               <ClipboardList className="text-emerald-500" size={38} />
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-emerald-500 to-green-500 bg-clip-text text-transparent">
-                All Sales
+              <h1 className="text-md md:text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent">
+                Point Of Sale
               </h1>
-              <p className="text-gray-600 mt-1">Overview of all sales transactions</p>
             </div>
           </div>
           <div className="mt-2 md:mt-0">

@@ -32,6 +32,7 @@ const Navbar = () => {
     const navItems = [
         { name: "Dashboard", icon: <Home size={18} />, path: "/dashboard" },
         { name: "All Sales", icon: <Zap size={18} />, path: "/sale/all" },
+        { name: "POS", icon: <Store size={18} />, path: "/sale/pos" },
     ];
 
     const isActive = (path) => {
