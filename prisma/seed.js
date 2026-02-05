@@ -89,7 +89,7 @@ async function main() {
         'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read',
 
         // Add transfer permissions
-        'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_recive',
+        'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive',
 
         // Add Wastage/Damage permissions
         'damage_create', 'damage_edit', 'damage_delete', 'damage_read',
