@@ -123,9 +123,9 @@ router.post("/", async (req, res) => {
     const calculatedGrandTotal = amountAfterDiscount + taxAmount + parseFloat(shippingCost);
     
     // Validate that paid amount is not greater than grand total
-    if (parseFloat(paidAmount) > calculatedGrandTotal) {
+    if ((parseFloat(paidAmount) - calculatedGrandTotal) > 0 ) {
       return res.status(400).json({ 
-        error: "Paid amount cannot exceed grand total" 
+        error: "Paid amount cannot exceed grand total from" 
       });
     }
 
@@ -142,8 +142,16 @@ router.post("/", async (req, res) => {
     });
 
     if (!entityAccount) {
+      let storeName = await prisma.store.findUnique({
+        where: {
+          id: actualDestinationId
+        },
+        select: {
+          name: true
+        }
+      });
       return res.status(400).json({ 
-        error: `No primary account found for ${actualDestinationType} with ID ${actualDestinationId}` 
+        error: `No primary account found for ${storeName.name}` 
       });
     }
 
