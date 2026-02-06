@@ -176,9 +176,9 @@ const uploadRoutes = require('./routes/uploadRoutes');
 
 
 
-app.use('/api/materials', materialRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/factories', factoryRoutes);
+app.use('/api/materials', authenticateToken, materialRoutes);
+app.use('/api/products', authenticateToken, productRoutes);
+app.use('/api/factories', authenticateToken, factoryRoutes);
 app.use('/api/productions', productionRoutes);
 app.use('/api/stores', storeRoutes);
 app.use('/api/suppliers', supplierRoutes);

@@ -20,6 +20,7 @@ const AddMaterial = () => {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [selectedImageFile, setSelectedImageFile] = useState(null);
+  const token = localStorage.getItem('token');
 
   // Function to upload image
   const uploadImage = async (file) => {
@@ -30,6 +31,7 @@ const AddMaterial = () => {
       // Use the correct endpoint: /api/uploads/product
       const response = await axios.post(`${API_ROUTES.UPLOADS}/product`, formData, {
         headers: {
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data',
         },
       });
@@ -108,7 +110,12 @@ const AddMaterial = () => {
         image: imageUrl,
       };
       
-      await axios.post(API_ROUTES.MATERIALS, materialData);
+       await axios.post(API_ROUTES.MATERIALS, materialData, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
       alert('Material created successfully!');
       navigate('/materials/all');
       

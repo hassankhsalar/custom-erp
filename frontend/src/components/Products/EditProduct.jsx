@@ -7,6 +7,7 @@ import { Image as ImageIcon, X, Upload } from 'lucide-react';
 const EditProduct = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const token = localStorage.getItem('token');
   const [product, setProduct] = useState(null);
   const [materials, setMaterials] = useState([]);
   const [allMaterials, setAllMaterials] = useState([]);
@@ -35,35 +36,74 @@ const EditProduct = () => {
   };
 
   useEffect(() => {
-    const fetchProduct = async () => {
-      try {
-        const response = await axios.get(`${API_ROUTES.PRODUCTS}/${id}`);
-        setProduct(response.data);
-        setMaterials(response.data.materials.map(m => ({...m, material_name: m.material.name})));
-        
-        if (response.data.image) {
-          setImagePreview(getImageUrl(response.data.image));
-        }
-        
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching product:', error);
-        setLoading(false);
-      }
-    };
+  const fetchProduct = async () => {
+    if (!token) {
+      alert('Authentication required. Please login.');
+      navigate('/login');
+      return;
+    }
 
-    const fetchMaterials = async () => {
-      try {
-        const response = await axios.get(API_ROUTES.MATERIALS);
-        setAllMaterials(response.data.materials);
-      } catch (error) {
-        console.error('Error fetching materials:', error);
+    try {
+      const response = await axios.get(`${API_ROUTES.PRODUCTS}/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      setProduct(response.data);
+      setMaterials(response.data.materials.map(m => ({...m, material_name: m.material.name})));
+      
+      if (response.data.image) {
+        setImagePreview(getImageUrl(response.data.image));
       }
-    };
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching product:', error);
+      
+      // Handle authentication errors
+      if (error.response?.status === 401) {
+        alert('Session expired. Please login again.');
+        localStorage.removeItem('token');
+        navigate('/login');
+      } else if (error.response?.status === 403) {
+        alert('Permission denied. You do not have access to this product.');
+      }
+      
+      setLoading(false);
+    }
+  };
 
+  const fetchMaterials = async () => {
+    if (!token) return;
+    
+    try {
+      const response = await axios.get(API_ROUTES.MATERIALS, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      setAllMaterials(response.data.materials);
+    } catch (error) {
+      console.error('Error fetching materials:', error);
+      
+      // Handle authentication errors
+      if (error.response?.status === 401) {
+        alert('Session expired. Please login again.');
+        localStorage.removeItem('token');
+        navigate('/login');
+      } else if (error.response?.status === 403) {
+        alert('Permission denied. You do not have access to materials.');
+      }
+    }
+  };
+
+  if (token) {
     fetchProduct();
     fetchMaterials();
-  }, [id]);
+  }
+}, [id, token, navigate]);
 
   useEffect(() => {
     if (searchTerm) {
@@ -143,23 +183,31 @@ const EditProduct = () => {
   };
 
   const uploadImage = async (file) => {
-    const formData = new FormData();
-    formData.append('image', file);
+  const formData = new FormData();
+  formData.append('image', file);
+  
+  try {
+    const response = await axios.post(`${API_ROUTES.UPLOADS}/product`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
     
-    try {
-      // Use the correct endpoint: /api/uploads/product
-      const response = await axios.post(`${API_ROUTES.UPLOADS}/product`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
-      return response.data.imageUrl;
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      throw error;
+    return response.data.imageUrl;
+  } catch (error) {
+    console.error('Error uploading image:', error);
+    
+    // Handle authentication errors
+    if (error.response?.status === 401) {
+      alert('Session expired during image upload. Please login again.');
+      localStorage.removeItem('token');
+      navigate('/login');
     }
-  };
+    
+    throw error;
+  }
+};
 
   const removeImage = () => {
     setProduct({ ...product, image: null });
@@ -168,71 +216,99 @@ const EditProduct = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setUploadingImage(true);
+  e.preventDefault();
+  
+  // Check authentication
+  if (!token) {
+    alert('Authentication required. Please login.');
+    navigate('/login');
+    return;
+  }
+  
+  setUploadingImage(true);
+  
+  try {
+    let imageUrl = product.image;
     
-    try {
-      let imageUrl = product.image;
-      
-      // Upload image if a new one was selected
-      if (selectedImageFile) {
-        try {
-          imageUrl = await uploadImage(selectedImageFile);
-          setProduct({ ...product, image: imageUrl });
-        } catch (uploadError) {
-          console.error('Image upload failed:', uploadError);
-          alert('Failed to upload image. Product will be updated without changing the image.');
-        }
+    // Upload image if a new one was selected
+    if (selectedImageFile) {
+      try {
+        imageUrl = await uploadImage(selectedImageFile);
+        setProduct({ ...product, image: imageUrl });
+      } catch (uploadError) {
+        console.error('Image upload failed:', uploadError);
+        alert('Failed to upload image. Product will be updated without changing the image.');
       }
-      
-      // Prepare product data
-      const productData = {
-        ...product,
+    }
+    
+    // Prepare product data
+    const productData = {
+      ...product,
+      sale_price: parseFloat(product.sale_price),
+      wholesale_price: parseFloat(product.wholesale_price),
+      cost: parseFloat(product.cost),
+      stock: parseInt(product.stock),
+      alert_quantity: product.alert_quantity ? parseInt(product.alert_quantity) : 0,
+      image: selectedImageFile ? imageUrl : product.image,
+      materials: materials.map(m => ({
+        material_id: parseInt(m.material_id),
+        material_quantity: parseFloat(m.material_quantity),
+        price: parseFloat(m.price)
+      })),
+    };
+    
+    // Update the product
+    await axios.put(`${API_ROUTES.PRODUCTS}/${id}`, productData, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    alert('Product updated successfully!');
+    navigate('/products/all');
+    
+  } catch (error) {
+    console.error('Error updating product:', error);
+    
+    // Handle authentication errors
+    if (error.response?.status === 401) {
+      alert('Session expired. Please login again.');
+      localStorage.removeItem('token');
+      navigate('/login');
+      return;
+    } else if (error.response?.status === 403) {
+      alert('Permission denied. You cannot update this product.');
+      return;
+    }
+    
+    // Try a simpler approach if the first fails
+    try {
+      const simpleData = {
+        name: product.name,
+        description: product.description || '',
         sale_price: parseFloat(product.sale_price),
         wholesale_price: parseFloat(product.wholesale_price),
         cost: parseFloat(product.cost),
         stock: parseInt(product.stock),
-        alert_quantity: product.alert_quantity ? parseInt(product.alert_quantity) : 0,
-        // Only update image if we have a new URL
-        image: selectedImageFile ? imageUrl : product.image,
-        materials: materials.map(m => ({
-          material_id: parseInt(m.material_id),
-          material_quantity: parseFloat(m.material_quantity),
-          price: parseFloat(m.price)
-        })),
       };
       
-      // Update the product
-      await axios.put(`${API_ROUTES.PRODUCTS}/${id}`, productData);
-      
-      alert('Product updated successfully!');
+      await axios.put(`${API_ROUTES.PRODUCTS}/${id}`, simpleData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      alert('Basic product information updated successfully!');
       navigate('/products/all');
-      
-    } catch (error) {
-      console.error('Error updating product:', error);
-      
-      // Try a simpler approach if the first fails
-      try {
-        const simpleData = {
-          name: product.name,
-          description: product.description || '',
-          sale_price: parseFloat(product.sale_price),
-          wholesale_price: parseFloat(product.wholesale_price),
-          cost: parseFloat(product.cost),
-          stock: parseInt(product.stock),
-        };
-        
-        await axios.put(`${API_ROUTES.PRODUCTS}/${id}`, simpleData);
-        alert('Basic product information updated successfully!');
-        navigate('/products/all');
-      } catch (secondError) {
-        console.error('Second attempt failed:', secondError);
-        alert('Error updating product. Please try again.');
-      }
-    } finally {
-      setUploadingImage(false);
+    } catch (secondError) {
+      console.error('Second attempt failed:', secondError);
+      alert('Error updating product. Please try again.');
     }
-  };
+  } finally {
+    setUploadingImage(false);
+  }
+};
 
   const selectedMaterial = allMaterials.find(
     (m) => m.id === parseInt(newMaterial.material_id)

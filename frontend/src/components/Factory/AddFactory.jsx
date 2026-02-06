@@ -5,6 +5,7 @@ import { API_ROUTES } from '../../config';
 
 const AddFactory = () => {
   const navigate = useNavigate();
+  const token = localStorage.getItem('token');
   const [factory, setFactory] = useState({
     name: '',
     phone: '',
@@ -22,16 +23,39 @@ const AddFactory = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await axios.post(API_ROUTES.FACTORIES, factory);
-      alert('Factory created successfully!');
-      navigate('/factories/all');
-    } catch (error) {
-      console.error('Error creating factory:', error);
+  e.preventDefault();
+  
+  // Check authentication
+  if (!token) {
+    alert('Authentication required. Please login.');
+    navigate('/login');
+    return;
+  }
+  
+  try {
+    await axios.post(API_ROUTES.FACTORIES, factory, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    alert('Factory created successfully!');
+    navigate('/factories/all');
+  } catch (error) {
+    console.error('Error creating factory:', error);
+    
+    // Handle authentication errors
+    if (error.response?.status === 401) {
+      alert('Session expired. Please login again.');
+      localStorage.removeItem('token');
+      navigate('/login');
+    } else if (error.response?.status === 403) {
+      alert('Permission denied. You cannot create factories.');
+    } else {
       alert('Error creating factory. Please try again.');
     }
-  };
+  }
+};
 
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">

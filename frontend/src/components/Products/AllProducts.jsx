@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES } from '../../config';
 import { Pen, Trash2, Image as ImageIcon } from 'lucide-react';
@@ -10,6 +10,8 @@ const AllProducts = () => {
   const [itemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [expandedProductId, setExpandedProductId] = useState(null);
+  const token = localStorage.getItem('token');
+  const navigate = useNavigate();
 
   // Function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -31,35 +33,78 @@ const AllProducts = () => {
   }
 };
   useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const response = await axios.get(API_ROUTES.PRODUCTS, {
-          params: { page: currentPage, limit: itemsPerPage },
-        });
-        setProducts(response.data.products);
-        setTotalPages(Math.ceil(response.data.totalCount / itemsPerPage));
-      } catch (error) {
-        console.error('Error fetching products:', error);
-      }
-    };
-    fetchProducts();
-  }, [currentPage, itemsPerPage]);
-
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this product?')) {
-      try {
-        await axios.delete(`${API_ROUTES.PRODUCTS}/${id}`);
-        // Refetch products for the current page
-        const response = await axios.get(API_ROUTES.PRODUCTS, {
-          params: { page: currentPage, limit: itemsPerPage },
-        });
-        setProducts(response.data.products);
-        setTotalPages(Math.ceil(response.data.totalCount / itemsPerPage));
-      } catch (error) {
-        console.error('Error deleting product:', error);
+  const fetchProducts = async () => {
+    try {
+      const response = await axios.get(API_ROUTES.PRODUCTS, {
+        params: { page: currentPage, limit: itemsPerPage },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      setProducts(response.data.products);
+      setTotalPages(Math.ceil(response.data.totalCount / itemsPerPage));
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      
+      // Handle authentication errors
+      if (error.response?.status === 401) {
+        alert('Session expired. Please login again.');
+        localStorage.removeItem('token');
+        navigate('/login');
+      } else if (error.response?.status === 403) {
+        alert('Permission denied. You do not have access to products.');
       }
     }
   };
+  
+  if (token) {
+    fetchProducts();
+  } else {
+    alert('Authentication required. Please login.');
+    navigate('/login');
+  }
+}, [currentPage, itemsPerPage, token, navigate]);
+
+  const handleDelete = async (id) => {
+  if (!token) {
+    alert('Authentication required. Please login.');
+    navigate('/login');
+    return;
+  }
+  
+  if (window.confirm('Are you sure you want to delete this product?')) {
+    try {
+      await axios.delete(`${API_ROUTES.PRODUCTS}/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      // Refetch products for the current page
+      const response = await axios.get(API_ROUTES.PRODUCTS, {
+        params: { page: currentPage, limit: itemsPerPage },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      setProducts(response.data.products);
+      setTotalPages(Math.ceil(response.data.totalCount / itemsPerPage));
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      
+      // Handle authentication errors
+      if (error.response?.status === 401) {
+        alert('Session expired. Please login again.');
+        localStorage.removeItem('token');
+        navigate('/login');
+      } else if (error.response?.status === 403) {
+        alert('Permission denied. You cannot delete this product.');
+      }
+    }
+  }
+};
 
   const toggleMaterials = (id) => {
     setExpandedProductId(expandedProductId === id ? null : id);
