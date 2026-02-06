@@ -281,46 +281,62 @@ const KPICard = ({ title, value, change, trend, icon, color }) => {
 };
 
 // Revenue Chart Component
-const RevenueChart = ({ data }) => (
-  <div className="glass-card rounded-2xl p-6 backdrop-blur-sm border border-white/40">
-    <div className="flex items-center justify-between mb-6">
-      <div>
-        <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-          <BarChart3 className="mr-2 text-blue-600" />
-          Revenue Trend
-        </h3>
-        <p className="text-sm text-gray-500 mt-1">Monthly revenue overview</p>
+const RevenueChart = ({ data }) => {
+  const safeData = Array.isArray(data) ? data : [];
+  const maxRevenue = safeData.reduce((max, item) => Math.max(max, item.revenue || 0), 0);
+  const minHeight = 16;
+  const maxHeight = 200;
+
+  const formatCompact = (value) => {
+    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+    return `$${value.toFixed(0)}`;
+  };
+
+  return (
+    <div className="glass-card rounded-2xl p-6 backdrop-blur-sm border border-white/40">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+            <BarChart3 className="mr-2 text-blue-600" />
+            Revenue Trend
+          </h3>
+          <p className="text-sm text-gray-500 mt-1">Monthly revenue overview</p>
+        </div>
+        <button className="p-2 rounded-lg hover:bg-gray-100/50 text-gray-500 hover:text-gray-700 transition-colors">
+          <MoreVertical size={18} />
+        </button>
       </div>
-      <button className="p-2 rounded-lg hover:bg-gray-100/50 text-gray-500 hover:text-gray-700 transition-colors">
-        <MoreVertical size={18} />
-      </button>
-    </div>
-    <div className="h-64 flex items-end justify-between space-x-2">
-      {data.map((item, index) => {
-        const height = Math.max(20, (item.revenue / 500000) * 200);
-        return (
-          <div key={index} className="flex flex-col items-center flex-1 group">
-            <div className="relative w-full max-w-14">
-              <div
-                className="bg-gradient-to-t from-blue-500 to-blue-600 rounded-t-lg w-full transition-all duration-500 group-hover:from-blue-600 group-hover:to-blue-700"
-                style={{ height: `${height}px` }}
-              >
-                <div className="absolute inset-0 bg-gradient-to-t from-blue-400/20 to-transparent rounded-t-lg"></div>
+      <div className="h-64 flex items-end justify-between space-x-2">
+        {safeData.map((item, index) => {
+          const revenue = item.revenue || 0;
+          const height = maxRevenue > 0
+            ? minHeight + (revenue / maxRevenue) * (maxHeight - minHeight)
+            : minHeight;
+          return (
+            <div key={index} className="flex flex-col items-center flex-1 group">
+              <div className="relative w-full max-w-14">
+                <div
+                  className="bg-gradient-to-t from-blue-500 to-blue-600 rounded-t-lg w-full transition-all duration-500 group-hover:from-blue-600 group-hover:to-blue-700"
+                  style={{ height: `${height}px` }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-t from-blue-400/20 to-transparent rounded-t-lg"></div>
+                </div>
+                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+                  {formatCompact(revenue)}
+                </div>
               </div>
-              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                ${(item.revenue / 1000).toFixed(0)}K
-              </div>
+              <span className="text-xs mt-2 text-gray-600 font-medium">{item.month}</span>
+              <span className="text-xs text-gray-400">
+                {formatCompact(revenue)}
+              </span>
             </div>
-            <span className="text-xs mt-2 text-gray-600 font-medium">{item.month}</span>
-            <span className="text-xs text-gray-400">
-              ${(item.revenue / 1000).toFixed(0)}K
-            </span>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 
 // Top Products Table Component

@@ -394,13 +394,13 @@ async function getShopPerformance(startDate) {
 
 async function getMonthlyRevenue() {
   try {
-    // Get sales from last 6 months
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const now = new Date();
+    const startMonth = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const endDate = now;
 
     const sales = await prisma.sale.findMany({
       where: {
-        createdAt: { gte: sixMonthsAgo }
+        createdAt: { gte: startMonth, lte: endDate }
       },
       select: {
         grandTotal: true,
@@ -411,30 +411,40 @@ async function getMonthlyRevenue() {
     // Group by month
     const monthlyData = {};
     sales.forEach(sale => {
-      const month = sale.createdAt.toLocaleString('default', { month: 'short' });
-      if (!monthlyData[month]) {
-        monthlyData[month] = { revenue: 0, sales: 0 };
+      const date = new Date(sale.createdAt);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthlyData[key]) {
+        monthlyData[key] = { revenue: 0, sales: 0 };
       }
-      monthlyData[month].revenue += sale.grandTotal;
-      monthlyData[month].sales += 1;
+      monthlyData[key].revenue += sale.grandTotal;
+      monthlyData[key].sales += 1;
     });
 
-    // Fill in missing months
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-    return months.map(month => ({
-      month,
-      revenue: monthlyData[month]?.revenue || Math.floor(Math.random() * 200000) + 100000,
-      sales: monthlyData[month]?.sales || Math.floor(Math.random() * 50) + 20
-    }));
+    const months = [];
+    for (let i = 0; i < 6; i += 1) {
+      const d = new Date(startMonth.getFullYear(), startMonth.getMonth() + i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      months.push({
+        month: d.toLocaleString('default', { month: 'short' }),
+        revenue: monthlyData[key]?.revenue || 0,
+        sales: monthlyData[key]?.sales || 0
+      });
+    }
+    return months;
   } catch (error) {
     console.error("Error in getMonthlyRevenue:", error);
-    // Return mock data if there's an error
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-    return months.map(month => ({
-      month,
-      revenue: Math.floor(Math.random() * 300000) + 150000,
-      sales: Math.floor(Math.random() * 70) + 30
-    }));
+    const fallbackMonths = [];
+    const now = new Date();
+    const startMonth = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    for (let i = 0; i < 6; i += 1) {
+      const d = new Date(startMonth.getFullYear(), startMonth.getMonth() + i, 1);
+      fallbackMonths.push({
+        month: d.toLocaleString('default', { month: 'short' }),
+        revenue: 0,
+        sales: 0
+      });
+    }
+    return fallbackMonths;
   }
 }
 
