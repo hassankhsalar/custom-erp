@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES } from '../../config';
 
@@ -7,33 +7,82 @@ const AllFactory = () => {
   const [factories, setFactories] = useState([]);
   const [showDropdown, setShowDropdown] = useState(null);
   const [loading, setLoading] = useState(true);
+  const token = localStorage.getItem('token');
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchFactories = async () => {
-      try {
-        const response = await axios.get(API_ROUTES.FACTORIES);
-        setFactories(response.data);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching factories:', error);
-        setLoading(false);
+  const fetchFactories = async () => {
+    if (!token) {
+      alert('Authentication required. Please login.');
+      navigate('/login');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await axios.get(API_ROUTES.FACTORIES, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      setFactories(response.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching factories:', error);
+      
+      // Handle authentication errors
+      if (error.response?.status === 401) {
+        alert('Session expired. Please login again.');
+        localStorage.removeItem('token');
+        navigate('/login');
+      } else if (error.response?.status === 403) {
+        alert('Permission denied. You do not have access to factories.');
       }
-    };
+      
+      setLoading(false);
+    }
+  };
+  
+  if (token) {
     fetchFactories();
-  }, []);
+  } else {
+    setLoading(false);
+  }
+}, [token, navigate]);
 
   const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this factory?')) {
-      try {
-        await axios.delete(`${API_ROUTES.FACTORIES}/${id}`);
-        setFactories(factories.filter((factory) => factory.id !== id));
-        alert('Factory deleted successfully!');
-      } catch (error) {
-        console.error('Error deleting factory:', error);
+  if (!token) {
+    alert('Authentication required. Please login.');
+    navigate('/login');
+    return;
+  }
+
+  if (window.confirm('Are you sure you want to delete this factory?')) {
+    try {
+      await axios.delete(`${API_ROUTES.FACTORIES}/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      setFactories(factories.filter((factory) => factory.id !== id));
+      alert('Factory deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting factory:', error);
+      
+      // Handle authentication errors
+      if (error.response?.status === 401) {
+        alert('Session expired. Please login again.');
+        localStorage.removeItem('token');
+        navigate('/login');
+      } else if (error.response?.status === 403) {
+        alert('Permission denied. You cannot delete factories.');
+      } else {
         alert('Error deleting factory. Please try again.');
       }
     }
-  };
+  }
+};
 
   const formatContactInfo = (factory) => {
     const hasPhone = factory.phone && factory.phone.trim() !== '';

@@ -1,10 +1,14 @@
-import { ArrowUpDown, ClipboardList, TrendingUp, DollarSign, Calendar, Store, User, Tag, CreditCard, Filter } from "lucide-react";
+import { ArrowUpDown, ClipboardList, TrendingUp, DollarSign, Calendar, Store, User, Tag, CreditCard, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { useState, useEffect } from "react";
 
 export default function AllSales() {
   const [sales, setSales] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [loading, setLoading] = useState(true);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -33,6 +37,7 @@ export default function AllSales() {
       direction = 'descending';
     }
     setSortConfig({ key, direction });
+    setCurrentPage(1); // Reset to first page when sorting
   };
 
   const formatSalesData = (sales) => {
@@ -50,6 +55,7 @@ export default function AllSales() {
     }));
   };
 
+  // Calculate pagination
   const sortedData = sortConfig.key ? 
     [...formatSalesData(sales)].sort((a, b) => {
       if (sortConfig.key === 'date') {
@@ -82,6 +88,31 @@ export default function AllSales() {
       return 0;
     }) : 
     formatSalesData(sales);
+
+  // Get current items for pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = sortedData.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(sortedData.length / itemsPerPage);
+
+  // Pagination controls
+  const nextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const prevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const goToPage = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
 
   const tableHeaders = sales.length > 0 ? 
     Object.keys(formatSalesData(sales)[0]).filter(key => key !== 'id' && key !== 'rawDate') : 
@@ -208,7 +239,7 @@ export default function AllSales() {
               </tr>
             </thead>
             <tbody>
-              {sortedData.map((item, index) => (
+              {currentItems.map((item, index) => (
                 <tr
                   key={item.id}
                   className={`border-t border-white/10 hover:bg-white/10 transition-all duration-200 ${
@@ -250,14 +281,142 @@ export default function AllSales() {
         </div>
       </div>
 
+      {/* Pagination Controls */}
+      {sales.length > 0 && (
+        <div className="glass-card p-4 mt-4 border border-white/20 backdrop-blur-xl">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              {/* Items per page selector */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Show:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                >
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+                <span className="text-sm text-gray-600">per page</span>
+              </div>
+
+              {/* Page info */}
+              <div className="text-sm text-gray-700">
+                Showing <span className="font-semibold">{indexOfFirstItem + 1}</span> to{" "}
+                <span className="font-semibold">
+                  {Math.min(indexOfLastItem, sortedData.length)}
+                </span>{" "}
+                of <span className="font-semibold">{sortedData.length}</span> sales
+              </div>
+            </div>
+
+            {/* Pagination buttons */}
+            <div className="flex items-center gap-2">
+              {/* First page */}
+              <button
+                onClick={() => goToPage(1)}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                title="First page"
+              >
+                <ChevronsLeft size={16} className="text-gray-600" />
+              </button>
+
+              {/* Previous page */}
+              <button
+                onClick={prevPage}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                title="Previous page"
+              >
+                <ChevronLeft size={16} className="text-gray-600" />
+              </button>
+
+              {/* Page numbers */}
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => goToPage(pageNum)}
+                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                        currentPage === pageNum
+                          ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white"
+                          : "hover:bg-white/50 text-gray-700"
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+
+                {totalPages > 5 && currentPage < totalPages - 2 && (
+                  <>
+                    <span className="mx-1 text-gray-400">...</span>
+                    <button
+                      onClick={() => goToPage(totalPages)}
+                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                        currentPage === totalPages
+                          ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white"
+                          : "hover:bg-white/50 text-gray-700"
+                      }`}
+                    >
+                      {totalPages}
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Next page */}
+              <button
+                onClick={nextPage}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                title="Next page"
+              >
+                <ChevronRight size={16} className="text-gray-600" />
+              </button>
+
+              {/* Last page */}
+              <button
+                onClick={() => goToPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                title="Last page"
+              >
+                <ChevronsRight size={16} className="text-gray-600" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer Stats */}
       {sales.length > 0 && (
-        <div className="glass-card p-4 mt-6 border border-white/20 backdrop-blur-xl">
+        <div className="glass-card p-4 mt-4 border border-white/20 backdrop-blur-xl">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <div className="glass-tag px-3 py-1.5 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
                 <span className="text-sm font-medium text-gray-700">
-                  Showing <span className="text-emerald-600 font-bold">{sales.length}</span> sales
+                  Showing <span className="text-emerald-600 font-bold">{currentItems.length}</span> of{" "}
+                  <span className="text-emerald-600 font-bold">{sortedData.length}</span> sales
                 </span>
               </div>
               <div className="glass-tag px-3 py-1.5 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
@@ -270,7 +429,9 @@ export default function AllSales() {
               </div>
             </div>
             <div className="text-sm text-gray-500">
-              Last updated: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              Page <span className="font-semibold">{currentPage}</span> of{" "}
+              <span className="font-semibold">{totalPages}</span> • Last updated:{" "}
+              {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </div>
           </div>
         </div>

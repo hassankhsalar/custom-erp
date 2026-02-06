@@ -42,7 +42,7 @@ const Navbar = () => {
     return (
         <>
             {/* Glass Navbar */}
-            <nav className="relative z-50 w-full rounded-2xl mx-2 mt-2 px-4 md:px-8 py-3 backdrop-blur-xl border border-white/20 shadow-xl bg-white/70">
+            <nav className="w-full rounded-2xl mx-2 mt-2 px-4 md:px-8 py-3 backdrop-blur-xl border border-white/20 shadow-xl bg-white/70 z-50 relative">
                 <div className="flex items-center justify-between w-full">
                     
                     {/* Logo and Brand */}
@@ -113,10 +113,7 @@ const Navbar = () => {
                             {isProfileOpen && (currentUser || localUserName) && (
                                 <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-xl bg-white/95 backdrop-blur-md border border-gray-200 shadow-xl focus:outline-none z-[1000]">
                                     <div className="py-1">
-                                        <div className="px-4 py-3 border-b border-white/20">
-                                            <p className="text-sm font-semibold text-gray-800">{currentUser?.name || localUserName}</p>
-                                            <p className="text-xs text-gray-500 truncate">{currentUser?.email || localUserEmail}</p>
-                                        </div>
+                                        
                                         <Link
                                             to="/profile"
                                             className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-white/50"

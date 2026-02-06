@@ -282,7 +282,7 @@ const ProductRepair = () => {
           </div>
 
           {/* Analytics Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-8 gap-4 mb-6">
             <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-xl p-4">
               <div className="flex items-center justify-between">
                 <div>
