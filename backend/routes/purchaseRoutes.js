@@ -142,16 +142,16 @@ router.post("/", async (req, res) => {
     });
 
     if (!entityAccount) {
-      let storeName = await prisma.store.findUnique({
-        where: {
-          id: actualDestinationId
-        },
-        select: {
-          name: true
-        }
-      });
+      let destinationName = getDestinationDetails(actualDestinationType, actualDestinationId);
+
+      if (destinationName.name) {
+        destinationName = destinationName.name.toUpperCase();
+      } else {
+        destinationName = "this " + actualDestinationType.toUpperCase();
+      }
+
       return res.status(400).json({ 
-        error: `No primary account found for ${storeName.name}` 
+        error: `No primary account found for ${destinationName}` 
       });
     }
 
@@ -210,7 +210,8 @@ router.post("/", async (req, res) => {
               actualDestinationType,
               actualDestinationId, 
               parseInt(item.productId), 
-              parseFloat(item.quantity)
+              parseFloat(item.quantity),
+              parseFloat(item.unitPrice)
             );
           } else {
             await updateMaterialStock(
@@ -218,7 +219,8 @@ router.post("/", async (req, res) => {
               actualDestinationType,
               actualDestinationId, 
               parseInt(item.materialId), 
-              parseFloat(item.quantity)
+              parseFloat(item.quantity),
+              parseFloat(item.unitPrice)
             );
           }
 
@@ -341,41 +343,41 @@ async function getDestinationDetails(destinationType, destinationId) {
 }
 
 // Helper function to update product stock
-async function updateProductStock(tx, destinationType, destinationId, productId, quantity) {
+async function updateProductStock(tx, destinationType, destinationId, productId, quantity, unitPrice) {
   switch (destinationType) {
     case "store":
-      await updateStoreProductStock(tx, destinationId, productId, quantity);
+      await updateStoreProductStock(tx, destinationId, productId, quantity, unitPrice);
       break;
       
     case "shop":
-      await updateShopProductStock(tx, destinationId, productId, quantity);
+      await updateShopProductStock(tx, destinationId, productId, quantity, unitPrice);
       break;
       
     case "factory":
-      await updateFactoryProductStock(tx, destinationId, productId, quantity);
+      await updateFactoryProductStock(tx, destinationId, productId, quantity, unitPrice);
       break;
   }
 }
 
 // Helper function to update material stock
-async function updateMaterialStock(tx, destinationType, destinationId, materialId, quantity) {
+async function updateMaterialStock(tx, destinationType, destinationId, materialId, quantity, unitPrice) {
   switch (destinationType) {
     case "store":
-      await updateStoreMaterialStock(tx, destinationId, materialId, quantity);
+      await updateStoreMaterialStock(tx, destinationId, materialId, quantity, unitPrice);
       break;
       
     case "shop":
-      await updateShopMaterialStock(tx, destinationId, materialId, quantity);
+      await updateShopMaterialStock(tx, destinationId, materialId, quantity, unitPrice);
       break;
       
     case "factory":
-      await updateFactoryMaterialStock(tx, destinationId, materialId, quantity);
+      await updateFactoryMaterialStock(tx, destinationId, materialId, quantity, unitPrice);
       break;
   }
 }
 
 // Store product stock update
-async function updateStoreProductStock(tx, storeId, productId, quantity) {
+async function updateStoreProductStock(tx, storeId, productId, quantity, unitPrice) {
   const existingStoreProduct = await tx.storeProduct.findUnique({
     where: {
       store_id_product_id: {
@@ -386,6 +388,16 @@ async function updateStoreProductStock(tx, storeId, productId, quantity) {
   });
 
   if (existingStoreProduct) {
+    const existingStock = parseFloat(existingStoreProduct.stock) || 0;
+    const existingAvg = existingStoreProduct.avg_cost;
+    const normalizedAvg = existingAvg === null || existingAvg === undefined
+      ? parseFloat(unitPrice)
+      : parseFloat(existingAvg);
+    const totalQty = existingStock + quantity;
+    const newAvgCost = totalQty > 0
+      ? ((normalizedAvg * existingStock) + (unitPrice * quantity)) / totalQty
+      : parseFloat(unitPrice);
+
     await tx.storeProduct.update({
       where: {
         store_id_product_id: {
@@ -395,6 +407,7 @@ async function updateStoreProductStock(tx, storeId, productId, quantity) {
       },
       data: {
         stock: { increment: quantity },
+        avg_cost: newAvgCost,
       },
     });
   } else {
@@ -403,6 +416,7 @@ async function updateStoreProductStock(tx, storeId, productId, quantity) {
         store_id: storeId,
         product_id: productId,
         stock: quantity,
+        avg_cost: parseFloat(unitPrice),
       },
     });
   }
@@ -414,7 +428,7 @@ async function updateStoreProductStock(tx, storeId, productId, quantity) {
 }
 
 // Shop product stock update
-async function updateShopProductStock(tx, shopId, productId, quantity) {
+async function updateShopProductStock(tx, shopId, productId, quantity, unitPrice) {
   const existingShopProduct = await tx.shopProduct.findUnique({
     where: {
       shop_id_product_id: {
@@ -425,6 +439,16 @@ async function updateShopProductStock(tx, shopId, productId, quantity) {
   });
 
   if (existingShopProduct) {
+    const existingStock = parseFloat(existingShopProduct.stock) || 0;
+    const existingAvg = existingShopProduct.avg_cost;
+    const normalizedAvg = existingAvg === null || existingAvg === undefined
+      ? parseFloat(unitPrice)
+      : parseFloat(existingAvg);
+    const totalQty = existingStock + quantity;
+    const newAvgCost = totalQty > 0
+      ? ((normalizedAvg * existingStock) + (unitPrice * quantity)) / totalQty
+      : parseFloat(unitPrice);
+
     await tx.shopProduct.update({
       where: {
         shop_id_product_id: {
@@ -434,6 +458,7 @@ async function updateShopProductStock(tx, shopId, productId, quantity) {
       },
       data: {
         stock: { increment: quantity },
+        avg_cost: newAvgCost,
       },
     });
   } else {
@@ -442,6 +467,7 @@ async function updateShopProductStock(tx, shopId, productId, quantity) {
         shop_id: shopId,
         product_id: productId,
         stock: quantity,
+        avg_cost: parseFloat(unitPrice),
       },
     });
   }
@@ -453,7 +479,7 @@ async function updateShopProductStock(tx, shopId, productId, quantity) {
 }
 
 // Factory product stock update
-async function updateFactoryProductStock(tx, factoryId, productId, quantity) {
+async function updateFactoryProductStock(tx, factoryId, productId, quantity, unitPrice) {
   const existingFactoryProduct = await tx.factoryProduct.findUnique({
     where: {
       factoryId_productId: {
@@ -464,6 +490,16 @@ async function updateFactoryProductStock(tx, factoryId, productId, quantity) {
   });
 
   if (existingFactoryProduct) {
+    const existingStock = parseFloat(existingFactoryProduct.stock) || 0;
+    const existingAvg = existingFactoryProduct.avg_cost;
+    const normalizedAvg = existingAvg === null || existingAvg === undefined
+      ? parseFloat(unitPrice)
+      : parseFloat(existingAvg);
+    const totalQty = existingStock + quantity;
+    const newAvgCost = totalQty > 0
+      ? ((normalizedAvg * existingStock) + (unitPrice * quantity)) / totalQty
+      : parseFloat(unitPrice);
+
     await tx.factoryProduct.update({
       where: {
         factoryId_productId: {
@@ -473,6 +509,7 @@ async function updateFactoryProductStock(tx, factoryId, productId, quantity) {
       },
       data: {
         stock: { increment: quantity },
+        avg_cost: newAvgCost,
       },
     });
   } else {
@@ -481,6 +518,7 @@ async function updateFactoryProductStock(tx, factoryId, productId, quantity) {
         factoryId: factoryId,
         productId: productId,
         stock: quantity,
+        avg_cost: parseFloat(unitPrice),
       },
     });
   }
@@ -492,7 +530,7 @@ async function updateFactoryProductStock(tx, factoryId, productId, quantity) {
 }
 
 // Store material stock update (existing)
-async function updateStoreMaterialStock(tx, storeId, materialId, quantity) {
+async function updateStoreMaterialStock(tx, storeId, materialId, quantity, unitPrice) {
   const existingStoreMaterial = await tx.storeMaterial.findUnique({
     where: {
       store_id_material_id: {
@@ -503,6 +541,16 @@ async function updateStoreMaterialStock(tx, storeId, materialId, quantity) {
   });
 
   if (existingStoreMaterial) {
+    const existingStock = parseFloat(existingStoreMaterial.stock) || 0;
+    const existingAvg = existingStoreMaterial.avg_cost;
+    const normalizedAvg = existingAvg === null || existingAvg === undefined
+      ? parseFloat(unitPrice)
+      : parseFloat(existingAvg);
+    const totalQty = existingStock + quantity;
+    const newAvgCost = totalQty > 0
+      ? ((normalizedAvg * existingStock) + (unitPrice * quantity)) / totalQty
+      : parseFloat(unitPrice);
+
     await tx.storeMaterial.update({
       where: {
         store_id_material_id: {
@@ -512,6 +560,7 @@ async function updateStoreMaterialStock(tx, storeId, materialId, quantity) {
       },
       data: {
         stock: { increment: quantity },
+        avg_cost: newAvgCost,
       },
     });
   } else {
@@ -520,6 +569,7 @@ async function updateStoreMaterialStock(tx, storeId, materialId, quantity) {
         store_id: storeId,
         material_id: materialId,
         stock: quantity,
+        avg_cost: parseFloat(unitPrice),
       },
     });
   }
@@ -531,7 +581,7 @@ async function updateStoreMaterialStock(tx, storeId, materialId, quantity) {
 }
 
 // Shop material stock update (existing)
-async function updateShopMaterialStock(tx, shopId, materialId, quantity) {
+async function updateShopMaterialStock(tx, shopId, materialId, quantity, unitPrice) {
   const existingShopMaterial = await tx.shopMaterial.findUnique({
     where: {
       shop_id_material_id: {
@@ -542,6 +592,16 @@ async function updateShopMaterialStock(tx, shopId, materialId, quantity) {
   });
 
   if (existingShopMaterial) {
+    const existingStock = parseFloat(existingShopMaterial.stock) || 0;
+    const existingAvg = existingShopMaterial.avg_cost;
+    const normalizedAvg = existingAvg === null || existingAvg === undefined
+      ? parseFloat(unitPrice)
+      : parseFloat(existingAvg);
+    const totalQty = existingStock + quantity;
+    const newAvgCost = totalQty > 0
+      ? ((normalizedAvg * existingStock) + (unitPrice * quantity)) / totalQty
+      : parseFloat(unitPrice);
+
     await tx.shopMaterial.update({
       where: {
         shop_id_material_id: {
@@ -551,6 +611,7 @@ async function updateShopMaterialStock(tx, shopId, materialId, quantity) {
       },
       data: {
         stock: { increment: quantity },
+        avg_cost: newAvgCost,
       },
     });
   } else {
@@ -559,6 +620,7 @@ async function updateShopMaterialStock(tx, shopId, materialId, quantity) {
         shop_id: shopId,
         material_id: materialId,
         stock: quantity,
+        avg_cost: parseFloat(unitPrice),
       },
     });
   }
@@ -570,7 +632,7 @@ async function updateShopMaterialStock(tx, shopId, materialId, quantity) {
 }
 
 // Factory material stock update (existing)
-async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity) {
+async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity, unitPrice) {
   const existingFactoryMaterial = await tx.factoryMaterial.findUnique({
     where: {
       factoryId_materialId: {
@@ -581,6 +643,16 @@ async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity) {
   });
 
   if (existingFactoryMaterial) {
+    const existingStock = parseFloat(existingFactoryMaterial.stock) || 0;
+    const existingAvg = existingFactoryMaterial.avg_cost;
+    const normalizedAvg = existingAvg === null || existingAvg === undefined
+      ? parseFloat(unitPrice)
+      : parseFloat(existingAvg);
+    const totalQty = existingStock + quantity;
+    const newAvgCost = totalQty > 0
+      ? ((normalizedAvg * existingStock) + (unitPrice * quantity)) / totalQty
+      : parseFloat(unitPrice);
+
     await tx.factoryMaterial.update({
       where: {
         factoryId_materialId: {
@@ -590,6 +662,7 @@ async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity) {
       },
       data: {
         stock: { increment: quantity },
+        avg_cost: newAvgCost,
       },
     });
   } else {
@@ -598,6 +671,7 @@ async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity) {
         factoryId: factoryId,
         materialId: materialId,
         stock: quantity,
+        avg_cost: parseFloat(unitPrice),
       },
     });
   }

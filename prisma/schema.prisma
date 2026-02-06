@@ -342,6 +342,7 @@ model StoreMaterial {
   store_id    Int
   material_id Int
   stock       Float @default(0)
+  avg_cost   Float?
   scrap      Int?
   store    Store    @relation(fields: [store_id], references: [id])
   material Material @relation(fields: [material_id], references: [id])
@@ -353,6 +354,7 @@ model StoreProduct {
   store_id   Int
   product_id Int
   stock      Float @default(0)
+  avg_cost  Float?
   scrap      Int?
   store   Store   @relation(fields: [store_id], references: [id])
   product Product @relation(fields: [product_id], references: [id])
@@ -451,6 +453,7 @@ model Sale {
   shop        Shop?        @relation(fields: [shopId], references: [id])
   customer    String?
   totalAmount Float
+  total_cost  Float?
   discount    Float        @default(0)
   grandTotal  Float
   paymentType String       @default("cash") // e.g. cash, card, mobile
@@ -474,6 +477,7 @@ model SaleItem {
   material   Material? @relation(fields: [materialId], references: [id])
   quantity   Float
   unitPrice  Float
+  avg_cost   Float?
   totalPrice Float
 
   @@index([productId])
@@ -529,6 +533,7 @@ model ShopProduct {
   shop_id    Int
   product_id Int
   stock      Float @default(0)
+  avg_cost  Float?
   scrap      Int?
   shop    Shop    @relation(fields: [shop_id], references: [id])
   product Product @relation(fields: [product_id], references: [id])
@@ -540,6 +545,7 @@ model ShopMaterial {
   shop_id     Int
   material_id Int
   stock       Float @default(0)
+  avg_cost   Float?
   scrap      Int?
   shop     Shop     @relation(fields: [shop_id], references: [id])
   material Material @relation(fields: [material_id], references: [id])
@@ -596,16 +602,20 @@ model Transfer {
 model TransferItem {
   id         Int      @id @default(autoincrement())
   transferId Int
+  productId  Int?
+  materialId Int?
   transfer   Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
   item       String
   itemId     Int
   quantity   Float
+  avg_cost   Float?
 }
 
 model FactoryProduct {
   factoryId Int
   productId Int
   stock     Float @default(0)
+  avg_cost Float?
   scrap      Int?
   factory   Factory @relation(fields: [factoryId], references: [id])
   product   Product @relation(fields: [productId], references: [id])
@@ -617,6 +627,7 @@ model FactoryMaterial {
   factoryId  Int
   materialId Int
   stock      Float @default(0)
+  avg_cost  Float?
   scrap      Int?
   factory  Factory  @relation(fields: [factoryId], references: [id])
   material Material @relation(fields: [materialId], references: [id])
