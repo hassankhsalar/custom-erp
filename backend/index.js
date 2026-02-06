@@ -203,12 +203,20 @@ app.use('/api/cash-register-assign', cashRegisterAssignRoutes);
 app.use('/api/cash-registers', cashRegisterRoutes);
 app.use('/api/assign-user', assignUserRoutes);
 app.use('/api/permissions', permissionRoutes);
-app.use('/api/users', userPermissionRoutes);
+app.use('/api/user-management', userPermissionRoutes);
 
 // serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));
+
 
 const port = 3001;
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
+
+
+module.exports = {
+  authenticateToken,
+  hasPermission,
+  JWT_SECRET
+};

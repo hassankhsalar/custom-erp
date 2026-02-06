@@ -443,27 +443,33 @@ export default function PermissionsManagement() {
   }, []);
 
   const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [permsRes, usersRes] = await Promise.all([
-        fetch("http://localhost:3001/api/permissions"),
-        fetch("http://localhost:3001/api/users")
-      ]);
-      
-      if (!permsRes.ok) throw new Error("Failed to fetch permissions");
-      if (!usersRes.ok) throw new Error("Failed to fetch users");
-      
-      const permsData = await permsRes.json();
-      const usersData = await usersRes.json();
-      
-      setPermissions(permsData);
-      setUsers(usersData.filter(user => user.role !== "ADMIN"));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    const [permsRes, usersRes] = await Promise.all([
+      fetch("http://localhost:3001/api/permissions"),
+      fetch("http://localhost:3001/api/user-management") // Changed to user-management
+    ]);
+    
+    if (!permsRes.ok) throw new Error("Failed to fetch permissions");
+    if (!usersRes.ok) throw new Error("Failed to fetch users");
+    
+    const permsData = await permsRes.json();
+    const usersData = await usersRes.json();
+    
+    console.log('Permissions data:', permsData);
+    console.log('Users with permissions data:', usersData);
+    console.log('First user permission:', usersData[0]?.permission);
+    
+    setPermissions(permsData);
+    // Filter out admin users - check if role property exists
+    setUsers(usersData.filter(user => user.role !== "ADMIN" && user.role !== "admin"));
+  } catch (err) {
+    setError(err.message);
+    console.error('Fetch error:', err);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handlePermissionToggle = (permissionName) => {
     setSelectedPermissions(prev => ({
@@ -575,52 +581,52 @@ export default function PermissionsManagement() {
   };
 
   const handleAssignPermission = async (e) => {
-    e.preventDefault();
-    if (!selectedUserId || !selectedPermissionId) {
-      alert("Please select both user and permission");
-      return;
-    }
+  e.preventDefault();
+  if (!selectedUserId || !selectedPermissionId) {
+    alert("Please select both user and permission");
+    return;
+  }
 
-    try {
-      const res = await fetch(`http://localhost:3001/api/users/${selectedUserId}/permission`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissionId: selectedPermissionId })
-      });
+  try {
+    const res = await fetch(`http://localhost:3001/api/user-management/${selectedUserId}/permission`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ permissionId: selectedPermissionId })
+    });
 
-      if (!res.ok) throw new Error("Failed to assign permission");
-      
-      // Reset form
-      setSelectedUserId("");
-      setSelectedPermissionId("");
-      
-      // Refresh data
-      fetchData();
-      
-      alert("Permission assigned successfully!");
-    } catch (err) {
-      alert(err.message);
-    }
-  };
+    if (!res.ok) throw new Error("Failed to assign permission");
+    
+    // Reset form
+    setSelectedUserId("");
+    setSelectedPermissionId("");
+    
+    // Refresh data
+    fetchData();
+    
+    alert("Permission assigned successfully!");
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
   const handleRemovePermission = async (userId) => {
-    if (!confirm("Remove permission from this user?")) return;
-    
-    try {
-      const res = await fetch(`http://localhost:3001/api/users/${userId}/permission`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissionId: null })
-      });
+  if (!confirm("Remove permission from this user?")) return;
+  
+  try {
+    const res = await fetch(`http://localhost:3001/api/user-management/${userId}/permission`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ permissionId: null })
+    });
 
-      if (!res.ok) throw new Error("Failed to remove permission");
-      
-      fetchData();
-      alert("Permission removed!");
-    } catch (err) {
-      alert(err.message);
-    }
-  };
+    if (!res.ok) throw new Error("Failed to remove permission");
+    
+    fetchData();
+    alert("Permission removed!");
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
   // Check if all permissions in a category are selected
   const isCategoryAllSelected = (categoryKey) => {
