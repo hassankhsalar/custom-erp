@@ -448,7 +448,8 @@ const TransferStatus = ({ data }) => (
           transferred: { bg: 'from-emerald-500 to-green-500', text: 'text-emerald-600' },
           being_shipped: { bg: 'from-blue-500 to-cyan-500', text: 'text-blue-600' },
           pending: { bg: 'from-amber-500 to-orange-500', text: 'text-amber-600' },
-          cancelled: { bg: 'from-red-500 to-red-600', text: 'text-red-600' }
+          processing: { bg: 'from-green-500 to-lime-500', text: 'text-lime-600' },
+          not_received: { bg: 'from-red-500 to-rose-700', text: 'text-red-600' }
         };
         
         const colors = statusColors[status] || { bg: 'from-gray-500 to-gray-600', text: 'text-gray-600' };

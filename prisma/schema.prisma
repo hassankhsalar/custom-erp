@@ -251,7 +251,7 @@ model Material {
   productionMaterials ProductionMaterial[]
   purchaseItems       PurchaseItem[]
   shopMaterial        ShopMaterial[]
-  storeToShopTransferItem StoreToShopTransferItem[]
+  
   factoryMaterials    FactoryMaterial[]
   saleItem            SaleItem[]
   saleReturnItem      SaleReturnItem[]
@@ -279,7 +279,7 @@ model Product {
   saleItem                SaleItem[]
   saleReturnItem           SaleReturnItem[]
   shopProduct             ShopProduct[]
-  storeToShopTransferItem StoreToShopTransferItem[]
+  
   factoryProducts         FactoryProduct[]
   purchaseItem            PurchaseItem[]
   productRepairItem       ProductRepairItem[]
@@ -333,7 +333,7 @@ model Store {
   mobile                  String?
   storeMaterials          StoreMaterial[]
   storeProducts           StoreProduct[]
-  storeToShopTransfer     StoreToShopTransfer[]
+  
   //sales                   Sale[]
   //saleReturns             SaleReturn[]
 }
@@ -525,7 +525,7 @@ model Shop {
   shopMaterials ShopMaterial[]
   sales         Sale[]
   saleReturns   SaleReturn[]
-  storeToShopTransfer StoreToShopTransfer[]
+  
   cashRegisterRecord  CashRegisterRecord[]
 }
 
@@ -554,36 +554,7 @@ model ShopMaterial {
 }
 
 
-model StoreToShopTransfer {
-  id          Int       @id @default(autoincrement())
-  reference   String    @unique
-  storeId     Int
-  shopId      Int
-  store       Store     @relation(fields: [storeId], references: [id])
-  shop        Shop      @relation(fields: [shopId], references: [id])
-  status      String    @default("pending") // pending, being_shipped, transferred
-  totalItems  Int
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  
-  transferItems StoreToShopTransferItem[]
-}
 
-model StoreToShopTransferItem {
-  id          Int                 @id @default(autoincrement())
-  transferId  Int
-  transfer    StoreToShopTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
-  productId   Int?
-  materialId  Int?
-  product     Product?            @relation(fields: [productId], references: [id])
-  material    Material?           @relation(fields: [materialId], references: [id])
-  quantity    Float
-  type        String              // "product" or "material"
-  
-  @@index([transferId])
-  @@index([productId])
-  @@index([materialId])
-}
 
 model Transfer {
   id            Int            @id @default(autoincrement())
@@ -594,8 +565,10 @@ model Transfer {
   toId          Int
   shipping_cost Float
   status        String         @default("processing")
+  isRecived     Boolean?       @default(false)
   note          String?
   document      String?
+  createdAt     DateTime  @default(now())
   transferItems TransferItem[]
 }
 
@@ -608,6 +581,7 @@ model TransferItem {
   item       String
   itemId     Int
   quantity   Float
+  receivedQuantity   Float?
   avg_cost   Float?
 }
 

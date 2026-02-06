@@ -121,10 +121,14 @@ const TransferList = ({ fromType, toType, title }) => {
     switch (status) {
       case 'processing':
         return { bg: 'bg-yellow-100', text: 'text-yellow-800', border: 'border-yellow-200' };
-      case 'on_the_way':
+      case 'pending':
+        return { bg: 'bg-orange-100', text: 'text-orange-800', border: 'border-orange-200' };
+      case 'being_shipped':
         return { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-200' };
-      case 'transfer_done':
+      case 'transferred':
         return { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-200' };
+      case 'not_received':
+        return { bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-200' };
       default:
         return { bg: 'bg-gray-100', text: 'text-gray-800', border: 'border-gray-200' };
     }
@@ -140,10 +144,14 @@ const TransferList = ({ fromType, toType, title }) => {
     switch (status) {
       case 'processing':
         return <AlertCircle className="w-4 h-4" />;
-      case 'on_the_way':
+      case 'pending':
+        return <AlertCircle className="w-4 h-4" />;
+      case 'being_shipped':
         return <Truck className="w-4 h-4" />;
-      case 'transfer_done':
+      case 'transferred':
         return <CheckCircle className="w-4 h-4" />;
+      case 'not_received':
+        return <AlertCircle className="w-4 h-4" />;
       default:
         return null;
     }
@@ -197,8 +205,10 @@ const TransferList = ({ fromType, toType, title }) => {
               >
                 <option value="all">All Status</option>
                 <option value="processing">Processing</option>
-                <option value="on_the_way">On the Way</option>
-                <option value="transfer_done">Transfer Done</option>
+                <option value="pending">Pending</option>
+                <option value="being_shipped">Being Shipped</option>
+                <option value="transferred">Transferred</option>
+                <option value="not_received">Not Received</option>
               </select>
               <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
             </div>
@@ -346,15 +356,15 @@ const TransferList = ({ fromType, toType, title }) => {
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => openStatusModal(transfer)}
-                              disabled={transfer.status === 'transfer_done'}
-                              className={`p-2 rounded-lg ${transfer.status === 'transfer_done' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'}`}
+                              disabled={transfer.status === 'transferred'}
+                              className={`p-2 rounded-lg ${transfer.status === 'transferred' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'}`}
                               title="Change Status"
                             >
                               <CheckCircle className="w-4 h-4" />
                             </button>
                             <button
-                              disabled={transfer.status === 'transfer_done'}
-                              className={`p-2 rounded-lg ${transfer.status === 'transfer_done' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-yellow-100 text-yellow-600 hover:bg-yellow-200'}`}
+                              disabled={transfer.status === 'transferred'}
+                              className={`p-2 rounded-lg ${transfer.status === 'transferred' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-yellow-100 text-yellow-600 hover:bg-yellow-200'}`}
                               title="Edit Transfer"
                             >
                               <Edit2 className="w-4 h-4" />
@@ -475,7 +485,7 @@ const TransferList = ({ fromType, toType, title }) => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Update to</label>
                   <div className="grid grid-cols-3 gap-2">
-                    {['processing', 'on_the_way', 'transfer_done'].map((status) => {
+                    {['processing', 'pending', 'being_shipped', 'transferred', 'not_received'].map((status) => {
                       const colors = getStatusColor(status);
                       return (
                         <button

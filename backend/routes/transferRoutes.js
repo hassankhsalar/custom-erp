@@ -111,7 +111,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 router.post('/', authenticateToken, upload.single('document'), async (req, res) => {
-  const { from, to, fromId, toId, items, shipping_cost, note } = req.body;
+  const { from, to, fromId, toId, items, shipping_cost, note, status } = req.body;
   const document = req.file;
 
   try {
@@ -125,6 +125,7 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
         shipping_cost: parseFloat(shipping_cost),
         note,
         document: document ? document.path : null,
+        status: status || 'processing',
       },
     });
 
@@ -236,7 +237,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
         data: { status },
       });
 
-      if (status === 'transfer_done') {
+      if (status === 'transferred') {
         const updateStock = async (locationType, locationId, itemId, quantity) => {
           let model;
           let where;

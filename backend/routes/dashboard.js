@@ -164,15 +164,17 @@ async function getInventoryData() {
 }
 
 async function getTransferData() {
-  const transfers = await prisma.storeToShopTransfer.groupBy({
+  const transfers = await prisma.transfer.groupBy({
     by: ['status'],
     _count: { id: true }
   });
 
   const statusOverview = {
+    processing: 0,
     pending: 0,
     being_shipped: 0,
     transferred: 0,
+    not_received: 0,
     total: 0
   };
 
@@ -317,11 +319,11 @@ async function getRecentActivities() {
         }
       }
     }),
-    prisma.storeToShopTransfer.findMany({
+    prisma.transfer.findMany({
       take: 5,
-      orderBy: { createdAt: 'desc' },
-      include: { store: true, shop: true }
+      orderBy: { createdAt: 'desc' }
     }),
+
     prisma.purchase.findMany({
       take: 3,
       orderBy: { createdAt: 'desc' },

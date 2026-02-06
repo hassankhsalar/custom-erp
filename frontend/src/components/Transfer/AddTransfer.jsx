@@ -13,7 +13,8 @@ import {
   DollarSign,
   ClipboardList,
   ArrowLeftRight,
-  Filter
+  Filter,
+  Trash2
 } from "lucide-react";
 
 const AddTransfer = () => {
@@ -24,6 +25,7 @@ const AddTransfer = () => {
   const [items, setItems] = useState([]);
   const [shippingCost, setShippingCost] = useState(0);
   const [note, setNote] = useState('');
+  const [status, setStatus] = useState('processing');
   const [document, setDocument] = useState(null);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -135,6 +137,7 @@ const AddTransfer = () => {
     formData.append('toId', toId);
     formData.append('shipping_cost', shippingCost);
     formData.append('note', note);
+    formData.append('status', status);
     if (document) {
       formData.append('document', document);
     }
@@ -245,7 +248,7 @@ const AddTransfer = () => {
                     <select
                       value={fromType}
                       onChange={(e) => setFromType(e.target.value)}
-                      className="flex-1 glass-input p-3 rounded-lg border border-white/30 bg-white/30 backdrop-blur-sm"
+                      className="flex-1 w-full glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
                     >
                       <option value="store">Store</option>
                       <option value="shop">Shop</option>
@@ -255,7 +258,7 @@ const AddTransfer = () => {
                   <select
                     value={fromId}
                     onChange={(e) => setFromId(e.target.value)}
-                    className="w-full glass-input p-3 rounded-lg border border-white/30 bg-white/30 backdrop-blur-sm"
+                    className="w-full glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
                   >
                     {renderLocationOptions(fromType)}
                   </select>
@@ -271,7 +274,7 @@ const AddTransfer = () => {
                     <select
                       value={toType}
                       onChange={(e) => setToType(e.target.value)}
-                      className="flex-1 glass-input p-3 rounded-lg border border-white/30 bg-white/30 backdrop-blur-sm"
+                      className="flex-1 w-full glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
                     >
                       <option value="store">Store</option>
                       <option value="shop">Shop</option>
@@ -281,7 +284,7 @@ const AddTransfer = () => {
                   <select
                     value={toId}
                     onChange={(e) => setToId(e.target.value)}
-                    className="w-full glass-input p-3 rounded-lg border border-white/30 bg-white/30 backdrop-blur-sm"
+                    className="w-full glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
                   >
                     {renderLocationOptions(toType)}
                   </select>
@@ -306,7 +309,7 @@ const AddTransfer = () => {
                     type="number"
                     value={shippingCost}
                     onChange={(e) => setShippingCost(e.target.value)}
-                    className="w-full glass-input p-3 pl-10 rounded-lg border border-white/30 bg-white/30 backdrop-blur-sm"
+                    className="w-full glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
                     placeholder="0.00"
                     min="0"
                     step="0.01"
@@ -315,12 +318,25 @@ const AddTransfer = () => {
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="w-full glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
+                >
+                  <option value="processing">Processing</option>
+                  <option value="pending">Pending</option>
+                  <option value="being_shipped">Being Shipped</option>
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Note</label>
                 <input
                   type="text"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  className="w-full glass-input p-3 rounded-lg border border-white/30 bg-white/30 backdrop-blur-sm"
+                  className="w-full glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
                   placeholder="Add a note (optional)"
                 />
               </div>
@@ -328,11 +344,11 @@ const AddTransfer = () => {
 
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Document</label>
-              <div className="glass-input p-3 rounded-lg border border-white/30 bg-white/30 backdrop-blur-sm">
+              <div className="glass-input rounded-lg border border-white/30 bg-white/30 backdrop-blur-sm">
                 <input
                   type="file"
                   onChange={(e) => setDocument(e.target.files[0])}
-                  className="w-full"
+                  className="w-full p-2 rounded-lg border border-gray-300 outline-0"
                 />
               </div>
             </div>
@@ -354,7 +370,7 @@ const AddTransfer = () => {
                 type="text"
                 value={search}
                 onChange={handleSearch}
-                className="w-full glass-input p-3 pl-10 rounded-lg border border-white/30 bg-white/30 backdrop-blur-sm"
+                className="w-full glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
                 placeholder="Search products or materials..."
               />
             </div>
@@ -423,7 +439,7 @@ const AddTransfer = () => {
                             type="number"
                             value={item.quantity}
                             onChange={(e) => handleQuantityChange(index, e.target.value)}
-                            className="glass-input w-24 p-2 rounded-lg border border-white/30 bg-white/30 backdrop-blur-sm"
+                            className="w-32 glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
                             min="1"
                           />
                         </td>
@@ -432,7 +448,7 @@ const AddTransfer = () => {
                             onClick={() => handleRemoveItem(index)}
                             className="text-red-500 hover:text-red-700 transition-colors text-sm font-medium"
                           >
-                            Remove
+                            <Trash2 size={16} />
                           </button>
                         </td>
                       </tr>

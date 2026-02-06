@@ -19,8 +19,6 @@ async function main() {
   await prisma.saleReturn.deleteMany();
   await prisma.saleItem.deleteMany();
   await prisma.sale.deleteMany();
-  await prisma.storeToShopTransferItem.deleteMany();
-  await prisma.storeToShopTransfer.deleteMany();
   await prisma.purchaseItem.deleteMany();
   await prisma.purchase.deleteMany();
   await prisma.transferItem.deleteMany();
@@ -977,92 +975,6 @@ async function main() {
     }),
   ]);
 
-  // --- STORE TO SHOP TRANSFERS --- (Total 4) - StoreToShopTransfer has @unique on reference
-  const storeToShopTransfers = await Promise.all([
-    prisma.storeToShopTransfer.create({
-      data: {
-        reference: "STS-001",
-        storeId: stores[0].id,
-        shopId: shops[0].id,
-        status: "transferred",
-        totalItems: 2,
-        transferItems: {
-          create: [
-            {
-              productId: products[0].id,
-              quantity: 5,
-              type: "product",
-            },
-            {
-              materialId: materials[0].id,
-              quantity: 20,
-              type: "material",
-            },
-          ],
-        },
-      },
-    }),
-    prisma.storeToShopTransfer.create({
-      data: {
-        reference: "STS-002",
-        storeId: stores[1].id,
-        shopId: shops[1].id,
-        status: "being_shipped",
-        totalItems: 1,
-        transferItems: {
-          create: [
-            {
-              productId: products[1].id,
-              quantity: 8,
-              type: "product",
-            },
-          ],
-        },
-      },
-    }),
-    prisma.storeToShopTransfer.create({
-      data: {
-        reference: "STS-003",
-        storeId: stores[2].id,
-        shopId: shops[2].id,
-        status: "pending",
-        totalItems: 1,
-        transferItems: {
-          create: [
-            {
-              productId: products[2].id,
-              quantity: 2,
-              type: "product",
-            },
-          ],
-        },
-      },
-    }),
-    prisma.storeToShopTransfer.create({
-      data: {
-        reference: "STS-004",
-        storeId: stores[3].id,
-        shopId: shops[3].id,
-        status: "transferred",
-        totalItems: 2,
-        transferItems: {
-          create: [
-            {
-              productId: products[3].id,
-              quantity: 3,
-              type: "product",
-            },
-            {
-              materialId: materials[2].id,
-              quantity: 10,
-              type: "material",
-            },
-          ],
-        },
-      },
-    }),
-  ]);
-
   // --- NOTIFICATIONS --- (Total 4)
   const notifications = await Promise.all([
     prisma.notification.create({
@@ -1227,7 +1139,6 @@ async function main() {
   console.log(`Created ${await prisma.production.count()} productions`);
   console.log(`Created ${await prisma.sale.count()} sales`);
   console.log(`Created ${await prisma.transfer.count()} transfers`);
-  console.log(`Created ${await prisma.storeToShopTransfer.count()} store-to-shop transfers`);
   console.log(`Created ${await prisma.notification.count()} notifications`);
   console.log(`Created ${await prisma.cashRegisterAssignment.count()} cash register assignments`);
   console.log(`Created ${await prisma.entityAccount.count()} entity accounts`);
