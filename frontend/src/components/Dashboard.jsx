@@ -96,7 +96,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50/30 p-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 z-10">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 z-10 relative">
         <div>
           <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 bg-clip-text text-transparent animate-gradient">
             Dashboard Overview
