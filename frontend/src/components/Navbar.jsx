@@ -8,7 +8,6 @@ import { useAuth } from "../App";
 
 const Navbar = () => {
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-    const [darkMode, setDarkMode] = useState(false);
     const [isProfileOpen, setProfileOpen] = useState(false);
     const profileRef = useRef(null);
     const location = useLocation();
@@ -33,23 +32,17 @@ const Navbar = () => {
     const navItems = [
         { name: "Dashboard", icon: <Home size={18} />, path: "/dashboard" },
         { name: "All Sales", icon: <Zap size={18} />, path: "/sale/all" },
-        { name: "Reports", icon: <Newspaper size={18} />, path: "/" },
-        { name: "Shops", icon: <Store size={18} />, path: "/shop/all" }
+        { name: "POS", icon: <Store size={18} />, path: "/sale/pos" },
     ];
 
     const isActive = (path) => {
         return location.pathname === path;
     };
 
-    const toggleTheme = () => {
-        setDarkMode(!darkMode);
-        document.documentElement.classList.toggle('dark');
-    };
-
     return (
         <>
             {/* Glass Navbar */}
-            <nav className="w-full rounded-2xl mx-2 mt-2 px-4 md:px-8 py-3 backdrop-blur-xl border border-white/20 shadow-xl bg-white/70">
+            <nav className="w-full rounded-2xl mx-2 mt-2 px-4 md:px-8 py-3 backdrop-blur-xl border border-white/20 shadow-xl bg-white/70 z-50 relative">
                 <div className="flex items-center justify-between w-full">
                     
                     {/* Logo and Brand */}
@@ -57,12 +50,12 @@ const Navbar = () => {
                         <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-white/30 backdrop-blur-md bg-white/90 shadow-[0_4px_12px_rgba(0,0,0,0.05)]">
                             <img src={logo} alt="BSP Logo" className="w-12 h-12 object-contain" />
                         </div>
-                        <div className="hidden md:block">
+                        {/* <div className="hidden md:block">
                             <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                                 BSP
                             </h1>
                             <p className="text-xs text-gray-500">Inventory Management System</p>
-                        </div>
+                        </div> */}
                     </div>
 
                     {/* Desktop Navigation */}
@@ -89,14 +82,7 @@ const Navbar = () => {
                     {/* Action Buttons */}
                     <div className="flex items-center gap-3">
                         
-                        {/* Theme Toggle */}
-                        <button
-                            onClick={toggleTheme}
-                            className="p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 to-amber-600/10 hover:from-amber-500/20 hover:to-amber-600/20 text-amber-600 hover:text-amber-700 transition-all duration-300 backdrop-blur-sm bg-white/70 border border-white/20 hover:bg-white/90 hover:translate-y-[-1px] hover:shadow-[0_5px_15px_rgba(0,0,0,0.1)]"
-                            title="Toggle Theme"
-                        >
-                            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-                        </button>
+                        
 
                         {/* Notifications */}
                         <Link to="/notifications">
@@ -125,12 +111,9 @@ const Navbar = () => {
                                 </div>
                             </button>
                             {isProfileOpen && (currentUser || localUserName) && (
-                                <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-xl bg-white/80 backdrop-blur-xl border border-gray-200 shadow-xl focus:outline-none z-500">
+                                <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-xl bg-white/95 backdrop-blur-md border border-gray-200 shadow-xl focus:outline-none z-[1000]">
                                     <div className="py-1">
-                                        <div className="px-4 py-3 border-b border-white/20">
-                                            <p className="text-sm font-semibold text-gray-800">{currentUser?.name || localUserName}</p>
-                                            <p className="text-xs text-gray-500 truncate">{currentUser?.email || localUserEmail}</p>
-                                        </div>
+                                        
                                         <Link
                                             to="/profile"
                                             className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-white/50"

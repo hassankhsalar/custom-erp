@@ -154,7 +154,7 @@ const purchaseRoutes = require('./routes/purchaseRoutes');
 const salesRoutes = require('./routes/salesRoutes');
 const shopRoutes = require('./routes/shopRoutes');
 const shopSalesRoutes = require('./routes/shop-sales');
-const storeToShopTransfersRoutes = require('./routes/store-to-shop-transfers');
+// const storeToShopTransfersRoutes = require('./routes/store-to-shop-transfers');
 const dashboardRoutes = require('./routes/dashboard');
 const userRoutes = require('./routes/users');
 const transferRoutes = require('./routes/transferRoutes');
@@ -176,9 +176,9 @@ const uploadRoutes = require('./routes/uploadRoutes');
 
 
 
-app.use('/api/materials', materialRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/factories', factoryRoutes);
+app.use('/api/materials', authenticateToken, materialRoutes);
+app.use('/api/products', authenticateToken, productRoutes);
+app.use('/api/factories', authenticateToken, factoryRoutes);
 app.use('/api/productions', productionRoutes);
 app.use('/api/stores', storeRoutes);
 app.use('/api/suppliers', supplierRoutes);
@@ -186,7 +186,7 @@ app.use('/api/purchases', purchaseRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/shops', shopRoutes);
 app.use('/api/shop-sales', shopSalesRoutes);
-app.use('/api/store-to-shop-transfers', storeToShopTransfersRoutes);
+// app.use('/api/store-to-shop-transfers', storeToShopTransfersRoutes);
 app.use('/api/dash-board', dashboardRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/transfers', transferRoutes);
@@ -203,12 +203,20 @@ app.use('/api/cash-register-assign', cashRegisterAssignRoutes);
 app.use('/api/cash-registers', cashRegisterRoutes);
 app.use('/api/assign-user', assignUserRoutes);
 app.use('/api/permissions', permissionRoutes);
-app.use('/api/users', userPermissionRoutes);
+app.use('/api/user-management', userPermissionRoutes);
 
 // serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));
+
 
 const port = 3001;
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
+
+
+module.exports = {
+  authenticateToken,
+  hasPermission,
+  JWT_SECRET
+};

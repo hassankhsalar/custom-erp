@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { API_ROUTES } from "../config";
 import { useAuth } from '../App';
+import { usePermission } from '../hooks/usePermission';
 import {
   TrendingUp,
   TrendingDown,
@@ -30,6 +31,7 @@ import {
 
 const Dashboard = () => {
   const { token, logout } = useAuth();
+  const { hasPermission } = usePermission();
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState("month");
@@ -96,7 +98,7 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50/30 p-6">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 z-10">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 z-10 relative">
         <div>
           <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 bg-clip-text text-transparent animate-gradient">
             Dashboard Overview
@@ -143,57 +145,74 @@ const Dashboard = () => {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <KPICard
-          title="Total Revenue"
-          value={dashboardData.kpis.revenue.value}
-          change={dashboardData.kpis.revenue.change}
-          trend={dashboardData.kpis.revenue.trend}
-          icon={<DollarSign className="h-6 w-6" />}
-          color="green"
-        />
-        <KPICard
-          title="Total Sales"
-          value={dashboardData.kpis.sales.value}
-          change={dashboardData.kpis.sales.change}
-          trend={dashboardData.kpis.sales.trend}
-          icon={<ShoppingCart className="h-6 w-6" />}
-          color="blue"
-        />
-        <KPICard
-          title="Inventory Value"
-          value={dashboardData.kpis.inventory.value}
-          change={dashboardData.kpis.inventory.change}
-          trend={dashboardData.kpis.inventory.trend}
-          icon={<Package className="h-6 w-6" />}
-          color="purple"
-        />
-        <KPICard
-          title="Pending Transfers"
-          value={dashboardData.kpis.transfers.value}
-          change={dashboardData.kpis.transfers.change}
-          trend={dashboardData.kpis.transfers.trend}
-          icon={<Truck className="h-6 w-6" />}
-          color="orange"
-        />
-      </div>
+        {hasPermission(['sales_read', 'general_ledger_report', 'profit_loss_report']) && (
+          <KPICard
+            title="Total Revenue"
+            value={dashboardData.kpis.revenue.value}
+            change={dashboardData.kpis.revenue.change}
+            trend={dashboardData.kpis.revenue.trend}
+            icon={<DollarSign className="h-6 w-6" />}
+            color="green"
+          />
+        )}
+        {hasPermission('sales_read') && (
+          <KPICard
+            title="Total Sales"
+            value={dashboardData.kpis.sales.value}
+            change={dashboardData.kpis.sales.change}
+            trend={dashboardData.kpis.sales.trend}
+            icon={<ShoppingCart className="h-6 w-6" />}
+            color="blue"
+          />
+        )}
+        {hasPermission(['material_read', 'product_read', 'stock_report']) && (
+          <KPICard
+            title="Inventory Value"
+            value={dashboardData.kpis.inventory.value}
+            change={dashboardData.kpis.inventory.change}
+            trend={dashboardData.kpis.inventory.trend}
+            icon={<Package className="h-6 w-6" />}
+            color="purple"
+          />
+        )}
+                {hasPermission('transfers_read') && (
+                  <KPICard
+                    title="Pending Transfers"
+                    value={dashboardData.kpis.transfers.value}
+                    change={dashboardData.kpis.transfers.change}
+                    trend={dashboardData.kpis.transfers.trend}
+                    icon={<Truck className="h-6 w-6" />}
+                    color="orange"
+                  />
+                )}
+              </div>
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <RevenueChart data={dashboardData.sales.monthlyRevenue} />
-        <InventoryChart data={dashboardData.inventory.byCategory} />
+        {hasPermission(['sales_read', 'sales_report']) && (
+          <RevenueChart data={dashboardData.sales.monthlyRevenue} />
+        )}
+        {hasPermission(['stock_report', 'material_read', 'product_read']) && (
+          <LowStockTable data={dashboardData.inventory.lowStock} />
+        )}
       </div>
 
       {/* Tables Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <TopProductsTable data={dashboardData.sales.topProducts} />
-        <LowStockTable data={dashboardData.inventory.lowStock} />
+        {hasPermission(['best_selling_product_report', 'sales_read']) && (
+          <TopProductsTable data={dashboardData.sales.topProducts} />
+        )}
+        {hasPermission(['sales_report', 'shop_read']) && (
+          <ShopPerformance data={dashboardData.performance} />
+        )}
       </div>
 
       {/* Bottom Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <TransferStatus data={dashboardData.transfers} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {hasPermission(['transfer_report', 'transfers_read']) && (
+          <TransferStatus data={dashboardData.transfers} />
+        )}
         <RecentActivity data={dashboardData.recentActivity} />
-        <ShopPerformance data={dashboardData.performance} />
       </div>
     </div>
   );
@@ -262,102 +281,63 @@ const KPICard = ({ title, value, change, trend, icon, color }) => {
 };
 
 // Revenue Chart Component
-const RevenueChart = ({ data }) => (
-  <div className="glass-card rounded-2xl p-6 backdrop-blur-sm border border-white/40">
-    <div className="flex items-center justify-between mb-6">
-      <div>
-        <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-          <BarChart3 className="mr-2 text-blue-600" />
-          Revenue Trend
-        </h3>
-        <p className="text-sm text-gray-500 mt-1">Monthly revenue overview</p>
-      </div>
-      <button className="p-2 rounded-lg hover:bg-gray-100/50 text-gray-500 hover:text-gray-700 transition-colors">
-        <MoreVertical size={18} />
-      </button>
-    </div>
-    <div className="h-64 flex items-end justify-between space-x-2">
-      {data.map((item, index) => {
-        const height = Math.max(20, (item.revenue / 500000) * 200);
-        return (
-          <div key={index} className="flex flex-col items-center flex-1 group">
-            <div className="relative w-full max-w-14">
-              <div
-                className="bg-gradient-to-t from-blue-500 to-blue-600 rounded-t-lg w-full transition-all duration-500 group-hover:from-blue-600 group-hover:to-blue-700"
-                style={{ height: `${height}px` }}
-              >
-                <div className="absolute inset-0 bg-gradient-to-t from-blue-400/20 to-transparent rounded-t-lg"></div>
-              </div>
-              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-                ${(item.revenue / 1000).toFixed(0)}K
-              </div>
-            </div>
-            <span className="text-xs mt-2 text-gray-600 font-medium">{item.month}</span>
-            <span className="text-xs text-gray-400">
-              ${(item.revenue / 1000).toFixed(0)}K
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  </div>
-);
+const RevenueChart = ({ data }) => {
+  const safeData = Array.isArray(data) ? data : [];
+  const maxRevenue = safeData.reduce((max, item) => Math.max(max, item.revenue || 0), 0);
+  const minHeight = 16;
+  const maxHeight = 200;
 
-// Inventory Chart Component
-const InventoryChart = ({ data }) => (
-  <div className="glass-card rounded-2xl p-6 backdrop-blur-sm border border-white/40">
-    <div className="flex items-center justify-between mb-6">
-      <div>
-        <h3 className="text-lg font-semibold text-gray-800 flex items-center">
-          <Package className="mr-2 text-purple-600" />
-          Inventory Distribution
-        </h3>
-        <p className="text-sm text-gray-500 mt-1">Value by category</p>
+  const formatCompact = (value) => {
+    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+    return `$${value.toFixed(0)}`;
+  };
+
+  return (
+    <div className="glass-card rounded-2xl p-6 backdrop-blur-sm border border-white/40">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+            <BarChart3 className="mr-2 text-blue-600" />
+            Revenue Trend
+          </h3>
+          <p className="text-sm text-gray-500 mt-1">Monthly revenue overview</p>
+        </div>
+        <button className="p-2 rounded-lg hover:bg-gray-100/50 text-gray-500 hover:text-gray-700 transition-colors">
+          <MoreVertical size={18} />
+        </button>
       </div>
-      <button className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
-        <Eye size={14} />
-        View All
-      </button>
-    </div>
-    <div className="space-y-4">
-      {data.map((item, index) => {
-        const percentage = (item.value / 2000000) * 100;
-        const gradientColors = [
-          'from-blue-500 to-cyan-500',
-          'from-emerald-500 to-green-500',
-          'from-purple-500 to-pink-500',
-          'from-amber-500 to-orange-500',
-          'from-indigo-500 to-blue-500'
-        ];
-        
-        return (
-          <div key={index} className="flex items-center justify-between group hover:bg-white/30 p-2 rounded-lg transition-colors duration-200">
-            <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-lg bg-gradient-to-r ${gradientColors[index % gradientColors.length]} flex items-center justify-center`}>
-                <Package size={14} className="text-white" />
-              </div>
-              <div>
-                <span className="text-sm font-medium text-gray-800">{item.category}</span>
-                <div className="text-xs text-gray-500">${(item.value / 1000).toFixed(0)}K</div>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="w-32 bg-gray-200/50 rounded-full h-2">
+      <div className="h-64 flex items-end justify-between space-x-2">
+        {safeData.map((item, index) => {
+          const revenue = item.revenue || 0;
+          const height = maxRevenue > 0
+            ? minHeight + (revenue / maxRevenue) * (maxHeight - minHeight)
+            : minHeight;
+          return (
+            <div key={index} className="flex flex-col items-center flex-1 group">
+              <div className="relative w-full max-w-14">
                 <div
-                  className={`h-2 rounded-full bg-gradient-to-r ${gradientColors[index % gradientColors.length]} transition-all duration-1000`}
-                  style={{ width: `${percentage}%` }}
-                ></div>
+                  className="bg-gradient-to-t from-blue-500 to-blue-600 rounded-t-lg w-full transition-all duration-500 group-hover:from-blue-600 group-hover:to-blue-700"
+                  style={{ height: `${height}px` }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-t from-blue-400/20 to-transparent rounded-t-lg"></div>
+                </div>
+                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+                  {formatCompact(revenue)}
+                </div>
               </div>
-              <span className="text-sm font-medium text-gray-800 w-10 text-right">
-                {percentage.toFixed(0)}%
+              <span className="text-xs mt-2 text-gray-600 font-medium">{item.month}</span>
+              <span className="text-xs text-gray-400">
+                {formatCompact(revenue)}
               </span>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
-  </div>
-);
+  );
+};
+
 
 // Top Products Table Component
 const TopProductsTable = ({ data }) => (
@@ -484,7 +464,8 @@ const TransferStatus = ({ data }) => (
           transferred: { bg: 'from-emerald-500 to-green-500', text: 'text-emerald-600' },
           being_shipped: { bg: 'from-blue-500 to-cyan-500', text: 'text-blue-600' },
           pending: { bg: 'from-amber-500 to-orange-500', text: 'text-amber-600' },
-          cancelled: { bg: 'from-red-500 to-red-600', text: 'text-red-600' }
+          processing: { bg: 'from-green-500 to-lime-500', text: 'text-lime-600' },
+          not_received: { bg: 'from-red-500 to-rose-700', text: 'text-red-600' }
         };
         
         const colors = statusColors[status] || { bg: 'from-gray-500 to-gray-600', text: 'text-gray-600' };
