@@ -82,7 +82,7 @@ export default function NewPurchase() {
         "Content-Type": "application/json",
         ...(token && { "Authorization": `bearer ${token}` })
       };
-      const res = await fetch("http://localhost:3001/api/products", { headers });
+      const res = await fetch("http://localhost:3001/api/products/all-products", { headers });
 
       const data = await res.json();
       setProducts(data.products || data || []);
@@ -122,11 +122,7 @@ export default function NewPurchase() {
 
       const token = localStorage.getItem("token");
       const headers = {};
-      
-      // Add token for protected routes (stores require auth)
-      if (destinationType === "store") {
-        headers.Authorization = `Bearer ${token}`;
-      }
+      headers.Authorization = `Bearer ${token}`;
 
       const res = await fetch(endpoint, { headers });
       if (!res.ok) throw new Error("Failed to fetch destinations");
