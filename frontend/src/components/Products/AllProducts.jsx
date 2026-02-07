@@ -18,6 +18,7 @@ import {
   AlertCircle,
   CheckCircle,
   X,
+  AlertTriangle,
   Settings,
   Factory
 } from 'lucide-react';
@@ -32,6 +33,7 @@ const AllProducts = () => {
   const [modal, setModal] = useState({ isOpen: false, type: null, data: null });
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
+  const [ totalProducts, setTotalProducts ] = useState(0);
 
   // Function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -61,6 +63,7 @@ const AllProducts = () => {
         });
         setProducts(response.data.products);
         setTotalPages(Math.ceil(response.data.totalCount / itemsPerPage));
+        setTotalProducts(response.data.totalCount);
       } catch (error) {
         console.error('Error fetching products:', error);
         
@@ -108,6 +111,7 @@ const AllProducts = () => {
         });
         setProducts(response.data.products);
         setTotalPages(Math.ceil(response.data.totalCount / itemsPerPage));
+        setTotalProducts(response.data.totalCount);
       } catch (error) {
         console.error('Error deleting product:', error);
         
@@ -153,8 +157,7 @@ const AllProducts = () => {
   };
 
   // Calculate statistics
-  const totalProducts = products.length;
-  const lowStockProducts = products.filter(p => p.stock <= 10 && p.stock > 0).length;
+  const lowStockProducts = products.filter(p => p.stock < p.alert_quantity && p.stock > 0).length;
   const outOfStockProducts = products.filter(p => p.stock <= 0).length;
 
   // Pagination controls
@@ -202,11 +205,6 @@ const AllProducts = () => {
             </div>
             
             <div className="flex items-center gap-4">
-              <div className="hidden md:block px-6 py-3 bg-white/60 backdrop-blur-sm rounded-xl border border-white/80">
-                <p className="text-sm font-medium text-gray-700">Total Products</p>
-                <p className="text-2xl font-bold text-blue-600">{products.length}</p>
-              </div>
-              
               <Link 
                 to="/products/create" 
                 className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
@@ -251,7 +249,7 @@ const AllProducts = () => {
                 <p className="text-2xl font-bold text-red-600">{outOfStockProducts}</p>
               </div>
               <div className="p-3 bg-red-100 rounded-xl">
-                <X size={24} className="text-red-600" />
+                <AlertTriangle size={24} className="text-red-600" />
               </div>
             </div>
           </div>
@@ -493,7 +491,7 @@ const AllProducts = () => {
                         <span className="font-semibold">
                           {Math.min(currentPage * itemsPerPage, products.length)}
                         </span>{" "}
-                        of <span className="font-semibold">{products.length}</span> products
+                        of <span className="font-semibold">{totalProducts}</span> products
                       </div>
                     </div>
 

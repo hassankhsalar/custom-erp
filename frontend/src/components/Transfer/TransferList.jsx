@@ -500,14 +500,17 @@ const TransferList = ({ fromType, toType, title }) => {
                                 </span>
                               </div>
                             </td>
-                            <td className="p-4">
+                            <td className="p-4 min-w-24">
                               <div className="flex items-center gap-2">
-                                <div className="p-2 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-lg">
-                                  <Package className="w-4 h-4 text-blue-600" />
-                                </div>
-                                <div className="text-center">
-                                  <span className="font-bold text-lg text-gray-900 block">{transfer.totalProducts}</span>
-                                  <span className="text-xs text-gray-500">items</span>
+                                <div className=" text-xs">
+                                  <div className="block">
+                                    <span className="font-bold text-gray-900">{transfer.totalProducts} </span>
+                                    <span className=" text-gray-500">items</span>
+                                  </div>
+                                  <div className="block">
+                                    <span className="font-bold text-gray-900">{transfer.totalItems} </span>
+                                    <span className=" text-gray-500">Types</span>
+                                  </div>
                                 </div>
                               </div>
                             </td>

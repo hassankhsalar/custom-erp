@@ -1,4 +1,5 @@
 export const API_BASE_URL = 'http://localhost:3001/api';
+export const MEDIA_BASE_URL = 'http://localhost:3001';
 
 export const API_ROUTES = {
   LOGIN: `${API_BASE_URL}/login`,
@@ -6,8 +7,13 @@ export const API_ROUTES = {
   PROFILE: `${API_BASE_URL}/profile`,
   ADMIN: `${API_BASE_URL}/admin`,
   DASHBOARD: `${API_BASE_URL}/dashboard`,
+
   MATERIALS: `${API_BASE_URL}/materials`,
+
+  // Product routes
   PRODUCTS: `${API_BASE_URL}/products`,
+  PRODUCTS_ALL: `${API_BASE_URL}/products/all-products`,
+
   FACTORIES: `${API_BASE_URL}/factories`,
   PRODUCTIONS: `${API_BASE_URL}/productions`,
   STORES: `${API_BASE_URL}/stores`,

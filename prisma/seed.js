@@ -587,7 +587,7 @@ async function main() {
       start_date: new Date(Date.now() - randInt(1, 30) * 24 * 60 * 60 * 1000),
       estimated_end_date: new Date(Date.now() + randInt(1, 30) * 24 * 60 * 60 * 1000),
       factoryId: factory.id,
-      status: pick(['pending', 'running', 'done']),
+      status: pick(['pending', 'running', 'production_done']),
       productionProducts: {
         create: [
           {

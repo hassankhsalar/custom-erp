@@ -50,6 +50,7 @@ router.get('/', authenticateToken, async (req, res) => {
           },
         },
       },
+      orderBy: { createdAt: 'desc' },
     }),
     prisma.transfer.count({ where }),
   ]);
@@ -94,12 +95,14 @@ router.get('/', authenticateToken, async (req, res) => {
     else if (transfer.to === 'factory') toName = factoryMap.get(transfer.toId) || 'N/A';
 
     const totalProducts = transfer.transferItems.reduce((sum, item) => sum + item.quantity, 0);
+    const totalItems = transfer.transferItems.length;
 
     return {
         ...transfer,
         fromName,
         toName,
         totalProducts,
+        totalItems
     };
   });
 
