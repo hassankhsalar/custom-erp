@@ -1,6 +1,7 @@
 import { Mailbox, ShoppingCart, Store, Undo2, ArrowUpDown, Search, X, DollarSign, Package, RefreshCw, AlertCircle, CheckCircle, TrendingDown, Filter, ArrowLeftRight, User, Calendar, CreditCard, Hash } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { API_ROUTES } from '../../config';
 
 export default function SaleReturn() {
   const [shops, setShops] = useState([]);
@@ -24,7 +25,7 @@ export default function SaleReturn() {
       return;
     }
 
-    fetch("http://localhost:3001/api/shops", {
+    fetch(`${API_ROUTES.SHOPS}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => res.json())
@@ -43,7 +44,7 @@ export default function SaleReturn() {
     if (!token) return;
 
     setLoading(true);
-    fetch(`http://localhost:3001/api/shop-sales/return-eligible?shopId=${selectedShop}`, {
+    fetch(`${API_ROUTES.SHOP_SALES}/return-eligible?shopId=${selectedShop}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {
@@ -261,7 +262,7 @@ export default function SaleReturn() {
 
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:3001/api/shop-sales/return", {
+      const res = await fetch(`${API_ROUTES.SHOP_SALES}/return`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

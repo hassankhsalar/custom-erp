@@ -44,7 +44,9 @@ const AddTransfer = () => {
           axios.get(API_ROUTES.SHOPS, {
             headers: { Authorization: `Bearer ${token}` }
           }),
-          axios.get(API_ROUTES.FACTORIES),
+          axios.get(API_ROUTES.FACTORIES, {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
         ]);
         setStores(storesRes.data.stores);
         setShops(shopsRes.data);
@@ -87,27 +89,45 @@ const AddTransfer = () => {
   }, [toType, stores, shops, factories]);
 
   const handleSearch = async (e) => {
-    setSearch(e.target.value);
-    if (e.target.value.length > 2) {
-      try {
-        const resProducts = await axios.get(API_ROUTES.PRODUCTS, {
-          params: { search: e.target.value },
-        });
-        const productsWithTag = resProducts.data.products.map(p => ({ ...p, itemType: 'product' }));
-
-        const resMaterials = await axios.get(API_ROUTES.MATERIALS, {
-          params: { search: e.target.value },
-        })
-        const materialsWithTag = resMaterials.data.materials.map(m => ({ ...m, itemType: 'material' }));
-
-        setSearchResults([...productsWithTag, ...materialsWithTag]);
-      } catch (error) {
-        console.error('Error searching items:', error);
+  setSearch(e.target.value);
+  if (e.target.value.length > 2) {
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.error('No authentication token found');
+        setSearchResults([]);
+        return;
       }
-    } else {
+
+      const headers = {
+        Authorization: `Bearer ${token}`
+      };
+
+      const [resProducts, resMaterials] = await Promise.all([
+        axios.get(API_ROUTES.PRODUCTS, {
+          params: { search: e.target.value },
+          headers
+        }),
+        axios.get(API_ROUTES.MATERIALS, {
+          params: { search: e.target.value },
+          headers
+        })
+      ]);
+
+      const productsWithTag = (resProducts.data.products || []).map(p => ({ ...p, itemType: 'product' }));
+      const materialsWithTag = (resMaterials.data.materials || []).map(m => ({ ...m, itemType: 'material' }));
+
+      setSearchResults([...productsWithTag, ...materialsWithTag]);
+      
+    } catch (error) {
+      console.error('Error searching items:', error);
       setSearchResults([]);
     }
-  };
+  } else {
+    setSearchResults([]);
+  }
+};
 
   const handleAddItem = (item) => {
     setItems([...items, { ...item, quantity: 1 }]);

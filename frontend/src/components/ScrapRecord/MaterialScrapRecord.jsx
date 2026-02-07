@@ -115,25 +115,25 @@ const MaterialScrapRecord = () => {
   };
 
   // Get location icon based on type
-  const getLocationIcon = (type) => {
-    switch (type) {
-      case 'store':
-        return <Store size={16} className="text-blue-600" />;
-      case 'shop':
-        return <Store size={16} className="text-green-600" />;
-      case 'factory':
-        return <Factory size={16} className="text-orange-600" />;
-      default:
-        return <Warehouse size={16} className="text-gray-600" />;
-    }
-  };
+  // const getLocationIcon = (type) => {
+  //   switch (type) {
+  //     case 'store':
+  //       return <Store size={16} className="text-blue-600" />;
+  //     case 'shop':
+  //       return <Store size={16} className="text-green-600" />;
+  //     case 'factory':
+  //       return <Factory size={16} className="text-orange-600" />;
+  //     default:
+  //       return <Warehouse size={16} className="text-gray-600" />;
+  //   }
+  // };
 
   // Get location name
-  const getLocationName = (record) => {
-    const locationType = record.locationType?.charAt(0).toUpperCase() + record.locationType?.slice(1) || 'Location';
-    const branchId = record.branchId || '';
-    return `${locationType} ${branchId}`;
-  };
+  // const getLocationName = (record) => {
+  //   const locationType = record.locationType?.charAt(0).toUpperCase() + record.locationType?.slice(1) || 'Location';
+  //   const branchId = record.branchId || '';
+  //   return `${locationType} ${branchId}`;
+  // };
 
   // Helper function to get image URL
   const getImageUrl = (imagePath) => {
@@ -202,7 +202,6 @@ const MaterialScrapRecord = () => {
                   <thead className="bg-gray-100/80">
                     <tr>
                       <th className="p-4 text-left font-medium text-gray-700">Reason</th>
-                      <th className="p-4 text-left font-medium text-gray-700">Location</th>
                       <th className="p-4 text-left font-medium text-gray-700">Date</th>
                       <th className="p-4 text-left font-medium text-gray-700">Materials</th>
                       <th className="p-4 text-left font-medium text-gray-700">Total Loss</th>
@@ -225,17 +224,7 @@ const MaterialScrapRecord = () => {
                               </div>
                             </div>
                           </td>
-                          <td className="p-4">
-                            <div className="flex items-center gap-2">
-                              {getLocationIcon(record.locationType)}
-                              <span className="text-gray-700 font-medium">
-                                {getLocationName(record)}
-                              </span>
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {record.locationType || 'Unknown'} • ID: {record.branchId || 'N/A'}
-                            </p>
-                          </td>
+                          
                           <td className="p-4">
                             <div className="flex items-center gap-2">
                               <Calendar size={14} className="text-gray-400" />
@@ -479,18 +468,10 @@ const MaterialScrapRecord = () => {
                 <div className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-5">
                   <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                     <Warehouse size={18} className="text-blue-600" />
-                    Location & Summary
+                     Summary
                   </h3>
                   <div className="space-y-3">
-                    <div>
-                      <p className="text-sm text-gray-600">Location</p>
-                      <div className="flex items-center gap-2">
-                        {getLocationIcon(modal.data.locationType)}
-                        <p className="font-medium">
-                          {modal.data.locationType?.toUpperCase() || 'Unknown'} • ID: {modal.data.branchId || 'N/A'}
-                        </p>
-                      </div>
-                    </div>
+                    
                     <div>
                       <p className="text-sm text-gray-600">Total Materials</p>
                       <p className="font-medium">{getScrapMaterials(modal.data).length} materials</p>
@@ -581,11 +562,11 @@ const MaterialScrapRecord = () => {
               </div>
             </div>
             
-            <div className="sticky bottom-0 p-6 border-t border-white/50 bg-gradient-to-r from-red-500/10 to-orange-500/10">
+            <div className="sticky bottom-0 p-6 border-t border-white/50 ">
               <div className="flex justify-end">
                 <button
                   onClick={closeModal}
-                  className="px-6 py-3 bg-white/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
+                  className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
                 >
                   Close Details
                 </button>
