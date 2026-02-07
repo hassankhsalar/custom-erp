@@ -61,7 +61,12 @@ export default function NewPurchase() {
 
   const fetchMaterials = async () => {
     try {
-      const res = await fetch("http://localhost:3001/api/materials");
+      const token = localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token && { "Authorization": `bearer ${token}` })
+      };
+      const res = await fetch("http://localhost:3001/api/materials" , { headers });
       const data = await res.json();
       setMaterials(data.materials || data || []);
     } catch (error) {
@@ -72,7 +77,13 @@ export default function NewPurchase() {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch("http://localhost:3001/api/products");
+      const token = localStorage.getItem("token");
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token && { "Authorization": `bearer ${token}` })
+      };
+      const res = await fetch("http://localhost:3001/api/products", { headers });
+
       const data = await res.json();
       setProducts(data.products || data || []);
     } catch (error) {

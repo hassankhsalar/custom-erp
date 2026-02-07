@@ -132,12 +132,80 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
     const parsedItems = JSON.parse(items);
 
     for (const item of parsedItems) {
+      const itemType = item.itemType;
+      const itemId = parseInt(item.id);
+      const locId = parseInt(fromId);
+
+      const sourceAvgCost = await (async () => {
+        if (itemType === 'product') {
+          if (from === 'store') {
+            const row = await prisma.storeProduct.findUnique({
+              where: { store_id_product_id: { store_id: locId, product_id: itemId } },
+              select: { avg_cost: true }
+            });
+            return row?.avg_cost ?? 0;
+          }
+          if (from === 'shop') {
+            const row = await prisma.shopProduct.findUnique({
+              where: { shop_id_product_id: { shop_id: locId, product_id: itemId } },
+              select: { avg_cost: true }
+            });
+            return row?.avg_cost ?? 0;
+          }
+          if (from === 'factory') {
+            const row = await prisma.factoryProduct.findUnique({
+              where: { factoryId_productId: { factoryId: locId, productId: itemId } },
+              select: { avg_cost: true }
+            });
+            return row?.avg_cost ?? 0;
+          }
+        } else {
+          if (from === 'store') {
+            const row = await prisma.storeMaterial.findUnique({
+              where: { store_id_material_id: { store_id: locId, material_id: itemId } },
+              select: { avg_cost: true }
+            });
+            return row?.avg_cost ?? 0;
+          }
+          if (from === 'shop') {
+            const row = await prisma.shopMaterial.findUnique({
+              where: { shop_id_material_id: { shop_id: locId, material_id: itemId } },
+              select: { avg_cost: true }
+            });
+            return row?.avg_cost ?? 0;
+          }
+          if (from === 'factory') {
+            const row = await prisma.factoryMaterial.findUnique({
+              where: { factoryId_materialId: { factoryId: locId, materialId: itemId } },
+              select: { avg_cost: true }
+            });
+            return row?.avg_cost ?? 0;
+          }
+        }
+        return 0;
+      })();
+
+      const normalizedSourceAvgCost = sourceAvgCost && sourceAvgCost > 0
+        ? sourceAvgCost
+        : itemType === 'product'
+          ? (await prisma.product.findUnique({
+              where: { id: itemId },
+              select: { cost: true }
+            }))?.cost || 0
+          : (await prisma.material.findUnique({
+              where: { id: itemId },
+              select: { unit_cost: true }
+            }))?.unit_cost || 0;
+
       await prisma.transferItem.create({
         data: {
           transferId: transfer.id,
           item: item.itemType,
           itemId: item.id,
+          productId: item.itemType === 'product' ? item.id : null,
+          materialId: item.itemType === 'material' ? item.id : null,
           quantity: parseFloat(item.quantity),
+          avg_cost: normalizedSourceAvgCost,
         },
       });
 
@@ -238,7 +306,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
       });
 
       if (status === 'transferred') {
-        const updateStock = async (locationType, locationId, itemId, quantity) => {
+        const updateStock = async (locationType, locationId, itemId, quantity, itemType, transferAvgCost) => {
           let model;
           let where;
           let createData;
@@ -248,10 +316,17 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
           const qty = parseFloat(quantity);
           const locId = parseInt(locationId);
 
-          // Determine the model and where clause based on locationType and itemType
-          // This logic needs to be adapted from your existing updateStock function
-          // Assuming item.itemType is available in transfer.transferItems
-          const itemType = transfer.transferItems.find(i => i.itemId === itemIdInt).item; // Assuming item field holds 'product' or 'material'
+          const avgCost = transferAvgCost && transferAvgCost > 0
+            ? transferAvgCost
+            : itemType === 'product'
+              ? (await prisma.product.findUnique({
+                  where: { id: itemIdInt },
+                  select: { cost: true }
+                }))?.cost || 0
+              : (await prisma.material.findUnique({
+                  where: { id: itemIdInt },
+                  select: { unit_cost: true }
+                }))?.unit_cost || 0;
 
           switch (locationType) {
             case 'store':
@@ -260,9 +335,8 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
                 ? { store_id_product_id: { store_id: locId, product_id: itemIdInt } }
                 : { store_id_material_id: { store_id: locId, material_id: itemIdInt } };
               createData = itemType === 'product'
-                ? { store_id: locId, product_id: itemIdInt, stock: qty }
-                : { store_id: locId, material_id: itemIdInt, stock: qty };
-              updateData = { stock: { increment: qty } };
+                ? { store_id: locId, product_id: itemIdInt, stock: qty, avg_cost: avgCost }
+                : { store_id: locId, material_id: itemIdInt, stock: qty, avg_cost: avgCost };
               break;
             case 'shop':
               model = itemType === 'product' ? 'shopProduct' : 'shopMaterial';
@@ -270,9 +344,8 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
                 ? { shop_id_product_id: { shop_id: locId, product_id: itemIdInt } }
                 : { shop_id_material_id: { shop_id: locId, material_id: itemIdInt } };
               createData = itemType === 'product'
-                ? { shop_id: locId, product_id: itemIdInt, stock: qty }
-                : { shop_id: locId, material_id: itemIdInt, stock: qty };
-              updateData = { stock: { increment: qty } };
+                ? { shop_id: locId, product_id: itemIdInt, stock: qty, avg_cost: avgCost }
+                : { shop_id: locId, material_id: itemIdInt, stock: qty, avg_cost: avgCost };
               break;
             case 'factory':
               model = itemType === 'product' ? 'factoryProduct' : 'factoryMaterial';
@@ -280,23 +353,31 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
                 ? { factoryId_productId: { factoryId: locId, productId: itemIdInt } }
                 : { factoryId_materialId: { factoryId: locId, materialId: itemIdInt } };
               createData = itemType === 'product'
-                ? { factoryId: locId, productId: itemIdInt, stock: qty }
-                : { factoryId: locId, materialId: itemIdInt, stock: qty };
-              updateData = { stock: { increment: qty } };
+                ? { factoryId: locId, productId: itemIdInt, stock: qty, avg_cost: avgCost }
+                : { factoryId: locId, materialId: itemIdInt, stock: qty, avg_cost: avgCost };
               break;
             default:
               throw new Error(`Invalid location type: ${locationType}`);
           }
 
-          await prisma[model].upsert({
-            where,
-            update: updateData,
-            create: createData,
-          });
+          const existing = await prisma[model].findUnique({ where });
+          if (existing) {
+            const existingStock = parseFloat(existing.stock) || 0;
+            const existingAvg = existing.avg_cost;
+            const normalizedAvg = existingAvg === null || existingAvg === undefined ? avgCost : parseFloat(existingAvg);
+            const totalQty = existingStock + qty;
+            const newAvgCost = totalQty > 0
+              ? ((normalizedAvg * existingStock) + (avgCost * qty)) / totalQty
+              : avgCost;
+            updateData = { stock: { increment: qty }, avg_cost: newAvgCost };
+            await prisma[model].update({ where, data: updateData });
+          } else {
+            await prisma[model].create({ data: createData });
+          }
         };
 
         for (const item of transfer.transferItems) {
-          await updateStock(transfer.to, transfer.toId, item.itemId, item.quantity);
+          await updateStock(transfer.to, transfer.toId, item.itemId, item.quantity, item.item, item.avg_cost);
         }
       }
 
