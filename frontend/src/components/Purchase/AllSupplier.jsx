@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { ArrowUpDown, Users, Phone, MapPin, Calendar, Hash, Building2, TrendingUp, Search, X, Clock, UserCircle } from "lucide-react";
 
+import { API_ROUTES } from '../../config';
+
 export default function AllSuppliers() {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -9,21 +11,43 @@ export default function AllSuppliers() {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    const fetchSuppliers = async () => {
-      try {
-        const res = await fetch("http://localhost:3001/api/suppliers");
-        if (!res.ok) throw new Error("Failed to fetch suppliers");
-        const data = await res.json();
-        setSuppliers(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
+  const fetchSuppliers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        setError("Authentication required. Please log in.");
         setLoading(false);
+        return;
       }
-    };
+      
+      const res = await fetch(`${API_ROUTES.SUPPLIERS}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          // Handle authentication errors
+          localStorage.removeItem('token');
+          setError("Session expired. Please log in again.");
+        } else {
+          throw new Error("Failed to fetch suppliers");
+        }
+      }
+      
+      const data = await res.json();
+      setSuppliers(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchSuppliers();
-  }, []);
+  fetchSuppliers();
+}, []);
 
   const handleSort = (key) => {
     let direction = 'ascending';

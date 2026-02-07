@@ -21,6 +21,7 @@ import {
 
 const AddMaterialScrapRecord = () => {
   const navigate = useNavigate();
+  const token = localStorage.getItem('token');
   
   // Form state
   const [formData, setFormData] = useState({
@@ -80,7 +81,11 @@ const AddMaterialScrapRecord = () => {
   const fetchAllMaterials = async () => {
     try {
       setFetchingMaterials(true);
-      const response = await axios.get(`${API_ROUTES.MATERIALS}`);
+      const response = await axios.get(`${API_ROUTES.MATERIALS}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
       // Assuming response.data has materials array
       const materials = response.data.materials || response.data;
       setAllMaterials(Array.isArray(materials) ? materials : []);
@@ -216,7 +221,12 @@ const AddMaterialScrapRecord = () => {
         }))
       };
 
-      const response = await axios.post(API_ROUTES.MATERIAL_SCRAP_RECORDS, payload);
+      const response = await axios.post(API_ROUTES.MATERIAL_SCRAP_RECORDS, payload, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
 
       alert('Material scrap record created successfully!');
       navigate('/materialscraprecord');

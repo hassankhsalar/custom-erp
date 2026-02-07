@@ -22,6 +22,7 @@ import {
 
 const AddScrapRecord = () => {
   const navigate = useNavigate();
+  const token = localStorage.getItem('token');
   
   // Form state
   const [formData, setFormData] = useState({
@@ -81,7 +82,11 @@ const AddScrapRecord = () => {
   const fetchAllProducts = async () => {
     try {
       setFetchingProducts(true);
-      const response = await axios.get(`${API_ROUTES.PRODUCTS}`);
+      const response = await axios.get(`${API_ROUTES.PRODUCTS}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
       // Assuming response.data has products array
       const products = response.data.products || response.data;
       setAllProducts(Array.isArray(products) ? products : []);
@@ -216,7 +221,12 @@ const AddScrapRecord = () => {
         }))
       };
 
-      const response = await axios.post(API_ROUTES.SCRAP_RECORDS, payload);
+      const response = await axios.post(API_ROUTES.SCRAP_RECORDS, payload, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
 
       alert('Scrap record created successfully!');
       navigate('/scraprecord');

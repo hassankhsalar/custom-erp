@@ -1,5 +1,6 @@
 import { ArrowUpDown, ClipboardList, TrendingUp, DollarSign, Calendar, Store, User, Tag, CreditCard, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { useState, useEffect } from "react";
+import { API_ROUTES } from '../../config';
 
 export default function AllSales() {
   const [sales, setSales] = useState([]);
@@ -13,7 +14,7 @@ export default function AllSales() {
   useEffect(() => {
     const token = localStorage.getItem("token");
     setLoading(true);
-    fetch("http://localhost:3001/api/shop-sales", {
+    fetch(`${API_ROUTES.SHOP_SALES}`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },

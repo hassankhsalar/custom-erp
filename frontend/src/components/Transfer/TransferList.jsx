@@ -147,11 +147,13 @@ const TransferList = ({ fromType, toType, title }) => {
           text: 'text-amber-600'
         };
       case 'being_shipped':
+      case 'being_shipped':
         return { 
           bg: 'bg-gradient-to-r from-blue-500 to-cyan-500', 
           iconBg: 'bg-blue-100',
           text: 'text-blue-600'
         };
+      case 'transferred':
       case 'transferred':
         return { 
           bg: 'bg-gradient-to-r from-emerald-500 to-green-500', 
@@ -188,6 +190,7 @@ const TransferList = ({ fromType, toType, title }) => {
       case 'being_shipped':
         return <Truck className="w-4 h-4" />;
       case 'transferred':
+      case 'transferred':
         return <CheckCircle className="w-4 h-4" />;
       case 'not_received':
         return <AlertCircle className="w-4 h-4" />;
@@ -217,6 +220,8 @@ const TransferList = ({ fromType, toType, title }) => {
 
   // Calculate statistics
   const processingTransfers = transfers.filter(t => t.status === 'processing').length;
+  const onTheWayTransfers = transfers.filter(t => t.status === 'being_shipped').length;
+  const completedTransfers = transfers.filter(t => t.status === 'transferred').length;
   const onTheWayTransfers = transfers.filter(t => t.status === 'being_shipped').length;
   const completedTransfers = transfers.filter(t => t.status === 'transferred').length;
 
@@ -541,8 +546,8 @@ const TransferList = ({ fromType, toType, title }) => {
                                 )}
 
                                 <button
-                                  disabled={transfer.status === 'transfer_done'}
-                                  className={`p-2 rounded-lg ${transfer.status === 'transfer_done' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}
+                                  disabled={transfer.status === 'transferred'}
+                                  className={`p-2 rounded-lg ${transfer.status === 'transferred' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}
                                   title="Edit Transfer"
                                 >
                                   <Edit2 className="w-4 h-4" />

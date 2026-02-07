@@ -64,7 +64,7 @@ export default function NewPurchase() {
       const token = localStorage.getItem("token");
       const headers = {
         "Content-Type": "application/json",
-        ...(token && { "Authorization": `bearer ${token}` })
+        ...(token && { "Authorization": `Bearer ${token}` })
       };
       const res = await fetch("http://localhost:3001/api/materials" , { headers });
       const data = await res.json();
@@ -92,16 +92,22 @@ export default function NewPurchase() {
     }
   };
 
-  const fetchSuppliers = async () => {
-    try {
-      const res = await fetch("http://localhost:3001/api/suppliers");
-      const data = await res.json();
-      setSuppliers(data || []);
-    } catch (error) {
-      console.error("Failed to fetch suppliers:", error);
-      setSuppliers([]);
+const fetchSuppliers = async () => {
+  try {
+    const token = localStorage.getItem("token");
+    const headers = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
-  };
+    
+    const res = await fetch("http://localhost:3001/api/suppliers", { headers });
+    const data = await res.json();
+    setSuppliers(data || []);
+  } catch (error) {
+    console.error("Failed to fetch suppliers:", error);
+    setSuppliers([]);
+  }
+};
 
   const fetchDestinations = async () => {
     try {

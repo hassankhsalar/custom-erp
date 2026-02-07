@@ -49,6 +49,9 @@ const AddTransfer = () => {
           axios.get(API_ROUTES.FACTORIES, {
             headers: { Authorization: `Bearer ${token}` }
           }),
+          axios.get(API_ROUTES.FACTORIES, {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
         ]);
         setStores(storesRes.data.stores);
         setShops(shopsRes.data);
@@ -103,17 +106,23 @@ const AddTransfer = () => {
         const resMaterials = await axios.get(API_ROUTES.MATERIALS, {
           headers: { Authorization: `Bearer ${token}` },
           params: { search: e.target.value },
+          headers
         })
-        const materialsWithTag = resMaterials.data.materials.map(m => ({ ...m, itemType: 'material' }));
+      ]);
 
-        setSearchResults([...productsWithTag, ...materialsWithTag]);
-      } catch (error) {
-        console.error('Error searching items:', error);
-      }
-    } else {
+      const productsWithTag = (resProducts.data.products || []).map(p => ({ ...p, itemType: 'product' }));
+      const materialsWithTag = (resMaterials.data.materials || []).map(m => ({ ...m, itemType: 'material' }));
+
+      setSearchResults([...productsWithTag, ...materialsWithTag]);
+      
+    } catch (error) {
+      console.error('Error searching items:', error);
       setSearchResults([]);
     }
-  };
+  } else {
+    setSearchResults([]);
+  }
+};
 
   const handleAddItem = (item) => {
     setItems([...items, { ...item, quantity: 1 }]);

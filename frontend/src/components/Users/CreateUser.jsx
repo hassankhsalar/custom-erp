@@ -15,7 +15,8 @@ import {
   Check,
   Eye,
   EyeOff,
-  Sparkles
+  Sparkles,
+  AtSign // Added for username icon
 } from 'lucide-react';
 
 const CreateUser = () => {
@@ -25,6 +26,7 @@ const CreateUser = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
+    username: '', // Added username field
     name: '',
     password: '',
     role: 'USER',
@@ -43,7 +45,7 @@ const CreateUser = () => {
   };
 
   const validateForm = () => {
-    if (!formData.email || !formData.name || !formData.password) {
+    if (!formData.email || !formData.username || !formData.name || !formData.password) {
       setMessage({ text: 'Please fill in all required fields', type: 'error' });
       return false;
     }
@@ -52,6 +54,16 @@ const CreateUser = () => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       setMessage({ text: 'Please enter a valid email address', type: 'error' });
+      return false;
+    }
+
+    // Username validation (alphanumeric, underscores, dots, 3-20 chars)
+    const usernameRegex = /^[a-zA-Z0-9_.]{3,20}$/;
+    if (!usernameRegex.test(formData.username)) {
+      setMessage({ 
+        text: 'Username must be 3-20 characters (letters, numbers, underscores, dots)', 
+        type: 'error' 
+      });
       return false;
     }
 
@@ -90,6 +102,7 @@ const CreateUser = () => {
       
       const userData = {
         email: formData.email,
+        username: formData.username, // Added username
         name: formData.name,
         password: formData.password,
         role: formData.role
@@ -122,6 +135,7 @@ const CreateUser = () => {
   const handleReset = () => {
     setFormData({
       email: '',
+      username: '', // Reset username
       name: '',
       password: '',
       role: 'USER',
@@ -254,6 +268,37 @@ const CreateUser = () => {
                     required
                   />
                 </div>
+              </div>
+
+              {/* Username Field - ADDED */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  <span className="flex items-center gap-2">
+                    <AtSign size={16} />
+                    Username *
+                  </span>
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <AtSign className="text-gray-400" size={18} />
+                  </div>
+                  <input
+                    type="text"
+                    name="username"
+                    value={formData.username}
+                    onChange={handleInputChange}
+                    className="glass-card w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200/50 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition-all duration-300"
+                    placeholder="john_doe"
+                    minLength="3"
+                    maxLength="20"
+                    pattern="[a-zA-Z0-9_.]+"
+                    title="Letters, numbers, underscores and dots only"
+                    required
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  3-20 characters (letters, numbers, _, .)
+                </p>
               </div>
 
               {/* Name Field */}
@@ -394,6 +439,7 @@ const CreateUser = () => {
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-8 pt-6 border-t border-gray-200/50">
             <div className="text-sm text-gray-500">
               <span className="font-medium">{formData.name || 'New user'}</span>
+              {formData.username && ` • @${formData.username}`}
               {formData.email && ` • ${formData.email}`}
             </div>
             
@@ -449,11 +495,11 @@ const CreateUser = () => {
           <div className="p-4 glass-card rounded-xl border border-white/30">
             <div className="flex items-center gap-3 mb-2">
               <div className="p-2 bg-blue-500/10 rounded-lg">
-                <Lock className="text-blue-500" size={16} />
+                <AtSign className="text-blue-500" size={16} />
               </div>
-              <h4 className="font-medium text-gray-700">Password Security</h4>
+              <h4 className="font-medium text-gray-700">Username</h4>
             </div>
-            <p className="text-sm text-gray-600">Strong passwords combine uppercase, lowercase, numbers & symbols.</p>
+            <p className="text-sm text-gray-600">Choose a unique username for login. Use letters, numbers, underscores or dots.</p>
           </div>
           
           <div className="p-4 glass-card rounded-xl border border-white/30">

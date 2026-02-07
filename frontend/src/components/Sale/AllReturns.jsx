@@ -134,7 +134,7 @@ export default function AllReturns() {
   const fetchShops = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:3001/api/shops", {
+      const res = await fetch(`${API_ROUTES.SHOPS}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
