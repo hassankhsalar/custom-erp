@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
-import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList } from "lucide-react";
+import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X } from "lucide-react";
 
 export default function ShopPOS() {
   const [shops, setShops] = useState([]);
@@ -531,10 +531,7 @@ export default function ShopPOS() {
                               <div className="flex-1">
                                 <div className="font-medium text-gray-800 truncate">{item.name}</div>
                                 <div className="text-sm text-gray-600 mt-1">
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${item.type === 'product' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
-                                    {item.type === 'product' ? '📦 Product' : '🔧 Material'}
-                                  </span>
-                                  {item.barcode && <span className="ml-2">| {item.barcode}</span>}
+                                  {item.barcode && <span>{item.barcode}</span>}
                                 </div>
                                 <div className="flex items-center mt-2">
                                   <span className={`text-xs font-medium ${isLowStock ? 'text-amber-600' : 'text-gray-700'}`}>
@@ -751,10 +748,7 @@ export default function ShopPOS() {
                                 <div className="flex-1 min-w-0">
                                   <div className="font-medium text-gray-900">{item.name}</div>
                                   <div className="text-sm text-gray-600 mt-1">
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${item.type === 'product' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
-                                      {item.type === 'product' ? '📦 Product' : '🔧 Material'}
-                                    </span>
-                                    {item.barcode && <span className="ml-2">| {item.barcode}</span>}
+                                    {item.barcode && <span>{item.barcode}</span>}
                                     {item.unit && <span className="ml-2">| Unit: {item.unit}</span>}
                                   </div>
                                 </div>
@@ -811,9 +805,9 @@ export default function ShopPOS() {
                             <td className="p-4">
                               <button
                                 onClick={() => handleRemoveFromCart(index)}
-                                className="bg-red-100 text-red-600 hover:text-red-800 font-medium text-sm px-2 rounded-md"
+                                className="bg-red-100 text-red-600 hover:text-red-800 font-medium text-sm p-2 rounded-md"
                               >
-                                Remove
+                                <X size={16} />
                               </button>
                             </td>
                           </tr>

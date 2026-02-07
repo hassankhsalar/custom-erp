@@ -46,7 +46,12 @@ router.get('/', authenticateToken, async (req, res) => {
       include: {
         transferItems: {
           select: {
+            item: true,
+            itemId: true,
+            productId: true,
+            materialId: true,
             quantity: true,
+            avg_cost: true,
           },
         },
       },
@@ -82,6 +87,33 @@ router.get('/', authenticateToken, async (req, res) => {
   const shopMap = new Map(shops.map(s => [s.id, s.name]));
   const factoryMap = new Map(factories.map(f => [f.id, f.name]));
 
+  const productIds = new Set();
+  const materialIds = new Set();
+  transfers.forEach(transfer => {
+    transfer.transferItems.forEach(item => {
+      if (item.item === 'product' && item.itemId) productIds.add(item.itemId);
+      if (item.item === 'material' && item.itemId) materialIds.add(item.itemId);
+    });
+  });
+
+  const [products, materials] = await Promise.all([
+    productIds.size > 0
+      ? prisma.product.findMany({
+          where: { id: { in: Array.from(productIds) } },
+          select: { id: true, name: true }
+        })
+      : [],
+    materialIds.size > 0
+      ? prisma.material.findMany({
+          where: { id: { in: Array.from(materialIds) } },
+          select: { id: true, name: true }
+        })
+      : [],
+  ]);
+
+  const productMap = new Map(products.map(p => [p.id, p.name]));
+  const materialMap = new Map(materials.map(m => [m.id, m.name]));
+
   const transfersWithNamesAndTotalProducts = transfers.map(transfer => {
     let fromName = 'N/A';
     let toName = 'N/A';
@@ -96,13 +128,20 @@ router.get('/', authenticateToken, async (req, res) => {
 
     const totalProducts = transfer.transferItems.reduce((sum, item) => sum + item.quantity, 0);
     const totalItems = transfer.transferItems.length;
+    const transferItems = transfer.transferItems.map(item => ({
+      ...item,
+      name: item.item === 'product'
+        ? (productMap.get(item.itemId) || 'Unknown Product')
+        : (materialMap.get(item.itemId) || 'Unknown Material'),
+    }));
 
     return {
-        ...transfer,
-        fromName,
-        toName,
-        totalProducts,
-        totalItems
+      ...transfer,
+      fromName,
+      toName,
+      totalProducts,
+      totalItems,
+      transferItems,
     };
   });
 

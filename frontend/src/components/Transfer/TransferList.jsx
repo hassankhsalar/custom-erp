@@ -895,28 +895,46 @@ const TransferList = ({ fromType, toType, title }) => {
                 </div>
               </div>
 
-              {/* Products Section */}
+              {/* Items Section */}
               <div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                   <Package size={20} className="text-purple-600" />
-                  Products ({detailsModal.data.totalProducts || 0})
+                  Items ({detailsModal.data.totalItems || 0})
                 </h3>
-                <div className="bg-gray-50/50 backdrop-blur-sm rounded-xl border border-white/60 p-4">
-                  <p className="text-gray-600 text-center">
-                    Product details would appear here
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="sticky bottom-0 p-6 border-t border-white/50">
-              <div className="flex justify-end">
-                <button
-                  onClick={closeDetailsModal}
-                  className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
-                >
-                  Close Details
-                </button>
+                {detailsModal.data.transferItems && detailsModal.data.transferItems.length > 0 ? (
+                  <div className="overflow-hidden rounded-xl border border-white/60 bg-white/60 backdrop-blur-sm">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-100/80">
+                        <tr>
+                          <th className="p-3 text-left font-medium text-gray-700">Item</th>
+                          <th className="p-3 text-left font-medium text-gray-700">Type</th>
+                          <th className="p-3 text-left font-medium text-gray-700">Quantity</th>
+                          <th className="p-3 text-left font-medium text-gray-700">Avg Cost</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detailsModal.data.transferItems.map((item, idx) => (
+                          <tr key={`${item.item}-${item.itemId}-${idx}`} className="border-t border-white/50 hover:bg-white/40">
+                            <td className="p-3 font-medium text-gray-800">{item.name}</td>
+                            <td className="p-3 text-gray-600 capitalize">{item.item}</td>
+                            <td className="p-3 text-gray-700">{item.quantity}</td>
+                            <td className="p-3 text-gray-700">
+                              {item.avg_cost !== null && item.avg_cost !== undefined
+                                ? `$${parseFloat(item.avg_cost).toFixed(2)}`
+                                : 'N/A'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50/50 backdrop-blur-sm rounded-xl border border-white/60 p-4">
+                    <p className="text-gray-600 text-center">
+                      No items found for this transfer
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

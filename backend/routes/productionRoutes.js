@@ -349,6 +349,27 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
       });
 
       if (status === 'production_done') {
+        const safeNum = (val) => {
+          const num = parseFloat(val);
+          return Number.isFinite(num) ? num : 0;
+        };
+
+        const totalMaterialCost = (materials || []).reduce((sum, m) => {
+          const qty = safeNum(m.quantity);
+          const fine = safeNum(m.fine);
+          const price = safeNum(m.price);
+          const usedQty = Math.max(0, qty - fine);
+          return sum + usedQty * price;
+        }, 0);
+
+        const totalFineProducts = (products || []).reduce((sum, p) => {
+          return sum + safeNum(p.received);
+        }, 0);
+
+        const computedUnitCost = totalFineProducts > 0
+          ? totalMaterialCost / totalFineProducts
+          : 0;
+
         const production = await prisma.production.findUnique({
           where: { id: parseInt(id) },
         });
@@ -356,12 +377,15 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
         
         // Update products with received and scrap quantities
         for (const p of products) {
+          const incomingUnitCost = safeNum(p.unit_cost);
+          const finalUnitCost = incomingUnitCost > 0 ? incomingUnitCost : computedUnitCost;
+
           await prisma.productionProducts.update({
             where: { id: p.id },
             data: {
               received: parseFloat(p.received),
               scrap: parseFloat(p.scrap),
-              unit_cost: parseFloat(p.unit_cost),
+              unit_cost: finalUnitCost,
             },
           });
 
@@ -383,8 +407,8 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
             where: { id: p.productId },
             select: { cost: true }
           });
-          const baseUnitCost = parseFloat(p.unit_cost || 0) > 0
-            ? parseFloat(p.unit_cost)
+          const baseUnitCost = finalUnitCost > 0
+            ? finalUnitCost
             : (productCostRow?.cost || 0);
 
           if (factoryProduct) {
