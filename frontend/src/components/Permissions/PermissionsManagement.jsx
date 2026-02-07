@@ -67,6 +67,8 @@ import {
   Activity,
   BanknoteIcon
 } from "lucide-react";
+import { API_ROUTES } from '../../config';
+
 
 export default function PermissionsManagement() {
   const [activeTab, setActiveTab] = useState("permissions");
@@ -74,6 +76,7 @@ export default function PermissionsManagement() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const token = localStorage.getItem('token');
   
   // Permissions form state
   const [permissionName, setPermissionName] = useState("");
@@ -442,16 +445,48 @@ export default function PermissionsManagement() {
     fetchData();
   }, []);
 
-  const fetchData = async () => {
+ const fetchData = async () => {
   try {
     setLoading(true);
+    
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      setError("Authentication required. Please log in.");
+      setLoading(false);
+      // Optional: Redirect to login
+      // window.location.href = '/login';
+      return;
+    }
+    
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+
     const [permsRes, usersRes] = await Promise.all([
-      fetch("http://localhost:3001/api/permissions"),
-      fetch("http://localhost:3001/api/user-management") // Changed to user-management
+      fetch(`${API_ROUTES.PERMISSIONS}`, { headers }),
+      fetch(`${API_ROUTES.USERMANAGEMENT}`, { headers }) // Changed to user-management
     ]);
     
-    if (!permsRes.ok) throw new Error("Failed to fetch permissions");
-    if (!usersRes.ok) throw new Error("Failed to fetch users");
+    // Check for authentication errors
+    if (permsRes.status === 401 || usersRes.status === 401) {
+      localStorage.removeItem('token');
+      setError("Session expired. Please log in again.");
+      setLoading(false);
+      return;
+    }
+    
+    if (!permsRes.ok) {
+      const errorData = await permsRes.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to fetch permissions");
+    }
+    
+    if (!usersRes.ok) {
+      const errorData = await usersRes.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to fetch users");
+    }
     
     const permsData = await permsRes.json();
     const usersData = await usersRes.json();
@@ -461,8 +496,15 @@ export default function PermissionsManagement() {
     console.log('First user permission:', usersData[0]?.permission);
     
     setPermissions(permsData);
+    
     // Filter out admin users - check if role property exists
-    setUsers(usersData.filter(user => user.role !== "ADMIN" && user.role !== "admin"));
+    // Note: The role might come from user.permission.name or user.role
+    const filteredUsers = usersData.filter(user => {
+      const userRole = user.role || user.permission?.name || '';
+      return !['ADMIN', 'admin', 'superadmin'].includes(userRole);
+    });
+    
+    setUsers(filteredUsers);
   } catch (err) {
     setError(err.message);
     console.error('Fetch error:', err);
@@ -524,14 +566,16 @@ export default function PermissionsManagement() {
 
     try {
       const endpoint = editingPermission 
-        ? `http://localhost:3001/api/permissions/${editingPermission.id}`
-        : "http://localhost:3001/api/permissions";
+        ? `${API_ROUTES.PERMISSIONS}/${editingPermission.id}`
+        : `${API_ROUTES.PERMISSIONS}`;
       
       const method = editingPermission ? "PUT" : "POST";
       
       const res = await fetch(endpoint, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          "Content-Type": "application/json" },
         body: JSON.stringify({
           name: permissionName,
           permissions: selectedPermsArray
@@ -564,21 +608,48 @@ export default function PermissionsManagement() {
   };
 
   const handleDeletePermission = async (id) => {
-    if (!confirm("Are you sure you want to delete this permission?")) return;
+  if (!confirm("Are you sure you want to delete this permission?")) return;
+  
+  try {
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
     
-    try {
-      const res = await fetch(`http://localhost:3001/api/permissions/${id}`, {
-        method: "DELETE"
-      });
-      
-      if (!res.ok) throw new Error("Failed to delete permission");
-      
-      fetchData();
-      alert("Permission deleted!");
-    } catch (err) {
-      alert(err.message);
+    if (!token) {
+      alert("Authentication required. Please log in.");
+      return;
     }
-  };
+    
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+    
+    const res = await fetch(`${API_ROUTES.PERMISSIONS}/${id}`, {
+      method: "DELETE",
+      headers
+    });
+    
+    // Check for authentication errors
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('token');
+      alert("Session expired. Please log in again.");
+      // Optional: Redirect to login page
+      // window.location.href = '/login';
+      return;
+    }
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to delete permission");
+    }
+    
+    fetchData();
+    alert("Permission deleted successfully!");
+  } catch (err) {
+    console.error("Error deleting permission:", err);
+    alert(err.message || "An error occurred while deleting permission");
+  }
+};
 
   const handleAssignPermission = async (e) => {
   e.preventDefault();
@@ -588,9 +659,11 @@ export default function PermissionsManagement() {
   }
 
   try {
-    const res = await fetch(`http://localhost:3001/api/user-management/${selectedUserId}/permission`, {
+    const res = await fetch(`${API_ROUTES.USERMANAGEMENT}/${selectedUserId}/permission`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+          'Authorization': `Bearer ${token}`,
+          "Content-Type": "application/json" },
       body: JSON.stringify({ permissionId: selectedPermissionId })
     });
 
@@ -613,9 +686,11 @@ export default function PermissionsManagement() {
   if (!confirm("Remove permission from this user?")) return;
   
   try {
-    const res = await fetch(`http://localhost:3001/api/user-management/${userId}/permission`, {
+    const res = await fetch(`${API_ROUTES.USERMANAGEMENT}/${userId}/permission`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+          'Authorization': `Bearer ${token}`,
+          "Content-Type": "application/json" },
       body: JSON.stringify({ permissionId: null })
     });
 

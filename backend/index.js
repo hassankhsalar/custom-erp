@@ -202,8 +202,8 @@ app.use('/api/assign-account', authenticateToken, assignAccountRoutes);
 app.use('/api/cash-register-assign', authenticateToken, cashRegisterAssignRoutes);
 app.use('/api/cash-registers', authenticateToken, cashRegisterRoutes);
 app.use('/api/assign-user', authenticateToken, assignUserRoutes);
-app.use('/api/permissions', permissionRoutes);
-app.use('/api/user-management', userPermissionRoutes);
+app.use('/api/permissions', authenticateToken, permissionRoutes);
+app.use('/api/user-management', authenticateToken, userPermissionRoutes);
 
 // serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));

@@ -106,11 +106,11 @@ export default function AllAssignedUsers() {
     }
 
     const assignmentsData = await assignmentsRes.json();
+console.log("Assignments data:", assignmentsData);
     const usersData = await usersRes.json();
 
     setAssignments(assignmentsData);
     setUsers(usersData);
-
     // Calculate statistics
     const assignmentsByType = {};
     const assignmentsByUser = {};
@@ -176,7 +176,7 @@ export default function AllAssignedUsers() {
     };
     
     const res = await fetch(
-      `${API_ROUTES.UPLOADS}/assignment/${assignmentId}`,
+      `${API_ROUTES.ASSIGNUSER}/assignment/${assignmentId}`,
       { 
         method: "DELETE",
         headers 
@@ -279,6 +279,9 @@ export default function AllAssignedUsers() {
 
       return 0;
     });
+
+    
+console.log(users);
 
   // Get entity icon based on type
   const getEntityIcon = (type) => {
@@ -759,7 +762,7 @@ export default function AllAssignedUsers() {
                         </td>
                         <td className="p-4">
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
-                            {assignment.user?.role}
+                            {assignment.user?.permission.name}
                           </span>
                         </td>
                         <td className="p-4">
@@ -812,7 +815,7 @@ export default function AllAssignedUsers() {
                                   </div>
                                   <div className="flex items-center justify-between">
                                     <span className="text-sm text-gray-600">Role:</span>
-                                    <span className="font-medium">{assignment.user?.role}</span>
+                                    <span className="font-medium">{assignment.user?.permission.name}</span>
                                   </div>
                                   <div className="flex items-center justify-between">
                                     <span className="text-sm text-gray-600">User ID:</span>

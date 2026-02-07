@@ -4,6 +4,7 @@ const router = express.Router();
 const prisma = new PrismaClient();
 
 
+
 // Get all assignments with complete details
 router.get('/all-assignments', async (req, res) => {
   try {
@@ -11,12 +12,18 @@ router.get('/all-assignments', async (req, res) => {
       include: {
         user: {
           select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-            createdAt: true
-          }
+  id: true,
+  name: true,
+  email: true,
+  username: true,
+  createdAt: true,
+  permission: {
+    select: {
+      name: true,
+      permissions: true
+    }
+  }
+}
         }
       },
       orderBy: { id: 'desc' }
@@ -163,7 +170,14 @@ router.get('/entities', async (req, res) => {
             id: true,
             name: true,
             email: true,
-            role: true
+            username: true,
+            createdAt: true,
+            permission: {
+              select: {
+                name: true,
+                permissions: true
+              }
+            }
           }
         }
       }
@@ -180,7 +194,14 @@ router.get('/entities', async (req, res) => {
         mobile: store.mobile,
         assignedUsers: assignments.filter(a => 
           a.associateName === 'store' && a.associateId === store.id
-        ).map(a => a.user)
+        ).map(a => ({
+          id: a.user.id,
+          name: a.user.name,
+          email: a.user.email,
+          username: a.user.username,
+          // Use permission name as role
+          role: a.user.permission?.name || 'default'
+        }))
       })),
       ...shops.map(shop => ({
         id: shop.id,
@@ -191,7 +212,13 @@ router.get('/entities', async (req, res) => {
         mobile: shop.mobile,
         assignedUsers: assignments.filter(a => 
           a.associateName === 'shop' && a.associateId === shop.id
-        ).map(a => a.user)
+        ).map(a => ({
+          id: a.user.id,
+          name: a.user.name,
+          email: a.user.email,
+          username: a.user.username,
+          role: a.user.permission?.name || 'default'
+        }))
       })),
       ...factories.map(factory => ({
         id: factory.id,
@@ -203,7 +230,13 @@ router.get('/entities', async (req, res) => {
         email: factory.email,
         assignedUsers: assignments.filter(a => 
           a.associateName === 'factory' && a.associateId === factory.id
-        ).map(a => a.user)
+        ).map(a => ({
+          id: a.user.id,
+          name: a.user.name,
+          email: a.user.email,
+          username: a.user.username,
+          role: a.user.permission?.name || 'default'
+        }))
       })),
       ...cashRegisters.map(cr => ({
         id: cr.id,
@@ -213,7 +246,13 @@ router.get('/entities', async (req, res) => {
         cash_in_hand: cr.cash_in_hand,
         assignedUsers: assignments.filter(a => 
           a.associateName === 'cashRegister' && a.associateId === cr.id
-        ).map(a => a.user)
+        ).map(a => ({
+          id: a.user.id,
+          name: a.user.name,
+          email: a.user.email,
+          username: a.user.username,
+          role: a.user.permission?.name || 'default'
+        }))
       })),
       ...accounts.map(account => ({
         id: account.id,
@@ -224,7 +263,13 @@ router.get('/entities', async (req, res) => {
         status: account.status,
         assignedUsers: assignments.filter(a => 
           a.associateName === 'account' && a.associateId === account.id
-        ).map(a => a.user)
+        ).map(a => ({
+          id: a.user.id,
+          name: a.user.name,
+          email: a.user.email,
+          username: a.user.username,
+          role: a.user.permission?.name || 'default'
+        }))
       }))
     ];
 
@@ -243,12 +288,25 @@ router.get('/available-users', async (req, res) => {
         id: true,
         name: true,
         email: true,
-        role: true,
-        createdAt: true
+        username: true,
+        createdAt: true,
+        permission: {
+          select: {
+            name: true,
+            permissions: true
+          }
+        }
       },
       orderBy: { name: 'asc' }
     });
-    res.json(users);
+    
+    // Format users with role from permission
+    const formattedUsers = users.map(user => ({
+      ...user,
+      role: user.permission?.name || 'default'
+    }));
+    
+    res.json(formattedUsers);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -345,23 +403,40 @@ router.post('/assign', async (req, res) => {
     }
 
     // Create the assignment
-    const assignment = await prisma.userAssociate.create({
-      data: {
-        userId: parseInt(userId),
-        associateName,
-        associateId: parseInt(associateId)
-      },
-      include: {
-        user: {
+const assignment = await prisma.userAssociate.create({
+  data: {
+    userId: parseInt(userId),
+    associateName,
+    associateId: parseInt(associateId)
+  },
+  include: {
+    user: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        username: true,
+        permission: {
           select: {
-            id: true,
             name: true,
-            email: true,
-            role: true
+            permissions: true
           }
         }
       }
-    });
+    }
+  }
+});
+
+// Format the response with role
+const formattedAssignment = {
+  ...assignment,
+  user: {
+    ...assignment.user,
+    role: assignment.user.permission?.name || 'default'
+  }
+};
+
+res.status(201).json(formattedAssignment);
 
     res.status(201).json(assignment);
   } catch (error) {
@@ -390,14 +465,29 @@ router.get('/entity/:type/:id', async (req, res) => {
             id: true,
             name: true,
             email: true,
-            role: true,
-            createdAt: true
+            username: true,
+            createdAt: true,
+            permission: {
+              select: {
+                name: true,
+                permissions: true
+              }
+            }
           }
         }
       }
     });
 
-    res.json(assignments);
+    // Format assignments with role
+    const formattedAssignments = assignments.map(assignment => ({
+      ...assignment,
+      user: {
+        ...assignment.user,
+        role: assignment.user.permission?.name || 'default'
+      }
+    }));
+
+    res.json(formattedAssignments);
   } catch (error) {
     console.error('Error fetching entity assignments:', error);
     res.status(500).json({ error: error.message });
@@ -505,5 +595,7 @@ router.get('/stats', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+
 
 module.exports = router;
