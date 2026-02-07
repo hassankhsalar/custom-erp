@@ -834,27 +834,29 @@ const AllProductions = () => {
                       </table>
                     </div>
                   </div>
+
+                  <div className="pb-6">
+                    <div className="flex justify-end gap-3">
+                      <button
+                        onClick={closeModal}
+                        className="px-6 py-3 cursor-pointer bg-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-500 hover:text-white transition-all duration-300 border border-white/60"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleStatusChange}
+                        className="px-6 py-3 cursor-pointer bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-purple-600 hover:to-blue-600 transition-all duration-300 flex items-center gap-2"
+                      >
+                        <Save size={18} />
+                        Save Changes
+                      </button>
+                    </div>
+                  </div>
+
                 </div>
               )}
             </div>
-            
-            <div className="sticky bottom-0 p-6 border-t border-white/50 bg-gradient-to-r from-purple-500/10 to-blue-500/10">
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={closeModal}
-                  className="px-6 py-3 bg-white/60 text-gray-700 font-medium rounded-xl hover:bg-white/80 transition-all duration-300 border border-white/60"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleStatusChange}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-purple-600 hover:to-blue-600 transition-all duration-300 flex items-center gap-2"
-                >
-                  <Save size={18} />
-                  Save Changes
-                </button>
-              </div>
-            </div>
+
           </div>
         </div>
       )}

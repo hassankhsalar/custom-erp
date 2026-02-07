@@ -34,6 +34,7 @@ const NewProduction = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [selectedMaterials, setSelectedMaterials] = useState([]);
+  const [factoryMaterialMap, setFactoryMaterialMap] = useState({});
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -67,6 +68,11 @@ const NewProduction = () => {
       if (p.materials) {
         p.materials.forEach(materialItem => {
           const { material, material_quantity } = materialItem;
+          const factoryInfo = factoryMaterialMap[material.id];
+          const unitPrice = factoryInfo?.avg_cost && factoryInfo.avg_cost > 0
+            ? factoryInfo.avg_cost
+            : material.unit_cost;
+          const availableStock = factoryInfo?.stock ?? 0;
           if (materialsMap.has(material.id)) {
             const existing = materialsMap.get(material.id);
             existing.quantity += material_quantity * productQuantity;
@@ -75,7 +81,8 @@ const NewProduction = () => {
               materialId: material.id,
               name: material.name,
               quantity: material_quantity * productQuantity,
-              price: material.unit_cost,
+              price: unitPrice,
+              availableStock,
             });
           }
         });
@@ -90,13 +97,42 @@ const NewProduction = () => {
         if (existingMat) {
           return {
             ...newMat,
-            price: existingMat.price,
+            price: newMat.price,
           };
         }
         return newMat;
       });
     });
-  }, [selectedProducts, stores]);
+  }, [selectedProducts, factoryMaterialMap]);
+
+  useEffect(() => {
+    const fetchFactoryMaterials = async () => {
+      if (!formData.factoryId) {
+        setFactoryMaterialMap({});
+        return;
+      }
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(
+          `${API_ROUTES.FACTORIES}/${formData.factoryId}/materials`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const map = {};
+        response.data.forEach((fm) => {
+          map[fm.materialId] = {
+            avg_cost: fm.avg_cost,
+            stock: fm.stock,
+            unit_cost: fm.material?.unit_cost || 0,
+          };
+        });
+        setFactoryMaterialMap(map);
+      } catch (error) {
+        console.error('Error fetching factory materials:', error);
+        setFactoryMaterialMap({});
+      }
+    };
+    fetchFactoryMaterials();
+  }, [formData.factoryId]);
 
   // Helper function to get image URL
   const getImageUrl = (imagePath) => {
@@ -153,9 +189,19 @@ const NewProduction = () => {
 
   const handleMaterialChange = (index, field, value) => {
     setSelectedMaterials(prev =>
-      prev.map((item, i) =>
-        i === index ? { ...item, [field]: value } : item
-      )
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        const updated = { ...item, [field]: value };
+        if (field === 'quantity') {
+          const qty = parseFloat(value) || 0;
+          const available = item.availableStock ?? 0;
+          if (available > 0 && qty > available) {
+            alert(`Requested quantity exceeds available stock (${available}).`);
+            updated.quantity = available;
+          }
+        }
+        return updated;
+      })
     );
   };
 
@@ -510,8 +556,6 @@ const NewProduction = () => {
                           <th className="p-3 text-left font-medium text-gray-700">Product</th>
                           <th className="p-3 text-left font-medium text-gray-700">Code</th>
                           <th className="p-3 text-left font-medium text-gray-700">Quantity</th>
-                          <th className="p-3 text-left font-medium text-gray-700">Unit Cost</th>
-                          <th className="p-3 text-left font-medium text-gray-700">To Store</th>
                           <th className="p-3 text-left font-medium text-gray-700">Action</th>
                         </tr>
                       </thead>
@@ -555,31 +599,6 @@ const NewProduction = () => {
                                   className="w-20 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                   step="1"
                                   min="1"
-                                />
-                              </td>
-                              <td className="p-3">
-                                <div className="relative">
-                                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-                                    <DollarSign size={14} className="text-gray-400" />
-                                  </div>
-                                  <input
-                                    type="number"
-                                    value={product.unit_cost}
-                                    onChange={(e) => handleProductChange(index, 'unit_cost', e.target.value)}
-                                    className="w-24 pl-8 pr-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                    step="0.01"
-                                    min="0"
-                                  />
-                                </div>
-                              </td>
-                              <td className="p-3">
-                                <input
-                                  type="number"
-                                  value={product.moved_to_store}
-                                  onChange={(e) => handleProductChange(index, 'moved_to_store', e.target.value)}
-                                  className="w-20 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/30 focus:border-green-400"
-                                  step="1"
-                                  min="0"
                                 />
                               </td>
                               <td className="p-3">
@@ -655,14 +674,11 @@ const NewProduction = () => {
                           </td>
                           <td className="p-3">
                             <div className="relative">
-                              <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-                                <DollarSign size={14} className="text-gray-400" />
-                              </div>
                               <input
                                 type="number"
                                 value={material.price}
                                 onChange={(e) => handleMaterialChange(index, 'price', e.target.value)}
-                                className="w-24 pl-8 pr-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400"
+                                className="w-24 p-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400"
                                 step="0.01"
                                 min="0"
                               />

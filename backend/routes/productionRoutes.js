@@ -39,6 +39,39 @@ router.post('/', authenticateToken, async (req, res) => {
     const reference = await generateReference();
 
     const result = await prisma.$transaction(async (prisma) => {
+      const materialsData = [];
+      for (const material of materials) {
+        const materialId = parseInt(material.materialId);
+        const qty = parseFloat(material.quantity);
+
+        const factoryMaterial = await prisma.factoryMaterial.findUnique({
+          where: {
+            factoryId_materialId: {
+              factoryId: parseInt(factoryId),
+              materialId,
+            }
+          }
+        });
+
+        if (!factoryMaterial || factoryMaterial.stock < qty) {
+          throw new Error(`Not enough stock for material ${material.name || materialId} in this factory`);
+        }
+
+        const baseMaterial = await prisma.material.findUnique({
+          where: { id: materialId },
+          select: { unit_cost: true }
+        });
+        const unitPrice = factoryMaterial.avg_cost && factoryMaterial.avg_cost > 0
+          ? factoryMaterial.avg_cost
+          : (baseMaterial?.unit_cost || 0);
+
+        materialsData.push({
+          materialId,
+          quantity: qty,
+          price: unitPrice,
+        });
+      }
+
       const newProduction = await prisma.production.create({
         data: {
           reference,
@@ -56,11 +89,7 @@ router.post('/', authenticateToken, async (req, res) => {
             })),
           },
           productionMaterials: {
-            create: materials.map(m => ({
-              materialId: parseInt(m.materialId),
-              quantity: parseFloat(m.quantity),
-              price: parseFloat(m.price),
-            })),
+            create: materialsData,
           },
         },
         include: {
@@ -69,30 +98,17 @@ router.post('/', authenticateToken, async (req, res) => {
         },
       });
 
-      for (const material of materials) {
-        const factoryMaterial = await prisma.factoryMaterial.findUnique({
-          where: {
-            factoryId_materialId: {
-              factoryId: parseInt(factoryId),
-              materialId: parseInt(material.materialId),
-            }
-          }
-        });
-
-        if (!factoryMaterial || factoryMaterial.stock < parseFloat(material.quantity)) {
-          throw new Error(`Not enough stock for material ${material.name} in this factory`);
-        }
-
+      for (const material of materialsData) {
         await prisma.factoryMaterial.update({
           where: {
             factoryId_materialId: {
               factoryId: parseInt(factoryId),
-              materialId: parseInt(material.materialId),
+              materialId: material.materialId,
             }
           },
           data: {
             stock: {
-              decrement: parseFloat(material.quantity),
+              decrement: material.quantity,
             },
           },
         });
@@ -217,30 +233,48 @@ router.put('/:id', authenticateToken, async (req, res) => {
       await prisma.productionMaterial.deleteMany({ where: { productionId: parseInt(id) } });
 
       // Decrement stock for new materials and check for availability
+      const materialsData = [];
       for (const material of materials) {
+        const materialId = parseInt(material.materialId);
+        const qty = parseFloat(material.quantity);
+
         const factoryMaterial = await prisma.factoryMaterial.findUnique({
           where: {
             factoryId_materialId: {
               factoryId: parseInt(factoryId),
-              materialId: parseInt(material.materialId),
+              materialId,
             }
           }
         });
 
-        if (!factoryMaterial || factoryMaterial.stock < parseFloat(material.quantity)) {
-          throw new Error(`Not enough stock for material ${material.materialId} in factory ${factoryId}`);
+        if (!factoryMaterial || factoryMaterial.stock < qty) {
+          throw new Error(`Not enough stock for material ${materialId} in factory ${factoryId}`);
         }
+
+        const baseMaterial = await prisma.material.findUnique({
+          where: { id: materialId },
+          select: { unit_cost: true }
+        });
+        const unitPrice = factoryMaterial.avg_cost && factoryMaterial.avg_cost > 0
+          ? factoryMaterial.avg_cost
+          : (baseMaterial?.unit_cost || 0);
+
+        materialsData.push({
+          materialId,
+          quantity: qty,
+          price: unitPrice,
+        });
 
         await prisma.factoryMaterial.update({
           where: {
             factoryId_materialId: {
               factoryId: parseInt(factoryId),
-              materialId: parseInt(material.materialId),
+              materialId,
             }
           },
           data: {
             stock: {
-              decrement: parseFloat(material.quantity),
+              decrement: qty,
             },
           },
         });
@@ -264,11 +298,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
             })),
           },
           productionMaterials: {
-            create: materials.map(m => ({
-              materialId: parseInt(m.materialId),
-              quantity: parseFloat(m.quantity),
-              price: parseFloat(m.price),
-            })),
+            create: materialsData,
           },
         },
         include: {
@@ -340,40 +370,60 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
           const scrapQuantity = parseFloat(p.scrap || 0);
           
           if (receivedQuantity > 0 || scrapQuantity > 0) {
-            const factoryProduct = await prisma.factoryProduct.findUnique({
+          const factoryProduct = await prisma.factoryProduct.findUnique({
+            where: {
+              factoryId_productId: {
+                factoryId: factoryId,
+                productId: p.productId,
+              }
+            }
+          });
+
+          const productCostRow = await prisma.product.findUnique({
+            where: { id: p.productId },
+            select: { cost: true }
+          });
+          const baseUnitCost = parseFloat(p.unit_cost || 0) > 0
+            ? parseFloat(p.unit_cost)
+            : (productCostRow?.cost || 0);
+
+          if (factoryProduct) {
+            const existingStock = parseFloat(factoryProduct.stock) || 0;
+            const existingAvg = factoryProduct.avg_cost;
+            const normalizedExistingAvg = existingAvg && existingAvg > 0
+              ? parseFloat(existingAvg)
+              : baseUnitCost;
+            const totalQty = existingStock + receivedQuantity;
+            const newAvgCost = totalQty > 0
+              ? ((normalizedExistingAvg * existingStock) + (baseUnitCost * receivedQuantity)) / totalQty
+              : baseUnitCost;
+
+            await prisma.factoryProduct.update({
               where: {
                 factoryId_productId: {
                   factoryId: factoryId,
                   productId: p.productId,
                 }
+              },
+              data: {
+                stock: {
+                  increment: receivedQuantity,
+                },
+                scrap: scrapQuantity > 0 ? scrapQuantity : factoryProduct.scrap, // Update scrap field
+                avg_cost: newAvgCost,
+              },
+            });
+          } else {
+            await prisma.factoryProduct.create({
+              data: {
+                factoryId: factoryId,
+                productId: p.productId,
+                stock: receivedQuantity,
+                scrap: scrapQuantity,
+                avg_cost: baseUnitCost,
               }
             });
-
-            if (factoryProduct) {
-              await prisma.factoryProduct.update({
-                where: {
-                  factoryId_productId: {
-                    factoryId: factoryId,
-                    productId: p.productId,
-                  }
-                },
-                data: {
-                  stock: {
-                    increment: receivedQuantity,
-                  },
-                  scrap: scrapQuantity > 0 ? scrapQuantity : factoryProduct.scrap, // Update scrap field
-                },
-              });
-            } else {
-              await prisma.factoryProduct.create({
-                data: {
-                  factoryId: factoryId,
-                  productId: p.productId,
-                  stock: receivedQuantity,
-                  scrap: scrapQuantity,
-                }
-              });
-            }
+          }
           }
         }
         
