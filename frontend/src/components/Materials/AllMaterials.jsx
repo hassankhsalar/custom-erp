@@ -8,20 +8,37 @@ const AllMaterials = () => {
   const [materials, setMaterials] = useState([]);
   const [showDropdown, setShowDropdown] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  const token = localStorage.getItem('token');
 
   useEffect(() => {
     const fetchMaterials = async () => {
       try {
-        const response = await axios.get(API_ROUTES.MATERIALS);
+        const response = await axios.get(API_ROUTES.MATERIALS, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
         setMaterials(response.data.materials);
         setLoading(false);
       } catch (error) {
         console.error('Error fetching materials:', error);
+        
+        // Handle authentication errors
+        if (error.response?.status === 401) {
+          alert('Session expired. Please login again.');
+          localStorage.removeItem('token');
+          window.location.href = '/login';
+        } else if (error.response?.status === 403) {
+          alert('Permission denied. You do not have access to view materials.');
+        }
+        
         setLoading(false);
       }
     };
     fetchMaterials();
-  }, []);
+  }, [token]);
 
   // Function to get full image URL (same as AllProducts)
   const getImageUrl = (imagePath) => {
@@ -46,11 +63,26 @@ const AllMaterials = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this material?')) {
       try {
-        await axios.delete(`${API_ROUTES.MATERIALS}/${id}`);
+        await axios.delete(`${API_ROUTES.MATERIALS}/${id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
         setMaterials(materials.filter((material) => material.id !== id));
       } catch (error) {
         console.error('Error deleting material:', error);
-        alert('Error deleting material. Please try again.');
+        
+        // Handle authentication errors
+        if (error.response?.status === 401) {
+          alert('Session expired. Please login again.');
+          localStorage.removeItem('token');
+          window.location.href = '/login';
+        } else if (error.response?.status === 403) {
+          alert('Permission denied. You do not have permission to delete materials.');
+        } else {
+          alert('Error deleting material. Please try again.');
+        }
       }
     }
   };

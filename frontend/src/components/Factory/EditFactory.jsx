@@ -5,6 +5,7 @@ import { API_ROUTES } from '../../config';
 
 const EditFactory = () => {
   const navigate = useNavigate();
+  const token = localStorage.getItem('token');
   const { id } = useParams();
   const [factory, setFactory] = useState({
     name: '',
@@ -16,18 +17,45 @@ const EditFactory = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchFactory = async () => {
-      try {
-        const response = await axios.get(`${API_ROUTES.FACTORIES}/${id}`);
-        setFactory(response.data);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching factory:', error);
-        setLoading(false);
+  const fetchFactory = async () => {
+    if (!token) {
+      alert('Authentication required. Please login.');
+      navigate('/login');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await axios.get(`${API_ROUTES.FACTORIES}/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      setFactory(response.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching factory:', error);
+      
+      // Handle authentication errors
+      if (error.response?.status === 401) {
+        alert('Session expired. Please login again.');
+        localStorage.removeItem('token');
+        navigate('/login');
+      } else if (error.response?.status === 403) {
+        alert('Permission denied. You do not have access to this factory.');
       }
-    };
+      
+      setLoading(false);
+    }
+  };
+  
+  if (token) {
     fetchFactory();
-  }, [id]);
+  } else {
+    setLoading(false);
+  }
+}, [id, token, navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -38,16 +66,39 @@ const EditFactory = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await axios.put(`${API_ROUTES.FACTORIES}/${id}`, factory);
-      alert('Factory updated successfully!');
-      navigate('/factories/all');
-    } catch (error) {
-      console.error('Error updating factory:', error);
+  e.preventDefault();
+  
+  // Check authentication
+  if (!token) {
+    alert('Authentication required. Please login.');
+    navigate('/login');
+    return;
+  }
+
+  try {
+    await axios.put(`${API_ROUTES.FACTORIES}/${id}`, factory, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    alert('Factory updated successfully!');
+    navigate('/factories/all');
+  } catch (error) {
+    console.error('Error updating factory:', error);
+    
+    // Handle authentication errors
+    if (error.response?.status === 401) {
+      alert('Session expired. Please login again.');
+      localStorage.removeItem('token');
+      navigate('/login');
+    } else if (error.response?.status === 403) {
+      alert('Permission denied. You cannot update this factory.');
+    } else {
       alert('Error updating factory. Please try again.');
     }
-  };
+  }
+};
 
   if (loading) {
     return (

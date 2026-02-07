@@ -23,6 +23,7 @@ const EditMaterial = () => {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [selectedImageFile, setSelectedImageFile] = useState(null);
+  const token = localStorage.getItem('token');
 
   // Function to get full image URL (same as EditProduct)
   const getImageUrl = (imagePath) => {
@@ -40,24 +41,45 @@ const EditMaterial = () => {
   };
 
   useEffect(() => {
-    const fetchMaterial = async () => {
-      try {
-        const response = await axios.get(`${API_ROUTES.MATERIALS}/${id}`);
-        setMaterial(response.data);
-        
-        // Set image preview if image exists
-        if (response.data.image) {
-          setImagePreview(getImageUrl(response.data.image));
-        }
-        
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching material:', error);
-        setLoading(false);
+  const fetchMaterial = async () => {
+    try {
+      const response = await axios.get(`${API_ROUTES.MATERIALS}/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      setMaterial(response.data);
+      
+      // Set image preview if image exists
+      if (response.data.image) {
+        setImagePreview(getImageUrl(response.data.image));
       }
-    };
+      
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching material:', error);
+      
+      // Handle authentication errors
+      if (error.response?.status === 401) {
+        alert('Session expired. Please login again.');
+        localStorage.removeItem('token');
+        navigate('/login');
+      } else if (error.response?.status === 403) {
+        alert('Permission denied. You do not have access to this material.');
+      }
+      
+      setLoading(false);
+    }
+  };
+  
+  if (token) {
     fetchMaterial();
-  }, [id]);
+  } else {
+    alert('No authentication token found. Please login.');
+    navigate('/login');
+  }
+}, [id, token, navigate]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -95,23 +117,29 @@ const EditMaterial = () => {
   };
 
   const uploadImage = async (file) => {
-    const formData = new FormData();
-    formData.append('image', file);
+  const formData = new FormData();
+  formData.append('image', file);
+  
+  try {
+    const response = await axios.post(`${API_ROUTES.UPLOADS}/material`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
     
-    try {
-      // Use the correct endpoint: /api/uploads/material
-      const response = await axios.post(`${API_ROUTES.UPLOADS}/material`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
-      return response.data.imageUrl;
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      throw error;
+    return response.data.imageUrl;
+  } catch (error) {
+    console.error('Error uploading image:', error);
+    
+    // Handle authentication errors during upload
+    if (error.response?.status === 401) {
+      alert('Session expired during image upload. Please try again.');
     }
-  };
+    
+    throw error;
+  }
+};
 
   const removeImage = () => {
     setMaterial({ ...material, image: null });
@@ -120,64 +148,92 @@ const EditMaterial = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setUploadingImage(true);
+  e.preventDefault();
+  
+  // Check if token exists
+  if (!token) {
+    alert('Authentication required. Please login.');
+    navigate('/login');
+    return;
+  }
+  
+  setUploadingImage(true);
+  
+  try {
+    let imageUrl = material.image;
     
-    try {
-      let imageUrl = material.image;
-      
-      // Upload image if a new one was selected
-      if (selectedImageFile) {
-        try {
-          imageUrl = await uploadImage(selectedImageFile);
-          setMaterial({ ...material, image: imageUrl });
-        } catch (uploadError) {
-          console.error('Image upload failed:', uploadError);
-          alert('Failed to upload image. Material will be updated without changing the image.');
-        }
+    // Upload image if a new one was selected
+    if (selectedImageFile) {
+      try {
+        imageUrl = await uploadImage(selectedImageFile);
+        setMaterial({ ...material, image: imageUrl });
+      } catch (uploadError) {
+        console.error('Image upload failed:', uploadError);
+        alert('Failed to upload image. Material will be updated without changing the image.');
       }
-      
-      // Prepare material data
-      const materialData = {
-        ...material,
+    }
+    
+    // Prepare material data
+    const materialData = {
+      ...material,
+      unit_cost: parseFloat(material.unit_cost),
+      sale_price: material.sale_price ? parseFloat(material.sale_price) : null,
+      current_stock: parseFloat(material.current_stock),
+      alert_quantity: material.alert_quantity ? parseFloat(material.alert_quantity) : null,
+      image: selectedImageFile ? imageUrl : material.image,
+    };
+    
+    // Update the material with token
+    await axios.put(`${API_ROUTES.MATERIALS}/${id}`, materialData, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    alert('Material updated successfully!');
+    navigate('/materials/all');
+    
+  } catch (error) {
+    console.error('Error updating material:', error);
+    
+    // Handle authentication errors
+    if (error.response?.status === 401) {
+      alert('Session expired. Please login again.');
+      localStorage.removeItem('token');
+      navigate('/login');
+      return;
+    } else if (error.response?.status === 403) {
+      alert('Permission denied. You cannot update this material.');
+      return;
+    }
+    
+    // Try a simpler approach if the first fails
+    try {
+      const simpleData = {
+        name: material.name,
+        description: material.description || '',
+        unit: material.unit,
         unit_cost: parseFloat(material.unit_cost),
-        sale_price: material.sale_price ? parseFloat(material.sale_price) : null,
         current_stock: parseFloat(material.current_stock),
-        alert_quantity: material.alert_quantity ? parseFloat(material.alert_quantity) : null,
-        // Only update image if we have a new URL
-        image: selectedImageFile ? imageUrl : material.image,
       };
       
-      // Update the material
-      await axios.put(`${API_ROUTES.MATERIALS}/${id}`, materialData);
-      
-      alert('Material updated successfully!');
+      await axios.put(`${API_ROUTES.MATERIALS}/${id}`, simpleData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      alert('Basic material information updated successfully!');
       navigate('/materials/all');
-      
-    } catch (error) {
-      console.error('Error updating material:', error);
-      
-      // Try a simpler approach if the first fails
-      try {
-        const simpleData = {
-          name: material.name,
-          description: material.description || '',
-          unit: material.unit,
-          unit_cost: parseFloat(material.unit_cost),
-          current_stock: parseFloat(material.current_stock),
-        };
-        
-        await axios.put(`${API_ROUTES.MATERIALS}/${id}`, simpleData);
-        alert('Basic material information updated successfully!');
-        navigate('/materials/all');
-      } catch (secondError) {
-        console.error('Second attempt failed:', secondError);
-        alert('Error updating material. Please try again.');
-      }
-    } finally {
-      setUploadingImage(false);
+    } catch (secondError) {
+      console.error('Second attempt failed:', secondError);
+      alert('Error updating material. Please try again.');
     }
-  };
+  } finally {
+    setUploadingImage(false);
+  }
+};
 
   if (loading) {
     return (

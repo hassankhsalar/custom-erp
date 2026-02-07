@@ -11,13 +11,11 @@ export default function AllPurchase() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
-  const [activeView, setActiveView] = useState("detailed");
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [selectedPurchase, setSelectedPurchase] = useState(null);
   
   // Modal states
   const [viewModalOpen, setViewModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
   const [addPaymentModalOpen, setAddPaymentModalOpen] = useState(false);
   const [viewPaymentModalOpen, setViewPaymentModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -407,20 +405,6 @@ export default function AllPurchase() {
               <Layers size={24} />
               Purchase Data View
             </h2>
-            <div className="flex bg-white/60 rounded-lg p-1">
-              <button
-                onClick={() => setActiveView("summary")}
-                className={`px-4 py-2 rounded-md transition-all duration-300 ${activeView === "summary" ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md" : "text-gray-600 hover:bg-white/80"}`}
-              >
-                Summary View
-              </button>
-              <button
-                onClick={() => setActiveView("detailed")}
-                className={`px-4 py-2 rounded-md transition-all duration-300 ${activeView === "detailed" ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-md" : "text-gray-600 hover:bg-white/80"}`}
-              >
-                Detailed Items
-              </button>
-            </div>
           </div>
         </div>
 

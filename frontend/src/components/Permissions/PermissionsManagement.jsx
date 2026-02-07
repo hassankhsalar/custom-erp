@@ -28,7 +28,44 @@ import {
   Truck,
   CreditCard,
   BarChart3,
-  User
+  User,
+  Scale,
+  Award,
+  Layers,
+  Building2,
+  Banknote,
+  Coins,
+  ArrowLeftRight,
+  FileSpreadsheet,
+  AlertTriangle,
+  Wrench,
+  Wallet,
+  Briefcase,
+  Calendar,
+  Users as UsersIcon,
+  Settings,
+  Database,
+  DatabaseBackup,
+  UserCog,
+  KeyRound,
+  Building,
+  UserCircle,
+  UserPlus as UserPlusIcon,
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  PieChart,
+  FileText,
+  FileBarChart,
+  ClipboardCheck,
+  ClipboardList,
+  PackageCheck,
+  PackageX,
+  Calculator,
+  History,
+  LogOut,
+  Activity,
+  BanknoteIcon
 } from "lucide-react";
 
 export default function PermissionsManagement() {
@@ -49,97 +86,320 @@ export default function PermissionsManagement() {
   const [searchUser, setSearchUser] = useState("");
   const [searchPermission, setSearchPermission] = useState("");
   
-  // Permission categories with icons
+  // All permissions list (exact names as they should be sent to backend)
+  const allPermissions = [
+    // Product and material management permissions
+    'material_create', 'material_read', 'material_edit', 'material_delete',
+    'product_read', 'product_create', 'product_edit', 'product_delete',
+    'unit_read', 'unit_create', 'unit_edit', 'unit_delete',
+    'brand_read', 'brand_create', 'brand_edit', 'brand_delete',
+    'product_category_read', 'product_category_create', 'product_category_edit', 'product_category_delete',
+
+    // Store factory, shop management permissions
+    'factory_create', 'factory_edit', 'factory_delete', 'factory_read',
+    'store_create', 'store_edit', 'store_delete', 'store_read',
+    'shop_create', 'shop_edit', 'shop_delete', 'shop_read',
+    'inventory_adjustment_create', 'inventory_adjustment_read',
+
+    // Add cash register and bank account permissions
+    'cash_register_read', 'cash_register_create', 'cash_register_edit', 'cash_register_delete',
+    'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit',
+    'bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete',
+    'bank_account_deposit', 'bank_account_withdraw',
+
+    // Add account permissions
+    'account_read', 'account_create', 'account_edit', 'account_delete',
+    'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement', 'account_balance',
+
+    // Add purchase permissions
+    'purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment',
+    'purchases_return_create', 'purchases_return_edit', 'purchases_return_delete', 'purchases_return_read',
+
+    // Add production permissions
+    'production_create', 'production_edit', 'production_delete', 'production_read', 'production_change_status', 
+
+    // Add sales permissions
+    'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_add_payment',
+    'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read',
+
+    // Add transfer permissions
+    'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive',
+
+    // Add Wastage/Damage permissions
+    'damage_create', 'damage_edit', 'damage_delete', 'damage_read',
+
+    // Add Repair permissions
+    'repairs_create', 'repairs_edit', 'repairs_delete', 'repairs_read',
+
+    // Add Expense permissions
+    'expenses_create', 'expenses_edit', 'expenses_delete', 'expenses_read',
+
+    // Add Salary and HRM permissions
+    'salary_create', 'salary_edit', 'salary_delete', 'salary_read',
+    'leave_approve', 'leave_read', 'holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read',
+    
+    // Add Report permissions
+    'general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report',
+    'sales_report', 'purchases_report', 'stock_report', 'transfer_report',
+    'profit_loss_report', 'purchase_sales_report', 'customer_report', 'supplier_report',
+    'best_selling_product_report', 'worst_selling_product_report', 'profit_calender_report',
+
+    // Add user management permissions
+    'user_create', 'user_edit', 'user_delete', 'user_read', 'user_activate_deactivate', 'user_logout', 'user_associate_create', 'user_activity_log_read',
+
+    // Add role and permission management permissions
+    'role_create', 'role_edit', 'role_delete', 'role_read',
+
+    // Add customer permissions
+    'customer_read', 'customer_create', 'customer_edit', 'customer_delete',
+
+    // Add supplier permissions
+    'supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete',
+
+    // System Management
+    'general_settings_edit', 'company_settings_edit', 
+    'data_import', 'data_export',
+  ];
+
+  // Group permissions by category for better organization in UI - SEPARATE CATEGORIES
   const permissionCategories = [
+    // Material Management
     {
-      id: 'dashboard',
+      key: 'material',
+      name: 'Material',
+      icon: <Package size={18} className="text-green-500" />,
+      permissions: ['material_create', 'material_read', 'material_edit', 'material_delete']
+    },
+    // Product Management
+    {
+      key: 'product',
+      name: 'Product',
+      icon: <Tag size={18} className="text-purple-500" />,
+      permissions: ['product_read', 'product_create', 'product_edit', 'product_delete']
+    },
+    // Unit Management
+    {
+      key: 'unit',
+      name: 'Unit',
+      icon: <Scale size={18} className="text-amber-500" />,
+      permissions: ['unit_read', 'unit_create', 'unit_edit', 'unit_delete']
+    },
+    // Brand Management
+    {
+      key: 'brand',
+      name: 'Brand',
+      icon: <Award size={18} className="text-pink-500" />,
+      permissions: ['brand_read', 'brand_create', 'brand_edit', 'brand_delete']
+    },
+    // Product Category Management
+    {
+      key: 'product_category',
+      name: 'Product Category',
+      icon: <Layers size={18} className="text-indigo-500" />,
+      permissions: ['product_category_read', 'product_category_create', 'product_category_edit', 'product_category_delete']
+    },
+    // Factory Management
+    {
+      key: 'factory',
+      name: 'Factory',
+      icon: <Factory size={18} className="text-cyan-500" />,
+      permissions: ['factory_create', 'factory_edit', 'factory_delete', 'factory_read']
+    },
+    // Store Management
+    {
+      key: 'store',
+      name: 'Store',
+      icon: <Store size={18} className="text-indigo-500" />,
+      permissions: ['store_create', 'store_edit', 'store_delete', 'store_read']
+    },
+    // Shop Management
+    {
+      key: 'shop',
+      name: 'Shop',
+      icon: <ShoppingBag size={18} className="text-pink-500" />,
+      permissions: ['shop_create', 'shop_edit', 'shop_delete', 'shop_read']
+    },
+    // Inventory Adjustment
+    {
+      key: 'inventory_adjustment',
+      name: 'Inventory Adjustment',
+      icon: <PackageCheck size={18} className="text-teal-500" />,
+      permissions: ['inventory_adjustment_create', 'inventory_adjustment_read']
+    },
+    // Cash Register Management
+    {
+      key: 'cash_register',
+      name: 'Cash Register',
+      icon: <Coins size={18} className="text-yellow-600" />,
+      permissions: [
+        'cash_register_read', 'cash_register_create', 'cash_register_edit', 'cash_register_delete',
+        'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit'
+      ]
+    },
+    // Bank Account Management
+    {
+      key: 'bank_account',
+      name: 'Bank Account',
+      icon: <BanknoteIcon size={18} className="text-blue-600" />,
+      permissions: [
+        'bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete',
+        'bank_account_deposit', 'bank_account_withdraw'
+      ]
+    },
+    // Account Management
+    {
+      key: 'account',
+      name: 'Accounts',
+      icon: <CreditCard size={18} className="text-yellow-500" />,
+      permissions: [
+        'account_read', 'account_create', 'account_edit', 'account_delete',
+        'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement', 'account_balance'
+      ]
+    },
+    // Purchase Management
+    {
+      key: 'purchase',
+      name: 'Purchase',
+      icon: <ShoppingCart size={18} className="text-teal-500" />,
+      permissions: [
+        'purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment'
+      ]
+    },
+    // Purchase Return Management
+    {
+      key: 'purchases_return',
+      name: 'Purchase Return',
+      icon: <PackageX size={18} className="text-rose-500" />,
+      permissions: ['purchases_return_create', 'purchases_return_edit', 'purchases_return_delete', 'purchases_return_read']
+    },
+    // Production Management
+    {
+      key: 'production',
+      name: 'Production',
+      icon: <Factory size={18} className="text-amber-500" />,
+      permissions: ['production_create', 'production_edit', 'production_delete', 'production_read', 'production_change_status']
+    },
+    // Sales Management
+    {
+      key: 'sales',
+      name: 'Sales',
+      icon: <Receipt size={18} className="text-emerald-500" />,
+      permissions: [
+        'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_add_payment'
+      ]
+    },
+    // Sales Return Management
+    {
+      key: 'sales_return',
+      name: 'Sales Return',
+      icon: <ArrowLeftRight size={18} className="text-red-500" />,
+      permissions: ['sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read']
+    },
+    // Transfer Management
+    {
+      key: 'transfer',
+      name: 'Transfer',
+      icon: <Truck size={18} className="text-gray-600" />,
+      permissions: ['transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive']
+    },
+    // Damage/Wastage Management
+    {
+      key: 'damage',
+      name: 'Wastage/Damage',
+      icon: <AlertTriangle size={18} className="text-red-500" />,
+      permissions: ['damage_create', 'damage_edit', 'damage_delete', 'damage_read']
+    },
+    // Repair Management
+    {
+      key: 'repairs',
+      name: 'Repairs',
+      icon: <Wrench size={18} className="text-orange-600" />,
+      permissions: ['repairs_create', 'repairs_edit', 'repairs_delete', 'repairs_read']
+    },
+    // Expense Management
+    {
+      key: 'expenses',
+      name: 'Expenses',
+      icon: <Wallet size={18} className="text-rose-600" />,
+      permissions: ['expenses_create', 'expenses_edit', 'expenses_delete', 'expenses_read']
+    },
+    // Salary Management
+    {
+      key: 'salary',
+      name: 'Salary',
+      icon: <Briefcase size={18} className="text-green-600" />,
+      permissions: ['salary_create', 'salary_edit', 'salary_delete', 'salary_read']
+    },
+    // Leave Management
+    {
+      key: 'leave',
+      name: 'Leave',
+      icon: <Calendar size={18} className="text-sky-500" />,
+      permissions: ['leave_approve', 'leave_read']
+    },
+    // Holiday Management
+    {
+      key: 'holiday',
+      name: 'Holiday',
+      icon: <Calendar size={18} className="text-purple-500" />,
+      permissions: ['holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read']
+    },
+    // Customer Management
+    {
+      key: 'customer',
+      name: 'Customer',
+      icon: <UserCircle size={18} className="text-blue-500" />,
+      permissions: ['customer_read', 'customer_create', 'customer_edit', 'customer_delete']
+    },
+    // Supplier Management
+    {
+      key: 'supplier',
+      name: 'Supplier',
+      icon: <Building size={18} className="text-orange-500" />,
+      permissions: ['supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete']
+    },
+    // User Management
+    {
+      key: 'user',
+      name: 'User Management',
+      icon: <UserCog size={18} className="text-rose-500" />,
+      permissions: [
+        'user_create', 'user_edit', 'user_delete', 'user_read', 
+        'user_activate_deactivate', 'user_logout', 'user_associate_create', 'user_activity_log_read'
+      ]
+    },
+    // Role & Permission Management
+    {
+      key: 'role',
+      name: 'Role & Permissions',
+      icon: <KeyRound size={18} className="text-purple-600" />,
+      permissions: ['role_create', 'role_edit', 'role_delete', 'role_read']
+    },
+    // Reports
+    {
+      key: 'report',
+      name: 'Reports',
+      icon: <BarChart3 size={18} className="text-violet-500" />,
+      permissions: [
+        'general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report',
+        'sales_report', 'purchases_report', 'stock_report', 'transfer_report',
+        'profit_loss_report', 'purchase_sales_report', 'customer_report', 'supplier_report',
+        'best_selling_product_report', 'worst_selling_product_report', 'profit_calender_report'
+      ]
+    },
+    // System Management
+    {
+      key: 'system',
+      name: 'System Management',
+      icon: <Settings size={18} className="text-gray-600" />,
+      permissions: ['general_settings_edit', 'company_settings_edit', 'data_import', 'data_export']
+    },
+    // Dashboard
+    {
+      key: 'dashboard',
       name: 'Dashboard',
       icon: <LayoutDashboard size={18} className="text-blue-500" />,
       permissions: ['view']
-    },
-    {
-      id: 'material',
-      name: 'Material',
-      icon: <Package size={18} className="text-green-500" />,
-      permissions: ['create', 'read', 'edit', 'delete']
-    },
-    {
-      id: 'product',
-      name: 'Product',
-      icon: <Tag size={18} className="text-purple-500" />,
-      permissions: ['create', 'read', 'edit', 'delete']
-    },
-    {
-      id: 'production',
-      name: 'Production',
-      icon: <Factory size={18} className="text-amber-500" />,
-      permissions: ['create', 'read', 'edit', 'delete']
-    },
-    {
-      id: 'scrap_record',
-      name: 'Scrap Record',
-      icon: <Warehouse size={18} className="text-red-500" />,
-      permissions: ['create', 'read', 'edit', 'delete']
-    },
-    {
-      id: 'repair',
-      name: 'Repair',
-      icon: <Factory size={18} className="text-orange-500" />,
-      permissions: ['create', 'read', 'edit', 'delete']
-    },
-    {
-      id: 'factory',
-      name: 'Factory',
-      icon: <Factory size={18} className="text-cyan-500" />,
-      permissions: ['create', 'read', 'edit', 'delete']
-    },
-    {
-      id: 'stores',
-      name: 'Stores',
-      icon: <Store size={18} className="text-indigo-500" />,
-      permissions: ['create', 'read', 'edit', 'delete']
-    },
-    {
-      id: 'shop',
-      name: 'Shop',
-      icon: <ShoppingBag size={18} className="text-pink-500" />,
-      permissions: ['create', 'read', 'edit', 'delete']
-    },
-    {
-      id: 'purchase',
-      name: 'Purchase',
-      icon: <ShoppingCart size={18} className="text-teal-500" />,
-      permissions: ['create', 'read', 'edit', 'delete']
-    },
-    {
-      id: 'sale',
-      name: 'Sale',
-      icon: <Receipt size={18} className="text-emerald-500" />,
-      permissions: ['create', 'read', 'edit', 'delete']
-    },
-    {
-      id: 'transfer',
-      name: 'Transfer',
-      icon: <Truck size={18} className="text-gray-600" />,
-      permissions: ['create', 'read', 'edit', 'delete']
-    },
-    {
-      id: 'accounts',
-      name: 'Accounts',
-      icon: <CreditCard size={18} className="text-yellow-500" />,
-      permissions: ['create', 'read', 'edit', 'delete']
-    },
-    {
-      id: 'report',
-      name: 'Report',
-      icon: <BarChart3 size={18} className="text-violet-500" />,
-      permissions: ['create', 'read', 'edit', 'delete']
-    },
-    {
-      id: 'user',
-      name: 'User',
-      icon: <User size={18} className="text-rose-500" />,
-      permissions: ['create', 'read', 'edit', 'delete']
     }
   ];
 
@@ -152,22 +412,17 @@ export default function PermissionsManagement() {
         ? editingPermission.permissions 
         : [];
       
-      permissionCategories.forEach(category => {
-        category.permissions.forEach(perm => {
-          const permissionString = `${category.id}_${perm}`;
-          parsedPermissions[permissionString] = currentPerms.includes(permissionString);
-        });
+      // Initialize all permissions as false
+      allPermissions.forEach(perm => {
+        parsedPermissions[perm] = currentPerms.includes(perm);
       });
       
       setSelectedPermissions(parsedPermissions);
     } else {
       // Reset to empty state
       const initialPermissions = {};
-      permissionCategories.forEach(category => {
-        category.permissions.forEach(perm => {
-          const permissionString = `${category.id}_${perm}`;
-          initialPermissions[permissionString] = false;
-        });
+      allPermissions.forEach(perm => {
+        initialPermissions[perm] = false;
       });
       setSelectedPermissions(initialPermissions);
     }
@@ -188,44 +443,61 @@ export default function PermissionsManagement() {
   }, []);
 
   const fetchData = async () => {
-    try {
-      setLoading(true);
-      const [permsRes, usersRes] = await Promise.all([
-        fetch("http://localhost:3001/api/permissions"),
-        fetch("http://localhost:3001/api/users")
-      ]);
-      
-      if (!permsRes.ok) throw new Error("Failed to fetch permissions");
-      if (!usersRes.ok) throw new Error("Failed to fetch users");
-      
-      const permsData = await permsRes.json();
-      const usersData = await usersRes.json();
-      
-      setPermissions(permsData);
-      setUsers(usersData.filter(user => user.role !== "ADMIN"));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  try {
+    setLoading(true);
+    const [permsRes, usersRes] = await Promise.all([
+      fetch("http://localhost:3001/api/permissions"),
+      fetch("http://localhost:3001/api/user-management") // Changed to user-management
+    ]);
+    
+    if (!permsRes.ok) throw new Error("Failed to fetch permissions");
+    if (!usersRes.ok) throw new Error("Failed to fetch users");
+    
+    const permsData = await permsRes.json();
+    const usersData = await usersRes.json();
+    
+    console.log('Permissions data:', permsData);
+    console.log('Users with permissions data:', usersData);
+    console.log('First user permission:', usersData[0]?.permission);
+    
+    setPermissions(permsData);
+    // Filter out admin users - check if role property exists
+    setUsers(usersData.filter(user => user.role !== "ADMIN" && user.role !== "admin"));
+  } catch (err) {
+    setError(err.message);
+    console.error('Fetch error:', err);
+  } finally {
+    setLoading(false);
+  }
+};
 
-  const handlePermissionToggle = (permissionString) => {
+  const handlePermissionToggle = (permissionName) => {
     setSelectedPermissions(prev => ({
       ...prev,
-      [permissionString]: !prev[permissionString]
+      [permissionName]: !prev[permissionName]
     }));
   };
 
-  const handleSelectAllCategory = (categoryId) => {
-    const category = permissionCategories.find(c => c.id === categoryId);
+  const handleSelectAllCategory = (categoryKey) => {
+    const category = permissionCategories.find(c => c.key === categoryKey);
     const allSelected = category.permissions.every(perm => 
-      selectedPermissions[`${categoryId}_${perm}`]
+      selectedPermissions[perm]
     );
     
     const updatedPermissions = { ...selectedPermissions };
     category.permissions.forEach(perm => {
-      updatedPermissions[`${categoryId}_${perm}`] = !allSelected;
+      updatedPermissions[perm] = !allSelected;
+    });
+    
+    setSelectedPermissions(updatedPermissions);
+  };
+
+  const handleSelectAllPermissions = () => {
+    const allSelected = allPermissions.every(perm => selectedPermissions[perm]);
+    
+    const updatedPermissions = { ...selectedPermissions };
+    allPermissions.forEach(perm => {
+      updatedPermissions[perm] = !allSelected;
     });
     
     setSelectedPermissions(updatedPermissions);
@@ -234,7 +506,7 @@ export default function PermissionsManagement() {
   const getSelectedPermissionsArray = () => {
     return Object.entries(selectedPermissions)
       .filter(([_, isSelected]) => isSelected)
-      .map(([permissionString]) => permissionString);
+      .map(([permissionName]) => permissionName);
   };
 
   const handleCreatePermission = async (e) => {
@@ -271,10 +543,8 @@ export default function PermissionsManagement() {
       // Reset form
       setPermissionName("");
       const resetPermissions = {};
-      permissionCategories.forEach(category => {
-        category.permissions.forEach(perm => {
-          resetPermissions[`${category.id}_${perm}`] = false;
-        });
+      allPermissions.forEach(perm => {
+        resetPermissions[perm] = false;
       });
       setSelectedPermissions(resetPermissions);
       setEditingPermission(null);
@@ -311,67 +581,112 @@ export default function PermissionsManagement() {
   };
 
   const handleAssignPermission = async (e) => {
-    e.preventDefault();
-    if (!selectedUserId || !selectedPermissionId) {
-      alert("Please select both user and permission");
-      return;
-    }
+  e.preventDefault();
+  if (!selectedUserId || !selectedPermissionId) {
+    alert("Please select both user and permission");
+    return;
+  }
 
-    try {
-      const res = await fetch(`http://localhost:3001/api/users/${selectedUserId}/permission`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissionId: selectedPermissionId })
-      });
+  try {
+    const res = await fetch(`http://localhost:3001/api/user-management/${selectedUserId}/permission`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ permissionId: selectedPermissionId })
+    });
 
-      if (!res.ok) throw new Error("Failed to assign permission");
-      
-      // Reset form
-      setSelectedUserId("");
-      setSelectedPermissionId("");
-      
-      // Refresh data
-      fetchData();
-      
-      alert("Permission assigned successfully!");
-    } catch (err) {
-      alert(err.message);
-    }
-  };
+    if (!res.ok) throw new Error("Failed to assign permission");
+    
+    // Reset form
+    setSelectedUserId("");
+    setSelectedPermissionId("");
+    
+    // Refresh data
+    fetchData();
+    
+    alert("Permission assigned successfully!");
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
   const handleRemovePermission = async (userId) => {
-    if (!confirm("Remove permission from this user?")) return;
-    
-    try {
-      const res = await fetch(`http://localhost:3001/api/users/${userId}/permission`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissionId: null })
-      });
+  if (!confirm("Remove permission from this user?")) return;
+  
+  try {
+    const res = await fetch(`http://localhost:3001/api/user-management/${userId}/permission`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ permissionId: null })
+    });
 
-      if (!res.ok) throw new Error("Failed to remove permission");
-      
-      fetchData();
-      alert("Permission removed!");
-    } catch (err) {
-      alert(err.message);
-    }
-  };
+    if (!res.ok) throw new Error("Failed to remove permission");
+    
+    fetchData();
+    alert("Permission removed!");
+  } catch (err) {
+    alert(err.message);
+  }
+};
 
   // Check if all permissions in a category are selected
-  const isCategoryAllSelected = (categoryId) => {
-    const category = permissionCategories.find(c => c.id === categoryId);
-    return category.permissions.every(perm => 
-      selectedPermissions[`${categoryId}_${perm}`]
-    );
+  const isCategoryAllSelected = (categoryKey) => {
+    const category = permissionCategories.find(c => c.key === categoryKey);
+    return category.permissions.every(perm => selectedPermissions[perm]);
   };
 
   // Check if any permission in a category is selected
-  const isCategoryAnySelected = (categoryId) => {
-    const category = permissionCategories.find(c => c.id === categoryId);
-    return category.permissions.some(perm => 
-      selectedPermissions[`${categoryId}_${perm}`]
-    );
+  const isCategoryAnySelected = (categoryKey) => {
+    const category = permissionCategories.find(c => c.key === categoryKey);
+    return category.permissions.some(perm => selectedPermissions[perm]);
+  };
+
+  // Helper function to format permission names for display (remove underscores)
+  const formatPermissionDisplay = (permissionName) => {
+    // Replace underscores with spaces and capitalize first letter of each word
+    return permissionName
+      .replace(/_/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
+  // Helper function to get a short label for checkboxes
+  const getShortPermissionLabel = (permissionName) => {
+    const parts = permissionName.split('_');
+    const action = parts[parts.length - 1];
+    
+    const actionMap = {
+      'create': 'Create',
+      'read': 'View',
+      'edit': 'Edit',
+      'delete': 'Delete',
+      'approve': 'Approve',
+      'open': 'Open',
+      'close': 'Close',
+      'withdraw': 'Withdraw',
+      'deposit': 'Deposit',
+      'transfer': 'Transfer',
+      'statement': 'Statement',
+      'balance': 'Balance',
+      'logout': 'Logout',
+      'change_status': 'Change Status',
+      'add_payment': 'Add Payment',
+      'edit_today': 'Edit Today',
+      'receive': 'Receive',
+      'activate_deactivate': 'Activate/Deactivate',
+      'associate_create': 'Create Associate',
+      'activity_log_read': 'Activity Log',
+      'report': 'Report'
+    };
+    
+    return actionMap[action] || 
+      action.charAt(0).toUpperCase() + action.slice(1);
+  };
+
+  // Count selected permissions in a category
+  const countSelectedInCategory = (categoryKey) => {
+    const category = permissionCategories.find(c => c.key === categoryKey);
+    return category.permissions.filter(perm => selectedPermissions[perm]).length;
   };
 
   if (loading) {
@@ -430,6 +745,11 @@ export default function PermissionsManagement() {
                 <p className="text-xl font-bold text-indigo-600">
                   {users.filter(u => u.permissionId).length}
                 </p>
+              </div>
+
+              <div className="px-4 py-2 bg-white/60 backdrop-blur-sm rounded-lg border border-white/80">
+                <p className="text-sm font-medium text-gray-700">Available Permission Types</p>
+                <p className="text-xl font-bold text-blue-600">{allPermissions.length}</p>
               </div>
             </div>
           </div>
@@ -493,16 +813,31 @@ export default function PermissionsManagement() {
                   />
                 </div>
 
+                {/* Select All Button */}
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleSelectAllPermissions}
+                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg font-medium hover:from-blue-600 hover:to-indigo-600 transition-all duration-300 flex items-center gap-2"
+                  >
+                    <CheckSquare size={16} />
+                    {allPermissions.every(perm => selectedPermissions[perm]) 
+                      ? "Deselect All" 
+                      : "Select All"
+                    }
+                  </button>
+                </div>
+
                 {/* Permissions Grid */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-4">
-                    Select Permissions
+                    Select Permissions ({getSelectedPermissionsArray().length} selected)
                   </label>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {permissionCategories.map((category) => (
                       <div 
-                        key={category.id}
+                        key={category.key}
                         className="border border-white/60 rounded-xl p-4 bg-white/20 backdrop-blur-sm"
                       >
                         {/* Category Header */}
@@ -510,59 +845,62 @@ export default function PermissionsManagement() {
                           <div className="flex items-center gap-2">
                             {category.icon}
                             <h3 className="font-semibold text-gray-800">{category.name}</h3>
+                            <span className="text-xs px-2 py-1 bg-gray-100 rounded-full text-gray-600">
+                              {countSelectedInCategory(category.key)}/{category.permissions.length}
+                            </span>
                           </div>
                           <button
                             type="button"
-                            onClick={() => handleSelectAllCategory(category.id)}
+                            onClick={() => handleSelectAllCategory(category.key)}
                             className="text-xs px-2 py-1 bg-white/60 rounded hover:bg-white/80 transition-colors"
                           >
-                            {isCategoryAllSelected(category.id) ? "Deselect All" : "Select All"}
+                            {isCategoryAllSelected(category.key) ? "Deselect All" : "Select All"}
                           </button>
                         </div>
 
                         {/* Permission Checkboxes */}
                         <div className="space-y-2">
-                          {category.permissions.map((perm) => {
-                            const permissionString = `${category.id}_${perm}`;
-                            return (
-                              <label 
-                                key={permissionString}
-                                className="flex items-center gap-2 p-2 rounded-lg hover:bg-white/30 cursor-pointer transition-colors"
-                              >
-                                <div className="relative">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedPermissions[permissionString] || false}
-                                    onChange={() => handlePermissionToggle(permissionString)}
-                                    className="sr-only"
-                                  />
-                                  <div className={`w-5 h-5 rounded border flex items-center justify-center ${
-                                    selectedPermissions[permissionString]
-                                      ? 'bg-gradient-to-r from-purple-500 to-indigo-500 border-transparent'
-                                      : 'border-gray-300 bg-white'
-                                  }`}>
-                                    {selectedPermissions[permissionString] && (
-                                      <Check size={14} className="text-white" />
-                                    )}
-                                  </div>
+                          {category.permissions.map((permission) => (
+                            <label 
+                              key={permission}
+                              className="flex items-center gap-2 p-2 rounded-lg hover:bg-white/30 cursor-pointer transition-colors"
+                            >
+                              <div className="relative">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedPermissions[permission] || false}
+                                  onChange={() => handlePermissionToggle(permission)}
+                                  className="sr-only"
+                                />
+                                <div className={`w-5 h-5 rounded border flex items-center justify-center ${
+                                  selectedPermissions[permission]
+                                    ? 'bg-gradient-to-r from-purple-500 to-indigo-500 border-transparent'
+                                    : 'border-gray-300 bg-white'
+                                }`}>
+                                  {selectedPermissions[permission] && (
+                                    <Check size={14} className="text-white" />
+                                  )}
                                 </div>
-                                <span className="text-sm text-gray-700 capitalize">
-                                  {perm}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <span className="text-sm font-medium text-gray-700 truncate">
+                                  {getShortPermissionLabel(permission)}
                                 </span>
-                              </label>
-                            );
-                          })}
+                                <div className="text-xs text-gray-500 truncate" title={formatPermissionDisplay(permission)}>
+                                  {formatPermissionDisplay(permission)}
+                                </div>
+                              </div>
+                            </label>
+                          ))}
                         </div>
 
                         {/* Category Summary */}
                         <div className="mt-3 pt-2 border-t border-white/50">
                           <div className="flex items-center justify-between text-xs">
                             <span className="text-gray-600">
-                              {category.permissions.filter(perm => 
-                                selectedPermissions[`${category.id}_${perm}`]
-                              ).length} of {category.permissions.length} selected
+                              {countSelectedInCategory(category.key)} of {category.permissions.length} selected
                             </span>
-                            {isCategoryAnySelected(category.id) && !isCategoryAllSelected(category.id) && (
+                            {isCategoryAnySelected(category.key) && !isCategoryAllSelected(category.key) && (
                               <span className="text-amber-600">Partial</span>
                             )}
                           </div>
@@ -576,19 +914,20 @@ export default function PermissionsManagement() {
                 <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl border border-blue-200">
                   <div className="flex items-center gap-2 mb-3">
                     <CheckSquare size={18} className="text-blue-600" />
-                    <span className="font-medium text-gray-800">Selected Permissions</span>
+                    <span className="font-medium text-gray-800">Selected Permissions Summary</span>
                     <span className="ml-auto px-3 py-1 bg-white rounded-full text-sm font-medium text-blue-700">
                       {getSelectedPermissionsArray().length} selected
                     </span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-2">
                     {getSelectedPermissionsArray().length > 0 ? (
                       getSelectedPermissionsArray().map((perm) => (
                         <span
                           key={perm}
-                          className="px-3 py-1 bg-gradient-to-r from-blue-100 to-blue-50 text-blue-700 text-xs font-medium rounded-full border border-blue-200"
+                          className="px-3 py-1.5 bg-gradient-to-r from-blue-100 to-blue-50 text-blue-700 text-sm font-medium rounded-lg border border-blue-200"
+                          title={perm}
                         >
-                          {perm}
+                          {formatPermissionDisplay(perm)}
                         </span>
                       ))
                     ) : (
@@ -613,10 +952,8 @@ export default function PermissionsManagement() {
                         setEditingPermission(null);
                         setPermissionName("");
                         const resetPermissions = {};
-                        permissionCategories.forEach(category => {
-                          category.permissions.forEach(perm => {
-                            resetPermissions[`${category.id}_${perm}`] = false;
-                          });
+                        allPermissions.forEach(perm => {
+                          resetPermissions[perm] = false;
                         });
                         setSelectedPermissions(resetPermissions);
                       }}
@@ -660,7 +997,6 @@ export default function PermissionsManagement() {
                     <thead className="bg-gray-100/80">
                       <tr>
                         <th className="p-4 text-left font-medium text-gray-700">Name</th>
-                        <th className="p-4 text-left font-medium text-gray-700">Permissions</th>
                         <th className="p-4 text-left font-medium text-gray-700">Assigned Users</th>
                         <th className="p-4 text-left font-medium text-gray-700">Created</th>
                         <th className="p-4 text-left font-medium text-gray-700">Actions</th>
@@ -675,17 +1011,22 @@ export default function PermissionsManagement() {
                           <td className="p-4">
                             <div className="flex flex-wrap gap-2 max-w-md">
                               {Array.isArray(permission.permissions) ? (
-                                permission.permissions.map((perm, index) => (
+                                permission.permissions.slice(0, 6).map((perm, index) => (
                                   <span
                                     key={index}
                                     className="px-3 py-1 bg-gradient-to-r from-blue-100 to-blue-50 text-blue-700 text-xs font-medium rounded-full border border-blue-200"
                                     title={perm}
                                   >
-                                    {perm}
+                                    {formatPermissionDisplay(perm)}
                                   </span>
                                 ))
                               ) : (
                                 <span className="text-gray-500">No permissions</span>
+                              )}
+                              {Array.isArray(permission.permissions) && permission.permissions.length > 6 && (
+                                <span className="text-xs text-gray-500">
+                                  +{permission.permissions.length - 6} more
+                                </span>
                               )}
                             </div>
                           </td>
@@ -728,7 +1069,7 @@ export default function PermissionsManagement() {
           </div>
         )}
 
-        {/* Assignments Tab - Keep as before */}
+        {/* Assignments Tab */}
         {activeTab === "assignments" && (
           <div className="space-y-6">
             {/* Assignment Form */}
@@ -881,7 +1222,7 @@ export default function PermissionsManagement() {
                         <th className="p-4 text-left font-medium text-gray-700">Email</th>
                         <th className="p-4 text-left font-medium text-gray-700">Role</th>
                         <th className="p-4 text-left font-medium text-gray-700">Assigned Permission</th>
-                        <th className="p-4 text-left font-medium text-gray-700">Permissions List</th>
+                        <th className="p-4 text-left font-medium text-gray-700">Sample Permissions</th>
                         <th className="p-4 text-left font-medium text-gray-700">Actions</th>
                       </tr>
                     </thead>
@@ -909,21 +1250,21 @@ export default function PermissionsManagement() {
                           <td className="p-4">
                             <div className="flex flex-wrap gap-2 max-w-md">
                               {user.permission?.permissions && Array.isArray(user.permission.permissions) ? (
-                                user.permission.permissions.slice(0, 5).map((perm, index) => (
+                                user.permission.permissions.slice(0, 4).map((perm, index) => (
                                   <span
                                     key={index}
                                     className="px-2 py-1 bg-gradient-to-r from-blue-100 to-blue-50 text-blue-700 text-xs font-medium rounded"
                                     title={perm}
                                   >
-                                    {perm}
+                                    {formatPermissionDisplay(perm)}
                                   </span>
                                 ))
                               ) : (
                                 <span className="text-gray-500">No permissions</span>
                               )}
-                              {user.permission?.permissions && Array.isArray(user.permission.permissions) && user.permission.permissions.length > 5 && (
+                              {user.permission?.permissions && Array.isArray(user.permission.permissions) && user.permission.permissions.length > 4 && (
                                 <span className="text-xs text-gray-500">
-                                  +{user.permission.permissions.length - 5} more
+                                  +{user.permission.permissions.length - 4} more
                                 </span>
                               )}
                             </div>

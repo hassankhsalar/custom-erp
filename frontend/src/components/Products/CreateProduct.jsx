@@ -1,10 +1,13 @@
-
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_ROUTES } from '../../config';
 import { Upload, X, Eye } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const CreateProduct = () => {
+  const navigate = useNavigate();
+  const token = localStorage.getItem('token');
+  
   const [product, setProduct] = useState({
     name: '',
     description: '',
@@ -22,18 +25,48 @@ const CreateProduct = () => {
   const [image, setImage] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Check authentication on component mount
+  useEffect(() => {
+    if (!token) {
+      alert('Authentication required. Please login.');
+      navigate('/login');
+    } else {
+      setLoading(false);
+    }
+  }, [token, navigate]);
 
   useEffect(() => {
     const fetchMaterials = async () => {
+      if (!token) return;
+      
       try {
-        const response = await axios.get(API_ROUTES.MATERIALS);
-        setAllMaterials(response.data.materials);
+        const response = await axios.get(API_ROUTES.MATERIALS, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        setAllMaterials(response.data.materials || []);
       } catch (error) {
         console.error('Error fetching materials:', error);
+        
+        // Handle authentication errors
+        if (error.response?.status === 401) {
+          alert('Session expired. Please login again.');
+          localStorage.removeItem('token');
+          navigate('/login');
+        } else if (error.response?.status === 403) {
+          alert('Permission denied. You do not have access to materials.');
+        }
       }
     };
-    fetchMaterials();
-  }, []);
+    
+    if (token) {
+      fetchMaterials();
+    }
+  }, [token, navigate]);
 
   useEffect(() => {
     if (searchTerm) {
@@ -106,6 +139,11 @@ const CreateProduct = () => {
 
   const uploadImage = async () => {
     if (!image) return null;
+    if (!token) {
+      alert('Authentication required. Please login.');
+      navigate('/login');
+      return null;
+    }
     
     const formData = new FormData();
     formData.append('image', image);
@@ -115,11 +153,20 @@ const CreateProduct = () => {
       const response = await axios.post(`${API_ROUTES.UPLOADS}/product`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`,
         },
       });
       return response.data.imageUrl;
     } catch (error) {
       console.error('Error uploading image:', error);
+      
+      // Handle authentication errors
+      if (error.response?.status === 401) {
+        alert('Session expired during image upload. Please login again.');
+        localStorage.removeItem('token');
+        navigate('/login');
+      }
+      
       alert('Failed to upload image');
       return null;
     } finally {
@@ -129,6 +176,13 @@ const CreateProduct = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Check authentication
+    if (!token) {
+      alert('Authentication required. Please login.');
+      navigate('/login');
+      return;
+    }
     
     // Validate required fields
     if (!product.name || !product.sale_price || !product.wholesale_price || !product.cost) {
@@ -152,7 +206,7 @@ const CreateProduct = () => {
         sale_price: parseFloat(product.sale_price),
         wholesale_price: parseFloat(product.wholesale_price),
         cost: parseFloat(product.cost),
-        alert_quantity: parseInt(product.alert_quantity),
+        alert_quantity: parseInt(product.alert_quantity || 0),
         image: imageUrl,
         materials: materials.map(m => ({
           ...m, 
@@ -162,7 +216,13 @@ const CreateProduct = () => {
         })),
       };
 
-      await axios.post(API_ROUTES.PRODUCTS, productData);
+      await axios.post(API_ROUTES.PRODUCTS, productData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
       alert('Product created successfully!');
       
       // Clear form
@@ -177,8 +237,21 @@ const CreateProduct = () => {
       setMaterials([]);
       setImage(null);
       setImagePreview('');
+      
     } catch (error) {
       console.error('Error creating product:', error);
+      
+      // Handle authentication errors
+      if (error.response?.status === 401) {
+        alert('Session expired. Please login again.');
+        localStorage.removeItem('token');
+        navigate('/login');
+        return;
+      } else if (error.response?.status === 403) {
+        alert('Permission denied. You cannot create products.');
+        return;
+      }
+      
       alert(error.response?.data?.error || 'Error creating product');
     }
   };
@@ -186,6 +259,34 @@ const CreateProduct = () => {
   const selectedMaterial = allMaterials.find(
     (m) => m.id === parseInt(newMaterial.material_id)
   );
+
+  // Show loading or authentication message
+  if (loading) {
+    return (
+      <div className="container mx-auto p-4 min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center">
+        <div className="backdrop-blur-lg bg-white/70 rounded-2xl shadow-2xl p-12 border border-white/30 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!token) {
+    return (
+      <div className="container mx-auto p-4 min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center">
+        <div className="backdrop-blur-lg bg-white/70 rounded-2xl shadow-2xl p-12 border border-white/30 text-center">
+          <p className="text-gray-600 mb-4">Authentication required</p>
+          <button 
+            onClick={() => navigate('/login')}
+            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-medium transition-all duration-200"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto p-4 min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
@@ -278,6 +379,7 @@ const CreateProduct = () => {
                           className="hidden" 
                           accept="image/*"
                           onChange={handleImageChange}
+                          disabled={uploading}
                         />
                       </label>
                     )}
