@@ -33,6 +33,7 @@ import {
   Key
 } from "lucide-react";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
+import { API_ROUTES } from '../../config';
 
 export default function AssignAccount() {
 
@@ -52,6 +53,7 @@ export default function AssignAccount() {
   const [filterType, setFilterType] = useState("all"); // all, store, shop, factory
   const [showOnlyWithAccounts, setShowOnlyWithAccounts] = useState(false);
   const [showInactiveAccounts, setShowInactiveAccounts] = useState(false);
+  const token = localStorage.getItem('token');
   const [stats, setStats] = useState({
     totalEntities: 0,
     totalAccounts: 0,
@@ -65,67 +67,120 @@ export default function AssignAccount() {
   }, []);
 
   const fetchData = async () => {
-    setLoading(true);
-    setError("");
+  setLoading(true);
+  setError("");
+  
+  try {
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
     
-    try {
-      const [entitiesRes, accountsRes] = await Promise.all([
-        fetch("http://localhost:3001/api/assign-account/entities"),
-        fetch("http://localhost:3001/api/assign-account/available-accounts")
-      ]);
-
-      if (!entitiesRes.ok || !accountsRes.ok) {
-        throw new Error("Failed to fetch data");
-      }
-
-      const entitiesData = await entitiesRes.json();
-      const accountsData = await accountsRes.json();
-
-      setEntities(entitiesData);
-      setAccounts(accountsData);
-
-      // Calculate statistics
-      const assignedEntities = entitiesData.filter(e => 
-        e.assignedAccounts && e.assignedAccounts.length > 0
-      ).length;
-      
-      const totalBalance = entitiesData.reduce((sum, entity) => {
-        const entityBalance = entity.assignedAccounts?.reduce((accSum, assignment) => {
-          return accSum + (parseFloat(assignment.account?.balance) || 0);
-        }, 0) || 0;
-        return sum + entityBalance;
-      }, 0);
-
-      setStats({
-        totalEntities: entitiesData.length,
-        totalAccounts: accountsData.length,
-        assignedEntities,
-        unassignedEntities: entitiesData.length - assignedEntities,
-        totalBalance
-      });
-    } catch (err) {
-      setError(err.message);
-    } finally {
+    if (!token) {
+      setError("Authentication required. Please log in.");
       setLoading(false);
+      // Optional: Redirect to login
+      // window.location.href = '/login';
+      return;
     }
-  };
+
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+
+    const [entitiesRes, accountsRes] = await Promise.all([
+      fetch(`${API_ROUTES.ASSIGNACCOUNT}/entities`, { headers }),
+      fetch(`${API_ROUTES.ASSIGNACCOUNT}/available-accounts`, { headers })
+    ]);
+
+    // Check for authentication errors
+    if (entitiesRes.status === 401 || accountsRes.status === 401) {
+      localStorage.removeItem('token');
+      setError("Session expired. Please log in again.");
+      // Optional: Redirect to login
+      // window.location.href = '/login';
+      setLoading(false);
+      return;
+    }
+
+    if (!entitiesRes.ok || !accountsRes.ok) {
+      throw new Error("Failed to fetch data");
+    }
+
+    const entitiesData = await entitiesRes.json();
+    const accountsData = await accountsRes.json();
+
+    setEntities(entitiesData);
+    setAccounts(accountsData);
+
+    // Calculate statistics
+    const assignedEntities = entitiesData.filter(e => 
+      e.assignedAccounts && e.assignedAccounts.length > 0
+    ).length;
+    
+    const totalBalance = entitiesData.reduce((sum, entity) => {
+      const entityBalance = entity.assignedAccounts?.reduce((accSum, assignment) => {
+        return accSum + (parseFloat(assignment.account?.balance) || 0);
+      }, 0) || 0;
+      return sum + entityBalance;
+    }, 0);
+
+    setStats({
+      totalEntities: entitiesData.length,
+      totalAccounts: accountsData.length,
+      assignedEntities,
+      unassignedEntities: entitiesData.length - assignedEntities,
+      totalBalance
+    });
+  } catch (err) {
+    console.error("Error fetching data:", err);
+    setError(err.message || "An error occurred while fetching data");
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Fetch assignments for selected entity
   const fetchEntityAssignments = async (entity) => {
-    try {
-      const res = await fetch(
-        `http://localhost:3001/api/assign-account/entity/${entity.type}/${entity.id}`
-      );
-      
-      if (!res.ok) throw new Error("Failed to fetch assignments");
-      
-      const data = await res.json();
-      setEntityAssignments(data);
-      setSelectedEntity(entity);
-    } catch (err) {
-      setError(err.message);
+  try {
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      setError("Authentication required. Please log in.");
+      return;
     }
-  };
+    
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+    
+    const res = await fetch(
+      `${API_ROUTES.ASSIGNACCOUNT}/entity/${entity.type}/${entity.id}`,
+      { headers }
+    );
+    
+    // Check for authentication errors
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('token');
+      setError("Session expired. Please log in again.");
+      // Optional: Redirect to login
+      // window.location.href = '/login';
+      return;
+    }
+    
+    if (!res.ok) {
+      throw new Error(`Failed to fetch assignments: ${res.statusText}`);
+    }
+    
+    const data = await res.json();
+    setEntityAssignments(data);
+    setSelectedEntity(entity);
+  } catch (err) {
+    console.error("Error fetching entity assignments:", err);
+    setError(err.message || "An error occurred while fetching assignments");
+  }
+};
 
   // Handle entity selection
   const handleEntityClick = (entity) => {
@@ -157,9 +212,10 @@ export default function AssignAccount() {
     try {
       const assignedById = currentUser?.id; // user ID from auth
 
-      const res = await fetch("http://localhost:3001/api/assign-account/assign", {
+      const res = await fetch(`${API_ROUTES.ASSIGNACCOUNT}/assign`, {
         method: "POST",
         headers: {
+          'Authorization': `Bearer ${token}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
@@ -199,52 +255,110 @@ export default function AssignAccount() {
 
   // Handle removing assignment
   const handleRemoveAssignment = async (assignmentId) => {
-    if (!confirm("Are you sure you want to remove this account assignment?")) {
+  if (!confirm("Are you sure you want to remove this account assignment?")) {
+    return;
+  }
+
+  try {
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      alert("Authentication required. Please log in.");
+      // Optional: Redirect to login
+      // window.location.href = '/login';
       return;
     }
-
-    try {
-      const res = await fetch(
-        `http://localhost:3001/api/assign-account/assignment/${assignmentId}`,
-        { method: "DELETE" }
-      );
-
-      if (!res.ok) throw new Error("Failed to remove assignment");
-
-      // Refresh data
-      fetchData();
-      
-      // Refresh assignments for current entity
-      if (selectedEntity) {
-        fetchEntityAssignments(selectedEntity);
+    
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+    
+    const res = await fetch(
+      `${API_ROUTES.ASSIGNACCOUNT}/assignment/${assignmentId}`,
+      { 
+        method: "DELETE",
+        headers 
       }
-      
-      alert("Account assignment removed successfully!");
-    } catch (err) {
-      setError(err.message);
+    );
+
+    // Check for authentication errors
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('token');
+      alert("Session expired. Please log in again.");
+      // Optional: Redirect to login
+      // window.location.href = '/login';
+      return;
     }
-  };
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to remove assignment: ${res.statusText}`);
+    }
+
+    // Refresh data
+    fetchData();
+    
+    // Refresh assignments for current entity
+    if (selectedEntity) {
+      fetchEntityAssignments(selectedEntity);
+    }
+    
+    alert("Account assignment removed successfully!");
+  } catch (err) {
+    console.error("Error removing assignment:", err);
+    alert(err.message || "An error occurred while removing assignment");
+  }
+};
 
   // Handle setting primary account
   const handleSetPrimary = async (assignmentId) => {
-    try {
-      const res = await fetch(
-        `http://localhost:3001/api/assign-account/set-primary/${assignmentId}`,
-        { method: "PUT" }
-      );
-
-      if (!res.ok) throw new Error("Failed to set primary account");
-
-      // Refresh assignments for current entity
-      if (selectedEntity) {
-        fetchEntityAssignments(selectedEntity);
-      }
-      
-      alert("Primary account updated successfully!");
-    } catch (err) {
-      setError(err.message);
+  try {
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      setError("Authentication required. Please log in.");
+      return;
     }
-  };
+    
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+    
+    const res = await fetch(
+      `${API_ROUTES.ASSIGNACCOUNT}/set-primary/${assignmentId}`,
+      { 
+        method: "PUT",
+        headers 
+      }
+    );
+
+    // Check for authentication errors
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('token');
+      setError("Session expired. Please log in again.");
+      return;
+    }
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to set primary account");
+    }
+
+    // Refresh assignments for current entity
+    if (selectedEntity) {
+      fetchEntityAssignments(selectedEntity);
+    }
+    
+    alert("Primary account updated successfully!");
+  } catch (err) {
+    console.error("Error setting primary account:", err);
+    setError(err.message || "An error occurred while updating primary account");
+  }
+};
 
   // Filter entities based on search and filters
   const filteredEntities = entities.filter(entity => {

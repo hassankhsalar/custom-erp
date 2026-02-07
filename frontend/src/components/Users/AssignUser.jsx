@@ -37,6 +37,7 @@ import {
   Banknote,
   Wallet
 } from "lucide-react";
+import { API_ROUTES } from '../../config';
 
 export default function AssignUser() {
   const [entities, setEntities] = useState([]);
@@ -52,6 +53,7 @@ export default function AssignUser() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all"); // all, store, shop, factory, cashRegister, account
   const [showOnlyWithUsers, setShowOnlyWithUsers] = useState(false);
+  const token = localStorage.getItem('token');
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalEntities: 0,
@@ -66,51 +68,104 @@ export default function AssignUser() {
   }, []);
 
   const fetchData = async () => {
-    setLoading(true);
-    setError("");
-    setSuccess("");
+  setLoading(true);
+  setError("");
+  setSuccess("");
+  
+  try {
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
     
-    try {
-      const [entitiesRes, usersRes, statsRes] = await Promise.all([
-        fetch("http://localhost:3001/api/assign-user/entities"),
-        fetch("http://localhost:3001/api/assign-user/available-users"),
-        fetch("http://localhost:3001/api/assign-user/stats")
-      ]);
-
-      if (!entitiesRes.ok || !usersRes.ok || !statsRes.ok) {
-        throw new Error("Failed to fetch data");
-      }
-
-      const entitiesData = await entitiesRes.json();
-      const usersData = await usersRes.json();
-      const statsData = await statsRes.json();
-
-      setEntities(entitiesData);
-      setUsers(usersData);
-      setStats(statsData);
-    } catch (err) {
-      setError(err.message);
-    } finally {
+    if (!token) {
+      setError("Authentication required. Please log in.");
       setLoading(false);
+      // Optional: Redirect to login
+      // window.location.href = '/login';
+      return;
     }
-  };
+    
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+
+    const [entitiesRes, usersRes, statsRes] = await Promise.all([
+      fetch(`${API_ROUTES.ASSIGNUSER}/entities`, { headers }),
+      fetch(`${API_ROUTES.ASSIGNUSER}/available-users`, { headers }),
+      fetch(`${API_ROUTES.ASSIGNUSER}/stats`, { headers })
+    ]);
+
+    // Check for authentication errors
+    if (entitiesRes.status === 401 || usersRes.status === 401 || statsRes.status === 401) {
+      localStorage.removeItem('token');
+      setError("Session expired. Please log in again.");
+      setLoading(false);
+      return;
+    }
+
+    if (!entitiesRes.ok || !usersRes.ok || !statsRes.ok) {
+      throw new Error("Failed to fetch data");
+    }
+
+    const entitiesData = await entitiesRes.json();
+    const usersData = await usersRes.json();
+    const statsData = await statsRes.json();
+
+    setEntities(entitiesData);
+    setUsers(usersData);
+    setStats(statsData);
+    
+  } catch (err) {
+    console.error("Error fetching data:", err);
+    setError(err.message || "An error occurred while fetching data");
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Fetch assignments for selected entity
   const fetchEntityAssignments = async (entity) => {
-    try {
-      const res = await fetch(
-        `http://localhost:3001/api/assign-user/entity/${entity.type}/${entity.id}`
-      );
-      
-      if (!res.ok) throw new Error("Failed to fetch assignments");
-      
-      const data = await res.json();
-      setEntityAssignments(data);
-      setSelectedEntity(entity);
-    } catch (err) {
-      setError(err.message);
+  try {
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      setError("Authentication required. Please log in.");
+      return;
     }
-  };
+    
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+    
+    const res = await fetch(
+      `${API_ROUTES.ASSIGNUSER}/entity/${entity.type}/${entity.id}`,
+      { headers }
+    );
+    
+    // Check for authentication errors
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('token');
+      setError("Session expired. Please log in again.");
+      return;
+    }
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Failed to fetch assignments: ${res.statusText}`);
+    }
+    
+    const data = await res.json();
+    setEntityAssignments(data);
+    setSelectedEntity(entity);
+    setError(""); // Clear any previous errors on success
+    
+  } catch (err) {
+    console.error("Error fetching entity assignments:", err);
+    setError(err.message || "An error occurred while fetching assignments");
+  }
+};
 
   // Handle entity selection
   const handleEntityClick = (entity) => {
@@ -140,9 +195,10 @@ export default function AssignUser() {
     }
 
     try {
-      const res = await fetch("http://localhost:3001/api/assign-user/assign", {
+      const res = await fetch(`${API_ROUTES.ASSIGNUSER}/assign`, {
         method: "POST",
         headers: {
+          'Authorization': `Bearer ${token}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
@@ -180,34 +236,62 @@ export default function AssignUser() {
 
   // Handle removing assignment
   const handleRemoveAssignment = async (assignmentId) => {
-    if (!confirm("Are you sure you want to remove this user assignment?")) {
+  if (!confirm("Are you sure you want to remove this user assignment?")) {
+    return;
+  }
+
+  try {
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      setError("Authentication required. Please log in.");
       return;
     }
-
-    try {
-      const res = await fetch(
-        `http://localhost:3001/api/assign-user/assignment/${assignmentId}`,
-        { method: "DELETE" }
-      );
-
-      if (!res.ok) throw new Error("Failed to remove assignment");
-
-      // Refresh data
-      fetchData();
-      
-      // Refresh assignments for current entity
-      if (selectedEntity) {
-        fetchEntityAssignments(selectedEntity);
+    
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+    
+    const res = await fetch(
+      `${API_ROUTES.ASSIGNUSER}/assignment/${assignmentId}`,
+      { 
+        method: "DELETE",
+        headers 
       }
-      
-      setSuccess("User assignment removed successfully!");
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (err) {
-      setError(err.message);
+    );
+
+    // Check for authentication errors
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('token');
+      setError("Session expired. Please log in again.");
+      return;
     }
-  };
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to remove assignment");
+    }
+
+    // Refresh data
+    fetchData();
+    
+    // Refresh assignments for current entity
+    if (selectedEntity) {
+      fetchEntityAssignments(selectedEntity);
+    }
+    
+    setSuccess("User assignment removed successfully!");
+    
+    // Clear success message after 3 seconds
+    setTimeout(() => setSuccess(""), 3000);
+    
+  } catch (err) {
+    console.error("Error removing assignment:", err);
+    setError(err.message || "An error occurred while removing assignment");
+  }
+};
 
   // Filter entities based on search and filters
   const filteredEntities = entities.filter(entity => {
