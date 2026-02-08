@@ -538,8 +538,8 @@ const TransferList = ({ fromType, toType, title }) => {
                                 )}
 
                                 <button
-                                  disabled={transfer.status === 'transfer_done'}
-                                  className={`p-2 rounded-lg ${transfer.status === 'transfer_done' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}
+                                  disabled={transfer.status === 'transferred'}
+                                  className={`p-2 rounded-lg ${transfer.status === 'transferred' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}
                                   title="Edit Transfer"
                                 >
                                   <Edit2 className="w-4 h-4" />

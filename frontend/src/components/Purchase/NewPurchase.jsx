@@ -59,49 +59,56 @@ export default function NewPurchase() {
     fetchDestinations();
   }, [destinationType]);
 
-  const fetchMaterials = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const headers = {
-        "Content-Type": "application/json",
-        ...(token && { "Authorization": `bearer ${token}` })
-      };
-      const res = await fetch("http://localhost:3001/api/materials" , { headers });
-      const data = await res.json();
-      setMaterials(data.materials || data || []);
-    } catch (error) {
-      console.error("Failed to fetch materials:", error);
-      setMaterials([]);
+ const fetchMaterials = async () => {
+  try {
+    const token = localStorage.getItem("token");
+    const headers = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
-  };
+    
+    const res = await fetch("http://localhost:3001/api/materials", { headers });
+    const data = await res.json();
+    setMaterials(data.materials || data || []);
+  } catch (error) {
+    console.error("Failed to fetch materials:", error);
+    setMaterials([]);
+  }
+};
 
-  const fetchProducts = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const headers = {
-        "Content-Type": "application/json",
-        ...(token && { "Authorization": `bearer ${token}` })
-      };
-      const res = await fetch("http://localhost:3001/api/products", { headers });
-
-      const data = await res.json();
-      setProducts(data.products || data || []);
-    } catch (error) {
-      console.error("Failed to fetch products:", error);
-      setProducts([]);
+const fetchProducts = async () => {
+  try {
+    const token = localStorage.getItem("token");
+    const headers = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
-  };
+    
+    const res = await fetch("http://localhost:3001/api/products", { headers });
+    const data = await res.json();
+    setProducts(data.products || data || []);
+  } catch (error) {
+    console.error("Failed to fetch products:", error);
+    setProducts([]);
+  }
+};
 
-  const fetchSuppliers = async () => {
-    try {
-      const res = await fetch("http://localhost:3001/api/suppliers");
-      const data = await res.json();
-      setSuppliers(data || []);
-    } catch (error) {
-      console.error("Failed to fetch suppliers:", error);
-      setSuppliers([]);
+const fetchSuppliers = async () => {
+  try {
+    const token = localStorage.getItem("token");
+    const headers = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
-  };
+    
+    const res = await fetch("http://localhost:3001/api/suppliers", { headers });
+    const data = await res.json();
+    setSuppliers(data || []);
+  } catch (error) {
+    console.error("Failed to fetch suppliers:", error);
+    setSuppliers([]);
+  }
+};
 
   const fetchDestinations = async () => {
     try {
@@ -125,6 +132,14 @@ export default function NewPurchase() {
       
       // Add token for protected routes (stores require auth)
       if (destinationType === "store") {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      if (destinationType === "shop") {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      if (destinationType === "factory") {
         headers.Authorization = `Bearer ${token}`;
       }
 

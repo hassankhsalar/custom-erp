@@ -1,35 +1,40 @@
 import { useState } from "react";
+import { API_ROUTES } from '../../config';
 
 export default function AddSupplier() {
   const [formData, setFormData] = useState({ name: "", mobile: "", address: "" });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-
+  const token = localStorage.getItem('token');
+ 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage("");
+  e.preventDefault();
+  setLoading(true);
+  setMessage("");
 
-    const res = await fetch("http://localhost:3001/api/suppliers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(formData),
-    });
+  const res = await fetch(`${API_ROUTES.SUPPLIERS}`, {
+    method: "POST",
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(formData),
+  });
 
-    const data = await res.json();
-    setLoading(false);
+  const data = await res.json();
+  setLoading(false);
 
-    if (res.ok) {
-      setMessage("✅ Supplier added successfully!");
-      setFormData({ name: "", mobile: "", address: "" });
-    } else {
-      setMessage(`❌ Error: ${data.error || "Failed to add supplier"}`);
-    }
-  };
+  if (res.ok) {
+    setMessage("✅ Supplier added successfully!");
+    setFormData({ name: "", mobile: "", address: "" });
+  } else {
+    setMessage(`❌ Error: ${data.error || "Failed to add supplier"}`);
+  }
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">

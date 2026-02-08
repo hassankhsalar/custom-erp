@@ -365,7 +365,7 @@ const AddRepairProduct = () => {
       });
 
       alert('Repair request created successfully!');
-      navigate('/product-repairs');
+      navigate('/productrepair');
     } catch (error) {
       console.error('Error creating repair request:', error);
       if (error.response?.status === 401) {

@@ -18,6 +18,7 @@ import {
   FileDigit,
   ArrowDown01
 } from "lucide-react";
+import { API_ROUTES } from "../../config";
 
 export default function AllAccounts() {
   const [accounts, setAccounts] = useState([]);
@@ -25,11 +26,17 @@ export default function AllAccounts() {
   const [error, setError] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [searchQuery, setSearchQuery] = useState("");
+  const token = localStorage.getItem('token');
 
   useEffect(() => {
     const fetchAccounts = async () => {
       try {
-        const res = await fetch("http://localhost:3001/api/accounts");
+        const res = await fetch(API_ROUTES.ACCOUNTS, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                  },
+                });
         if (!res.ok) throw new Error("Failed to fetch accounts");
         const data = await res.json();
         setAccounts(data);
@@ -55,9 +62,10 @@ export default function AllAccounts() {
     try {
       const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
       
-      const res = await fetch(`http://localhost:3001/api/accounts/${accountId}`, {
+      const res = await fetch(`${API_ROUTES.ACCOUNTS}/${accountId}`, {
         method: 'PUT',
         headers: {
+            'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ status: newStatus })
