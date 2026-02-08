@@ -4,3 +4,4 @@ node_modules
 gemini.md
 /generated/prisma
 /prisma/migrations
+/uploads/*

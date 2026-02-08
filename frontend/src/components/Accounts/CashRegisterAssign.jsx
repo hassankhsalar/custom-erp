@@ -55,6 +55,7 @@ import {
   Banknote
 } from "lucide-react";
 import { useCurrentUser } from "../../hooks/useCurrentUser";
+import { API_ROUTES } from '../../config';
 
 export default function CashRegisterAssign() {
 
@@ -76,6 +77,7 @@ export default function CashRegisterAssign() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("all"); // all, store, shop, factory
   const [showOnlyWithRegisters, setShowOnlyWithRegisters] = useState(false);
+  const token = localStorage.getItem('token');
   const [stats, setStats] = useState({
     totalEntities: 0,
     totalCashRegisters: 0,
@@ -96,54 +98,111 @@ export default function CashRegisterAssign() {
   }, []);
 
   const fetchData = async () => {
-    setLoading(true);
-    setError("");
-    setSuccess("");
+  setLoading(true);
+  setError("");
+  setSuccess("");
+  
+  try {
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
     
-    try {
-      const [entitiesRes, cashRegistersRes, statsRes, allCashRegistersRes] = await Promise.all([
-        fetch("http://localhost:3001/api/cash-register-assign/entities"),
-        fetch(`http://localhost:3001/api/cash-register-assign/available-cash-registers?status=active`),
-        fetch("http://localhost:3001/api/cash-register-assign/stats"),
-        fetch("http://localhost:3001/api/cash-register-assign/all-cash-registers")
-      ]);
-
-      if (!entitiesRes.ok || !cashRegistersRes.ok || !statsRes.ok || !allCashRegistersRes.ok) {
-        throw new Error("Failed to fetch data");
-      }
-
-      const entitiesData = await entitiesRes.json();
-      const cashRegistersData = await cashRegistersRes.json();
-      const statsData = await statsRes.json();
-      const allCashRegistersData = await allCashRegistersRes.json();
-
-      setEntities(entitiesData);
-      setCashRegisters(cashRegistersData);
-      setAllCashRegisters(allCashRegistersData);
-      setStats(statsData);
-    } catch (err) {
-      setError(err.message);
-    } finally {
+    if (!token) {
+      setError("Authentication required. Please log in.");
       setLoading(false);
+      // Optional: Redirect to login
+      // window.location.href = '/login';
+      return;
     }
-  };
+    
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+
+    const [entitiesRes, cashRegistersRes, statsRes, allCashRegistersRes] = await Promise.all([
+      fetch(`${API_ROUTES.CASHREGISTERASSIGN}/entities`, { headers }),
+      fetch(`${API_ROUTES.CASHREGISTERASSIGN}/available-cash-registers?status=active`, { headers }),
+      fetch(`${API_ROUTES.CASHREGISTERASSIGN}/stats`, { headers }),
+      fetch(`${API_ROUTES.CASHREGISTERASSIGN}/all-cash-registers`, { headers })
+    ]);
+
+    // Check for authentication errors
+    const responses = [entitiesRes, cashRegistersRes, statsRes, allCashRegistersRes];
+    for (const res of responses) {
+      if (res.status === 401 || res.status === 403) {
+        localStorage.removeItem('token');
+        setError("Session expired. Please log in again.");
+        // Optional: Redirect to login
+        // window.location.href = '/login';
+        setLoading(false);
+        return;
+      }
+    }
+
+    // Check for other errors
+    if (!entitiesRes.ok || !cashRegistersRes.ok || !statsRes.ok || !allCashRegistersRes.ok) {
+      throw new Error("Failed to fetch data");
+    }
+
+    const entitiesData = await entitiesRes.json();
+    const cashRegistersData = await cashRegistersRes.json();
+    const statsData = await statsRes.json();
+    const allCashRegistersData = await allCashRegistersRes.json();
+
+    setEntities(entitiesData);
+    setCashRegisters(cashRegistersData);
+    setAllCashRegisters(allCashRegistersData);
+    setStats(statsData);
+    
+  } catch (err) {
+    console.error("Error fetching data:", err);
+    setError(err.message || "An error occurred while fetching data");
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Fetch assignments for selected entity
   const fetchEntityAssignments = async (entity) => {
-    try {
-      const res = await fetch(
-        `http://localhost:3001/api/cash-register-assign/entity/${entity.type}/${entity.id}`
-      );
-      
-      if (!res.ok) throw new Error("Failed to fetch assignments");
-      
-      const data = await res.json();
-      setEntityAssignments(data);
-      setSelectedEntity(entity);
-    } catch (err) {
-      setError(err.message);
+  try {
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      setError("Authentication required. Please log in.");
+      return;
     }
-  };
+    
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+    
+    const res = await fetch(
+      `${API_ROUTES.CASHREGISTERASSIGN}/entity/${entity.type}/${entity.id}`,
+      { headers }
+    );
+    
+    // Check for authentication errors
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('token');
+      setError("Session expired. Please log in again.");
+      return;
+    }
+    
+    if (!res.ok) {
+      throw new Error(`Failed to fetch assignments: ${res.statusText}`);
+    }
+    
+    const data = await res.json();
+    setEntityAssignments(data);
+    setSelectedEntity(entity);
+    setError(""); // Clear any previous errors on success
+  } catch (err) {
+    console.error("Error fetching entity assignments:", err);
+    setError(err.message || "An error occurred while fetching assignments");
+  }
+};
 
   // Handle entity selection
   const handleEntityClick = (entity) => {
@@ -195,9 +254,10 @@ export default function CashRegisterAssign() {
     try {
       const assignedById = currentUser?.id; // user ID from auth
 
-      const res = await fetch("http://localhost:3001/api/cash-register-assign/assign", {
+      const res = await fetch(`${API_ROUTES.CASHREGISTERASSIGN}/assign`, {
         method: "POST",
         headers: {
+          'Authorization': `Bearer ${token}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
@@ -248,9 +308,10 @@ export default function CashRegisterAssign() {
     try {
       const assignedById = currentUser?.id; //user ID from auth
 
-      const res = await fetch("http://localhost:3001/api/cash-register-assign/assign-multiple", {
+      const res = await fetch(`${API_ROUTES.CASHREGISTERASSIGN}/assign-multiple`, {
         method: "POST",
         headers: {
+          'Authorization': `Bearer ${token}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
@@ -306,10 +367,11 @@ export default function CashRegisterAssign() {
   const handleUnassignCashRegister = async (assignmentId, reason = "") => {
     try {
       const res = await fetch(
-        `http://localhost:3001/api/cash-register-assign/unassign/${assignmentId}`,
+        `${API_ROUTES.CASHREGISTERASSIGN}/unassign/${assignmentId}`,
         {
           method: "PUT",
           headers: {
+          'Authorization': `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           body: JSON.stringify({ unassignReason: reason })
@@ -346,10 +408,11 @@ export default function CashRegisterAssign() {
 
     try {
       const res = await fetch(
-        `http://localhost:3001/api/cash-register-assign/unassign-all/${selectedEntity.type}/${selectedEntity.id}`,
+        `${API_ROUTES.CASHREGISTERASSIGN}/unassign-all/${selectedEntity.type}/${selectedEntity.id}`,
         {
           method: "PUT",
           headers: {
+          'Authorization': `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           body: JSON.stringify({ unassignReason: "Bulk unassignment" })
@@ -385,10 +448,11 @@ export default function CashRegisterAssign() {
 
     try {
       const res = await fetch(
-        `http://localhost:3001/api/cash-register-assign/cash-register/${cashRegisterId}/status`,
+        `${API_ROUTES.CASHREGISTERASSIGN}/cash-register/${cashRegisterId}/status`,
         {
           method: "PUT",
           headers: {
+          'Authorization': `Bearer ${token}`,
             "Content-Type": "application/json"
           },
           body: JSON.stringify({ 

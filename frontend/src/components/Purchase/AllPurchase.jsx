@@ -5,6 +5,7 @@ import {
   Eye, Edit, CreditCard, DollarSign, Trash2, CheckCircle, XCircle,
   ExternalLink, User, Check, AlertCircle, Loader2
 } from "lucide-react";
+import { API_ROUTES } from "../../config";
 
 export default function AllPurchase() {
   const [purchases, setPurchases] = useState([]);
@@ -29,6 +30,7 @@ export default function AllPurchase() {
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
   const [paymentHistory, setPaymentHistory] = useState([]);
+  const token = localStorage.getItem('token');
 
   useEffect(() => {
     fetchPurchases();
@@ -37,7 +39,11 @@ export default function AllPurchase() {
 
   const fetchPurchases = async () => {
     try {
-      const res = await fetch("http://localhost:3001/api/purchases");
+      const res = await fetch(`${API_ROUTES.PURCHASES}`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
       if (!res.ok) throw new Error("Failed to fetch purchases");
       const data = await res.json();
       setPurchases(data);
@@ -50,7 +56,11 @@ export default function AllPurchase() {
 
   const fetchAccounts = async () => {
     try {
-      const res = await fetch("http://localhost:3001/api/accounts");
+      const res = await fetch(`${API_ROUTES.ACCOUNTS}`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
       if (!res.ok) throw new Error("Failed to fetch accounts");
       const data = await res.json();
       setAccounts(data);
@@ -61,7 +71,11 @@ export default function AllPurchase() {
 
   const fetchPaymentHistory = async (purchaseId) => {
     try {
-      const res = await fetch(`http://localhost:3001/api/purchases/${purchaseId}/payments`);
+      const res = await fetch(`${API_ROUTES.PURCHASES}/${purchaseId}/payments`, {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
       if (!res.ok) throw new Error("Failed to fetch payment history");
       const data = await res.json();
       setPaymentHistory(data.payments || []);
@@ -229,9 +243,10 @@ export default function AllPurchase() {
     setPaymentLoading(true);
 
     try {
-      const response = await fetch(`http://localhost:3001/api/purchases/${selectedPurchase.id}/payments`, {
+      const response = await fetch(`${API_ROUTES.PURCHASES}/${selectedPurchase.id}/payments`, {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -277,8 +292,11 @@ export default function AllPurchase() {
     setDeleteLoading(true);
 
     try {
-      const response = await fetch(`http://localhost:3001/api/purchases/${selectedPurchase.id}`, {
+      const response = await fetch(`${API_ROUTES.PURCHASES}/${selectedPurchase.id}`, {
         method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
       });
 
       if (!response.ok) {

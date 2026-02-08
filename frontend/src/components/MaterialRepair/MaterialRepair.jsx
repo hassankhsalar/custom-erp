@@ -271,7 +271,7 @@ const MaterialRepair = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50 p-4 md:p-6">
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full mx-auto">
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-lg mb-6 p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -306,7 +306,7 @@ const MaterialRepair = () => {
           </div>
 
           {/* Analytics Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-8 gap-4 mb-6">
             <div className="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-xl p-4">
               <div className="flex items-center justify-between">
                 <div>

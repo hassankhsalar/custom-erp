@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
-import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList } from "lucide-react";
+import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X } from "lucide-react";
+import e from "cors";
 
 export default function ShopPOS() {
   const [shops, setShops] = useState([]);
@@ -276,6 +277,17 @@ export default function ShopPOS() {
     setShowPriceModal(true);
   };
 
+  const handlePriceChange = (index, price) => {
+    const newPrice = price || 0;
+    const updatedCart = [...cartItems];
+    const itemIndex = index;
+    
+    updatedCart[itemIndex].unitPrice = newPrice;
+    updatedCart[itemIndex].totalPrice = newPrice * updatedCart[itemIndex].quantity;
+
+    setCartItems(updatedCart);
+  };
+
   // Apply price override
   const handleApplyPriceOverride = () => {
     if (!tempPrice || parseFloat(tempPrice) <= 0) {
@@ -419,8 +431,8 @@ export default function ShopPOS() {
           </div>
           <div className="mt-2 md:mt-0">
             {shopId && (
-              <div className="text-md bg-gray-300/30 px-3 py-1 rounded-full text-emerald-600">
-                Selected: {shops.find(s => s.id === parseInt(shopId))?.name || "Shop"}
+              <div className="text-md font-semibold bg-gray-300/30 px-3 py-1 mr-4 rounded-full text-emerald-600">
+                {shops.find(s => s.id === parseInt(shopId))?.name || "Shop"}
               </div>
             )}
           </div>
@@ -531,10 +543,7 @@ export default function ShopPOS() {
                               <div className="flex-1">
                                 <div className="font-medium text-gray-800 truncate">{item.name}</div>
                                 <div className="text-sm text-gray-600 mt-1">
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${item.type === 'product' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
-                                    {item.type === 'product' ? '📦 Product' : '🔧 Material'}
-                                  </span>
-                                  {item.barcode && <span className="ml-2">| {item.barcode}</span>}
+                                  {item.barcode && <span>{item.barcode}</span>}
                                 </div>
                                 <div className="flex items-center mt-2">
                                   <span className={`text-xs font-medium ${isLowStock ? 'text-amber-600' : 'text-gray-700'}`}>
@@ -751,10 +760,7 @@ export default function ShopPOS() {
                                 <div className="flex-1 min-w-0">
                                   <div className="font-medium text-gray-900">{item.name}</div>
                                   <div className="text-sm text-gray-600 mt-1">
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${item.type === 'product' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
-                                      {item.type === 'product' ? '📦 Product' : '🔧 Material'}
-                                    </span>
-                                    {item.barcode && <span className="ml-2">| {item.barcode}</span>}
+                                    {item.barcode && <span>{item.barcode}</span>}
                                     {item.unit && <span className="ml-2">| Unit: {item.unit}</span>}
                                   </div>
                                 </div>
@@ -762,18 +768,18 @@ export default function ShopPOS() {
                             </td>
                             <td className="p-4">
                               <div className="flex items-center gap-2">
-                                <span className="font-medium text-gray-900">${item.unitPrice.toFixed(2)}</span>
-                                {item.unitPrice !== item.original_price && (
-                                  <span className="text-xs text-green-600 bg-green-100 px-1.5 py-0.5 rounded">
-                                    Overridden
-                                  </span>
-                                )}
-                                <button
-                                  onClick={() => handleOpenPriceModal(index)}
-                                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                                >
-                                  Edit
-                                </button>
+                                <div>
+                                  <input
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    value={item.unitPrice}
+                                    onChange={(e) => handlePriceChange(index, e.target.value)}
+                                    className="w-full min-w-24 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition"
+                                    placeholder="Enter new price"
+                                    autoFocus
+                                  />
+                                </div>
                               </div>
                             </td>
                             <td className="p-4">
@@ -811,9 +817,9 @@ export default function ShopPOS() {
                             <td className="p-4">
                               <button
                                 onClick={() => handleRemoveFromCart(index)}
-                                className="bg-red-100 text-red-600 hover:text-red-800 font-medium text-sm px-2 rounded-md"
+                                className="bg-red-100 text-red-600 hover:text-red-800 font-medium text-sm p-2 rounded-md"
                               >
-                                Remove
+                                <X size={16} />
                               </button>
                             </td>
                           </tr>

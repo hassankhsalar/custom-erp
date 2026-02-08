@@ -1,4 +1,5 @@
 export const API_BASE_URL = 'http://localhost:3001/api';
+export const MEDIA_BASE_URL = 'http://localhost:3001';
 
 export const API_ROUTES = {
   LOGIN: `${API_BASE_URL}/login`,
@@ -6,14 +7,21 @@ export const API_ROUTES = {
   PROFILE: `${API_BASE_URL}/profile`,
   ADMIN: `${API_BASE_URL}/admin`,
   DASHBOARD: `${API_BASE_URL}/dashboard`,
+
   MATERIALS: `${API_BASE_URL}/materials`,
+
+  // Product routes
   PRODUCTS: `${API_BASE_URL}/products`,
+  PRODUCTS_ALL: `${API_BASE_URL}/products/all-products`,
+
   FACTORIES: `${API_BASE_URL}/factories`,
   PRODUCTIONS: `${API_BASE_URL}/productions`,
   STORES: `${API_BASE_URL}/stores`,
   SALES: `${API_BASE_URL}/sales`,
   PURCHASES: `${API_BASE_URL}/purchases`,
   SUPPLIERS: `${API_BASE_URL}/suppliers`,
+  ACCOUNTS: `${API_BASE_URL}/accounts`,
+  ASSIGNACCOUNT: `${API_BASE_URL}/assign-account`,
 
   SHOPS: `${API_BASE_URL}/shops`,
   SHOPS_ALL: `${API_BASE_URL}/shops`,
@@ -25,10 +33,12 @@ export const API_ROUTES = {
   SHOP_SALES_SHOPS: `${API_BASE_URL}/shop-sales/shops`,
   SHOP_SALES_ITEMS: (shopId) => `${API_BASE_URL}/shop-sales/items/shop/${shopId}`,
   SHOP_SALES_BY_ID: (id) => `${API_BASE_URL}/shop-sales/${id}`,
-
-  //sales returns
+  
+  CASHREGISTER: `${API_BASE_URL}/cash-registers`,
+  CASHREGISTERASSIGN: `${API_BASE_URL}/cash-register-assign`,
+  
   //SHOP_SALES_RETURNS: `${API_BASE_URL}/shop-sales/returns/all`,
- SHOP_SALES_RETURNS_BACKUP: `${API_BASE_URL}/shop-sales/returns-list`,
+  SHOP_SALES_RETURNS_BACKUP: `${API_BASE_URL}/shop-sales/returns-list`,
   //transfer routes
   TRANSFERS: `${API_BASE_URL}/transfers`,
   
@@ -60,6 +70,9 @@ export const API_ROUTES = {
 
   //user routes
   USERS: `${API_BASE_URL}/users`,
+  ASSIGNUSER: `${API_BASE_URL}/assign-user`,
+  PERMISSIONS: `${API_BASE_URL}/permissions`,
+  USERMANAGEMENT: `${API_BASE_URL}/user-management`,
 };
 
 // &&&&&  indexJs route list for reference &&&&&&&&&&&&&&&&&&&&&&&&&&&

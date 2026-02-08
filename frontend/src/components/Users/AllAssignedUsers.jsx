@@ -40,9 +40,11 @@ import {
   UserPlus
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { API_ROUTES } from '../../config';
 
 export default function AllAssignedUsers() {
   const navigate = useNavigate();
+  const token = localStorage.getItem('token');
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -68,57 +70,81 @@ export default function AllAssignedUsers() {
   }, []);
 
   const fetchData = async () => {
-    setLoading(true);
-    setError("");
+  setLoading(true);
+  setError("");
+  
+  try {
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
     
-    try {
-      const [assignmentsRes, usersRes] = await Promise.all([
-        fetch("http://localhost:3001/api/assign-user/all-assignments"),
-        fetch("http://localhost:3001/api/assign-user/available-users")
-      ]);
-
-      if (!assignmentsRes.ok || !usersRes.ok) {
-        throw new Error("Failed to fetch data");
-      }
-
-      const assignmentsData = await assignmentsRes.json();
-      const usersData = await usersRes.json();
-
-      setAssignments(assignmentsData);
-      setUsers(usersData);
-
-      // Calculate statistics
-      const assignmentsByType = {};
-      const assignmentsByUser = {};
-      const uniqueUsers = new Set();
-      const uniqueEntities = new Set();
-
-      assignmentsData.forEach(assignment => {
-        // Count by type
-        assignmentsByType[assignment.associateName] = (assignmentsByType[assignment.associateName] || 0) + 1;
-        
-        // Count by user
-        const userId = assignment.userId;
-        assignmentsByUser[userId] = (assignmentsByUser[userId] || 0) + 1;
-        
-        // Track unique users and entities
-        uniqueUsers.add(userId);
-        uniqueEntities.add(`${assignment.associateName}-${assignment.associateId}`);
-      });
-
-      setStats({
-        totalAssignments: assignmentsData.length,
-        assignmentsByType,
-        assignmentsByUser,
-        uniqueUsers: uniqueUsers.size,
-        uniqueEntities: uniqueEntities.size
-      });
-    } catch (err) {
-      setError(err.message);
-    } finally {
+    if (!token) {
+      setError("Authentication required. Please log in.");
       setLoading(false);
+      return;
     }
-  };
+    
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+
+    const [assignmentsRes, usersRes] = await Promise.all([
+      fetch(`${API_ROUTES.ASSIGNUSER}/all-assignments`, { headers }),
+      fetch(`${API_ROUTES.ASSIGNUSER}/available-users`, { headers })
+    ]);
+
+    // Check for authentication errors
+    if (assignmentsRes.status === 401 || usersRes.status === 401) {
+      localStorage.removeItem('token');
+      setError("Session expired. Please log in again.");
+      setLoading(false);
+      return;
+    }
+
+    if (!assignmentsRes.ok || !usersRes.ok) {
+      throw new Error("Failed to fetch data");
+    }
+
+    const assignmentsData = await assignmentsRes.json();
+    const usersData = await usersRes.json();
+
+    setAssignments(assignmentsData);
+    setUsers(usersData);
+
+    // Calculate statistics
+    const assignmentsByType = {};
+    const assignmentsByUser = {};
+    const uniqueUsers = new Set();
+    const uniqueEntities = new Set();
+
+    assignmentsData.forEach(assignment => {
+      // Count by type
+      assignmentsByType[assignment.associateName] = (assignmentsByType[assignment.associateName] || 0) + 1;
+      
+      // Count by user
+      const userId = assignment.userId;
+      assignmentsByUser[userId] = (assignmentsByUser[userId] || 0) + 1;
+      
+      // Track unique users and entities
+      uniqueUsers.add(userId);
+      uniqueEntities.add(`${assignment.associateName}-${assignment.associateId}`);
+    });
+
+    setStats({
+      totalAssignments: assignmentsData.length,
+      assignmentsByType,
+      assignmentsByUser,
+      uniqueUsers: uniqueUsers.size,
+      uniqueEntities: uniqueEntities.size
+    });
+    
+  } catch (err) {
+    console.error("Error fetching data:", err);
+    setError(err.message || "An error occurred while fetching data");
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Handle sorting
   const handleSort = (key) => {
@@ -131,29 +157,57 @@ export default function AllAssignedUsers() {
 
   // Handle remove assignment
   const handleRemoveAssignment = async (assignmentId, userName, entityName) => {
-    if (!confirm(`Are you sure you want to remove ${userName} from ${entityName}?`)) {
+  if (!confirm(`Are you sure you want to remove ${userName} from ${entityName}?`)) {
+    return;
+  }
+
+  try {
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      setError("Authentication required. Please log in.");
       return;
     }
+    
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+    
+    const res = await fetch(
+      `${API_ROUTES.UPLOADS}/assignment/${assignmentId}`,
+      { 
+        method: "DELETE",
+        headers 
+      }
+    );
 
-    try {
-      const res = await fetch(
-        `http://localhost:3001/api/assign-user/assignment/${assignmentId}`,
-        { method: "DELETE" }
-      );
-
-      if (!res.ok) throw new Error("Failed to remove assignment");
-
-      // Refresh data
-      fetchData();
-      
-      setSuccess("Assignment removed successfully!");
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (err) {
-      setError(err.message);
+    // Check for authentication errors
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem('token');
+      setError("Session expired. Please log in again.");
+      return;
     }
-  };
+    
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || "Failed to remove assignment");
+    }
+
+    // Refresh data
+    fetchData();
+    
+    setSuccess("Assignment removed successfully!");
+    
+    // Clear success message after 3 seconds
+    setTimeout(() => setSuccess(""), 3000);
+    
+  } catch (err) {
+    console.error("Error removing assignment:", err);
+    setError(err.message || "An error occurred while removing assignment");
+  }
+};
 
   // Toggle row expansion
   const toggleRowExpansion = (assignmentId) => {
@@ -225,6 +279,9 @@ export default function AllAssignedUsers() {
 
       return 0;
     });
+
+    
+console.log(users);
 
   // Get entity icon based on type
   const getEntityIcon = (type) => {
@@ -705,7 +762,7 @@ export default function AllAssignedUsers() {
                         </td>
                         <td className="p-4">
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
-                            {assignment.user?.role}
+                            {assignment.user?.permission.name}
                           </span>
                         </td>
                         <td className="p-4">
@@ -758,7 +815,7 @@ export default function AllAssignedUsers() {
                                   </div>
                                   <div className="flex items-center justify-between">
                                     <span className="text-sm text-gray-600">Role:</span>
-                                    <span className="font-medium">{assignment.user?.role}</span>
+                                    <span className="font-medium">{assignment.user?.permission.name}</span>
                                   </div>
                                   <div className="flex items-center justify-between">
                                     <span className="text-sm text-gray-600">User ID:</span>

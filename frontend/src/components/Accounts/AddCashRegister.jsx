@@ -11,6 +11,8 @@ import {
   ArrowLeft
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { API_ROUTES } from '../../config';
+
 
 export default function AddCashRegister() {
   const navigate = useNavigate();
@@ -23,6 +25,7 @@ export default function AddCashRegister() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const token = localStorage.getItem('token');
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -39,9 +42,10 @@ export default function AddCashRegister() {
     setSuccess("");
 
     try {
-      const res = await fetch("http://localhost:3001/api/cash-registers", {
+      const res = await fetch(`${API_ROUTES.CASHREGISTER}`, {
         method: "POST",
         headers: {
+          'Authorization': `Bearer ${token}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify(formData)

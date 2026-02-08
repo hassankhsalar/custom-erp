@@ -147,11 +147,13 @@ const TransferList = ({ fromType, toType, title }) => {
           text: 'text-amber-600'
         };
       case 'being_shipped':
+      case 'being_shipped':
         return { 
           bg: 'bg-gradient-to-r from-blue-500 to-cyan-500', 
           iconBg: 'bg-blue-100',
           text: 'text-blue-600'
         };
+      case 'transferred':
       case 'transferred':
         return { 
           bg: 'bg-gradient-to-r from-emerald-500 to-green-500', 
@@ -188,6 +190,7 @@ const TransferList = ({ fromType, toType, title }) => {
       case 'being_shipped':
         return <Truck className="w-4 h-4" />;
       case 'transferred':
+      case 'transferred':
         return <CheckCircle className="w-4 h-4" />;
       case 'not_received':
         return <AlertCircle className="w-4 h-4" />;
@@ -218,7 +221,7 @@ const TransferList = ({ fromType, toType, title }) => {
   // Calculate statistics
   const processingTransfers = transfers.filter(t => t.status === 'processing').length;
   const onTheWayTransfers = transfers.filter(t => t.status === 'being_shipped').length;
-  const completedTransfers = transfers.filter(t => t.status === 'transferred').length;
+  const completedTransfers = transfers.filter(t => t.status === 'transfer_done').length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
@@ -500,14 +503,17 @@ const TransferList = ({ fromType, toType, title }) => {
                                 </span>
                               </div>
                             </td>
-                            <td className="p-4">
+                            <td className="p-4 min-w-24">
                               <div className="flex items-center gap-2">
-                                <div className="p-2 bg-gradient-to-r from-blue-100 to-cyan-100 rounded-lg">
-                                  <Package className="w-4 h-4 text-blue-600" />
-                                </div>
-                                <div className="text-center">
-                                  <span className="font-bold text-lg text-gray-900 block">{transfer.totalProducts}</span>
-                                  <span className="text-xs text-gray-500">items</span>
+                                <div className=" text-xs">
+                                  <div className="block">
+                                    <span className="font-bold text-gray-900">{transfer.totalProducts} </span>
+                                    <span className=" text-gray-500">items</span>
+                                  </div>
+                                  <div className="block">
+                                    <span className="font-bold text-gray-900">{transfer.totalItems} </span>
+                                    <span className=" text-gray-500">Types</span>
+                                  </div>
                                 </div>
                               </div>
                             </td>
@@ -538,8 +544,8 @@ const TransferList = ({ fromType, toType, title }) => {
                                 )}
 
                                 <button
-                                  disabled={transfer.status === 'transfer_done'}
-                                  className={`p-2 rounded-lg ${transfer.status === 'transfer_done' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}
+                                  disabled={transfer.status === 'transferred'}
+                                  className={`p-2 rounded-lg ${transfer.status === 'transferred' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}
                                   title="Edit Transfer"
                                 >
                                   <Edit2 className="w-4 h-4" />
@@ -892,28 +898,46 @@ const TransferList = ({ fromType, toType, title }) => {
                 </div>
               </div>
 
-              {/* Products Section */}
+              {/* Items Section */}
               <div>
                 <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                   <Package size={20} className="text-purple-600" />
-                  Products ({detailsModal.data.totalProducts || 0})
+                  Items ({detailsModal.data.totalItems || 0})
                 </h3>
-                <div className="bg-gray-50/50 backdrop-blur-sm rounded-xl border border-white/60 p-4">
-                  <p className="text-gray-600 text-center">
-                    Product details would appear here
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="sticky bottom-0 p-6 border-t border-white/50">
-              <div className="flex justify-end">
-                <button
-                  onClick={closeDetailsModal}
-                  className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
-                >
-                  Close Details
-                </button>
+                {detailsModal.data.transferItems && detailsModal.data.transferItems.length > 0 ? (
+                  <div className="overflow-hidden rounded-xl border border-white/60 bg-white/60 backdrop-blur-sm">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-100/80">
+                        <tr>
+                          <th className="p-3 text-left font-medium text-gray-700">Item</th>
+                          <th className="p-3 text-left font-medium text-gray-700">Type</th>
+                          <th className="p-3 text-left font-medium text-gray-700">Quantity</th>
+                          <th className="p-3 text-left font-medium text-gray-700">Avg Cost</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {detailsModal.data.transferItems.map((item, idx) => (
+                          <tr key={`${item.item}-${item.itemId}-${idx}`} className="border-t border-white/50 hover:bg-white/40">
+                            <td className="p-3 font-medium text-gray-800">{item.name}</td>
+                            <td className="p-3 text-gray-600 capitalize">{item.item}</td>
+                            <td className="p-3 text-gray-700">{item.quantity}</td>
+                            <td className="p-3 text-gray-700">
+                              {item.avg_cost !== null && item.avg_cost !== undefined
+                                ? `$${parseFloat(item.avg_cost).toFixed(2)}`
+                                : 'N/A'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50/50 backdrop-blur-sm rounded-xl border border-white/60 p-4">
+                    <p className="text-gray-600 text-center">
+                      No items found for this transfer
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

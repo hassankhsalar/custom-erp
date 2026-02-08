@@ -95,7 +95,7 @@ async function main() {
         'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement',
         'purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment',
         'purchases_return_create', 'purchases_return_edit', 'purchases_return_delete', 'purchases_return_read',
-        'production_create', 'production_edit', 'production_delete', 'production_read', 'production_change_status',
+        'production_create', 'production_edit', 'production_delete', 'production_read', 'production_change_status', 'production_complete',
         'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_add_payment',
         'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read',
         'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive',
@@ -587,7 +587,7 @@ async function main() {
       start_date: new Date(Date.now() - randInt(1, 30) * 24 * 60 * 60 * 1000),
       estimated_end_date: new Date(Date.now() + randInt(1, 30) * 24 * 60 * 60 * 1000),
       factoryId: factory.id,
-      status: pick(['pending', 'running', 'done']),
+      status: pick(['pending', 'running', 'production_done']),
       productionProducts: {
         create: [
           {

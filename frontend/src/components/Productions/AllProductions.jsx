@@ -25,6 +25,7 @@ import {
 
 const AllProductions = () => {
   const [productions, setProductions] = useState([]);
+  const [totalProductions, setTotalProductions] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -36,6 +37,7 @@ const AllProductions = () => {
   const [selectedStatus, setSelectedStatus] = useState('');
   const [editableProducts, setEditableProducts] = useState([]);
   const [editableMaterials, setEditableMaterials] = useState([]);
+  const [autoUnitCost, setAutoUnitCost] = useState(0);
 
   useEffect(() => {
     fetchProductions(currentPage);
@@ -51,6 +53,7 @@ const AllProductions = () => {
       setProductions(response.data.productions);
       setCurrentPage(response.data.currentPage);
       setTotalPages(response.data.totalPages);
+      setTotalProductions(response.data.totalItems);
     } catch (error) {
       console.error('Error fetching productions:', error);
     } finally {
@@ -92,10 +95,28 @@ const AllProductions = () => {
   if (type === 'updateStatus') {
     setSelectedStatus(production.status);
     if (production.status === 'production_done') {
-        setEditableProducts(production.productionProducts.map(p => ({...p, received: p.quantity, scrap: 0})))
-        setEditableMaterials(production.productionMaterials.map(m => ({...m, scrap: 0, fine: 0}))) // Initialize fine
+        setEditableProducts(
+          production.productionProducts.map(p => ({
+            ...p,
+            received: p.quantity,
+            scrap: 0,
+            unit_cost_manual: false
+          }))
+        );
+        setEditableMaterials(
+          production.productionMaterials.map(m => ({
+            ...m,
+            scrap: 0,
+            fine: 0
+          }))
+        ); // Initialize fine
     } else {
-        setEditableProducts(production.productionProducts);
+        setEditableProducts(
+          production.productionProducts.map(p => ({
+            ...p,
+            unit_cost_manual: false
+          }))
+        );
         setEditableMaterials(production.productionMaterials.map(m => ({...m, fine: 0}))); // Initialize fine
     }
   }
@@ -127,7 +148,14 @@ const AllProductions = () => {
   }
 
   const handleProductEdit = (index, field, value) => {
-    setEditableProducts(prev => prev.map((p, i) => i === index ? {...p, [field]: value} : p));
+    setEditableProducts(prev => prev.map((p, i) => {
+      if (i !== index) return p;
+      const updated = { ...p, [field]: value };
+      if (field === 'unit_cost') {
+        updated.unit_cost_manual = true;
+      }
+      return updated;
+    }));
   }
 
   const handleMaterialEdit = (index, field, value) => {
@@ -156,6 +184,40 @@ const AllProductions = () => {
     return newMaterials;
   });
 }
+
+  useEffect(() => {
+    if (selectedStatus !== 'production_done') {
+      setAutoUnitCost(0);
+      return;
+    }
+    const totalMaterialCost = editableMaterials.reduce((sum, m) => {
+      const qty = parseFloat(m.quantity) || 0;
+      const fine = parseFloat(m.fine) || 0;
+      const price = parseFloat(m.price) || 0;
+      const usedQty = Math.max(0, qty - fine);
+      return sum + usedQty * price;
+    }, 0);
+
+    const totalFineProducts = editableProducts.reduce((sum, p) => {
+      const received = parseFloat(p.received) || 0;
+      return sum + received;
+    }, 0);
+
+    const computed = totalFineProducts > 0 ? totalMaterialCost / totalFineProducts : 0;
+    setAutoUnitCost(computed);
+
+    setEditableProducts(prev => {
+      let changed = false;
+      const next = prev.map(p => {
+        if (p.unit_cost_manual) return p;
+        const current = parseFloat(p.unit_cost) || 0;
+        if (Math.abs(current - computed) < 0.0001) return p;
+        changed = true;
+        return { ...p, unit_cost: computed };
+      });
+      return changed ? next : prev;
+    });
+  }, [selectedStatus, editableMaterials, editableProducts]);
 
   // Helper function to get image URL
   const getImageUrl = (imagePath) => {
@@ -207,7 +269,7 @@ const AllProductions = () => {
             <div className="flex items-center gap-4">
               <div className="hidden md:block px-6 py-3 bg-white/60 backdrop-blur-sm rounded-xl border border-white/80">
                 <p className="text-sm font-medium text-gray-700">Total Productions</p>
-                <p className="text-2xl font-bold text-emerald-600">{productions.length}</p>
+                <p className="text-2xl font-bold text-emerald-600">{totalProductions}</p>
               </div>
               
               <Link 
@@ -774,6 +836,11 @@ const AllProductions = () => {
                                     step="0.01"
                                     min="0"
                                   />
+                                  {!p.unit_cost_manual && autoUnitCost > 0 && (
+                                    <div className="text-[10px] text-gray-500 mt-1">
+                                      Auto: ${autoUnitCost.toFixed(4)}
+                                    </div>
+                                  )}
                                 </td>
                               </tr>
                             );
@@ -784,10 +851,13 @@ const AllProductions = () => {
                   </div>
 
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                      <Layers size={20} className="text-purple-600" />
-                      Update Materials
-                    </h3>
+                    <div className='mb-4'>
+                      <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                        <Layers size={20} className="text-purple-600" />
+                        Update Materials
+                      </h3>
+                      <p className="text-sm text-gray-600">* Specify if there is any fine materials left after the production is done or if there is any scrap.</p>
+                    </div>
                     <div className="overflow-hidden rounded-xl border border-white/60">
                       <table className="w-full text-sm">
                         <thead className="bg-gray-100/80">
@@ -834,27 +904,29 @@ const AllProductions = () => {
                       </table>
                     </div>
                   </div>
+
+                  <div className="pb-6">
+                    <div className="flex justify-end gap-3">
+                      <button
+                        onClick={closeModal}
+                        className="px-6 py-3 cursor-pointer bg-gray-300 text-gray-700 font-medium rounded-xl hover:bg-gray-500 hover:text-white transition-all duration-300 border border-white/60"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleStatusChange}
+                        className="px-6 py-3 cursor-pointer bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-purple-600 hover:to-blue-600 transition-all duration-300 flex items-center gap-2"
+                      >
+                        <Save size={18} />
+                        Save Changes
+                      </button>
+                    </div>
+                  </div>
+
                 </div>
               )}
             </div>
-            
-            <div className="sticky bottom-0 p-6 border-t border-white/50 bg-gradient-to-r from-purple-500/10 to-blue-500/10">
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={closeModal}
-                  className="px-6 py-3 bg-white/60 text-gray-700 font-medium rounded-xl hover:bg-white/80 transition-all duration-300 border border-white/60"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleStatusChange}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-500 to-blue-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-purple-600 hover:to-blue-600 transition-all duration-300 flex items-center gap-2"
-                >
-                  <Save size={18} />
-                  Save Changes
-                </button>
-              </div>
-            </div>
+
           </div>
         </div>
       )}

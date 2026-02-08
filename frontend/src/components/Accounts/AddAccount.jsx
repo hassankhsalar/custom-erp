@@ -17,6 +17,7 @@ import { useNavigate } from "react-router-dom";
 
 export default function AddAccount() {
   const navigate = useNavigate();
+  const token = localStorage.getItem('token');
   const [formData, setFormData] = useState({
     name: "",
     account_number: "",
@@ -77,6 +78,7 @@ export default function AddAccount() {
       const response = await fetch("http://localhost:3001/api/accounts", {
         method: "POST",
         headers: {
+            'Authorization': `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
