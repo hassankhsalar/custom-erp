@@ -32,6 +32,7 @@ const Navbar = () => {
     const navItems = [
         { name: "Dashboard", icon: <Home size={18} />, path: "/dashboard" },
         { name: "All Sales", icon: <Zap size={18} />, path: "/sale/all" },
+        { name: "POS", icon: <Store size={18} />, path: "/sale/pos" },
     ];
 
     const isActive = (path) => {
@@ -110,7 +111,7 @@ const Navbar = () => {
                                 </div>
                             </button>
                             {isProfileOpen && (currentUser || localUserName) && (
-                                <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-xl bg-white backdrop-blur-xl border border-gray-200 shadow-xl focus:outline-none z-60">
+                                <div className="absolute right-0 mt-2 w-56 origin-top-right rounded-xl bg-white/95 backdrop-blur-md border border-gray-200 shadow-xl focus:outline-none z-[1000]">
                                     <div className="py-1">
                                         
                                         <Link

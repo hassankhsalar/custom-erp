@@ -158,6 +158,12 @@ const TransferList = ({ fromType, toType, title }) => {
           iconBg: 'bg-emerald-100',
           text: 'text-emerald-600'
         };
+      case 'not_received':
+        return { 
+          bg: 'bg-gradient-to-r from-red-500 to-rose-600', 
+          iconBg: 'bg-emerald-100',
+          text: 'text-emerald-600'
+        };
       default:
         return { 
           bg: 'bg-gradient-to-r from-gray-500 to-gray-600', 
@@ -177,10 +183,14 @@ const TransferList = ({ fromType, toType, title }) => {
     switch (status) {
       case 'processing':
         return <AlertCircle className="w-4 h-4" />;
+      case 'pending':
+        return <AlertCircle className="w-4 h-4" />;
       case 'being_shipped':
         return <Truck className="w-4 h-4" />;
       case 'transferred':
         return <CheckCircle className="w-4 h-4" />;
+      case 'not_received':
+        return <AlertCircle className="w-4 h-4" />;
       default:
         return null;
     }
@@ -313,8 +323,10 @@ const TransferList = ({ fromType, toType, title }) => {
                 >
                   <option value="all">All Status</option>
                   <option value="processing">Processing</option>
-                  <option value="being_shipped">being_shipped</option>
-                  <option value="transferred">Completed</option>
+                  <option value="pending">Pending</option>
+                  <option value="being_shipped">Being Shipped</option>
+                  <option value="transferred">Transferred</option>
+                  <option value="not_received">Not Received</option>
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
               </div>
@@ -437,47 +449,47 @@ const TransferList = ({ fromType, toType, title }) => {
                               </div>
                             </td>
                             <td className="p-4">
-  <div className="flex items-center justify-between gap-4">
-    {/* From section */}
-    <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-2">
-        <div className={`p-2 rounded-lg flex-shrink-0 ${transfer.from === 'factory' ? 'bg-blue-100' : 'bg-green-100'}`}>
-          {transfer.from === 'factory' ? (
-            <Factory className="w-4 h-4 text-blue-600" />
-          ) : (
-            <Store className="w-4 h-4 text-green-600" />
-          )}
-        </div>
-        <div className="min-w-0">
-          <div className="text-sm font-medium text-gray-900 truncate">{transfer.fromName}</div>
-          <div className="text-xs text-gray-500 truncate">({transfer.from})</div>
-        </div>
-      </div>
-    </div>
+                              <div className="flex items-center justify-between gap-4">
+                                {/* From section */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`p-2 rounded-lg flex-shrink-0 ${transfer.from === 'factory' ? 'bg-blue-100' : 'bg-green-100'}`}>
+                                      {transfer.from === 'factory' ? (
+                                        <Factory className="w-4 h-4 text-blue-600" />
+                                      ) : (
+                                        <Store className="w-4 h-4 text-green-600" />
+                                      )}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="text-sm font-medium text-gray-900 truncate">{transfer.fromName}</div>
+                                      <div className="text-xs text-gray-500 truncate">({transfer.from})</div>
+                                    </div>
+                                  </div>
+                                </div>
 
-    {/* Arrow */}
-    <div className="flex-shrink-0 px-2">
-      <ArrowRight className="w-4 h-4 text-gray-400" />
-    </div>
+                                {/* Arrow */}
+                                <div className="flex-shrink-0 px-2">
+                                  <ArrowRight className="w-4 h-4 text-gray-400" />
+                                </div>
 
-    {/* To section */}
-    <div className="flex-1 min-w-0">
-      <div className="flex items-center gap-2">
-        <div className={`p-2 rounded-lg flex-shrink-0 ${transfer.to === 'factory' ? 'bg-blue-100' : 'bg-green-100'}`}>
-          {transfer.to === 'factory' ? (
-            <Factory className="w-4 h-4 text-blue-600" />
-          ) : (
-            <Store className="w-4 h-4 text-green-600" />
-          )}
-        </div>
-        <div className="min-w-0">
-          <div className="text-sm font-medium text-gray-900 truncate">{transfer.toName}</div>
-          <div className="text-xs text-gray-500 truncate">({transfer.to})</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</td>
+                                {/* To section */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`p-2 rounded-lg flex-shrink-0 ${transfer.to === 'factory' ? 'bg-blue-100' : 'bg-green-100'}`}>
+                                      {transfer.to === 'factory' ? (
+                                        <Factory className="w-4 h-4 text-blue-600" />
+                                      ) : (
+                                        <Store className="w-4 h-4 text-green-600" />
+                                      )}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="text-sm font-medium text-gray-900 truncate">{transfer.toName}</div>
+                                      <div className="text-xs text-gray-500 truncate">({transfer.to})</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
                             <td className="p-4">
                               <div className="flex items-center gap-2">
                                 <div className="p-2 bg-gradient-to-r from-green-100 to-emerald-100 rounded-lg">
@@ -500,7 +512,7 @@ const TransferList = ({ fromType, toType, title }) => {
                               </div>
                             </td>
                             <td className="p-4">
-                              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-sm font-semibold ${statusColors.bg}`}>
+                              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-normal ${statusColors.bg}`}>
                                 {getStatusIcon(transfer.status)}
                                 <span>{formatStatus(transfer.status)}</span>
                               </div>
@@ -514,14 +526,17 @@ const TransferList = ({ fromType, toType, title }) => {
                                 >
                                   <Eye className="w-4 h-4" />
                                 </button>
-                                <button
-                                  onClick={() => openStatusModal(transfer)}
-                                  disabled={transfer.status === 'transferred'}
-                                  className={`p-2 rounded-lg ${transfer.status === 'transferred' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
-                                  title="Change Status"
-                                >
-                                  <CheckCircle className="w-4 h-4" />
-                                </button>
+                                {transfer.status != 'transferred' && (
+                                  <button
+                                    onClick={() => openStatusModal(transfer)}
+                                    disabled={transfer.status === 'transfer_done'}
+                                    className={`p-2 rounded-lg ${transfer.status === 'transfer_done' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
+                                    title="Change Status"
+                                  >
+                                    <CheckCircle className="w-4 h-4" />
+                                  </button>
+                                )}
+
                                 <button
                                   disabled={transfer.status === 'transferred'}
                                   className={`p-2 rounded-lg ${transfer.status === 'transferred' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}
@@ -713,7 +728,7 @@ const TransferList = ({ fromType, toType, title }) => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-3">Update to</label>
                   <div className="grid grid-cols-3 gap-2">
-                    {['processing', 'being_shipped', 'transferred'].map((status) => {
+                    {['processing', 'pending', 'being_shipped', 'transferred', 'not_received'].map((status) => {
                       const colors = getStatusColor(status);
                       return (
                         <button

@@ -1072,7 +1072,6 @@ export default function PermissionsManagement() {
                     <thead className="bg-gray-100/80">
                       <tr>
                         <th className="p-4 text-left font-medium text-gray-700">Name</th>
-                        <th className="p-4 text-left font-medium text-gray-700">Permissions</th>
                         <th className="p-4 text-left font-medium text-gray-700">Assigned Users</th>
                         <th className="p-4 text-left font-medium text-gray-700">Created</th>
                         <th className="p-4 text-left font-medium text-gray-700">Actions</th>
