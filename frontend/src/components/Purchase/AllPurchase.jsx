@@ -24,6 +24,12 @@ export default function AllPurchase() {
   const [addPaymentModalOpen, setAddPaymentModalOpen] = useState(false);
   const [viewPaymentModalOpen, setViewPaymentModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [addShipmentModalOpen, setAddShipmentModalOpen] = useState(false);
+  const [shipments, setShipments] = useState([]);
+  const [shipmentItems, setShipmentItems] = useState([]);
+  const [shipmentNote, setShipmentNote] = useState("");
+  const [shipmentLoading, setShipmentLoading] = useState(false);
+  const [activeViewTab, setActiveViewTab] = useState("items");
   
   // Form states
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -100,6 +106,25 @@ export default function AllPurchase() {
     }
   };
 
+  const fetchShipments = async (purchaseId) => {
+    try {
+      const res = await fetch(`${API_ROUTES.PURCHASES}/${purchaseId}/shipments`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!res.ok) throw new Error("Failed to fetch shipments");
+      const data = await res.json();
+      const shipmentList = data.shipments || [];
+      setShipments(shipmentList);
+      return shipmentList;
+    } catch (err) {
+      console.error("Error fetching shipments:", err);
+      setShipments([]);
+      return [];
+    }
+  };
+
   const handleDropdownToggle = (purchaseId) => {
     setActiveDropdown(activeDropdown === purchaseId ? null : purchaseId);
   };
@@ -118,7 +143,10 @@ export default function AllPurchase() {
   // Action handlers
   const handleView = (purchase) => {
     setSelectedPurchase(purchase);
+    setActiveViewTab("items");
     setViewModalOpen(true);
+    fetchPaymentHistory(purchase.id);
+    fetchShipments(purchase.id);
     setActiveDropdown(null);
   };
 
@@ -142,6 +170,41 @@ export default function AllPurchase() {
     setSelectedPurchase(purchase);
     await fetchPaymentHistory(purchase.id);
     setViewPaymentModalOpen(true);
+    setActiveDropdown(null);
+  };
+
+  const buildShipmentItems = (purchase, shipmentList) => {
+    const receivedByItemId = {};
+    shipmentList.forEach((shipment) => {
+      shipment.items?.forEach((si) => {
+        if (!si.purchaseItemId) return;
+        receivedByItemId[si.purchaseItemId] = (receivedByItemId[si.purchaseItemId] || 0) + (parseFloat(si.received_quantity) || 0);
+      });
+    });
+
+    return (purchase.purchaseItems || []).map((item) => {
+      const receivedSoFar = receivedByItemId[item.id] || 0;
+      const remaining = Math.max(0, (parseFloat(item.quantity) || 0) - receivedSoFar);
+      const itemName = item.itemType === 'material' ? item.material?.name : item.product?.name;
+      return {
+        purchaseItemId: item.id,
+        itemType: item.itemType,
+        name: itemName || "-",
+        orderedQuantity: parseFloat(item.quantity) || 0,
+        receivedSoFar,
+        remaining,
+        receivedQuantity: remaining > 0 ? remaining : 0
+      };
+    });
+  };
+
+  const handleAddShipment = async (purchase) => {
+    setSelectedPurchase(purchase);
+    setShipmentNote("");
+    const shipmentList = await fetchShipments(purchase.id);
+    const itemsForShipment = buildShipmentItems(purchase, shipmentList).filter(i => i.remaining > 0);
+    setShipmentItems(itemsForShipment);
+    setAddShipmentModalOpen(true);
     setActiveDropdown(null);
   };
 
@@ -356,6 +419,52 @@ export default function AllPurchase() {
     }
   };
 
+  const handleShipmentSubmit = async () => {
+    if (!selectedPurchase) return;
+    const itemsToSend = shipmentItems
+      .filter(i => parseFloat(i.receivedQuantity) > 0)
+      .map(i => ({
+        purchaseItemId: i.purchaseItemId,
+        receivedQuantity: parseFloat(i.receivedQuantity)
+      }));
+
+    if (itemsToSend.length === 0) {
+      alert("Please enter received quantities for shipment.");
+      return;
+    }
+
+    setShipmentLoading(true);
+    try {
+      const response = await fetch(`${API_ROUTES.PURCHASES}/${selectedPurchase.id}/shipments`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          items: itemsToSend,
+          note: shipmentNote
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to add shipment');
+      }
+
+      await fetchPurchases();
+      await fetchShipments(selectedPurchase.id);
+      setAddShipmentModalOpen(false);
+      setShipmentItems([]);
+      setShipmentNote("");
+    } catch (error) {
+      console.error('Error adding shipment:', error);
+      alert(error.message || 'Failed to add shipment');
+    } finally {
+      setShipmentLoading(false);
+    }
+  };
+
   // Handle purchase deletion
   const handleDeleteSubmit = async () => {
     if (!selectedPurchase) return;
@@ -493,7 +602,7 @@ export default function AllPurchase() {
             <table className="w-full text-sm">
               <thead className="bg-gray-100/80">
                 <tr>
-                  {['reference', 'supplier', 'grand total', 'due amount', 'date', 'destination', 'status', 'actions'].map((key) => (
+                  {['reference', 'supplier', 'grand total', 'due amount', 'date', 'destination', 'shipping status', 'actions'].map((key) => (
                     <th
                       key={key}
                       className="p-3 text-left font-medium text-gray-700 cursor-pointer"
@@ -578,12 +687,14 @@ export default function AllPurchase() {
                       </td>
                       
                       <td className="p-3">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          isPaid 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-amber-100 text-amber-800'
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
+                          purchase.shippingStatus === 'received'
+                            ? 'bg-green-100 text-green-800'
+                            : purchase.shippingStatus === 'pending'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-violet-100 text-violet-600'
                         }`}>
-                          {isPaid ? 'Paid' : 'Pending'}
+                          { purchase.shippingStatus }
                         </span>
                       </td>
                       
@@ -616,14 +727,16 @@ export default function AllPurchase() {
                                     Add Payment
                                   </button>
                                 )}
-                                
-                                <button
-                                  onClick={() => handleViewPayment(purchase)}
-                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition"
-                                >
-                                  <DollarSign size={16} />
-                                  View Payments
-                                </button>
+
+                                {(purchase.shippingStatus || 'pending') !== 'received' && (
+                                  <button
+                                    onClick={() => handleAddShipment(purchase)}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition"
+                                  >
+                                    <Truck size={16} />
+                                    Add Shipment
+                                  </button>
+                                )}
                                 
                                 <div className="border-t my-1"></div>
                                 
@@ -794,9 +907,9 @@ export default function AllPurchase() {
                 >
                   <XCircle size={24} className="text-gray-500" />
                 </button>
-              </div>
             </div>
-            <div className="p-6">
+          </div>
+          <div className="p-6">
               <div className="grid grid-cols-2 gap-6 mb-6">
                 <div>
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Supplier</h4>
@@ -842,37 +955,131 @@ export default function AllPurchase() {
               </div>
 
               <div className="border-t pt-6">
-                <h4 className="text-lg font-semibold mb-4">Items Purchased</h4>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="p-3 text-left">Type</th>
-                        <th className="p-3 text-left">Item</th>
-                        <th className="p-3 text-left">Quantity</th>
-                        <th className="p-3 text-left">Unit Price</th>
-                        <th className="p-3 text-left">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedPurchase.purchaseItems?.map((item, index) => (
-                        <tr key={index} className="border-t">
-                          <td className="p-3">
-                            <span className="px-2 py-1 bg-gray-100 rounded text-xs">
-                              {item.itemType}
-                            </span>
-                          </td>
-                          <td className="p-3">
-                            {item.itemType === 'material' ? item.material?.name : item.product?.name}
-                          </td>
-                          <td className="p-3">{item.quantity}</td>
-                          <td className="p-3">${item.unitPrice?.toFixed(2)}</td>
-                          <td className="p-3 font-semibold">${item.totalPrice?.toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="flex items-center gap-2 mb-4">
+                  {["items", "payments", "shipments"].map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveViewTab(tab)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                        activeViewTab === tab
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    </button>
+                  ))}
                 </div>
+
+                {activeViewTab === "items" && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="p-3 text-left">Type</th>
+                          <th className="p-3 text-left">Item</th>
+                          <th className="p-3 text-left">Quantity</th>
+                          <th className="p-3 text-left">Unit Price</th>
+                          <th className="p-3 text-left">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedPurchase.purchaseItems?.map((item, index) => (
+                          <tr key={index} className="border-t">
+                            <td className="p-3">
+                              <span className="px-2 py-1 bg-gray-100 rounded text-xs">
+                                {item.itemType}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              {item.itemType === 'material' ? item.material?.name : item.product?.name}
+                            </td>
+                            <td className="p-3">{item.quantity}</td>
+                            <td className="p-3">${item.unitPrice?.toFixed(2)}</td>
+                            <td className="p-3 font-semibold">${item.totalPrice?.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {activeViewTab === "payments" && (
+                  <div className="space-y-3">
+                    {paymentHistory.length > 0 ? (
+                      paymentHistory.map((txn, index) => (
+                        <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <div>
+                            <div className="font-medium text-gray-800">Payment #{index + 1}</div>
+                            <div className="text-sm text-gray-600">{new Date(txn.createdAt).toLocaleString()}</div>
+                            <div className="text-sm text-gray-600">Method: {txn.payment_method}</div>
+                            {txn.account && (
+                              <div className="text-sm text-gray-600">Account: {txn.account.name}</div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-green-600">
+                              ${txn.amount?.toFixed(2)}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              {txn.note || 'No notes'}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <DollarSign size={48} className="mx-auto mb-4 text-gray-300" />
+                        <p>No payments recorded yet</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeViewTab === "shipments" && (
+                  <div className="space-y-4">
+                    {shipments.length > 0 ? (
+                      shipments.map((shipment) => (
+                        <div key={shipment.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <div className="font-semibold text-gray-800">{shipment.reference || `Shipment #${shipment.id}`}</div>
+                              <div className="text-sm text-gray-600">{new Date(shipment.createdAt).toLocaleString()}</div>
+                            </div>
+                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {shipment.status || "pending"}
+                            </span>
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead className="bg-white">
+                                <tr>
+                                  <th className="p-2 text-left">Item</th>
+                                  <th className="p-2 text-left">Received Qty</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {shipment.items?.map((si) => (
+                                  <tr key={si.id} className="border-t">
+                                    <td className="p-2">
+                                      {si.itemType === 'material' ? si.material?.name : si.product?.name}
+                                    </td>
+                                    <td className="p-2">{si.received_quantity}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <Truck size={48} className="mx-auto mb-4 text-gray-300" />
+                        <p>No shipments recorded yet</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -917,7 +1124,7 @@ export default function AllPurchase() {
       {/* Add Payment Modal */}
       {addPaymentModalOpen && selectedPurchase && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b">
               <div className="flex justify-between items-center">
                 <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -1044,6 +1251,115 @@ export default function AllPurchase() {
                     </>
                   ) : (
                     'Record Payment'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Shipment Modal */}
+      {addShipmentModalOpen && selectedPurchase && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <Truck size={24} />
+                  Add Shipment
+                </h3>
+                <button
+                  onClick={() => setAddShipmentModalOpen(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  disabled={shipmentLoading}
+                >
+                  <XCircle size={24} className="text-gray-500" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              {shipmentItems.length === 0 ? (
+                <div className="text-center text-gray-600">
+                  No remaining quantities to receive.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {shipmentItems.map((item) => (
+                    <div key={item.purchaseItemId} className="border rounded-lg p-4 bg-gray-50">
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="font-medium text-gray-800">{item.name}</div>
+                        <span className="text-xs text-gray-600">{item.itemType}</span>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                        <div>
+                          <div className="text-gray-500">Ordered</div>
+                          <div className="font-semibold">{item.orderedQuantity}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500">Received</div>
+                          <div className="font-semibold">{item.receivedSoFar}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500">Remaining</div>
+                          <div className="font-semibold">{item.remaining}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-500">Receive Now</div>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            max={item.remaining}
+                            value={item.receivedQuantity}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setShipmentItems(prev => prev.map(si => (
+                                si.purchaseItemId === item.purchaseItemId
+                                  ? { ...si, receivedQuantity: val }
+                                  : si
+                              )));
+                            }}
+                            className="w-full p-2 border rounded-lg bg-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-2">Note</label>
+                    <textarea
+                      value={shipmentNote}
+                      onChange={(e) => setShipmentNote(e.target.value)}
+                      className="w-full p-2 border rounded-lg"
+                      rows="3"
+                      placeholder="Optional note..."
+                    ></textarea>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setAddShipmentModalOpen(false)}
+                  className="flex-1 bg-gray-200 text-gray-800 font-medium py-3 rounded-lg hover:bg-gray-300 transition disabled:opacity-50"
+                  disabled={shipmentLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleShipmentSubmit}
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-medium py-3 rounded-lg hover:from-blue-600 hover:to-purple-700 transition shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                  disabled={shipmentLoading || shipmentItems.length === 0}
+                >
+                  {shipmentLoading ? (
+                    <>
+                      <Loader2 size={20} className="animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Shipment'
                   )}
                 </button>
               </div>

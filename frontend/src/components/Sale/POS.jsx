@@ -17,10 +17,11 @@ export default function ShopPOS() {
   const [paymentType, setPaymentType] = useState("cash");
   const [bankAccounts, setBankAccounts] = useState([]);
   const [bankAccountId, setBankAccountId] = useState("");
+  const [paidAmount, setPaidAmount] = useState(0);
+  const [paidAmountTouched, setPaidAmountTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [editingPriceIndex, setEditingPriceIndex] = useState(null);
   const [tempPrice, setTempPrice] = useState("");
-  const [showPriceModal, setShowPriceModal] = useState(false);
   const [priceModalData, setPriceModalData] = useState({ index: null, currentPrice: 0 });
 
   const searchInputRef = useRef(null);
@@ -280,6 +281,8 @@ export default function ShopPOS() {
     setCustomer("");
     setSearchQuery("");
     setShowSearchResults(false);
+    setPaidAmount(0);
+    setPaidAmountTouched(false);
   };
 
   // Open price override modal
@@ -291,7 +294,6 @@ export default function ShopPOS() {
       name: item.name
     });
     setTempPrice(item.unitPrice.toFixed(2));
-    setShowPriceModal(true);
   };
 
   const handlePriceChange = (index, price) => {
@@ -303,25 +305,6 @@ export default function ShopPOS() {
     updatedCart[itemIndex].totalPrice = newPrice * updatedCart[itemIndex].quantity;
 
     setCartItems(updatedCart);
-  };
-
-  // Apply price override
-  const handleApplyPriceOverride = () => {
-    if (!tempPrice || parseFloat(tempPrice) <= 0) {
-      alert("Please enter a valid price greater than 0");
-      return;
-    }
-
-    const newPrice = parseFloat(tempPrice);
-    const updatedCart = [...cartItems];
-    const itemIndex = priceModalData.index;
-    
-    updatedCart[itemIndex].unitPrice = newPrice;
-    updatedCart[itemIndex].totalPrice = newPrice * updatedCart[itemIndex].quantity;
-    
-    setCartItems(updatedCart);
-    setShowPriceModal(false);
-    setTempPrice("");
   };
 
   // Validate form before submission
@@ -346,6 +329,16 @@ export default function ShopPOS() {
       return false;
     }
 
+    if (paidAmount < 0) {
+      alert("⚠️ Paid amount cannot be negative.");
+      return false;
+    }
+
+    if (paidAmount > grandTotal) {
+      alert("⚠️ Paid amount cannot exceed grand total.");
+      return false;
+    }
+
     // Check stock availability for all items
     for (const cartItem of cartItems) {
       if (cartItem.quantity <= 0) {
@@ -365,12 +358,13 @@ export default function ShopPOS() {
       return;
     }
 
-    const payload = {
+  const payload = {
       shopId: parseInt(shopId),
       customer: customer.trim() || null,
       paymentType,
       bankAccountId: paymentType === "card" ? parseInt(bankAccountId) : null,
       discount: Math.max(0, parseFloat(discount) || 0),
+      paidAmount: parseFloat(paidAmount) || 0,
       items: cartItems.map(item => ({
         itemId: item.itemId,
         type: item.type,
@@ -408,6 +402,8 @@ export default function ShopPOS() {
         setCustomer("");
         setSearchQuery("");
         setShowSearchResults(false);
+        setPaidAmount(0);
+        setPaidAmountTouched(false);
         
         // Refresh shop items to get updated stock from server
         if (shopId) {
@@ -431,6 +427,12 @@ export default function ShopPOS() {
   // Calculate totals
   const subtotal = cartItems.reduce((sum, item) => sum + item.totalPrice, 0);
   const grandTotal = Math.max(0, subtotal - (parseFloat(discount) || 0));
+
+  useEffect(() => {
+    if (!paidAmountTouched) {
+      setPaidAmount(grandTotal);
+    }
+  }, [grandTotal, paidAmountTouched]);
 
   // Get low stock items (below 20)
   const lowStockItems = shopItems.filter(item => item.shop_stock < 20 && item.shop_stock > 0);
@@ -511,7 +513,7 @@ export default function ShopPOS() {
               <input
                 ref={searchInputRef}
                 type="text"
-                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-1 outline-none focus:ring-green-500 focus:border-green-500 transition"
                 placeholder="Search products & materials..."
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
@@ -902,6 +904,33 @@ export default function ShopPOS() {
                       </div>
                     </div>
 
+                    <div className="flex justify-between items-center">
+                      <span>Paid Amount:</span>
+                      <div className="flex items-center space-x-3">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={paidAmount}
+                          onChange={(e) => {
+                            setPaidAmountTouched(true);
+                            setPaidAmount(parseFloat(e.target.value) || 0);
+                          }}
+                          className="w-32 border border-gray-300 p-2 rounded-lg text-right focus:ring-1 outline-none focus:ring-blue-500 focus:border-blue-500 transition"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between text-sm ">
+                      <span>Change:</span>
+                      <span className="font-medium">${ ((parseFloat(paidAmount) || 0) - grandTotal ).toFixed(2)}</span>
+                    </div>
+
+                    <div className="flex justify-between text-sm text-gray-600">
+                      <span>Due:</span>
+                      <span className="font-medium">${Math.max(0, grandTotal - (parseFloat(paidAmount) || 0)).toFixed(2)}</span>
+                    </div>
+
                     <div className="pt-6">
                       <button
                         onClick={handleSubmit}
@@ -931,60 +960,6 @@ export default function ShopPOS() {
           </div>
         </div>
       </div>
-
-      {/* Price Override Modal */}
-      {showPriceModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-yellow-100 rounded-lg">
-                <span className="text-yellow-600"><CircleDollarSign /></span>
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-800 text-lg">Override Price</h3>
-                <p className="text-sm text-gray-500">Adjust price for {priceModalData.name}</p>
-              </div>
-            </div>
-            
-            <div className="mb-6">
-              <div className="flex justify-between mb-2">
-                <span className="text-gray-700">Current Price:</span>
-                <span className="font-semibold">${priceModalData.currentPrice.toFixed(2)}</span>
-              </div>
-              
-              <label className="block text-sm font-medium text-gray-700 mb-2">New Price:</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={tempPrice}
-                  onChange={(e) => setTempPrice(e.target.value)}
-                  className="w-full pl-8 border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition"
-                  placeholder="Enter new price"
-                  autoFocus
-                />
-              </div>
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowPriceModal(false)}
-                className="flex-1 bg-gray-200 text-gray-800 font-medium py-3 rounded-lg hover:bg-gray-300 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleApplyPriceOverride}
-                className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white font-medium py-3 rounded-lg hover:from-yellow-600 hover:to-yellow-700 transition"
-              >
-                Apply New Price
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

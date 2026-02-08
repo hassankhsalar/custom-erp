@@ -258,6 +258,7 @@ model Material {
   saleReturnItem      SaleReturnItem[]
   materialRepairItem  MaterialRepairItem[]
   ScrapMaterial       ScrapMaterial[]
+  purchaseShipmentItems PurchaseShipmentItem[]
 }
 
 model Product {
@@ -285,6 +286,7 @@ model Product {
   purchaseItem            PurchaseItem[]
   productRepairItem       ProductRepairItem[]
   scrapProduct            ScrapProduct[]
+  purchaseShipmentItems   PurchaseShipmentItem[]
 }
 
 model ProductMaterial {
@@ -413,10 +415,12 @@ model Purchase {
   createdAt  DateTime @default(now())
   grandTotal   Float
   paidAmount   Float     @default(0)
+  shippingStatus String   @default("pending")
   shippingCost Float?
   discount     Float?
   tax          Float?
   purchaseItems PurchaseItem[]
+  purchaseShipments PurchaseShipment[]
   transactions Transactions[]
 
   accountId       Int?          
@@ -439,10 +443,47 @@ model PurchaseItem {
   unitPrice  Float
   totalPrice Float
   createdAt  DateTime @default(now())
+  shipmentItems PurchaseShipmentItem[]
 
   @@unique([purchaseId, productId, materialId])
   @@index([productId])
   @@index([materialId])
+}
+
+model PurchaseShipment {
+  id         Int      @id @default(autoincrement())
+  purchaseId Int
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  reference  String?  @unique
+  status     String   @default("pending")
+  note       String?
+  receivedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  items      PurchaseShipmentItem[]
+
+  @@index([purchaseId])
+}
+
+model PurchaseShipmentItem {
+  id              Int      @id @default(autoincrement())
+  shipmentId      Int
+  shipment        PurchaseShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  purchaseItemId  Int?
+  purchaseItem    PurchaseItem? @relation(fields: [purchaseItemId], references: [id], onDelete: Cascade)
+  itemType        String   @default("material")
+  materialId      Int?
+  material        Material? @relation(fields: [materialId], references: [id])
+  productId       Int?
+  product         Product?  @relation(fields: [productId], references: [id])
+  quantity        Float
+  received_quantity Float  @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([shipmentId])
+  @@index([purchaseItemId])
+  @@index([materialId])
+  @@index([productId])
 }
 
 model Sale {
@@ -460,6 +501,7 @@ model Sale {
   total_cost  Float?
   discount    Float        @default(0)
   grandTotal  Float
+  paidAmount  Float        @default(0)
   paymentType String       @default("cash") // e.g. cash, card, mobile
   createdAt   DateTime     @default(now())
   saleItems   SaleItem[]

@@ -142,7 +142,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
 // Create a new sale for shop (updated for products & materials)
 router.post("/", async (req, res) => {
   try {
-    const { shopId, customer, paymentType, discount, items, bankAccountId } = req.body;
+    const { shopId, customer, paymentType, discount, items, bankAccountId, paidAmount } = req.body;
 
     // Validate required fields
     if (!shopId || !items || !Array.isArray(items) || items.length === 0) {
@@ -165,7 +165,14 @@ router.post("/", async (req, res) => {
       }
     }
     
-    if (["bank", "card"].includes((paymentType || "cash").toLowerCase()) && !bankAccountId) {
+    const normalizedPaymentType = (paymentType || "cash").toLowerCase();
+    const paid = paidAmount !== undefined && paidAmount !== null ? parseFloat(paidAmount) : null;
+
+    if (paid !== null && (isNaN(paid) || paid < 0)) {
+      return res.status(400).json({ error: "Paid amount must be a non-negative number" });
+    }
+
+    if (["bank", "card"].includes(normalizedPaymentType) && paid > 0 && !bankAccountId) {
       return res.status(400).json({ error: "Bank account is required for card/bank payments" });
     }
 
@@ -173,6 +180,11 @@ router.post("/", async (req, res) => {
       // Calculate totals
       const totalAmount = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
       const grandTotal = Math.max(0, totalAmount - (parseFloat(discount) || 0));
+      const finalPaidAmount = paid !== null ? paid : grandTotal;
+
+      if (finalPaidAmount > grandTotal) {
+        throw new Error("Paid amount cannot exceed grand total");
+      }
 
       // Generate reference
       const reference = `SALE-${Date.now()}`;
@@ -192,10 +204,10 @@ router.post("/", async (req, res) => {
 
       // Create the sale
       let bankRecord = null;
-      if (["bank", "card"].includes((paymentType || "cash").toLowerCase()) && bankAccountId) {
+      if (["bank", "card"].includes(normalizedPaymentType) && bankAccountId && finalPaidAmount > 0) {
         bankRecord = await tx.bankAccount.update({
           where: { id: parseInt(bankAccountId) },
-          data: { current_balance: { increment: grandTotal } }
+          data: { current_balance: { increment: finalPaidAmount } }
         });
       }
 
@@ -207,6 +219,7 @@ router.post("/", async (req, res) => {
           totalAmount,
           discount: parseFloat(discount) || 0,
           grandTotal,
+          paidAmount: finalPaidAmount,
           paymentType: paymentType || "cash",
           bankAccountId: bankRecord ? bankRecord.id : null,
           bankName: bankRecord ? bankRecord.name : null,
@@ -322,25 +335,27 @@ router.post("/", async (req, res) => {
         saleItems.push(saleItem);
       }
 
-      const updatedAccount = await tx.accounts.update({
-        where: { id: entityAccount.accountId },
-        data: { balance: { increment: grandTotal } }
-      });
+      if (finalPaidAmount > 0) {
+        const updatedAccount = await tx.accounts.update({
+          where: { id: entityAccount.accountId },
+          data: { balance: { increment: finalPaidAmount } }
+        });
 
-      const createdById = req.user?.userId || 1;
-      await createTransaction(tx, {
-        reference: `SALE-${Date.now()}`,
-        createdById,
-        accountId: entityAccount.accountId,
-        bankAccountId: bankRecord ? bankRecord.id : null,
-        saleId: sale.id,
-        purpose: "Sale Payment",
-        added_to_account: true,
-        amount: grandTotal,
-        payment_method: paymentType || "cash",
-        current_account_balance: updatedAccount.balance,
-        note: `Payment for sale ${sale.reference}`
-      });
+        const createdById = req.user?.userId || 1;
+        await createTransaction(tx, {
+          reference: `SALE-${Date.now()}`,
+          createdById,
+          accountId: entityAccount.accountId,
+          bankAccountId: bankRecord ? bankRecord.id : null,
+          saleId: sale.id,
+          purpose: "Sale Payment",
+          added_to_account: true,
+          amount: finalPaidAmount,
+          payment_method: paymentType || "cash",
+          current_account_balance: updatedAccount.balance,
+          note: `Payment for sale ${sale.reference}`
+        });
+      }
 
       return { sale, saleItems };
     });
@@ -375,6 +390,16 @@ router.get("/", async (req, res) => {
             shop_keeper: true,
           },
         },
+        transactions: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            account: true,
+            createdBy: {
+              select: { id: true, name: true, email: true }
+            },
+            bankAccount: true
+          }
+        },
         saleItems: {
           include: {
             product: {
@@ -401,6 +426,216 @@ router.get("/", async (req, res) => {
     });
 
     res.json(sales);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add payment to sale
+router.post("/:id/payments", async (req, res) => {
+  try {
+    const saleId = parseInt(req.params.id);
+    if (isNaN(saleId)) {
+      return res.status(400).json({ error: "Invalid sale ID" });
+    }
+
+    const { amount, payment_method, bankAccountId, note } = req.body;
+    const paymentAmount = parseFloat(amount);
+    if (!paymentAmount || paymentAmount <= 0) {
+      return res.status(400).json({ error: "Payment amount must be greater than 0" });
+    }
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { shop: true }
+    });
+    if (!sale) {
+      return res.status(404).json({ error: "Sale not found" });
+    }
+
+    const dueAmount = Math.max(0, (parseFloat(sale.grandTotal) || 0) - (parseFloat(sale.paidAmount) || 0));
+    if (dueAmount.toFixed(2) < paymentAmount.toFixed(2)) {
+      return res.status(400).json({ error: `Payment amount ($${paymentAmount.toFixed(2)}) exceeds due amount ($${dueAmount.toFixed(2)})` });
+    }
+
+    const entityAccount = await prisma.entityAccount.findFirst({
+      where: {
+        entityType: "shop",
+        entityId: sale.shopId,
+        isPrimary: true
+      },
+      include: { account: true }
+    });
+    if (!entityAccount) {
+      return res.status(400).json({ error: "No primary account found for this shop" });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      let bankRecord = null;
+      if (["bank", "card"].includes((payment_method || "cash").toLowerCase()) && bankAccountId) {
+        bankRecord = await tx.bankAccount.update({
+          where: { id: parseInt(bankAccountId) },
+          data: { current_balance: { increment: paymentAmount } }
+        });
+      }
+
+      const updatedSale = await tx.sale.update({
+        where: { id: saleId },
+        data: { paidAmount: { increment: paymentAmount } }
+      });
+
+      const updatedAccount = await tx.accounts.update({
+        where: { id: entityAccount.accountId },
+        data: { balance: { increment: paymentAmount } }
+      });
+
+      const createdById = req.user?.userId || 1;
+      const txn = await createTransaction(tx, {
+        reference: `SALE-${Date.now()}`,
+        createdById,
+        accountId: entityAccount.accountId,
+        bankAccountId: bankRecord ? bankRecord.id : null,
+        saleId: updatedSale.id,
+        purpose: "Sale Payment",
+        added_to_account: true,
+        amount: paymentAmount,
+        payment_method: payment_method || "cash",
+        current_account_balance: updatedAccount.balance,
+        note: note || `Payment for sale ${updatedSale.reference}`
+      });
+
+      return { updatedSale, txn };
+    });
+
+    res.json({
+      success: true,
+      sale: result.updatedSale,
+      transaction: result.txn
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get payment history for sale
+router.get("/:id/payments", async (req, res) => {
+  try {
+    const saleId = parseInt(req.params.id);
+    if (isNaN(saleId)) {
+      return res.status(400).json({ error: "Invalid sale ID" });
+    }
+
+    const transactions = await prisma.transactions.findMany({
+      where: { saleId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        account: true,
+        createdBy: { select: { id: true, name: true, email: true } },
+        bankAccount: true
+      }
+    });
+
+    res.json({ payments: transactions });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update sale (limited fields)
+router.put("/:id", async (req, res) => {
+  try {
+    const saleId = parseInt(req.params.id);
+    if (isNaN(saleId)) {
+      return res.status(400).json({ error: "Invalid sale ID" });
+    }
+
+    const { customer, discount } = req.body;
+    const sale = await prisma.sale.findUnique({ where: { id: saleId } });
+    if (!sale) {
+      return res.status(404).json({ error: "Sale not found" });
+    }
+
+    if ((parseFloat(sale.paidAmount) || 0) > 0) {
+      return res.status(400).json({ error: "Cannot edit sale with payments" });
+    }
+
+    const newDiscount = discount !== undefined ? parseFloat(discount) || 0 : sale.discount;
+    const newGrandTotal = Math.max(0, (parseFloat(sale.totalAmount) || 0) - newDiscount);
+
+    const updatedSale = await prisma.sale.update({
+      where: { id: saleId },
+      data: {
+        customer: customer?.trim() || null,
+        discount: newDiscount,
+        grandTotal: newGrandTotal
+      }
+    });
+
+    res.json(updatedSale);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Delete sale (only if no payments)
+router.delete("/:id", async (req, res) => {
+  try {
+    const saleId = parseInt(req.params.id);
+    if (isNaN(saleId)) {
+      return res.status(400).json({ error: "Invalid sale ID" });
+    }
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: { saleItems: true }
+    });
+    if (!sale) {
+      return res.status(404).json({ error: "Sale not found" });
+    }
+    if ((parseFloat(sale.paidAmount) || 0) > 0) {
+      return res.status(400).json({ error: "Cannot delete sale with payments" });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const item of sale.saleItems) {
+        if (item.productId) {
+          await tx.shopProduct.update({
+            where: {
+              shop_id_product_id: {
+                shop_id: sale.shopId,
+                product_id: item.productId
+              }
+            },
+            data: { stock: { increment: parseFloat(item.quantity) } }
+          });
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { increment: parseFloat(item.quantity) } }
+          });
+        }
+        if (item.materialId) {
+          await tx.shopMaterial.update({
+            where: {
+              shop_id_material_id: {
+                shop_id: sale.shopId,
+                material_id: item.materialId
+              }
+            },
+            data: { stock: { increment: parseFloat(item.quantity) } }
+          });
+          await tx.material.update({
+            where: { id: item.materialId },
+            data: { current_stock: { increment: parseFloat(item.quantity) } }
+          });
+        }
+      }
+
+      await tx.saleItem.deleteMany({ where: { saleId } });
+      await tx.transactions.deleteMany({ where: { saleId } });
+      await tx.sale.delete({ where: { id: saleId } });
+    });
+
+    res.json({ success: true, message: "Sale deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

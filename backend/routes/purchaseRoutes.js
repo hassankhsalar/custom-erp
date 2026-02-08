@@ -27,6 +27,36 @@ const calculatePurchaseStatus = (purchase) => {
   return { dueAmount, status };
 };
 
+const calculateShippingStatusFromReceived = (items) => {
+  if (!items || items.length === 0) return 'pending';
+  let allZero = true;
+  let allComplete = true;
+  for (const item of items) {
+    const qty = parseFloat(item.quantity) || 0;
+    const received = parseFloat(item.receivedQuantity ?? item.received_quantity ?? 0) || 0;
+    if (received > 0) allZero = false;
+    if (received < qty) allComplete = false;
+  }
+  if (allComplete) return 'received';
+  if (allZero) return 'pending';
+  return 'partial';
+};
+
+const calculateShippingStatusFromTotals = (purchaseItems, receivedByItemId) => {
+  if (!purchaseItems || purchaseItems.length === 0) return 'pending';
+  let allZero = true;
+  let allComplete = true;
+  for (const item of purchaseItems) {
+    const qty = parseFloat(item.quantity) || 0;
+    const received = parseFloat(receivedByItemId[item.id] || 0);
+    if (received > 0) allZero = false;
+    if (received < qty) allComplete = false;
+  }
+  if (allComplete) return 'received';
+  if (allZero) return 'pending';
+  return 'partial';
+};
+
 // ➕ Add Purchase (Updated to support both products and materials)
 router.post("/", async (req, res) => {
   try {
@@ -107,6 +137,20 @@ router.post("/", async (req, res) => {
           error: "Quantity and unitPrice must be positive numbers" 
         });
       }
+
+      if (item.receivedQuantity !== undefined && item.receivedQuantity !== null) {
+        const receivedQty = parseFloat(item.receivedQuantity);
+        if (isNaN(receivedQty) || receivedQty < 0) {
+          return res.status(400).json({
+            error: "Received quantity must be a non-negative number"
+          });
+        }
+        if (receivedQty > parseFloat(item.quantity)) {
+          return res.status(400).json({
+            error: "Received quantity cannot exceed ordered quantity"
+          });
+        }
+      }
     }
 
     // Calculate subtotal from items
@@ -130,6 +174,8 @@ router.post("/", async (req, res) => {
         error: "Paid amount cannot exceed grand total from" 
       });
     }
+
+    const computedShippingStatus = calculateShippingStatusFromReceived(items);
 
     // Get the account associated with the destination
     const entityAccount = await prisma.entityAccount.findFirst({
@@ -174,6 +220,7 @@ router.post("/", async (req, res) => {
           discount: parseFloat(discount),
           tax: parseFloat(tax),
           paidAmount: parseFloat(paidAmount),
+          shippingStatus: computedShippingStatus,
         },
       });
 
@@ -181,6 +228,9 @@ router.post("/", async (req, res) => {
       const purchaseItems = await Promise.all(
         items.map(async (item) => {
           const totalPrice = item.quantity * item.unitPrice;
+          const receivedQty = item.receivedQuantity !== undefined && item.receivedQuantity !== null
+            ? parseFloat(item.receivedQuantity)
+            : parseFloat(item.quantity);
           
           const purchaseItemData = {
             purchaseId: purchase.id,
@@ -207,28 +257,57 @@ router.post("/", async (req, res) => {
 
           // 3. Update stock based on destination type and item type
           if (item.itemType === "product") {
-            await updateProductStock(
-              tx, 
-              actualDestinationType,
-              actualDestinationId, 
-              parseInt(item.productId), 
-              parseFloat(item.quantity),
-              parseFloat(item.unitPrice)
-            );
+            if (receivedQty > 0) {
+              await updateProductStock(
+                tx,
+                actualDestinationType,
+                actualDestinationId,
+                parseInt(item.productId),
+                receivedQty,
+                parseFloat(item.unitPrice)
+              );
+            }
           } else {
-            await updateMaterialStock(
-              tx, 
-              actualDestinationType,
-              actualDestinationId, 
-              parseInt(item.materialId), 
-              parseFloat(item.quantity),
-              parseFloat(item.unitPrice)
-            );
+            if (receivedQty > 0) {
+              await updateMaterialStock(
+                tx,
+                actualDestinationType,
+                actualDestinationId,
+                parseInt(item.materialId),
+                receivedQty,
+                parseFloat(item.unitPrice)
+              );
+            }
           }
 
-          return purchaseItem;
+          return { purchaseItem, receivedQty };
         })
       );
+
+      const shipment = await tx.purchaseShipment.create({
+        data: {
+          purchaseId: purchase.id,
+          reference: `SHIP-${Date.now()}`,
+          status: computedShippingStatus,
+          receivedAt: computedShippingStatus === 'received' ? new Date() : null
+        }
+      });
+
+      const shipmentItemsData = purchaseItems.map(({ purchaseItem, receivedQty }) => ({
+        shipmentId: shipment.id,
+        purchaseItemId: purchaseItem.id,
+        itemType: purchaseItem.itemType,
+        materialId: purchaseItem.materialId,
+        productId: purchaseItem.productId,
+        quantity: receivedQty,
+        received_quantity: receivedQty
+      }));
+
+      if (shipmentItemsData.length > 0) {
+        await tx.purchaseShipmentItem.createMany({
+          data: shipmentItemsData
+        });
+      }
 
       // 4. Create transaction record if paidAmount > 0
       if (parseFloat(paidAmount) > 0) {
@@ -273,7 +352,7 @@ router.post("/", async (req, res) => {
       message: "Purchase created successfully",
       purchase: {
         ...result.purchase,
-        purchaseItems: result.purchaseItems,
+        purchaseItems: result.purchaseItems.map((entry) => entry.purchaseItem),
       },
     });
 
@@ -983,6 +1062,170 @@ router.put('/:id', async (req, res) => {
     }
     
     res.status(400).json({ error: error.message || 'Failed to update purchase' });
+  }
+});
+
+// POST add shipment to purchase
+router.post('/:id/shipments', async (req, res) => {
+  try {
+    const purchaseId = parseInt(req.params.id);
+    if (isNaN(purchaseId)) {
+      return res.status(400).json({ error: 'Invalid purchase ID' });
+    }
+
+    const { items, note } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Shipment items are required' });
+    }
+
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: purchaseId },
+      include: {
+        purchaseItems: true,
+        purchaseShipments: {
+          include: { items: true }
+        }
+      }
+    });
+
+    if (!purchase) {
+      return res.status(404).json({ error: 'Purchase not found' });
+    }
+
+    const receivedByItemId = {};
+    purchase.purchaseShipments.forEach((shipment) => {
+      shipment.items.forEach((si) => {
+        if (!si.purchaseItemId) return;
+        receivedByItemId[si.purchaseItemId] = (receivedByItemId[si.purchaseItemId] || 0) + (parseFloat(si.received_quantity) || 0);
+      });
+    });
+
+    const shipmentItems = [];
+    for (const item of items) {
+      const purchaseItemId = parseInt(item.purchaseItemId);
+      const receivedQty = parseFloat(item.receivedQuantity);
+      if (!purchaseItemId || isNaN(purchaseItemId)) {
+        return res.status(400).json({ error: 'purchaseItemId is required for shipment items' });
+      }
+      if (isNaN(receivedQty) || receivedQty <= 0) {
+        continue;
+      }
+
+      const purchaseItem = purchase.purchaseItems.find((pi) => pi.id === purchaseItemId);
+      if (!purchaseItem) {
+        return res.status(400).json({ error: 'Invalid purchaseItemId' });
+      }
+
+      const receivedSoFar = receivedByItemId[purchaseItemId] || 0;
+      const remaining = (parseFloat(purchaseItem.quantity) || 0) - receivedSoFar;
+      if (receivedQty > remaining) {
+        return res.status(400).json({ error: 'Received quantity cannot exceed remaining quantity' });
+      }
+
+      shipmentItems.push({
+        purchaseItem,
+        receivedQty
+      });
+    }
+
+    if (shipmentItems.length === 0) {
+      return res.status(400).json({ error: 'No valid shipment items to add' });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const shipment = await tx.purchaseShipment.create({
+        data: {
+          purchaseId: purchase.id,
+          reference: `SHIP-${Date.now()}`,
+          status: 'received',
+          note: note || null,
+          receivedAt: new Date()
+        }
+      });
+
+      for (const entry of shipmentItems) {
+        const { purchaseItem, receivedQty } = entry;
+        await tx.purchaseShipmentItem.create({
+          data: {
+            shipmentId: shipment.id,
+            purchaseItemId: purchaseItem.id,
+            itemType: purchaseItem.itemType,
+            materialId: purchaseItem.materialId,
+            productId: purchaseItem.productId,
+            quantity: receivedQty,
+            received_quantity: receivedQty
+          }
+        });
+
+        if (purchaseItem.itemType === 'product') {
+          await updateProductStock(
+            tx,
+            purchase.destinationType,
+            purchase.destinationId,
+            purchaseItem.productId,
+            receivedQty,
+            purchaseItem.unitPrice
+          );
+        } else {
+          await updateMaterialStock(
+            tx,
+            purchase.destinationType,
+            purchase.destinationId,
+            purchaseItem.materialId,
+            receivedQty,
+            purchaseItem.unitPrice
+          );
+        }
+
+        receivedByItemId[purchaseItem.id] = (receivedByItemId[purchaseItem.id] || 0) + receivedQty;
+      }
+
+      const newShippingStatus = calculateShippingStatusFromTotals(purchase.purchaseItems, receivedByItemId);
+      await tx.purchase.update({
+        where: { id: purchase.id },
+        data: { shippingStatus: newShippingStatus }
+      });
+
+      return { shipment, shippingStatus: newShippingStatus };
+    });
+
+    res.json({
+      success: true,
+      shipment: result.shipment,
+      shippingStatus: result.shippingStatus
+    });
+  } catch (error) {
+    console.error('Error adding shipment:', error);
+    res.status(500).json({ error: error.message || 'Failed to add shipment' });
+  }
+});
+
+// GET shipments for a purchase
+router.get('/:id/shipments', async (req, res) => {
+  try {
+    const purchaseId = parseInt(req.params.id);
+    if (isNaN(purchaseId)) {
+      return res.status(400).json({ error: 'Invalid purchase ID' });
+    }
+
+    const shipments = await prisma.purchaseShipment.findMany({
+      where: { purchaseId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: {
+          include: {
+            material: true,
+            product: true,
+            purchaseItem: true
+          }
+        }
+      }
+    });
+
+    res.json({ shipments });
+  } catch (error) {
+    console.error('Error fetching shipments:', error);
+    res.status(500).json({ error: 'Failed to fetch shipments' });
   }
 });
 
