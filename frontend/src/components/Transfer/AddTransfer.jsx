@@ -108,10 +108,7 @@ const AddTransfer = () => {
           params: { search: e.target.value },
           headers
         })
-      ]);
-
-      const productsWithTag = (resProducts.data.products || []).map(p => ({ ...p, itemType: 'product' }));
-      const materialsWithTag = (resMaterials.data.materials || []).map(m => ({ ...m, itemType: 'material' }));
+        const materialsWithTag = (resMaterials.data.materials || []).map(m => ({ ...m, itemType: 'material' }));
 
       setSearchResults([...productsWithTag, ...materialsWithTag]);
       

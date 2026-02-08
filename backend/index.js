@@ -186,7 +186,6 @@ app.use('/api/purchases', authenticateToken, purchaseRoutes);
 app.use('/api/sales', authenticateToken, salesRoutes);
 app.use('/api/shops', authenticateToken, shopRoutes);
 app.use('/api/shop-sales', authenticateToken, shopSalesRoutes);
-app.use('/api/store-to-shop-transfers', storeToShopTransfersRoutes);
 // app.use('/api/store-to-shop-transfers', storeToShopTransfersRoutes);
 app.use('/api/dash-board', dashboardRoutes);
 app.use('/api/users', authenticateToken, userRoutes);

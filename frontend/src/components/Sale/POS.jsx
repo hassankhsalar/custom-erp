@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
 import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X } from "lucide-react";
+import e from "cors";
 
 export default function ShopPOS() {
   const [shops, setShops] = useState([]);
@@ -276,6 +277,17 @@ export default function ShopPOS() {
     setShowPriceModal(true);
   };
 
+  const handlePriceChange = (index, price) => {
+    const newPrice = price || 0;
+    const updatedCart = [...cartItems];
+    const itemIndex = index;
+    
+    updatedCart[itemIndex].unitPrice = newPrice;
+    updatedCart[itemIndex].totalPrice = newPrice * updatedCart[itemIndex].quantity;
+
+    setCartItems(updatedCart);
+  };
+
   // Apply price override
   const handleApplyPriceOverride = () => {
     if (!tempPrice || parseFloat(tempPrice) <= 0) {
@@ -419,8 +431,8 @@ export default function ShopPOS() {
           </div>
           <div className="mt-2 md:mt-0">
             {shopId && (
-              <div className="text-md bg-gray-300/30 px-3 py-1 rounded-full text-emerald-600">
-                Selected: {shops.find(s => s.id === parseInt(shopId))?.name || "Shop"}
+              <div className="text-md font-semibold bg-gray-300/30 px-3 py-1 mr-4 rounded-full text-emerald-600">
+                {shops.find(s => s.id === parseInt(shopId))?.name || "Shop"}
               </div>
             )}
           </div>
@@ -756,18 +768,18 @@ export default function ShopPOS() {
                             </td>
                             <td className="p-4">
                               <div className="flex items-center gap-2">
-                                <span className="font-medium text-gray-900">${item.unitPrice.toFixed(2)}</span>
-                                {item.unitPrice !== item.original_price && (
-                                  <span className="text-xs text-green-600 bg-green-100 px-1.5 py-0.5 rounded">
-                                    Overridden
-                                  </span>
-                                )}
-                                <button
-                                  onClick={() => handleOpenPriceModal(index)}
-                                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                                >
-                                  Edit
-                                </button>
+                                <div>
+                                  <input
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    value={item.unitPrice}
+                                    onChange={(e) => handlePriceChange(index, e.target.value)}
+                                    className="w-full min-w-24 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition"
+                                    placeholder="Enter new price"
+                                    autoFocus
+                                  />
+                                </div>
                               </div>
                             </td>
                             <td className="p-4">

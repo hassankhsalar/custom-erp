@@ -221,9 +221,7 @@ const TransferList = ({ fromType, toType, title }) => {
   // Calculate statistics
   const processingTransfers = transfers.filter(t => t.status === 'processing').length;
   const onTheWayTransfers = transfers.filter(t => t.status === 'being_shipped').length;
-  const completedTransfers = transfers.filter(t => t.status === 'transferred').length;
-  const onTheWayTransfers = transfers.filter(t => t.status === 'being_shipped').length;
-  const completedTransfers = transfers.filter(t => t.status === 'transferred').length;
+  const completedTransfers = transfers.filter(t => t.status === 'transfer_done').length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
