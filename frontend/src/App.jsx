@@ -75,6 +75,9 @@ import AllAccounts from "./components/Accounts/AllAccounts";
 import AssignAccount from "./components/Accounts/AssignAccount";
 import CashRegisterAssign from "./components/Accounts/CashRegisterAssign";
 import AddCashRegister from "./components/Accounts/AddCashRegister";
+import BankAccounts from "./components/Accounts/BankAccounts";
+import GeneralLedger from "./components/Accounts/GeneralLedger";
+import BalanceSheet from "./components/Accounts/BalanceSheet";
 import AssignUser from "./components/Users/AssignUser";
 import AllAssignedUsers from "./components/Users/AllAssignedUsers";
 import PermissionsManagement from "./components/Permissions/PermissionsManagement";
@@ -288,6 +291,15 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="cash_register_create" />}>
               <Route path="/addcashregister" element={<AddCashRegister />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="bank_account_read" />}>
+              <Route path="/bank-accounts" element={<BankAccounts />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="general_ledger_report" />}>
+              <Route path="/accounts/general-ledger" element={<GeneralLedger />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="balance_sheet_report" />}>
+              <Route path="/accounts/balance-sheet" element={<BalanceSheet />} />
             </Route>
 
             <Route element={<PermissionRoute requiredPermission="user_associate_create" />}>

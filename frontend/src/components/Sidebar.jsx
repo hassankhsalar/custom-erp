@@ -202,13 +202,16 @@ const Sidebar = () => {
       color: 'from-indigo-500 to-blue-500',
       bgColor: 'bg-gradient-to-r from-indigo-50 to-blue-100/50',
       textColor: 'text-indigo-700',
-      permissionKey: ['account_read', 'account_create', 'cash_register_create'],
+      permissionKey: ['account_read', 'account_create', 'cash_register_create', 'bank_account_read'],
       subItems: [
         { name: 'Add Account', path: '/addaccount', icon: <NotebookPen size={16} />, permissionKey: 'account_create' },
         { name: 'Account List', path: '/allaccounts', icon: <TableProperties size={16} />, permissionKey: 'account_read' },
         { name: 'Assign Account', path: '/assignaccount', icon: <TableProperties size={16} />, permissionKey: ['account_create', 'account_assign'] },
         { name: 'Assign CashRegister', path: '/cashregisterassign', icon: <TableProperties size={16} />, permissionKey: ['cash_register_create', 'cash_register_assign'] },
         { name: 'Add CashRegister', path: '/addcashregister', icon: <TableProperties size={16} />, permissionKey: 'cash_register_create' },
+        { name: 'Bank Accounts', path: '/bank-accounts', icon: <TableProperties size={16} />, permissionKey: ['bank_account_read', 'bank_account_create'] },
+        { name: 'General Ledger', path: '/accounts/general-ledger', icon: <TableProperties size={16} />, permissionKey: 'general_ledger_report' },
+        { name: 'Balance Sheet', path: '/accounts/balance-sheet', icon: <TableProperties size={16} />, permissionKey: 'balance_sheet_report' },
       ]
     },
     {
@@ -254,7 +257,7 @@ const Sidebar = () => {
   ];
 
   return (
-    <div className={`${isCollapsed ? 'w-20' : 'w-64'} bg-gradient-to-br from-white via-gray-50 to-white text-gray-800 p-6 min-h-full shadow-2xl backdrop-blur-sm border-r border-gray-200/50 transition-all duration-300 relative`}>
+    <div className={`${isCollapsed ? 'w-20' : 'w-64'} max-h-[100vh] overflow-y-auto bg-gradient-to-br from-white via-gray-50 to-white text-gray-800 p-6 min-h-full shadow-2xl backdrop-blur-sm border-r border-gray-200/50 transition-all duration-300 relative`}>
       {/* Collapse Toggle Button */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}

@@ -2,6 +2,7 @@ const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const router = express.Router();
+const { createTransaction } = require('../utils/transactionHelper');
 
 // Generate unique reference for transactions
 const generateTransactionReference = () => {
@@ -39,6 +40,7 @@ router.post("/", async (req, res) => {
       tax = 0,
       paidAmount = 0,
       paymentMethod = "cash",
+      bankAccountId,
       reference, 
       items 
     } = req.body;
@@ -238,19 +240,29 @@ router.post("/", async (req, res) => {
           }
         });
 
+        let bankAccountRecord = null;
+        if (["bank", "card", "bank_transfer"].includes((paymentMethod || "cash").toLowerCase()) && bankAccountId) {
+          bankAccountRecord = await tx.bankAccount.update({
+            where: { id: parseInt(bankAccountId) },
+            data: {
+              current_balance: { decrement: parseFloat(paidAmount) }
+            }
+          });
+        }
+
         // Create transaction record
-        await tx.transactions.create({
-          data: {
-            reference: `TRX-${Date.now()}`,
-            createdById: userId,
-            accountId: entityAccount.accountId,
-            purchaseId: purchase.id,
-            purpose: "Purchase Payment",
-            amount: parseFloat(paidAmount),
-            payment_method: paymentMethod || "cash",
-            current_account_balance: updatedAccount.balance,
-            note: `Payment for purchase ${purchase.reference}`
-          }
+        await createTransaction(tx, {
+          reference: `TRX-${Date.now()}`,
+          createdById: userId,
+          accountId: entityAccount.accountId,
+          bankAccountId: bankAccountRecord ? bankAccountRecord.id : null,
+          purchaseId: purchase.id,
+          purpose: "Purchase Payment",
+          added_to_account: false,
+          amount: parseFloat(paidAmount),
+          payment_method: paymentMethod || "cash",
+          current_account_balance: updatedAccount.balance,
+          note: `Payment for purchase ${purchase.reference}`
         });
       }
 
@@ -685,8 +697,19 @@ async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity, u
 // GET all purchases with calculated due and status
 router.get('/', async (req, res) => {
   try {
+    const page = parseInt(req.query.page, 10);
+    const limit = parseInt(req.query.limit, 10);
+    const usePagination = Number.isFinite(page) || Number.isFinite(limit);
+    const pageNumber = Number.isFinite(page) && page > 0 ? page : 1;
+    const limitNumber = Number.isFinite(limit) && limit > 0 ? limit : 10;
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const totalCount = usePagination ? await prisma.purchase.count() : null;
+
     const purchases = await prisma.purchase.findMany({
       orderBy: { createdAt: 'desc' },
+      skip: usePagination ? skip : undefined,
+      take: usePagination ? limitNumber : undefined,
       include: {
         supplier: true,
         purchaseItems: {
@@ -755,6 +778,19 @@ router.get('/', async (req, res) => {
         };
       })
     );
+
+    if (usePagination) {
+      const totalPages = Math.ceil(totalCount / limitNumber);
+      return res.json({
+        data: purchasesWithDestinations,
+        pagination: {
+          page: pageNumber,
+          limit: limitNumber,
+          totalCount,
+          totalPages
+        }
+      });
+    }
 
     res.json(purchasesWithDestinations);
   } catch (error) {
@@ -951,8 +987,8 @@ router.put('/:id', async (req, res) => {
 });
 
 // POST add payment to purchase
-router.post('/:id/payments', async (req, res) => {
-  try {
+  router.post('/:id/payments', async (req, res) => {
+    try {
     const purchaseId = parseInt(req.params.id);
     
     if (isNaN(purchaseId)) {
@@ -1034,22 +1070,28 @@ router.post('/:id/payments', async (req, res) => {
         }
       });
 
+      let bankAccountRecord = null;
+      if (["bank", "card", "bank_transfer"].includes((payment_method || "cash").toLowerCase()) && bankAccountId) {
+        bankAccountRecord = await prisma.bankAccount.update({
+          where: { id: parseInt(bankAccountId) },
+          data: { current_balance: { decrement: paymentAmount } }
+        });
+      }
+
       // Create transaction record
-      const transaction = await prisma.transactions.create({
-        data: {
-          reference: generateTransactionReference(),
-          createdById: parseInt(createdById),
-          cashRegisterId: cashRegisterId ? parseInt(cashRegisterId) : null,
-          bankAccountId: bankAccountId ? parseInt(bankAccountId) : null,
-          accountId: parseInt(accountId),
-          purchaseId: purchaseId,
-          purpose: purpose,
-          added_to_account: true,
-          amount: paymentAmount,
-          payment_method: payment_method,
-          current_account_balance: newAccountBalance,
-          note: note || `Payment for purchase ${purchase.reference}`
-        }
+      const transaction = await createTransaction(prisma, {
+        reference: generateTransactionReference(),
+        createdById: parseInt(createdById),
+        cashRegisterId: cashRegisterId ? parseInt(cashRegisterId) : null,
+        bankAccountId: bankAccountRecord ? bankAccountRecord.id : (bankAccountId ? parseInt(bankAccountId) : null),
+        accountId: parseInt(accountId),
+        purchaseId: purchaseId,
+        purpose: purpose,
+        added_to_account: false,
+        amount: paymentAmount,
+        payment_method: payment_method,
+        current_account_balance: newAccountBalance,
+        note: note || `Payment for purchase ${purchase.reference}`
       });
 
       return {

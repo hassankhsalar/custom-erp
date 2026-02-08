@@ -431,8 +431,7 @@ export default function AllSales() {
             </div>
             <div className="text-sm text-gray-500">
               Page <span className="font-semibold">{currentPage}</span> of{" "}
-              <span className="font-semibold">{totalPages}</span> • Last updated:{" "}
-              {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              <span className="font-semibold">{totalPages}</span>
             </div>
           </div>
         </div>

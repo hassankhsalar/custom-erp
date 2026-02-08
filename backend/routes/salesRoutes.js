@@ -2,11 +2,12 @@ const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const router = express.Router();
+const { createTransaction } = require('../utils/transactionHelper');
 
 // 🧾 Create a sale (POS)
 router.post("/", async (req, res) => {
   try {
-    const { storeId, customer, paymentType, items, discount } = req.body;
+    const { storeId, customer, paymentType, items, discount, bankAccountId } = req.body;
 
     let totalAmount = 0;
     items.forEach(i => {
@@ -14,48 +15,93 @@ router.post("/", async (req, res) => {
     });
     const grandTotal = totalAmount - (discount || 0);
 
-    // Create sale
-    const sale = await prisma.sale.create({
-      data: {
-        reference: `BSP-${Date.now()}${Math.floor(Math.random() * (10 ** 3))}`,
-        storeId,
-        customer,
-        totalAmount,
-        discount: discount || 0,
-        grandTotal,
-        paymentType,
-        saleItems: {
-          create: items.map(i => ({
-            productId: i.productId,
-            quantity: i.quantity,
-            unitPrice: i.unitPrice,
-            totalPrice: i.unitPrice * i.quantity
-          }))
-        }
-      },
-      include: { saleItems: true }
-    });
-
-    // Decrease stock for each product
-    for (const i of items) {
-      const existingStock = await prisma.storeProduct.findUnique({
-        where: {
-          store_id_product_id: {
-            store_id: storeId,
-            product_id: i.productId
-          }
-        }
-      });
-
-      if (existingStock) {
-        await prisma.storeProduct.update({
-          where: { store_id_product_id: { store_id: storeId, product_id: i.productId } },
-          data: { stock: { decrement: i.quantity } }
-        });
-      }
+    if (["bank", "card"].includes((paymentType || "cash").toLowerCase()) && !bankAccountId) {
+      return res.status(400).json({ message: "Bank account is required for card/bank payments" });
     }
 
-    res.json(sale);
+    const result = await prisma.$transaction(async (tx) => {
+      const entityAccount = await tx.entityAccount.findFirst({
+        where: { entityType: 'store', entityId: parseInt(storeId), isPrimary: true },
+        include: { account: true }
+      });
+
+      if (!entityAccount) {
+        throw new Error("No primary account found for this store");
+      }
+
+      let bankRecord = null;
+      if (["bank", "card"].includes((paymentType || "cash").toLowerCase()) && bankAccountId) {
+        bankRecord = await tx.bankAccount.update({
+          where: { id: parseInt(bankAccountId) },
+          data: { current_balance: { increment: grandTotal } }
+        });
+      }
+
+      const sale = await tx.sale.create({
+        data: {
+          reference: `SALE-${Date.now()}${Math.floor(Math.random() * (10 ** 3))}`,
+          storeId,
+          customer,
+          totalAmount,
+          discount: discount || 0,
+          grandTotal,
+          paymentType,
+          bankAccountId: bankRecord ? bankRecord.id : null,
+          bankName: bankRecord ? bankRecord.name : null,
+          saleItems: {
+            create: items.map(i => ({
+              productId: i.productId,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+              totalPrice: i.unitPrice * i.quantity
+            }))
+          }
+        },
+        include: { saleItems: true }
+      });
+
+      for (const i of items) {
+        const existingStock = await tx.storeProduct.findUnique({
+          where: {
+            store_id_product_id: {
+              store_id: storeId,
+              product_id: i.productId
+            }
+          }
+        });
+
+        if (existingStock) {
+          await tx.storeProduct.update({
+            where: { store_id_product_id: { store_id: storeId, product_id: i.productId } },
+            data: { stock: { decrement: i.quantity } }
+          });
+        }
+      }
+
+      const updatedAccount = await tx.accounts.update({
+        where: { id: entityAccount.accountId },
+        data: { balance: { increment: grandTotal } }
+      });
+
+      const createdById = req.user?.userId || 1;
+      await createTransaction(tx, {
+        reference: `TRX-${Date.now()}`,
+        createdById,
+        accountId: entityAccount.accountId,
+        bankAccountId: bankRecord ? bankRecord.id : null,
+        saleId: sale.id,
+        purpose: "Sale Payment",
+        added_to_account: true,
+        amount: grandTotal,
+        payment_method: paymentType || "cash",
+        current_account_balance: updatedAccount.balance,
+        note: `Payment for sale ${sale.reference}`
+      });
+
+      return sale;
+    });
+
+    res.json(result);
   } catch (err) {
     console.error("Create Sale Error:", err);
     res.status(500).json({ message: "Failed to create sale" });

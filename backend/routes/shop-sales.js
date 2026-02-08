@@ -2,6 +2,7 @@ const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const router = express.Router();
+const { createTransaction } = require('../utils/transactionHelper');
 
 // Get all shops for POS
 router.get("/shops", async (req, res) => {
@@ -141,7 +142,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
 // Create a new sale for shop (updated for products & materials)
 router.post("/", async (req, res) => {
   try {
-    const { shopId, customer, paymentType, discount, items } = req.body;
+    const { shopId, customer, paymentType, discount, items, bankAccountId } = req.body;
 
     // Validate required fields
     if (!shopId || !items || !Array.isArray(items) || items.length === 0) {
@@ -163,6 +164,10 @@ router.post("/", async (req, res) => {
         return res.status(400).json({ error: "Each item must have itemId" });
       }
     }
+    
+    if (["bank", "card"].includes((paymentType || "cash").toLowerCase()) && !bankAccountId) {
+      return res.status(400).json({ error: "Bank account is required for card/bank payments" });
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       // Calculate totals
@@ -170,9 +175,30 @@ router.post("/", async (req, res) => {
       const grandTotal = Math.max(0, totalAmount - (parseFloat(discount) || 0));
 
       // Generate reference
-      const reference = `SHOP-SALE-${Date.now()}`;
+      const reference = `SALE-${Date.now()}`;
+
+      const entityAccount = await tx.entityAccount.findFirst({
+        where: {
+          entityType: 'shop',
+          entityId: parseInt(shopId),
+          isPrimary: true
+        },
+        include: { account: true }
+      });
+
+      if (!entityAccount) {
+        throw new Error("No primary account found for this shop");
+      }
 
       // Create the sale
+      let bankRecord = null;
+      if (["bank", "card"].includes((paymentType || "cash").toLowerCase()) && bankAccountId) {
+        bankRecord = await tx.bankAccount.update({
+          where: { id: parseInt(bankAccountId) },
+          data: { current_balance: { increment: grandTotal } }
+        });
+      }
+
       const sale = await tx.sale.create({
         data: {
           reference,
@@ -182,6 +208,8 @@ router.post("/", async (req, res) => {
           discount: parseFloat(discount) || 0,
           grandTotal,
           paymentType: paymentType || "cash",
+          bankAccountId: bankRecord ? bankRecord.id : null,
+          bankName: bankRecord ? bankRecord.name : null,
         },
       });
 
@@ -293,6 +321,26 @@ router.post("/", async (req, res) => {
 
         saleItems.push(saleItem);
       }
+
+      const updatedAccount = await tx.accounts.update({
+        where: { id: entityAccount.accountId },
+        data: { balance: { increment: grandTotal } }
+      });
+
+      const createdById = req.user?.userId || 1;
+      await createTransaction(tx, {
+        reference: `SALE-${Date.now()}`,
+        createdById,
+        accountId: entityAccount.accountId,
+        bankAccountId: bankRecord ? bankRecord.id : null,
+        saleId: sale.id,
+        purpose: "Sale Payment",
+        added_to_account: true,
+        amount: grandTotal,
+        payment_method: paymentType || "cash",
+        current_account_balance: updatedAccount.balance,
+        note: `Payment for sale ${sale.reference}`
+      });
 
       return { sale, saleItems };
     });

@@ -3,7 +3,8 @@ import {
   ArrowUpDown, Package, Truck, Building2, Calendar, FileText, 
   Store, ShoppingBag, Factory, Layers, Tag, MoreVertical, 
   Eye, Edit, CreditCard, DollarSign, Trash2, CheckCircle, XCircle,
-  ExternalLink, User, Check, AlertCircle, Loader2
+  ExternalLink, User, Check, AlertCircle, Loader2,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
 } from "lucide-react";
 import { API_ROUTES } from "../../config";
 
@@ -14,6 +15,9 @@ export default function AllPurchase() {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [selectedPurchase, setSelectedPurchase] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
   
   // Modal states
   const [viewModalOpen, setViewModalOpen] = useState(false);
@@ -34,19 +38,31 @@ export default function AllPurchase() {
 
   useEffect(() => {
     fetchPurchases();
+  }, [currentPage, itemsPerPage]);
+
+  useEffect(() => {
     fetchAccounts();
   }, []);
 
   const fetchPurchases = async () => {
     try {
-      const res = await fetch(`${API_ROUTES.PURCHASES}`, {
+      const res = await fetch(`${API_ROUTES.PURCHASES}?page=${currentPage}&limit=${itemsPerPage}`, {
               headers: {
                 'Authorization': `Bearer ${token}`
               }
             });
       if (!res.ok) throw new Error("Failed to fetch purchases");
       const data = await res.json();
-      setPurchases(data);
+      if (Array.isArray(data)) {
+        setPurchases(data);
+        setTotalCount(data.length);
+      } else {
+        setPurchases(data.data || []);
+        setTotalCount(data.pagination?.totalCount || 0);
+        if (data.pagination?.totalPages && currentPage > data.pagination.totalPages) {
+          setCurrentPage(data.pagination.totalPages || 1);
+        }
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -218,6 +234,61 @@ export default function AllPurchase() {
       direction = 'descending';
     }
     setSortConfig({ key, direction });
+    setCurrentPage(1);
+  };
+
+  const sortedPurchases = sortConfig.key ? [...purchases].sort((a, b) => {
+    const direction = sortConfig.direction === 'ascending' ? 1 : -1;
+
+    if (sortConfig.key === 'grand total') {
+      return ((a.grandTotal || 0) - (b.grandTotal || 0)) * direction;
+    }
+    if (sortConfig.key === 'due amount') {
+      return (calculateDueAmount(a) - calculateDueAmount(b)) * direction;
+    }
+    if (sortConfig.key === 'date') {
+      return (new Date(a.createdAt) - new Date(b.createdAt)) * direction;
+    }
+    if (sortConfig.key === 'status') {
+      const aStatus = calculateDueAmount(a) <= 0 ? 'paid' : 'pending';
+      const bStatus = calculateDueAmount(b) <= 0 ? 'paid' : 'pending';
+      return aStatus.localeCompare(bStatus) * direction;
+    }
+    if (sortConfig.key === 'supplier') {
+      return (a.supplier?.name || '').localeCompare(b.supplier?.name || '') * direction;
+    }
+    if (sortConfig.key === 'reference') {
+      return (a.reference || '').localeCompare(b.reference || '') * direction;
+    }
+    if (sortConfig.key === 'destination') {
+      const aDest = a.destination ? `${a.destination.type}: ${a.destination.name}` : '';
+      const bDest = b.destination ? `${b.destination.type}: ${b.destination.name}` : '';
+      return aDest.localeCompare(bDest) * direction;
+    }
+    return 0;
+  }) : purchases;
+
+  const indexOfFirstItem = (currentPage - 1) * itemsPerPage;
+  const indexOfLastItem = Math.min(indexOfFirstItem + itemsPerPage, totalCount);
+  const currentItems = sortedPurchases;
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
+
+  const nextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const prevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const goToPage = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
   };
 
   // Handle payment submission
@@ -403,7 +474,7 @@ export default function AllPurchase() {
             <div className="flex items-center gap-3">
               <div className="px-4 py-2 bg-white/60 backdrop-blur-sm rounded-lg border border-white/80">
                 <p className="text-sm font-medium text-gray-700">Total Purchases</p>
-                <p className="text-xl font-bold text-blue-600">{purchases.length}</p>
+                <p className="text-xl font-bold text-blue-600">{totalCount}</p>
               </div>
               
               <div className="px-4 py-2 bg-white/60 backdrop-blur-sm rounded-lg border border-white/80">
@@ -416,33 +487,8 @@ export default function AllPurchase() {
           </div>
         </div>
 
-        {/* View Toggle */}
-        <div className="mb-6 backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-              <Layers size={24} />
-              Purchase Data View
-            </h2>
-          </div>
-        </div>
-
         {/* Purchase Table (Detailed View) */}
         <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl overflow-hidden">
-          <div className="p-6 border-b border-white/50">
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-                  <Package size={24} />
-                  Purchase Orders
-                </h2>
-                <p className="text-gray-600 mt-1">Click on actions for more options</p>
-              </div>
-              <div className="text-sm text-gray-500">
-                Showing {purchases.length} purchases
-              </div>
-            </div>
-          </div>
-
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-100/80">
@@ -466,7 +512,7 @@ export default function AllPurchase() {
                 </tr>
               </thead>
               <tbody>
-                {purchases.map((purchase) => {
+                {currentItems.map((purchase) => {
                   const dueAmount = calculateDueAmount(purchase);
                   const isPaid = dueAmount <= 0;
                   
@@ -598,6 +644,124 @@ export default function AllPurchase() {
                 })}
               </tbody>
             </table>
+            {/* Pagination Controls */}
+            {totalCount > 0 && (
+              <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-4 mt-4">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">Show:</span>
+                      <select
+                        value={itemsPerPage}
+                        onChange={(e) => {
+                          setItemsPerPage(Number(e.target.value));
+                          setCurrentPage(1);
+                        }}
+                        className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      >
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                      </select>
+                      <span className="text-sm text-gray-600">per page</span>
+                    </div>
+
+                    <div className="text-sm text-gray-700">
+                      Showing <span className="font-semibold">{totalCount === 0 ? 0 : indexOfFirstItem + 1}</span> to{" "}
+                      <span className="font-semibold">
+                        {indexOfLastItem}
+                      </span>{" "}
+                      of <span className="font-semibold">{totalCount}</span> purchases
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => goToPage(1)}
+                      disabled={currentPage === 1}
+                      className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                      title="First page"
+                    >
+                      <ChevronsLeft size={16} className="text-gray-600" />
+                    </button>
+
+                    <button
+                      onClick={prevPage}
+                      disabled={currentPage === 1}
+                      className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                      title="Previous page"
+                    >
+                      <ChevronLeft size={16} className="text-gray-600" />
+                    </button>
+
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => goToPage(pageNum)}
+                            className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                              currentPage === pageNum
+                                ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                                : "hover:bg-white/50 text-gray-700"
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+
+                      {totalPages > 5 && currentPage < totalPages - 2 && (
+                        <>
+                          <span className="mx-1 text-gray-400">...</span>
+                          <button
+                            onClick={() => goToPage(totalPages)}
+                            className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                              currentPage === totalPages
+                                ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                                : "hover:bg-white/50 text-gray-700"
+                            }`}
+                          >
+                            {totalPages}
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={nextPage}
+                      disabled={currentPage === totalPages || totalPages === 0}
+                      className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                      title="Next page"
+                    >
+                      <ChevronRight size={16} className="text-gray-600" />
+                    </button>
+
+                    <button
+                      onClick={() => goToPage(totalPages)}
+                      disabled={currentPage === totalPages || totalPages === 0}
+                      className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                      title="Last page"
+                    >
+                      <ChevronsRight size={16} className="text-gray-600" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {purchases.length === 0 && (

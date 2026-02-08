@@ -15,6 +15,8 @@ export default function ShopPOS() {
   const [discount, setDiscount] = useState(0);
   const [customer, setCustomer] = useState("");
   const [paymentType, setPaymentType] = useState("cash");
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [bankAccountId, setBankAccountId] = useState("");
   const [loading, setLoading] = useState(false);
   const [editingPriceIndex, setEditingPriceIndex] = useState(null);
   const [tempPrice, setTempPrice] = useState("");
@@ -60,6 +62,21 @@ export default function ShopPOS() {
         setShops([]);
       });
   }, [navigate]);
+
+  // Fetch bank accounts
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    fetch(API_ROUTES.BANK_ACCOUNTS, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch bank accounts");
+        return res.json();
+      })
+      .then((data) => setBankAccounts(Array.isArray(data) ? data : []))
+      .catch(() => setBankAccounts([]));
+  }, []);
 
   // Fetch items for selected shop
   useEffect(() => {
@@ -324,6 +341,11 @@ export default function ShopPOS() {
       return false;
     }
 
+    if (paymentType === "card" && !bankAccountId) {
+      alert("⚠️ Please select a bank account for card payments.");
+      return false;
+    }
+
     // Check stock availability for all items
     for (const cartItem of cartItems) {
       if (cartItem.quantity <= 0) {
@@ -347,6 +369,7 @@ export default function ShopPOS() {
       shopId: parseInt(shopId),
       customer: customer.trim() || null,
       paymentType,
+      bankAccountId: paymentType === "card" ? parseInt(bankAccountId) : null,
       discount: Math.max(0, parseFloat(discount) || 0),
       items: cartItems.map(item => ({
         itemId: item.itemId,
@@ -619,6 +642,24 @@ export default function ShopPOS() {
                   <option value="mobile">📱 Mobile Payment</option>
                 </select>
               </div>
+
+              {paymentType === "card" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bank Account</label>
+                  <select
+                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
+                    value={bankAccountId}
+                    onChange={(e) => setBankAccountId(e.target.value)}
+                  >
+                    <option value="">Select Bank</option>
+                    {bankAccounts.map((bank) => (
+                      <option key={bank.id} value={bank.id}>
+                        {bank.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             {/* Stock Alerts Card */}
             {(lowStockItems.length > 0 || outOfStockItems.length > 0) && (
@@ -808,7 +849,7 @@ export default function ShopPOS() {
                                 </button>
                               </div>
                               <div className="text-xs text-gray-500 mt-2">
-                                Available: {item.shop_stock - item.quantity}
+                                Available: {item.shop_stock} (-{ item.quantity} = {item.shop_stock - item.quantity})
                               </div>
                             </td>
                             <td className="p-4">

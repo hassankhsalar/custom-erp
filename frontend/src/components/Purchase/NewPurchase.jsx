@@ -23,9 +23,11 @@ export default function NewPurchase() {
     tax: "0",
     paidAmount: "0",
     paymentMethod: "cash",
+    bankAccountId: "",
     grandTotal: 0,
     reference: `PUR-${Date.now()}`
   });
+  const [bankAccounts, setBankAccounts] = useState([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   
@@ -57,6 +59,7 @@ export default function NewPurchase() {
     fetchProducts();
     fetchSuppliers();
     fetchDestinations();
+    fetchBankAccounts();
   }, [destinationType]);
 
  const fetchMaterials = async () => {
@@ -107,6 +110,22 @@ const fetchSuppliers = async () => {
   } catch (error) {
     console.error("Failed to fetch suppliers:", error);
     setSuppliers([]);
+  }
+};
+
+const fetchBankAccounts = async () => {
+  try {
+    const token = localStorage.getItem("token");
+    const headers = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    const res = await fetch("http://localhost:3001/api/bank-accounts", { headers });
+    const data = await res.json();
+    setBankAccounts(Array.isArray(data) ? data : []);
+  } catch (error) {
+    console.error("Failed to fetch bank accounts:", error);
+    setBankAccounts([]);
   }
 };
 
@@ -366,6 +385,12 @@ const fetchSuppliers = async () => {
         ...(token && { "Authorization": `Bearer ${token}` })
       };
 
+      if ((form.paymentMethod === "card" || form.paymentMethod === "bank_transfer") && !form.bankAccountId) {
+        setMessage("⚠️ Please select a bank account for card/bank transfers.");
+        setLoading(false);
+        return;
+      }
+
       const payload = {
         supplierId: parseInt(form.supplierId),
         destinationType: form.destinationType,
@@ -375,6 +400,7 @@ const fetchSuppliers = async () => {
         tax: parseFloat(form.tax) || 0,
         paidAmount: paidAmount,
         paymentMethod: form.paymentMethod,
+        bankAccountId: form.bankAccountId ? parseInt(form.bankAccountId) : null,
         grandTotal: financialBreakdown.grandTotal,
         reference: form.reference,
         items: validItems.map(item => ({
@@ -405,6 +431,7 @@ const fetchSuppliers = async () => {
           tax: "0",
           paidAmount: "0",
           paymentMethod: "cash",
+          bankAccountId: "",
           grandTotal: 0,
           reference: `PUR-${Date.now()}`
         });
@@ -936,6 +963,25 @@ const fetchSuppliers = async () => {
                           </button>
                         ))}
                       </div>
+
+                      {(form.paymentMethod === "card" || form.paymentMethod === "bank_transfer") && (
+                        <div className="mt-3">
+                          <label className="block text-xs text-gray-600 mb-1">Bank Account</label>
+                          <select
+                            name="bankAccountId"
+                            value={form.bankAccountId}
+                            onChange={handleFormChange}
+                            className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                          >
+                            <option value="">Select Bank</option>
+                            {bankAccounts.map((bank) => (
+                              <option key={bank.id} value={bank.id}>
+                                {bank.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
 
                     </div>
                     <div>

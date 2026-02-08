@@ -88,6 +88,7 @@ model BankAccount {
   current_balance     Float     @default(0)
   withdraw_charge     Float?
   transactions        Transactions[]
+  sales               Sale[]
 }
 
 
@@ -451,6 +452,9 @@ model Sale {
   shopId      Int?
   //store       Store?        @relation(fields: [storeId], references: [id])
   shop        Shop?        @relation(fields: [shopId], references: [id])
+  bankAccountId Int?
+  bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id])
+  bankName    String?
   customer    String?
   totalAmount Float
   total_cost  Float?
