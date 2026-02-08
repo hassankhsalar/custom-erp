@@ -97,6 +97,13 @@ const AddTransfer = () => {
     setSearch(e.target.value);
     if (e.target.value.length > 1) {
       try {
+        const token = localStorage.getItem('token');
+
+        if (!token) {
+          console.error('No authentication token found');
+          setSearchResults([]);
+          return;
+        }
         const resProducts = await axios.get(API_ROUTES.PRODUCTS_ALL, {
           headers: { Authorization: `Bearer ${token}` },
           params: { search: e.target.value },
