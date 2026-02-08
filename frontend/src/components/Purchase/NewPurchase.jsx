@@ -129,11 +129,7 @@ const fetchSuppliers = async () => {
 
       const token = localStorage.getItem("token");
       const headers = {};
-      
-      // Add token for protected routes (stores require auth)
-      if (destinationType === "store") {
-        headers.Authorization = `Bearer ${token}`;
-      }
+      headers.Authorization = `Bearer ${token}`;
 
       if (destinationType === "shop") {
         headers.Authorization = `Bearer ${token}`;

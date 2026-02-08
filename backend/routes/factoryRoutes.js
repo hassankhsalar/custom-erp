@@ -36,6 +36,24 @@ router.get('/:id', async (req, res) => {
     res.json(factory);
 });
 
+// Get factory materials with stock and avg_cost
+router.get('/:id/materials', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const materials = await prisma.factoryMaterial.findMany({
+      where: { factoryId: parseInt(id) },
+      include: {
+        material: {
+          select: { id: true, name: true, unit: true, unit_cost: true }
+        }
+      }
+    });
+    res.json(materials);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch factory materials' });
+  }
+});
+
 // Update a factory
 router.put('/:id', async (req, res) => {
   const { id } = req.params;

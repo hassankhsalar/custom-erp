@@ -65,6 +65,31 @@ router.get('/', async (req, res) => {
   }
 });
 
+
+// Get all products without pagination
+router.get('/all-products', async (req, res) => {
+  const { search } = req.query;
+  const where = {};
+
+  if (search) {
+    where.name = {
+      contains: search,
+    };
+  }
+
+  try {
+    const [products, totalCount] = await prisma.$transaction([
+      prisma.product.findMany({
+        where
+      }),
+      prisma.product.count({ where }),
+    ]);
+    res.json({ products, totalCount });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get a single product by ID
 router.get('/:id', async (req, res) => {
   try {

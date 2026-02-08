@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { API_ROUTES } from '../../config';
+import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
 import { 
   Truck, 
   Package, 
@@ -49,6 +49,9 @@ const AddTransfer = () => {
           axios.get(API_ROUTES.FACTORIES, {
             headers: { Authorization: `Bearer ${token}` }
           }),
+          axios.get(API_ROUTES.FACTORIES, {
+            headers: { Authorization: `Bearer ${token}` }
+          }),
         ]);
         setStores(storesRes.data.stores);
         setShops(shopsRes.data);
@@ -91,34 +94,28 @@ const AddTransfer = () => {
   }, [toType, stores, shops, factories]);
 
   const handleSearch = async (e) => {
-  setSearch(e.target.value);
-  if (e.target.value.length > 2) {
-    try {
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        console.error('No authentication token found');
-        setSearchResults([]);
-        return;
-      }
+    setSearch(e.target.value);
+    if (e.target.value.length > 1) {
+      try {
+        const token = localStorage.getItem('token');
 
-      const headers = {
-        Authorization: `Bearer ${token}`
-      };
-
-      const [resProducts, resMaterials] = await Promise.all([
-        axios.get(API_ROUTES.PRODUCTS, {
+        if (!token) {
+          console.error('No authentication token found');
+          setSearchResults([]);
+          return;
+        }
+        const resProducts = await axios.get(API_ROUTES.PRODUCTS_ALL, {
+          headers: { Authorization: `Bearer ${token}` },
           params: { search: e.target.value },
-          headers
-        }),
-        axios.get(API_ROUTES.MATERIALS, {
+        });
+        const productsWithTag = resProducts.data.products.map(p => ({ ...p, itemType: 'product' }));
+
+        const resMaterials = await axios.get(API_ROUTES.MATERIALS, {
+          headers: { Authorization: `Bearer ${token}` },
           params: { search: e.target.value },
           headers
         })
-      ]);
-
-      const productsWithTag = (resProducts.data.products || []).map(p => ({ ...p, itemType: 'product' }));
-      const materialsWithTag = (resMaterials.data.materials || []).map(m => ({ ...m, itemType: 'material' }));
+        const materialsWithTag = (resMaterials.data.materials || []).map(m => ({ ...m, itemType: 'material' }));
 
       setSearchResults([...productsWithTag, ...materialsWithTag]);
       
@@ -404,7 +401,17 @@ const AddTransfer = () => {
                     className="p-3 hover:bg-white/20 cursor-pointer border-b border-white/10 last:border-b-0 transition-colors flex items-center justify-between"
                   >
                     <div className="flex items-center">
-                      <Package size={16} className="mr-3 text-gray-400" />
+                      <div>
+                        {
+                          item.image ? item.image.startsWith('/uploads') ? (
+                            <img src={ MEDIA_BASE_URL + item.image } alt={item.name} className="w-8 h-8 rounded-lg object-cover mr-3" />
+                          ) : (
+                            <img src={ item.image } alt={item.name} className="w-8 h-8 rounded-lg object-cover mr-3" />
+                          ) : (
+                            <Package size={16} className="mr-3 text-gray-400" />
+                          )
+                        }
+                      </div>
                       <span className="font-medium text-gray-800">{item.name}</span>
                       <span className="ml-2 text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-600">
                         {item.itemType}
@@ -445,7 +452,17 @@ const AddTransfer = () => {
                       >
                         <td className="p-4">
                           <div className="flex items-center">
-                            <Package size={14} className="mr-3 text-gray-400" />
+                            <div>
+                              {
+                                item.image ? item.image.startsWith('/uploads') ? (
+                                  <img src={ MEDIA_BASE_URL + item.image } alt={item.name} className="w-8 h-8 rounded-lg object-cover mr-3" />
+                                ) : (
+                                  <img src={ item.image } alt={item.name} className="w-8 h-8 rounded-lg object-cover mr-3" />
+                                ) : (
+                                  <Package size={16} className="mr-3 text-gray-400" />
+                                )
+                              }
+                            </div>
                             <span className="text-gray-800">{item.name}</span>
                           </div>
                         </td>

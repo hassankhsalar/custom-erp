@@ -106,11 +106,11 @@ export default function AllAssignedUsers() {
     }
 
     const assignmentsData = await assignmentsRes.json();
-console.log("Assignments data:", assignmentsData);
     const usersData = await usersRes.json();
 
     setAssignments(assignmentsData);
     setUsers(usersData);
+
     // Calculate statistics
     const assignmentsByType = {};
     const assignmentsByUser = {};
@@ -176,7 +176,7 @@ console.log("Assignments data:", assignmentsData);
     };
     
     const res = await fetch(
-      `${API_ROUTES.ASSIGNUSER}/assignment/${assignmentId}`,
+      `${API_ROUTES.UPLOADS}/assignment/${assignmentId}`,
       { 
         method: "DELETE",
         headers 
