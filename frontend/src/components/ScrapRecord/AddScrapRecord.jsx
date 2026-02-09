@@ -164,6 +164,7 @@ const AddScrapRecord = () => {
       
       const products = response.data || [];
       setAvailableProducts(products);
+      console.log(products);
     } catch (error) {
       console.error('Error fetching products:', error);
       if (error.response?.status === 401) {
@@ -209,7 +210,7 @@ const AddScrapRecord = () => {
       productName: product.name,
       maxQuantity: product.availableQuantity || product.stock || 0,
       quantity: 1,
-      lossPerUnit: product.cost || 0
+      lossPerUnit: product.avg_cost || 0
     });
     setSearchResults([]);
     setSearchQuery('');
@@ -688,7 +689,7 @@ const AddScrapRecord = () => {
                                               <p className="text-xs text-gray-500">
                                                 Code: {product.barcode || 'N/A'} | 
                                                 Stock: {product.availableQuantity || product.stock || 0} | 
-                                                Cost: ${product.cost?.toFixed(2) || '0.00'}
+                                                Cost: ${product.avg_cost?.toFixed(2) || '0.00'}
                                               </p>
                                             </div>
                                           </div>
