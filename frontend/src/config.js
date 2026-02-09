@@ -78,6 +78,10 @@ export const API_ROUTES = {
   REPORT_TRANSFER_TOP_SENDER: `${API_BASE_URL}/reports/transfer/top-sender`,
   REPORT_TRANSFER_TOP_RECEIVER: `${API_BASE_URL}/reports/transfer/top-receiver`,
   REPORT_TRANSFER_TOP_ITEMS: `${API_BASE_URL}/reports/transfer/top-items`,
+  NOTIFICATIONS: `${API_BASE_URL}/notifications`,
+  NOTIFICATIONS_LATEST: `${API_BASE_URL}/notifications/latest`,
+  NOTIFICATIONS_UNREAD_COUNT: `${API_BASE_URL}/notifications/unread-count`,
+  NOTIFICATIONS_MARK_ALL_READ: `${API_BASE_URL}/notifications/mark-all-read`,
   
   //SHOP_SALES_RETURNS: `${API_BASE_URL}/shop-sales/returns/all`,
   SHOP_SALES_RETURNS_BACKUP: `${API_BASE_URL}/shop-sales/returns-list`,
