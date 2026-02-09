@@ -15,7 +15,10 @@ import {
   Recycle,
   BookA,
   NotebookPen,
-  TableProperties
+  Calendar,
+  TableProperties,
+  Wallet,
+  Briefcase
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -202,13 +205,45 @@ const Sidebar = () => {
       color: 'from-indigo-500 to-blue-500',
       bgColor: 'bg-gradient-to-r from-indigo-50 to-blue-100/50',
       textColor: 'text-indigo-700',
-      permissionKey: ['account_read', 'account_create', 'cash_register_create'],
+      permissionKey: ['account_read', 'account_create', 'cash_register_create', 'bank_account_read'],
       subItems: [
         { name: 'Add Account', path: '/addaccount', icon: <NotebookPen size={16} />, permissionKey: 'account_create' },
         { name: 'Account List', path: '/allaccounts', icon: <TableProperties size={16} />, permissionKey: 'account_read' },
         { name: 'Assign Account', path: '/assignaccount', icon: <TableProperties size={16} />, permissionKey: ['account_create', 'account_assign'] },
         { name: 'Assign CashRegister', path: '/cashregisterassign', icon: <TableProperties size={16} />, permissionKey: ['cash_register_create', 'cash_register_assign'] },
         { name: 'Add CashRegister', path: '/addcashregister', icon: <TableProperties size={16} />, permissionKey: 'cash_register_create' },
+        { name: 'Bank Accounts', path: '/bank-accounts', icon: <TableProperties size={16} />, permissionKey: ['bank_account_read', 'bank_account_create'] },
+        { name: 'General Ledger', path: '/accounts/general-ledger', icon: <TableProperties size={16} />, permissionKey: 'general_ledger_report' },
+        { name: 'Balance Sheet', path: '/accounts/balance-sheet', icon: <TableProperties size={16} />, permissionKey: 'balance_sheet_report' },
+      ]
+    },
+    {
+      name: 'HRM',
+      icon: <Users color='white' size={18} />,
+      color: 'from-teal-500 to-emerald-500',
+      bgColor: 'bg-gradient-to-r from-teal-50 to-emerald-100/50',
+      textColor: 'text-teal-700',
+      permissionKey: ['hrm_read', 'hrm_employee_manage'],
+      subItems: [
+        { name: 'Employees', path: '/hrm/employees', icon: <Users size={16} />, permissionKey: 'hrm_employee_manage' },
+        { name: 'Attendance', path: '/hrm/attendance', icon: <ClipboardList size={16} />, permissionKey: 'clock_in_out_manage' },
+        { name: 'Holidays', path: '/hrm/holidays', icon: <Calendar size={16} />, permissionKey: 'holiday_manage' },
+        { name: 'Leave Categories', path: '/hrm/leave-categories', icon: <Calendar size={16} />, permissionKey: 'leave_category_manage' },
+        { name: 'Leave Requests', path: '/hrm/leave-requests', icon: <Calendar size={16} />, permissionKey: 'leave_read' },
+        { name: 'Payroll', path: '/hrm/payroll', icon: <Briefcase size={16} />, permissionKey: 'payroll_manage' }
+      ]
+    },
+    {
+      name: 'Expense',
+      icon: <Wallet color='white' size={18} />,
+      color: 'from-rose-500 to-pink-500',
+      bgColor: 'bg-gradient-to-r from-rose-50 to-pink-100/50',
+      textColor: 'text-rose-700',
+      permissionKey: ['expenses_read', 'salary_read'],
+      subItems: [
+        { name: 'Expense Category', path: '/expense/categories', icon: <Wallet size={16} />, permissionKey: 'expenses_read' },
+        { name: 'Expenses', path: '/expense/list', icon: <Wallet size={16} />, permissionKey: 'expenses_read' },
+        { name: 'Salaries', path: '/expense/salaries', icon: <Briefcase size={16} />, permissionKey: 'salary_read' }
       ]
     },
     {
@@ -254,7 +289,7 @@ const Sidebar = () => {
   ];
 
   return (
-    <div className={`${isCollapsed ? 'w-20' : 'w-64'} bg-gradient-to-br from-white via-gray-50 to-white text-gray-800 p-6 min-h-full shadow-2xl backdrop-blur-sm border-r border-gray-200/50 transition-all duration-300 relative`}>
+    <div className={`${isCollapsed ? 'w-20' : 'w-64'} max-h-[100vh] overflow-y-auto bg-gradient-to-br from-white via-gray-50 to-white text-gray-800 p-6 min-h-full shadow-2xl backdrop-blur-sm border-r border-gray-200/50 transition-all duration-300 relative`}>
       {/* Collapse Toggle Button */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
