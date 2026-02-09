@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
 import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X } from "lucide-react";
-import e from "cors";
+
 
 export default function ShopPOS() {
   const [shops, setShops] = useState([]);
@@ -446,10 +446,10 @@ export default function ShopPOS() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center">
             <div className="glass-icon p-3 rounded-xl mr-4 bg-gradient-to-r from-emerald-500/10 to-blue-500/10">
-              <ClipboardList className="text-emerald-500" size={38} />
+              <ClipboardList className="text-blue-600" size={38} />
             </div>
             <div>
-              <h1 className="text-md md:text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent">
+              <h1 className="text-md md:text-xl font-bold bg-gradient-to-r from-blue-500 to-blue-600 bg-clip-text text-transparent">
                 Point Of Sale
               </h1>
             </div>
