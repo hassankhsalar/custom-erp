@@ -176,6 +176,7 @@ const permissionRoutes = require('./routes/permissionRoutes');
 const userPermissionRoutes = require('./routes/userPermissionRoutes');
 const hrmRoutes = require('./routes/hrmRoutes');
 const expenseRoutes = require('./routes/expenseRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 const { startSalaryCron } = require('./services/salaryCron');
 
 const uploadRoutes = require('./routes/uploadRoutes');
@@ -215,6 +216,7 @@ app.use('/api/permissions', authenticateToken, permissionRoutes);
 app.use('/api/user-management', authenticateToken, userPermissionRoutes);
 app.use('/api/hrm', authenticateToken, hrmRoutes);
 app.use('/api/expenses', authenticateToken, expenseRoutes);
+app.use('/api/reports', authenticateToken, reportRoutes);
 
 // serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));

@@ -40,6 +40,8 @@ import SaleReport from "./components/Report/SaleReport";
 import PurchaseReport from "./components/Report/PurchaseReport";
 import ProductionReport from "./components/Report/ProductionReport";
 import WastageReport from "./components/Report/WastageReport";
+import GenericReport from "./components/Report/GenericReport";
+import BestSellingReport from "./components/Report/BestSellingReport";
 import AllUser from "./components/Users/AllUser";
 import CreateUser from "./components/Users/CreateUser";
 import Settings from "./components/Settings/Settings";
@@ -90,6 +92,7 @@ import Salaries from "./components/Expense/Salaries";
 import AssignUser from "./components/Users/AssignUser";
 import AllAssignedUsers from "./components/Users/AllAssignedUsers";
 import PermissionsManagement from "./components/Permissions/PermissionsManagement";
+import { API_ROUTES } from "./config";
 
 import { useCurrentUser } from "./hooks/useCurrentUser";
 import { usePermission } from "./hooks/usePermission";
@@ -275,6 +278,36 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="wastage_report" />}>
               <Route path="/report/wastage" element={<WastageReport />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="trial_balance_report" />}>
+              <Route path="/report/trial-balance" element={<GenericReport title="Trial Balance" endpoint={API_ROUTES.REPORT_TRIAL_BALANCE} />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="cash_and_bank_report" />}>
+              <Route path="/report/cash-bank" element={<GenericReport title="Cash & Bank" endpoint={API_ROUTES.REPORT_CASH_BANK} />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="stock_report" />}>
+              <Route path="/report/stock" element={<GenericReport title="Stock Report" endpoint={API_ROUTES.REPORT_STOCK} />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="transfer_report" />}>
+              <Route path="/report/transfer" element={<GenericReport title="Transfer Report" endpoint={API_ROUTES.REPORT_TRANSFER} />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="profit_loss_report" />}>
+              <Route path="/report/profit-loss" element={<GenericReport title="Profit & Loss" endpoint={API_ROUTES.REPORT_PROFIT_LOSS} />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="purchase_sales_report" />}>
+              <Route path="/report/purchase-sales" element={<GenericReport title="Purchase vs Sales" endpoint={API_ROUTES.REPORT_PURCHASE_SALES} />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="customer_report" />}>
+              <Route path="/report/customer" element={<GenericReport title="Customer Report" endpoint={API_ROUTES.REPORT_CUSTOMER} />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="supplier_report" />}>
+              <Route path="/report/supplier" element={<GenericReport title="Supplier Report" endpoint={API_ROUTES.REPORT_SUPPLIER} />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="best_selling_product_report" />}>
+              <Route path="/report/best-selling" element={<BestSellingReport />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="profit_calender_report" />}>
+              <Route path="/report/profit-calendar" element={<GenericReport title="Profit Calendar" endpoint={API_ROUTES.REPORT_PROFIT_CALENDAR} />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="user_read" />}>
               <Route path="/users/all" element={<AllUser />} />
