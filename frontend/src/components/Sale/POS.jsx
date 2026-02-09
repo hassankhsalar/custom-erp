@@ -368,7 +368,7 @@ export default function ShopPOS() {
       return false;
     }
 
-    if (paidAmount > grandTotal) {
+    if ( (grandTotal.toFixed(2) + 0.001) < parseFloat(paidAmount).toFixed(2) ) {
       alert("⚠️ Paid amount cannot exceed grand total.");
       return false;
     }
@@ -465,7 +465,7 @@ export default function ShopPOS() {
 
   useEffect(() => {
     if (!paidAmountTouched) {
-      setPaidAmount(grandTotal);
+      setPaidAmount(grandTotal.toFixed(2));
     }
   }, [grandTotal, paidAmountTouched]);
 
@@ -718,9 +718,9 @@ export default function ShopPOS() {
                   value={paymentType}
                   onChange={(e) => setPaymentType(e.target.value)}
                 >
-                  <option value="cash">💵 Cash</option>
-                  <option value="card">💳 Card</option>
-                  <option value="mobile">📱 Mobile Payment</option>
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="mobile">Mobile Payment</option>
                 </select>
               </div>
 
@@ -993,7 +993,7 @@ export default function ShopPOS() {
                           value={paidAmount}
                           onChange={(e) => {
                             setPaidAmountTouched(true);
-                            setPaidAmount(parseFloat(e.target.value).toFixed(2) || 0);
+                            setPaidAmount(parseFloat(e.target.value) || 0);
                           }}
                           className="w-32 border border-gray-300 p-2 rounded-lg text-right focus:ring-1 outline-none focus:ring-blue-500 focus:border-blue-500 transition"
                         />

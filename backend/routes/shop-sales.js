@@ -182,7 +182,7 @@ router.post("/", async (req, res) => {
       const grandTotal = Math.max(0, totalAmount - (parseFloat(discount) || 0));
       const finalPaidAmount = paid !== null ? paid : grandTotal;
 
-      if (finalPaidAmount > grandTotal) {
+      if (finalPaidAmount.toFixed(2) > (grandTotal.toFixed(2) + 0.001)) {
         throw new Error("Paid amount cannot exceed grand total");
       }
 
@@ -228,6 +228,8 @@ router.post("/", async (req, res) => {
 
       // Process each sale item
       const saleItems = [];
+      let totalCost = 0;
+      let customer = customerId ? parseInt(customerId) : null;
       
       for (const item of items) {
         // Check stock based on item type
@@ -271,6 +273,9 @@ router.post("/", async (req, res) => {
             },
           });
 
+          item.avg_cost = shopProduct.avg_cost;
+          totalCost += parseFloat(item.avg_cost) * parseFloat(item.quantity);
+
         } else if (item.type === "material") {
           // Check and update shop material stock
           const shopMaterial = await tx.shopMaterial.findUnique({
@@ -310,6 +315,10 @@ router.post("/", async (req, res) => {
               current_stock: { decrement: parseFloat(item.quantity) },
             },
           });
+
+          item.avg_cost = shopMaterial.avg_cost;
+          totalCost += parseFloat(item.avg_cost) * parseFloat(item.quantity);
+
         }
 
         // Create sale item record
@@ -317,6 +326,7 @@ router.post("/", async (req, res) => {
           saleId: sale.id,
           quantity: parseFloat(item.quantity),
           unitPrice: parseFloat(item.unitPrice),
+          avg_cost: parseFloat(item.avg_cost),
           totalPrice: parseFloat(item.quantity) * parseFloat(item.unitPrice),
         };
 
@@ -333,6 +343,18 @@ router.post("/", async (req, res) => {
         });
 
         saleItems.push(saleItem);
+      }
+
+      await tx.sale.update({
+        where: { id: sale.id },
+        data: { total_cost: totalCost },
+      });
+
+      if(customer) {
+        await tx.customer.update({
+          where: { id: customer },
+          data: { total_purchase: { increment: finalPaidAmount } , total_due: { increment: (grandTotal - finalPaidAmount) } }
+        });
       }
 
       if (finalPaidAmount > 0) {

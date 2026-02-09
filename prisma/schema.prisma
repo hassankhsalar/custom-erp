@@ -546,6 +546,7 @@ model ProductionMaterial {
   quantity     Float
   price        Float
   scrap        Float      @default(0)
+  fineMaterial Float      @default(0)
 
   @@unique([productionId, materialId])
 }

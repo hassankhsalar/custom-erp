@@ -9,7 +9,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const JWT_SECRET = 'your-secret-key'; // Replace with a strong secret key
+const JWT_SECRET = 'your-secret-key';
 
 // Middleware to protect routes
 const authenticateToken = (req, res, next) => {

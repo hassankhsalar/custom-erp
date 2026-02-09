@@ -457,6 +457,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
             where: { id: m.id },
             data: {
               scrap: parseFloat(m.scrap),
+              fineMaterial: parseFloat(m.fine),
             },
           });
 
