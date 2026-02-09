@@ -125,7 +125,7 @@ const ScrapRecord = () => {
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-orange-300/20 rounded-full blur-3xl"></div>
       </div>
 
-      <div className="relative max-w-7xl mx-auto">
+      <div className="relative w-full mx-auto">
         {/* Header Card */}
         <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-red-100/50 mb-6 p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -135,7 +135,7 @@ const ScrapRecord = () => {
               </div>
               <div>
                 <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">
-                  Scrap Records
+                  Product Scrap Records
                 </h1>
                 <p className="text-gray-600 mt-2">Track and manage product scrap records</p>
               </div>

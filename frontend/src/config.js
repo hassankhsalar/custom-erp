@@ -54,6 +54,7 @@ export const API_ROUTES = {
   //scrap
   SCRAP_RECORDS: `${API_BASE_URL}/scrap-records`,
   MATERIAL_SCRAP_RECORDS: `${API_BASE_URL}/materials-scrap-records`,
+  BRANCH_MATERIALS: `${API_BASE_URL}/api/branch-materials`,
   
   // Add this new route for fetching scrap products by location
   SCRAP_PRODUCTS: `${API_BASE_URL}/scrap-products`,

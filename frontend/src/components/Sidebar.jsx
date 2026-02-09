@@ -293,12 +293,12 @@ const Sidebar = () => {
       {/* Collapse Toggle Button */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute -right-1 top-26 p-1.5 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-all hover:scale-110 z-10"
+        className="absolute -right-2 top-26 py-1 px-1.5 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-all hover:scale-110 z-10"
       >
         {isCollapsed ? (
-          <ChevronRight size={16} className="text-gray-600" />
+          <ChevronRight size={18} className="text-gray-600" />
         ) : (
-          <ChevronLeft size={16} className="text-gray-600" />
+          <ChevronLeft size={18} className="text-gray-600" />
         )}
       </button>
 

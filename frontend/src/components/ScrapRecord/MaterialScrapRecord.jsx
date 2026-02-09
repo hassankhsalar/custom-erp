@@ -151,7 +151,7 @@ const MaterialScrapRecord = () => {
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-orange-300/20 rounded-full blur-3xl"></div>
       </div>
 
-      <div className="relative max-w-7xl mx-auto">
+      <div className="relative w-full mx-auto">
         {/* Header Card */}
         <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-red-100/50 mb-6 p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
