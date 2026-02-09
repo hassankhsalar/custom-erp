@@ -142,7 +142,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
 // Create a new sale for shop (updated for products & materials)
 router.post("/", async (req, res) => {
   try {
-    const { shopId, customer, paymentType, discount, items, bankAccountId, paidAmount } = req.body;
+    const { shopId, customerId, paymentType, discount, items, bankAccountId, paidAmount } = req.body;
 
     // Validate required fields
     if (!shopId || !items || !Array.isArray(items) || items.length === 0) {
@@ -215,7 +215,7 @@ router.post("/", async (req, res) => {
         data: {
           reference,
           shopId: parseInt(shopId),
-          customer: customer?.trim() || null,
+          customerId: customerId ? parseInt(customerId) : null,
           totalAmount,
           discount: parseFloat(discount) || 0,
           grandTotal,
@@ -421,6 +421,14 @@ router.get("/", async (req, res) => {
             },
           },
         },
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            mobile: true,
+            email: true,
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -549,7 +557,7 @@ router.put("/:id", async (req, res) => {
       return res.status(400).json({ error: "Invalid sale ID" });
     }
 
-    const { customer, discount } = req.body;
+    const { customerId, discount } = req.body;
     const sale = await prisma.sale.findUnique({ where: { id: saleId } });
     if (!sale) {
       return res.status(404).json({ error: "Sale not found" });
@@ -565,7 +573,7 @@ router.put("/:id", async (req, res) => {
     const updatedSale = await prisma.sale.update({
       where: { id: saleId },
       data: {
-        customer: customer?.trim() || null,
+        customerId: customerId ? parseInt(customerId) : null,
         discount: newDiscount,
         grandTotal: newGrandTotal
       }

@@ -56,7 +56,9 @@ const Sidebar = () => {
         { name: 'All Sales', path: '/sale/all', icon: <FileText size={16} />, permissionKey: 'sales_read' },
         { name: 'Create Sale', path: '/sale/create', icon: <ShoppingCart size={16} />, permissionKey: 'sales_create' },
         { name: 'Sale Return', path: '/sale/return', icon: <ClipboardList size={16} />, permissionKey: ['sales_return_create', 'sales_create'] },
-        { name: 'All Sale Returns', path: '/sale/allreturns', icon: <FileText size={16} />, permissionKey: ['sales_return_read', 'sales_read'] }
+        { name: 'All Sale Returns', path: '/sale/allreturns', icon: <FileText size={16} />, permissionKey: ['sales_return_read', 'sales_read'] },
+        { name: 'Customers', path: '/customers/all', icon: <Users size={16} />, permissionKey: ['customer_read', 'customer_create'] },
+        { name: 'Add Customer', path: '/customers/add', icon: <UserPlus size={16} />, permissionKey: 'customer_create' }
       ]
     },
     {
@@ -364,7 +366,7 @@ const Sidebar = () => {
                 <>
                   <button
                     onClick={() => toggleMenu(item.name.toLowerCase())}
-                    className="group w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/80 hover:border-gray-200/70 border border-transparent transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
+                    className="group text-left w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/80 hover:border-gray-200/70 border border-transparent transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
                   >
                     <div className="flex items-center gap-3">
                       <div className={`p-2 rounded-lg bg-gradient-to-r ${item.color} shadow-sm`}>

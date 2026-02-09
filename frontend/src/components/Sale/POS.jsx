@@ -13,7 +13,10 @@ export default function ShopPOS() {
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [discount, setDiscount] = useState(0);
-  const [customer, setCustomer] = useState("");
+  const [customers, setCustomers] = useState([]);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState("");
+  const [showCustomerSearchResults, setShowCustomerSearchResults] = useState(false);
   const [paymentType, setPaymentType] = useState("cash");
   const [bankAccounts, setBankAccounts] = useState([]);
   const [bankAccountId, setBankAccountId] = useState("");
@@ -63,6 +66,25 @@ export default function ShopPOS() {
         setShops([]);
       });
   }, [navigate]);
+
+  // Fetch all customers
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    fetch(API_ROUTES.CUSTOMERS, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch customers");
+        return res.json();
+      })
+      .then((data) => setCustomers(Array.isArray(data) ? data : []))
+      .catch((err) => {
+        console.error("Error fetching customers:", err);
+        setCustomers([]);
+      });
+  }, []); // Empty dependency array means this runs once on mount
 
   // Fetch bank accounts
   useEffect(() => {
@@ -134,6 +156,17 @@ export default function ShopPOS() {
     setSearchResults(filtered);
     setShowSearchResults(true);
   };
+
+  // Handle customer search
+  const handleCustomerSearch = (query) => {
+    setCustomerSearchQuery(query);
+    if (!query.trim()) {
+      setShowCustomerSearchResults(false);
+      return;
+    }
+    setShowCustomerSearchResults(true);
+  };
+
 
   // Add item to cart and update local stock
   const handleAddToCart = (item) => {
@@ -278,7 +311,8 @@ export default function ShopPOS() {
     setShopItems(updatedShopItems);
     setCartItems([]);
     setDiscount(0);
-    setCustomer("");
+    setSelectedCustomer(null); // Clear selected customer
+    setCustomerSearchQuery(""); // Clear customer search query
     setSearchQuery("");
     setShowSearchResults(false);
     setPaidAmount(0);
@@ -360,7 +394,7 @@ export default function ShopPOS() {
 
   const payload = {
       shopId: parseInt(shopId),
-      customer: customer.trim() || null,
+      customerId: selectedCustomer ? selectedCustomer.id : null,
       paymentType,
       bankAccountId: paymentType === "card" ? parseInt(bankAccountId) : null,
       discount: Math.max(0, parseFloat(discount) || 0),
@@ -399,7 +433,8 @@ export default function ShopPOS() {
         // Clear cart but don't restore stock since it's already sold
         setCartItems([]);
         setDiscount(0);
-        setCustomer("");
+        setSelectedCustomer(null);
+        setCustomerSearchQuery("");
         setSearchQuery("");
         setShowSearchResults(false);
         setPaidAmount(0);
@@ -621,15 +656,59 @@ export default function ShopPOS() {
                 </div>
               </div>
               
-              <div>
+              <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Customer (Optional)</label>
                 <input
                   type="text"
                   className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
-                  placeholder="Enter customer name"
-                  value={customer}
-                  onChange={(e) => setCustomer(e.target.value)}
+                  placeholder="Search or select customer"
+                  value={selectedCustomer ? selectedCustomer.name : customerSearchQuery}
+                  onChange={(e) => handleCustomerSearch(e.target.value)}
+                  onFocus={() => setShowCustomerSearchResults(true)}
+                  // onBlur={() => setTimeout(() => setShowCustomerSearchResults(false), 200)}
                 />
+                {showCustomerSearchResults && customerSearchQuery.length > 0 && (
+                  <div className="absolute z-10 bg-white border border-gray-200 w-full max-h-60 overflow-y-auto shadow-xl rounded-lg mt-1">
+                    {customers
+                      .filter(
+                        (cust) =>
+                          cust.name.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
+                          cust.mobile.includes(customerSearchQuery)
+                      )
+                      .map((cust) => (
+                        <div
+                          key={cust.id}
+                          className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                          onClick={() => {
+                            setSelectedCustomer(cust);
+                            setCustomerSearchQuery(cust.name);
+                            setShowCustomerSearchResults(false);
+                          }}
+                        >
+                          <p className="font-medium text-gray-800">{cust.name}</p>
+                          <p className="text-sm text-gray-500">{cust.mobile}</p>
+                        </div>
+                      ))}
+                    {customers.filter(
+                      (cust) =>
+                        cust.name.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
+                        cust.mobile.includes(customerSearchQuery)
+                    ).length === 0 && (
+                      <div className="p-3 text-center text-gray-500">No customers found</div>
+                    )}
+                  </div>
+                )}
+                {selectedCustomer && (
+                    <button
+                        onClick={() => {
+                            setSelectedCustomer(null);
+                            setCustomerSearchQuery("");
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 bg-gray-100 rounded-full"
+                    >
+                        <X size={16} className="text-gray-500" />
+                    </button>
+                )}
               </div>
               
               <div>
@@ -914,7 +993,7 @@ export default function ShopPOS() {
                           value={paidAmount}
                           onChange={(e) => {
                             setPaidAmountTouched(true);
-                            setPaidAmount(parseFloat(e.target.value) || 0);
+                            setPaidAmount(parseFloat(e.target.value).toFixed(2) || 0);
                           }}
                           className="w-32 border border-gray-300 p-2 rounded-lg text-right focus:ring-1 outline-none focus:ring-blue-500 focus:border-blue-500 transition"
                         />

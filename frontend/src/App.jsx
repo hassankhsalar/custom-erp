@@ -48,6 +48,8 @@ import Settings from "./components/Settings/Settings";
 import AddShop from "./components/Shop/AddShop";
 import AllShop from "./components/Shop/AllShop";
 import AllReturns from "./components/Sale/AllReturns";
+import AllCustomers from "./components/Customer/AllCustomers";
+import AddCustomer from "./components/Customer/AddCustomer";
 import StoreDetails from "./components/Stores/StoreDetails";
 import StoreToShopTransfer from "./components/Stores/StoreToShopTransfer";
 import TransferManagement from "./components/Stores/TransferManagement";
@@ -200,6 +202,15 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="sales_return_read" />}>
               <Route path="/sale/allreturns" element={<AllReturns />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="customer_read" />}>
+              <Route path="/customers/all" element={<AllCustomers />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="customer_create" />}>
+              <Route path="/customers/add" element={<AddCustomer />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="customer_update" />}>
+              <Route path="/customers/edit/:id" element={<AddCustomer />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="material_read" />}>
               <Route path="/materials/all" element={<AllMaterials />} />
