@@ -151,58 +151,63 @@ const AddMaterialScrapRecord = () => {
   };
 
   const fetchBranchMaterials = async () => {
-  if (!formData.fromBranchId) {
-    setAvailableMaterials([]);
-    return;
-  }
-
-  try {
-    setFetchingMaterials(true);
-    const token = getToken();
-    
-    if (!token) {
-      alert('Authentication required. Please login again.');
+    if (!formData.fromBranchId) {
+      setAvailableMaterials([]);
       return;
     }
 
-    // Try with full URL first
-    const url = `http://localhost:3001/api/branch-materials?type=${formData.fromType}&branchId=${formData.fromBranchId}`;
-    console.log('Trying full URL:', url);
-    
-    const response = await axios.get(
-      url,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+    try {
+      setFetchingMaterials(true);
+      const token = getToken();
+
+      if (!token) {
+        alert("Authentication required. Please login again.");
+        return;
       }
-    );
-    
-    console.log('API Response:', response.data);
-    
-    // Handle the response structure
-    if (response.data && response.data.success === true && Array.isArray(response.data.materials)) {
-      setAvailableMaterials(response.data.materials);
-      console.log('Successfully fetched materials:', response.data.materials.length);
-    } else {
-      console.warn('Unexpected response structure');
-      setAvailableMaterials([]);
+
+      // Try with full URL first
+      const url = `http://localhost:3001/api/branch-materials?type=${formData.fromType}&branchId=${formData.fromBranchId}`;
+      console.log("Trying full URL:", url);
+
+      const response = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      console.log("API Response:", response.data);
+
+      // Handle the response structure
+      if (
+        response.data &&
+        response.data.success === true &&
+        Array.isArray(response.data.materials)
+      ) {
+        setAvailableMaterials(response.data.materials);
+        console.log(
+          "Successfully fetched materials:",
+          response.data.materials.length,
+        );
+      } else {
+        console.warn("Unexpected response structure");
+        setAvailableMaterials([]);
+      }
+    } catch (error) {
+      console.error("Error fetching branch materials:", error);
+      console.error("Error response:", error.response);
+
+      if (error.response?.status === 401) {
+        alert("Session expired. Please login again.");
+      } else {
+        setAvailableMaterials([]);
+        alert(
+          "Failed to load materials from this branch. Check console for details.",
+        );
+      }
+    } finally {
+      setFetchingMaterials(false);
     }
-    
-  } catch (error) {
-    console.error('Error fetching branch materials:', error);
-    console.error('Error response:', error.response);
-    
-    if (error.response?.status === 401) {
-      alert('Session expired. Please login again.');
-    } else {
-      setAvailableMaterials([]);
-      alert('Failed to load materials from this branch. Check console for details.');
-    }
-  } finally {
-    setFetchingMaterials(false);
-  }
-};
+  };
 
   // Search materials as user types
   const handleSearchChange = useCallback(
@@ -247,7 +252,8 @@ const AddMaterialScrapRecord = () => {
     const materialId = material.id || branchMaterial.materialId;
     const materialName = material.name || "Unknown Material";
     const stock = branchMaterial.stock || branchMaterial.quantity || 0;
-    const unitCost = material.unit_cost || 0;
+    // Use avg_cost from branchMaterial instead of unit_cost from material
+    const avgCost = branchMaterial.avg_cost || 0;
 
     if (!materialId) {
       alert("Invalid material data");
@@ -259,7 +265,7 @@ const AddMaterialScrapRecord = () => {
       materialName: materialName,
       maxQuantity: stock,
       quantity: 1,
-      lossPerUnit: unitCost,
+      lossPerUnit: avgCost, // Changed from unitCost to avgCost
       branchMaterialId: branchMaterial.id || "", // ID from StoreMaterial/ShopMaterial/FactoryMaterial
     });
     setSearchResults([]);
@@ -828,7 +834,10 @@ const AddMaterialScrapRecord = () => {
                                               <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
                                                 <span>Available: {stock}</span>
                                                 <span>
-                                                  • Cost: ${unitCost.toFixed(2)}
+                                                  • Avg Cost: $
+                                                  {branchMaterial.avg_cost?.toFixed(
+                                                    2,
+                                                  ) || "0.00"}
                                                   /unit
                                                 </span>
                                                 {material.brand && (
