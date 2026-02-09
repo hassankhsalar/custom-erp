@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
 
-export default function BestSellingReport() {
-  const [rows, setRows] = useState([]);
-  const [sortBy, setSortBy] = useState("amount");
-  const [order, setOrder] = useState("desc");
+const PurchaseSalesReport = () => {
   const [range, setRange] = useState({ startDate: "", endDate: "" });
+  const [rows, setRows] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1 });
   const token = localStorage.getItem("token");
 
@@ -18,13 +16,11 @@ export default function BestSellingReport() {
 
   const fetchRows = async (page = 1, limit = 10) => {
     const params = new URLSearchParams();
-    params.append("sortBy", sortBy);
-    params.append("order", order);
     if (range.startDate) params.append("startDate", range.startDate);
     if (range.endDate) params.append("endDate", range.endDate);
     params.append("page", page);
     params.append("limit", limit);
-    const res = await fetch(`${API_ROUTES.REPORT_BEST_SELLING_DETAILS}?${params.toString()}`, {
+    const res = await fetch(`${API_ROUTES.REPORT_PURCHASE_SALES_DETAILS}?${params.toString()}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     const data = await res.json();
@@ -38,30 +34,24 @@ export default function BestSellingReport() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Best/Worst Selling</h1>
-      <div className="flex flex-wrap gap-3 mb-4">
-        <select className="border p-2 rounded" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-          <option value="amount">Sold Amount</option>
-          <option value="quantity">Quantity</option>
-          <option value="profit">Profit</option>
-        </select>
-        <select className="border p-2 rounded" value={order} onChange={(e) => setOrder(e.target.value)}>
-          <option value="desc">Best to Worst</option>
-          <option value="asc">Worst to Best</option>
-        </select>
+      <h1 className="text-2xl font-bold mb-4">Purchase vs Sales</h1>
+      <div className="flex gap-3 mb-4">
         <input type="date" value={range.startDate} onChange={(e) => setRange(prev => ({ ...prev, startDate: e.target.value }))} className="border p-2 rounded" />
         <input type="date" value={range.endDate} onChange={(e) => setRange(prev => ({ ...prev, endDate: e.target.value }))} className="border p-2 rounded" />
         <button className="bg-blue-600 text-white px-3 rounded" onClick={() => fetchRows(1, pagination.limit)}>Apply</button>
       </div>
+
       <div className="bg-white rounded shadow">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-100">
               <th className="p-2 text-left">Image</th>
-              <th className="p-2 text-left">Item</th>
+              <th className="p-2 text-left">Name</th>
               <th className="p-2 text-left">Category</th>
-              <th className="p-2 text-left">Quantity</th>
-              <th className="p-2 text-left">Total Amount</th>
+              <th className="p-2 text-left">Purchase Qty</th>
+              <th className="p-2 text-left">Purchase Amount</th>
+              <th className="p-2 text-left">Sold Qty</th>
+              <th className="p-2 text-left">Sold Amount</th>
               <th className="p-2 text-left">Profit</th>
             </tr>
           </thead>
@@ -79,15 +69,21 @@ export default function BestSellingReport() {
                   </td>
                   <td className="p-2">{r.name}</td>
                   <td className="p-2">{r.category || "-"}</td>
-                  <td className="p-2">{Number(r.totalQty || 0)}</td>
-                  <td className="p-2">{Number(r.totalAmount || 0).toFixed(2)}</td>
-                  <td className="p-2">{Number(r.totalProfit || 0).toFixed(2)}</td>
+                  <td className="p-2">{Number(r.purchaseQty || 0)}</td>
+                  <td className="p-2">{Number(r.purchaseAmount || 0).toFixed(2)}</td>
+                  <td className="p-2">{Number(r.saleQty || 0)}</td>
+                  <td className="p-2">{Number(r.saleAmount || 0).toFixed(2)}</td>
+                  <td className="p-2">{Number(r.profit || 0).toFixed(2)}</td>
                 </tr>
               );
             })}
+            {rows.length === 0 && (
+              <tr>
+                <td className="p-2 text-gray-500" colSpan="8">No data</td>
+              </tr>
+            )}
           </tbody>
         </table>
-        {rows.length === 0 && <div className="p-4 text-gray-500">No data</div>}
       </div>
 
       <div className="flex gap-2 mt-3">
@@ -97,4 +93,6 @@ export default function BestSellingReport() {
       </div>
     </div>
   );
-}
+};
+
+export default PurchaseSalesReport;

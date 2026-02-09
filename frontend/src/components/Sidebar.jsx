@@ -56,7 +56,8 @@ const Sidebar = () => {
         { name: 'All Sales', path: '/sale/all', icon: <FileText size={16} />, permissionKey: 'sales_read' },
         { name: 'Create Sale', path: '/sale/create', icon: <ShoppingCart size={16} />, permissionKey: 'sales_create' },
         { name: 'Sale Return', path: '/sale/return', icon: <ClipboardList size={16} />, permissionKey: ['sales_return_create', 'sales_create'] },
-        { name: 'All Sale Returns', path: '/sale/allreturns', icon: <FileText size={16} />, permissionKey: ['sales_return_read', 'sales_read'] }
+        { name: 'All Sale Returns', path: '/sale/allreturns', icon: <FileText size={16} />, permissionKey: ['sales_return_read', 'sales_read'] },
+        { name: 'Customers', path: '/customers/all', icon: <Users size={16} />, permissionKey: ['customer_read', 'customer_create'] }
       ]
     },
     {
@@ -252,7 +253,7 @@ const Sidebar = () => {
       color: 'from-lime-500 to-green-500',
       bgColor: 'bg-gradient-to-r from-lime-50 to-green-100/50',
       textColor: 'text-lime-700',
-      permissionKey: ['general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report', 'sales_report', 'purchases_report', 'stock_report', 'transfer_report', 'profit_loss_report', 'purchase_sales_report', 'customer_report', 'supplier_report', 'best_selling_product_report', 'worst_selling_product_report', 'profit_calender_report'],
+      permissionKey: ['general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report', 'sales_report', 'purchases_report', 'stock_report', 'transfer_report', 'profit_loss_report', 'purchase_sales_report', 'customer_report', 'supplier_report', 'best_selling_product_report', 'worst_selling_product_report'],
       subItems: [
         { name: 'Sale Report', path: '/report/sale', icon: <BarChart3 size={16} />, permissionKey: ['sales_report'] },
         { name: 'Purchase Report', path: '/report/purchase', icon: <BarChart3 size={16} />, permissionKey: ['purchases_report'] },
@@ -266,8 +267,7 @@ const Sidebar = () => {
         { name: 'Purchase vs Sales', path: '/report/purchase-sales', icon: <BarChart3 size={16} />, permissionKey: ['purchase_sales_report'] },
         { name: 'Customer Report', path: '/report/customer', icon: <BarChart3 size={16} />, permissionKey: ['customer_report'] },
         { name: 'Supplier Report', path: '/report/supplier', icon: <BarChart3 size={16} />, permissionKey: ['supplier_report'] },
-        { name: 'Best/Worst Selling', path: '/report/best-selling', icon: <BarChart3 size={16} />, permissionKey: ['best_selling_product_report'] },
-        { name: 'Profit Calendar', path: '/report/profit-calendar', icon: <BarChart3 size={16} />, permissionKey: ['profit_calender_report'] }
+        { name: 'Best/Worst Selling', path: '/report/best-selling', icon: <BarChart3 size={16} />, permissionKey: ['best_selling_product_report'] }
       ]
     },
     {
@@ -364,7 +364,7 @@ const Sidebar = () => {
                 <>
                   <button
                     onClick={() => toggleMenu(item.name.toLowerCase())}
-                    className="group w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/80 hover:border-gray-200/70 border border-transparent transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
+                    className="group text-left w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/80 hover:border-gray-200/70 border border-transparent transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
                   >
                     <div className="flex items-center gap-3">
                       <div className={`p-2 rounded-lg bg-gradient-to-r ${item.color} shadow-sm`}>

@@ -488,6 +488,13 @@ export default function AllSales() {
                             </div>
                           )}
                         </div>
+                      ) : key === 'customer' ? (
+                        <div className="flex items-center gap-2">
+                          <div>
+                            <p className="font-medium text-gray-800">{item.customer.name}</p>
+                            <p className="text-sm text-gray-500">{item.customer.mobile}</p>
+                          </div>
+                        </div>
                       ) : (
                         <div className={`flex items-center ${
                           key === 'total' || key === 'grand total' ? 'font-semibold text-gray-900' :

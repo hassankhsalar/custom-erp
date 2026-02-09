@@ -3,13 +3,18 @@ import { CiMenuFries } from "react-icons/ci";
 import logo from "/bspLogo.png";
 import { Bell, CircleUserRound, Home, Zap, Newspaper, Store, Sun, Moon, LogOut } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
+import { API_ROUTES } from "../config";
 
 import { useAuth } from "../App";
 
 const Navbar = () => {
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const [isProfileOpen, setProfileOpen] = useState(false);
+    const [isNotificationOpen, setNotificationOpen] = useState(false);
+    const [notifications, setNotifications] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
     const profileRef = useRef(null);
+    const notificationRef = useRef(null);
     const location = useLocation();
     const { currentUser, loading, error, logout } = useAuth();
 
@@ -21,12 +26,40 @@ const Navbar = () => {
             if (profileRef.current && !profileRef.current.contains(event.target)) {
                 setProfileOpen(false);
             }
+            if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+                setNotificationOpen(false);
+            }
         };
         document.addEventListener("mousedown", handleClickOutside);
         return () => {
             document.removeEventListener("mousedown", handleClickOutside);
         };
-    }, [profileRef]);
+    }, [profileRef, notificationRef]);
+
+    const fetchNotifications = async () => {
+        try {
+            const token = localStorage.getItem("token");
+            if (!token) return;
+            const [latestRes, countRes] = await Promise.all([
+                fetch(`${API_ROUTES.NOTIFICATIONS_LATEST}?limit=5`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                }),
+                fetch(API_ROUTES.NOTIFICATIONS_UNREAD_COUNT, {
+                    headers: { Authorization: `Bearer ${token}` }
+                })
+            ]);
+            const latestData = await latestRes.json();
+            const countData = await countRes.json();
+            setNotifications(latestData.rows || []);
+            setUnreadCount(Number(countData.count || 0));
+        } catch (e) {
+            console.error("Failed to fetch notifications", e);
+        }
+    };
+
+    useEffect(() => {
+        fetchNotifications();
+    }, []);
 
 
     const navItems = [
@@ -85,16 +118,56 @@ const Navbar = () => {
                         
 
                         {/* Notifications */}
-                        <Link to="/notifications">
-                            <div className="relative">
-                                <button className="p-2.5 rounded-xl bg-gradient-to-r from-purple-500/10 to-purple-600/10 hover:from-purple-500/20 hover:to-purple-600/20 text-purple-600 hover:text-purple-700 transition-all duration-300 relative backdrop-blur-sm bg-white/70 border border-white/20 hover:bg-white/90 hover:translate-y-[-1px] hover:shadow-[0_5px_15px_rgba(0,0,0,0.1)]">
-                                    <Bell size={20} />
+                        <div className="relative" ref={notificationRef}>
+                            <button
+                                onClick={() => {
+                                    const next = !isNotificationOpen;
+                                    setNotificationOpen(next);
+                                    if (next) fetchNotifications();
+                                }}
+                                className="p-2.5 rounded-xl bg-gradient-to-r from-purple-500/10 to-purple-600/10 hover:from-purple-500/20 hover:to-purple-600/20 text-purple-600 hover:text-purple-700 transition-all duration-300 relative backdrop-blur-sm bg-white/70 border border-white/20 hover:bg-white/90 hover:translate-y-[-1px] hover:shadow-[0_5px_15px_rgba(0,0,0,0.1)]"
+                            >
+                                <Bell size={20} />
+                                {unreadCount > 0 && (
                                     <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gradient-to-r from-red-500 to-red-600 text-white text-xs flex items-center justify-center shadow-[0_2px_8px_rgba(255,71,87,0.3)]">
-                                        3
+                                        {unreadCount > 9 ? "9+" : unreadCount}
                                     </span>
-                                </button>
-                            </div>
-                        </Link>
+                                )}
+                            </button>
+                            {isNotificationOpen && (
+                                <div className="absolute right-0 mt-2 w-80 origin-top-right rounded-xl bg-white/95 backdrop-blur-md border border-gray-200 shadow-xl focus:outline-none z-[1000]">
+                                    <div className="p-3 border-b border-gray-100">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm font-semibold text-gray-800">Notifications</span>
+                                            <Link to="/notifications" className="text-xs text-blue-600 hover:text-blue-700" onClick={() => setNotificationOpen(false)}>
+                                                View all
+                                            </Link>
+                                        </div>
+                                    </div>
+                                    <div className="max-h-72 overflow-y-auto">
+                                        {notifications.length === 0 && (
+                                            <div className="p-4 text-sm text-gray-500">No notifications</div>
+                                        )}
+                                        {notifications.map((n) => (
+                                            <Link
+                                                key={n.id}
+                                                to="/notifications"
+                                                onClick={() => setNotificationOpen(false)}
+                                                className="block px-4 py-3 hover:bg-gray-50"
+                                            >
+                                                <div className="flex items-start gap-2">
+                                                    <div className={`mt-1 w-2 h-2 rounded-full ${n.isRead ? "bg-gray-300" : "bg-blue-500"}`} />
+                                                    <div>
+                                                        <div className="text-sm font-medium text-gray-800">{n.title}</div>
+                                                        {n.description && <div className="text-xs text-gray-500">{n.description}</div>}
+                                                    </div>
+                                                </div>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
 
                         {/* User Profile Dropdown */}
                         <div className="relative" ref={profileRef}>

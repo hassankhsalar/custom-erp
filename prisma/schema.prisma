@@ -546,6 +546,7 @@ model ProductionMaterial {
   quantity     Float
   price        Float
   scrap        Float      @default(0)
+  fineMaterial Float      @default(0)
 
   @@unique([productionId, materialId])
 }
@@ -653,7 +654,8 @@ model Sale {
   bankAccountId Int?
   bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id])
   bankName    String?
-  customer    String?
+  customerId  Int?
+  customer    Customer? @relation(fields: [customerId], references: [id])
   totalAmount Float
   total_cost  Float?
   discount    Float        @default(0)
@@ -945,6 +947,23 @@ model ScrapMaterial {
   material     Material            @relation(fields: [materialId], references: [id])
 
   @@index([createdAt])
+}
+
+
+model Customer {
+  id              Int       @id @default(autoincrement())
+  name            String
+  mobile          String    @unique
+  email           String?   @unique
+  address         String?
+  total_purchase  Float     @default(0)
+  total_due       Float     @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  sales           Sale[]
+
+  @@index([name])
+  @@index([mobile])
 }
 
 

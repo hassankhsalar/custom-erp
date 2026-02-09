@@ -175,17 +175,17 @@ const Dashboard = () => {
             color="purple"
           />
         )}
-                {hasPermission('transfers_read') && (
-                  <KPICard
-                    title="Pending Transfers"
-                    value={dashboardData.kpis.transfers.value}
-                    change={dashboardData.kpis.transfers.change}
-                    trend={dashboardData.kpis.transfers.trend}
-                    icon={<Truck className="h-6 w-6" />}
-                    color="orange"
-                  />
-                )}
-              </div>
+        {hasPermission('transfers_read') && (
+          <KPICard
+            title="Pending Transfers"
+            value={dashboardData.kpis.transfers.value}
+            change={dashboardData.kpis.transfers.change}
+            trend={dashboardData.kpis.transfers.trend}
+            icon={<Truck className="h-6 w-6" />}
+            color="orange"
+          />
+        )}
+      </div>
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -400,14 +400,10 @@ const LowStockTable = ({ data }) => (
         </h3>
         <p className="text-sm text-gray-500 mt-1">Items needing attention</p>
       </div>
-      <button className="text-sm text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1">
-        <AlertTriangle size={14} />
-        {data.length} alerts
-      </button>
     </div>
     <div className="space-y-3">
       {data.map((item) => {
-        const stockPercentage = (item.current / item.min) * 100;
+        const stockPercentage = (item.min > 0 && item.current > 0) ? (item.current / item.min) * 100 : (item.current > 0) ? 100 : 0;
         const severity = stockPercentage <= 30 ? 'high' : stockPercentage <= 60 ? 'medium' : 'low';
         
         return (
@@ -417,20 +413,20 @@ const LowStockTable = ({ data }) => (
           >
             <div>
               <p className="font-medium text-gray-900">{item.name}</p>
-              <p className="text-sm text-gray-500 capitalize">{item.type}</p>
+              <p className="text-sm text-gray-500 capitalize">in {item.location}</p>
             </div>
             <div className="text-right">
               <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
                 severity === 'high' ? 'bg-gradient-to-r from-red-500/10 to-red-600/10 text-red-600 border border-red-500/20' :
                 severity === 'medium' ? 'bg-gradient-to-r from-orange-500/10 to-orange-600/10 text-orange-600 border border-orange-500/20' :
-                'bg-gradient-to-r from-amber-500/10 to-yellow-600/10 text-amber-600 border border-amber-500/20'
+                'bg-gradient-to-r from-yellow-500/10 to-lime-600/10 text-lime-600 border border-lime-500/20'
               }`}>
                 {item.current} / {item.min}
               </span>
               <div className={`text-xs mt-1 ${
                 severity === 'high' ? 'text-red-500' :
                 severity === 'medium' ? 'text-orange-500' :
-                'text-amber-500'
+                'text-lime-500'
               }`}>
                 {stockPercentage.toFixed(0)}% of minimum
               </div>
