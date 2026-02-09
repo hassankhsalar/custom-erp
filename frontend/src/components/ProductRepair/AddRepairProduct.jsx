@@ -1252,7 +1252,8 @@ const AddRepairProduct = () => {
                       submitting ||
                       repairProducts.length === 0 ||
                       !formData.fromBranchId ||
-                      !formData.destination
+                      !formData.destination ||
+    (formData.shippingCost > 0 && !formData.accountId)
                         ? "bg-gray-400 text-gray-600 cursor-not-allowed"
                         : "bg-gradient-to-r from-green-500 to-blue-500 text-white hover:from-green-600 hover:to-blue-600 hover:shadow-xl"
                     }`}
