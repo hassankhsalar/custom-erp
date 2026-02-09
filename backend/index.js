@@ -178,6 +178,7 @@ const userPermissionRoutes = require('./routes/userPermissionRoutes');
 const hrmRoutes = require('./routes/hrmRoutes');
 const expenseRoutes = require('./routes/expenseRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const reportExtraRoutes = require('./routes/reportExtraRoutes');
 const { startSalaryCron } = require('./services/salaryCron');
 
 const uploadRoutes = require('./routes/uploadRoutes');
@@ -219,6 +220,7 @@ app.use('/api/user-management', authenticateToken, userPermissionRoutes);
 app.use('/api/hrm', authenticateToken, hrmRoutes);
 app.use('/api/expenses', authenticateToken, expenseRoutes);
 app.use('/api/reports', authenticateToken, reportRoutes);
+app.use('/api/reports', authenticateToken, reportExtraRoutes);
 
 // serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));

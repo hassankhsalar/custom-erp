@@ -253,7 +253,7 @@ const Sidebar = () => {
       color: 'from-lime-500 to-green-500',
       bgColor: 'bg-gradient-to-r from-lime-50 to-green-100/50',
       textColor: 'text-lime-700',
-      permissionKey: ['general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report', 'sales_report', 'purchases_report', 'stock_report', 'transfer_report', 'profit_loss_report', 'purchase_sales_report', 'customer_report', 'supplier_report', 'best_selling_product_report', 'worst_selling_product_report', 'profit_calender_report'],
+      permissionKey: ['general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report', 'sales_report', 'purchases_report', 'stock_report', 'transfer_report', 'profit_loss_report', 'purchase_sales_report', 'customer_report', 'supplier_report', 'best_selling_product_report', 'worst_selling_product_report'],
       subItems: [
         { name: 'Sale Report', path: '/report/sale', icon: <BarChart3 size={16} />, permissionKey: ['sales_report'] },
         { name: 'Purchase Report', path: '/report/purchase', icon: <BarChart3 size={16} />, permissionKey: ['purchases_report'] },
@@ -267,8 +267,7 @@ const Sidebar = () => {
         { name: 'Purchase vs Sales', path: '/report/purchase-sales', icon: <BarChart3 size={16} />, permissionKey: ['purchase_sales_report'] },
         { name: 'Customer Report', path: '/report/customer', icon: <BarChart3 size={16} />, permissionKey: ['customer_report'] },
         { name: 'Supplier Report', path: '/report/supplier', icon: <BarChart3 size={16} />, permissionKey: ['supplier_report'] },
-        { name: 'Best/Worst Selling', path: '/report/best-selling', icon: <BarChart3 size={16} />, permissionKey: ['best_selling_product_report'] },
-        { name: 'Profit Calendar', path: '/report/profit-calendar', icon: <BarChart3 size={16} />, permissionKey: ['profit_calender_report'] }
+        { name: 'Best/Worst Selling', path: '/report/best-selling', icon: <BarChart3 size={16} />, permissionKey: ['best_selling_product_report'] }
       ]
     },
     {
