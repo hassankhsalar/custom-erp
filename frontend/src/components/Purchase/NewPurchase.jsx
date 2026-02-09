@@ -23,9 +23,12 @@ export default function NewPurchase() {
     tax: "0",
     paidAmount: "0",
     paymentMethod: "cash",
+    bankAccountId: "",
     grandTotal: 0,
+    shippingStatus: "pending",
     reference: `PUR-${Date.now()}`
   });
+  const [bankAccounts, setBankAccounts] = useState([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   
@@ -57,6 +60,7 @@ export default function NewPurchase() {
     fetchProducts();
     fetchSuppliers();
     fetchDestinations();
+    fetchBankAccounts();
   }, [destinationType]);
 
  const fetchMaterials = async () => {
@@ -107,6 +111,22 @@ const fetchSuppliers = async () => {
   } catch (error) {
     console.error("Failed to fetch suppliers:", error);
     setSuppliers([]);
+  }
+};
+
+const fetchBankAccounts = async () => {
+  try {
+    const token = localStorage.getItem("token");
+    const headers = {};
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    const res = await fetch("http://localhost:3001/api/bank-accounts", { headers });
+    const data = await res.json();
+    setBankAccounts(Array.isArray(data) ? data : []);
+  } catch (error) {
+    console.error("Failed to fetch bank accounts:", error);
+    setBankAccounts([]);
   }
 };
 
@@ -195,6 +215,25 @@ const fetchSuppliers = async () => {
     setForm(prev => ({ ...prev, grandTotal }));
   }, [purchaseItems, form.discount, form.tax, form.shippingCost, form.paidAmount]);
 
+  useEffect(() => {
+    const computeShippingStatus = () => {
+      if (purchaseItems.length === 0) return "pending";
+      let allZero = true;
+      let allComplete = true;
+      purchaseItems.forEach((item) => {
+        const qty = parseFloat(item.quantity) || 0;
+        const received = parseFloat(item.receivedQuantity || 0) || 0;
+        if (received > 0) allZero = false;
+        if (received < qty) allComplete = false;
+      });
+      if (allComplete) return "received";
+      if (allZero) return "pending";
+      return "partial";
+    };
+
+    setForm(prev => ({ ...prev, shippingStatus: computeShippingStatus() }));
+  }, [purchaseItems]);
+
   const handleSearchInputChange = (value) => {
     setSearchState(prevState => {
       const lowerCaseValue = value.toLowerCase();
@@ -282,7 +321,9 @@ const fetchSuppliers = async () => {
           ? {
               ...item,
               [field]: value,
-              total: parseFloat(value || 0) * (field === 'quantity' ? parseFloat(item.unitPrice || 0) : parseFloat(item.quantity || 0))
+              total: field === 'quantity' || field === 'unitPrice'
+                ? parseFloat(field === 'quantity' ? value || 0 : item.quantity || 0) * parseFloat(field === 'unitPrice' ? value || 0 : item.unitPrice || 0)
+                : item.total
             }
           : item
       )
@@ -308,6 +349,7 @@ const fetchSuppliers = async () => {
       quantity: "1", // Default quantity
       unitPrice: standardPrice.toString(), // Default unit price
       total: standardPrice, // Default total
+      receivedQuantity: "1",
       originalStandardPrice: standardPrice, // Store original standard price for comparison if needed
     };
 
@@ -338,6 +380,11 @@ const fetchSuppliers = async () => {
     const validItems = purchaseItems.filter(item => {
       if (!item.itemType || !item.quantity || !item.unitPrice) return false;
       if (parseFloat(item.quantity) <= 0 || parseFloat(item.unitPrice) <= 0) return false;
+      if (item.receivedQuantity !== undefined && item.receivedQuantity !== null) {
+        const received = parseFloat(item.receivedQuantity);
+        if (isNaN(received) || received < 0) return false;
+        if (received > parseFloat(item.quantity)) return false;
+      }
       
       if (item.itemType === "material" && !item.materialId) return false;
       if (item.itemType === "product" && !item.productId) return false;
@@ -366,6 +413,12 @@ const fetchSuppliers = async () => {
         ...(token && { "Authorization": `Bearer ${token}` })
       };
 
+      if ((form.paymentMethod === "card" || form.paymentMethod === "bank_transfer") && !form.bankAccountId) {
+        setMessage("⚠️ Please select a bank account for card/bank transfers.");
+        setLoading(false);
+        return;
+      }
+
       const payload = {
         supplierId: parseInt(form.supplierId),
         destinationType: form.destinationType,
@@ -375,14 +428,19 @@ const fetchSuppliers = async () => {
         tax: parseFloat(form.tax) || 0,
         paidAmount: paidAmount,
         paymentMethod: form.paymentMethod,
+        bankAccountId: form.bankAccountId ? parseInt(form.bankAccountId) : null,
         grandTotal: financialBreakdown.grandTotal,
+        shippingStatus: form.shippingStatus,
         reference: form.reference,
         items: validItems.map(item => ({
           itemType: item.itemType,
           materialId: item.itemType === "material" ? parseInt(item.materialId) : undefined,
           productId: item.itemType === "product" ? parseInt(item.productId) : undefined,
           quantity: parseFloat(item.quantity),
-          unitPrice: parseFloat(item.unitPrice)
+          unitPrice: parseFloat(item.unitPrice),
+          receivedQuantity: item.receivedQuantity !== undefined && item.receivedQuantity !== null
+            ? parseFloat(item.receivedQuantity)
+            : parseFloat(item.quantity)
         }))
       };
 
@@ -405,7 +463,9 @@ const fetchSuppliers = async () => {
           tax: "0",
           paidAmount: "0",
           paymentMethod: "cash",
+          bankAccountId: "",
           grandTotal: 0,
+          shippingStatus: "pending",
           reference: `PUR-${Date.now()}`
         });
         setDestinationType("store");
@@ -483,16 +543,16 @@ const fetchSuppliers = async () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           {/* Left Column - Supplier & Destination */}
-          <div className="lg:col-span-1 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 space-y-6">
             {/* Supplier Selection Card */}
             <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
                 <div className="p-2 bg-blue-100 rounded-lg">
                   <Building2 className="text-blue-600" size={20} />
                 </div>
-                Supplier Information
+                Supplier And Shipping
               </h2>
               <div className="space-y-4">
                 <div>
@@ -520,6 +580,21 @@ const fetchSuppliers = async () => {
                       </svg>
                     </div>
                   </div>
+                </div>
+                {/* Shipping Status */}
+                <div className="mt-4 relative">
+                  <label className="block text-sm text-gray-600 mb-2">Shipping Status</label>
+                  <select
+                    name="shippingStatus"
+                    value={form.shippingStatus}
+                    onChange={handleFormChange}
+                    className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-400/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:focus:border-blue-400 transition-all duration-300 appearance-none"
+                  >
+                    <option value="">-- Choose Status --</option>
+                    <option value="pending">Pending</option>
+                    <option value="partial">Partial</option>
+                    <option value="received">Received</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -730,7 +805,7 @@ const fetchSuppliers = async () => {
                           </button>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                           {/* Item Image and Details */}
                           <div className="col-span-1 md:col-span-2 flex items-center gap-3">
                             <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 bg-gray-50">
@@ -772,6 +847,22 @@ const fetchSuppliers = async () => {
                             />
                           </div>
 
+                          {/* Recieved Quantity */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Received Quantity
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max={item.quantity}
+                              value={item.receivedQuantity ?? ""}
+                              onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'receivedQuantity', e.target.value)}
+                              className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400"
+                            />
+                          </div>
+
                           {/* Unit Price */}
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -780,7 +871,7 @@ const fetchSuppliers = async () => {
                             <input
                               type="number"
                               step="0.01"
-                              min="0.01"
+                              min={ item.avg_cost ? item.avg_cost : 0.001 }
                               value={item.unitPrice}
                               onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'unitPrice', e.target.value)}
                               required
@@ -794,7 +885,7 @@ const fetchSuppliers = async () => {
                             />
                             {standardPrice > 0 && (
                               <p className={`mt-1 text-xs ${
-                                currentPrice === standardPrice
+                                currentPrice <= standardPrice
                                   ? "text-green-600"
                                   : "text-yellow-600"
                               }`}>
@@ -936,6 +1027,25 @@ const fetchSuppliers = async () => {
                           </button>
                         ))}
                       </div>
+
+                      {(form.paymentMethod === "card" || form.paymentMethod === "bank_transfer") && (
+                        <div className="mt-3">
+                          <label className="block text-xs text-gray-600 mb-1">Bank Account</label>
+                          <select
+                            name="bankAccountId"
+                            value={form.bankAccountId}
+                            onChange={handleFormChange}
+                            className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                          >
+                            <option value="">Select Bank</option>
+                            {bankAccounts.map((bank) => (
+                              <option key={bank.id} value={bank.id}>
+                                {bank.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
 
                     </div>
                     <div>

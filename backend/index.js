@@ -51,7 +51,7 @@ const hasPermission = (permission) => {
 };
 
 // Register a new user
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', authenticateToken, hasPermission('create_user'), async (req, res) => {
   const { email, password, name, username } = req.body;
   const hashedPassword = await bcrypt.hash(password, 10);
   try {
@@ -168,9 +168,15 @@ const accountRoutes = require('./routes/accountRoutes');
 const assignAccountRoutes = require('./routes/assignAccountRoutes');
 const cashRegisterAssignRoutes = require('./routes/cashRegisterAssignRoutes');
 const cashRegisterRoutes = require('./routes/cashRegisterRoutes');
+const bankAccountRoutes = require('./routes/bankAccountRoutes');
+const generalLedgerRoutes = require('./routes/generalLedgerRoutes');
+const balanceSheetRoutes = require('./routes/balanceSheetRoutes');
 const assignUserRoutes = require('./routes/assignUserRoutes');
 const permissionRoutes = require('./routes/permissionRoutes');
 const userPermissionRoutes = require('./routes/userPermissionRoutes');
+const hrmRoutes = require('./routes/hrmRoutes');
+const expenseRoutes = require('./routes/expenseRoutes');
+const { startSalaryCron } = require('./services/salaryCron');
 
 const uploadRoutes = require('./routes/uploadRoutes');
 
@@ -201,9 +207,14 @@ app.use('/api/accounts', authenticateToken, accountRoutes);
 app.use('/api/assign-account', authenticateToken, assignAccountRoutes);
 app.use('/api/cash-register-assign', authenticateToken, cashRegisterAssignRoutes);
 app.use('/api/cash-registers', authenticateToken, cashRegisterRoutes);
+app.use('/api/bank-accounts', authenticateToken, bankAccountRoutes);
+app.use('/api/general-ledger', authenticateToken, generalLedgerRoutes);
+app.use('/api/balance-sheet', authenticateToken, balanceSheetRoutes);
 app.use('/api/assign-user', authenticateToken, assignUserRoutes);
 app.use('/api/permissions', authenticateToken, permissionRoutes);
 app.use('/api/user-management', authenticateToken, userPermissionRoutes);
+app.use('/api/hrm', authenticateToken, hrmRoutes);
+app.use('/api/expenses', authenticateToken, expenseRoutes);
 
 // serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));
@@ -213,6 +224,8 @@ const port = 3001;
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
+
+startSalaryCron();
 
 
 module.exports = {

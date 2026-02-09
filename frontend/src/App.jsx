@@ -75,6 +75,18 @@ import AllAccounts from "./components/Accounts/AllAccounts";
 import AssignAccount from "./components/Accounts/AssignAccount";
 import CashRegisterAssign from "./components/Accounts/CashRegisterAssign";
 import AddCashRegister from "./components/Accounts/AddCashRegister";
+import BankAccounts from "./components/Accounts/BankAccounts";
+import GeneralLedger from "./components/Accounts/GeneralLedger";
+import BalanceSheet from "./components/Accounts/BalanceSheet";
+import Employees from "./components/HRM/Employees";
+import Attendance from "./components/HRM/Attendance";
+import Holidays from "./components/HRM/Holidays";
+import LeaveCategories from "./components/HRM/LeaveCategories";
+import LeaveRequests from "./components/HRM/LeaveRequests";
+import Payroll from "./components/HRM/Payroll";
+import ExpenseCategories from "./components/Expense/ExpenseCategories";
+import Expenses from "./components/Expense/Expenses";
+import Salaries from "./components/Expense/Salaries";
 import AssignUser from "./components/Users/AssignUser";
 import AllAssignedUsers from "./components/Users/AllAssignedUsers";
 import PermissionsManagement from "./components/Permissions/PermissionsManagement";
@@ -288,6 +300,44 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="cash_register_create" />}>
               <Route path="/addcashregister" element={<AddCashRegister />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="bank_account_read" />}>
+              <Route path="/bank-accounts" element={<BankAccounts />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="general_ledger_report" />}>
+              <Route path="/accounts/general-ledger" element={<GeneralLedger />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="balance_sheet_report" />}>
+              <Route path="/accounts/balance-sheet" element={<BalanceSheet />} />
+            </Route>
+
+            <Route element={<PermissionRoute requiredPermission="hrm_employee_manage" />}>
+              <Route path="/hrm/employees" element={<Employees />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="clock_in_out_manage" />}>
+              <Route path="/hrm/attendance" element={<Attendance />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="holiday_manage" />}>
+              <Route path="/hrm/holidays" element={<Holidays />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="leave_category_manage" />}>
+              <Route path="/hrm/leave-categories" element={<LeaveCategories />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="leave_read" />}>
+              <Route path="/hrm/leave-requests" element={<LeaveRequests />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/hrm/payroll" element={<Payroll />} />
+            </Route>
+
+            <Route element={<PermissionRoute requiredPermission="expenses_read" />}>
+              <Route path="/expense/categories" element={<ExpenseCategories />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="expenses_read" />}>
+              <Route path="/expense/list" element={<Expenses />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="salary_read" />}>
+              <Route path="/expense/salaries" element={<Salaries />} />
             </Route>
 
             <Route element={<PermissionRoute requiredPermission="user_associate_create" />}>
