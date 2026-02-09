@@ -21,6 +21,108 @@ const isManagerOf = async (managerId, userId) => {
   return !!relation;
 };
 
+// Search users by name, email, or username (with authentication)
+router.get("/users/search", async (req, res) => {
+  try {
+    console.log('Search endpoint called with query:', req.query);
+    
+    const { query } = req.query;
+    
+    if (!query || query.trim().length < 1) {
+      return res.json([]);
+    }
+
+    const searchQuery = query.trim();
+    
+    // SIMPLE search without complex conditions
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [
+          { name: { contains: searchQuery } },
+          { email: { contains: searchQuery } },
+          { username: { contains: searchQuery } }
+        ]
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        username: true
+      },
+      take: 10
+    });
+
+    console.log('Search results:', users.length);
+    res.json(users);
+  } catch (err) {
+    console.error('Search error details:', {
+      message: err.message,
+      stack: err.stack,
+      code: err.code
+    });
+    
+    // Return empty array instead of error for frontend compatibility
+    res.json([]);
+  }
+});
+
+// Alternative: Direct database query if Prisma is having issues
+router.get("/users/search-simple", async (req, res) => {
+  try {
+    const { query } = req.query;
+    
+    if (!query || query.trim().length < 1) {
+      return res.json([]);
+    }
+
+    const searchQuery = `%${query.trim()}%`;
+    
+    // Using raw query as fallback
+    const users = await prisma.$queryRaw`
+      SELECT id, name, email, username
+      FROM User
+      WHERE name LIKE ${searchQuery}
+         OR email LIKE ${searchQuery}
+         OR username LIKE ${searchQuery}
+      LIMIT 10
+    `;
+
+    res.json(users);
+  } catch (err) {
+    console.error('Raw search error:', err);
+    res.json([]);
+  }
+});
+
+
+// Get user's manager
+router.get("/employees/:userId/manager", async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    const relation = await prisma.userManager.findFirst({
+      where: { userId, isPrimary: true },
+      include: {
+        manager: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            username: true
+          }
+        }
+      }
+    });
+
+    if (!relation) {
+      return res.json(null);
+    }
+
+    res.json(relation.manager);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Employees (profiles)
 router.get("/employees", async (req, res) => {
   try {
@@ -37,6 +139,42 @@ router.get("/employees", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Alternative search endpoint for employees only
+router.get("/employees/search", async (req, res) => {
+  try {
+    const { query } = req.query;
+    
+    if (!query || query.trim().length < 1) {
+      return res.json([]);
+    }
+
+    const searchQuery = query.trim();
+    
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [
+          { name: { contains: searchQuery } },
+          { email: { contains: searchQuery } },
+          { username: { contains: searchQuery } }
+        ]
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        username: true
+      },
+      take: 10
+    });
+
+    res.json(users);
+  } catch (err) {
+    console.error('Employee search error:', err);
+    res.json([]);
+  }
+});
+
 
 router.post("/employees", async (req, res) => {
   try {
@@ -230,7 +368,7 @@ router.delete("/holidays/:id", async (req, res) => {
   }
 });
 
-// Leave categories
+//get Leave categories
 router.get("/leave-categories", async (req, res) => {
   try {
     const categories = await prisma.leaveCategory.findMany({ orderBy: { name: "asc" } });
@@ -239,7 +377,7 @@ router.get("/leave-categories", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+//create Leave categories
 router.post("/leave-categories", async (req, res) => {
   try {
     const { name, isPaid, maxDays } = req.body;
@@ -255,7 +393,7 @@ router.post("/leave-categories", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+//update Leave categories
 router.put("/leave-categories/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -273,7 +411,7 @@ router.put("/leave-categories/:id", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+// delete Leave categories
 router.delete("/leave-categories/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -303,7 +441,7 @@ router.post("/leave-requests", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+// get all Leave requests
 router.get("/leave-requests", async (req, res) => {
   try {
     const requesterId = req.user.userId;
@@ -334,7 +472,7 @@ router.get("/leave-requests", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+// update approved Leave requests
 router.put("/leave-requests/:id/approve", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -372,7 +510,7 @@ router.put("/leave-requests/:id/approve", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+// update reject Leave requests
 router.put("/leave-requests/:id/reject", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -429,7 +567,7 @@ router.get("/payroll", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
+// Update Payroll / Salaries
 router.put("/payroll/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
