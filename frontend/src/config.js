@@ -39,6 +39,8 @@ export const API_ROUTES = {
   GENERAL_LEDGER: `${API_BASE_URL}/general-ledger`,
   BALANCE_SHEET: `${API_BASE_URL}/balance-sheet`,
   CASHREGISTERASSIGN: `${API_BASE_URL}/cash-register-assign`,
+  HRM: `${API_BASE_URL}/hrm`,
+  EXPENSES: `${API_BASE_URL}/expenses`,
   
   //SHOP_SALES_RETURNS: `${API_BASE_URL}/shop-sales/returns/all`,
   SHOP_SALES_RETURNS_BACKUP: `${API_BASE_URL}/shop-sales/returns-list`,

@@ -28,6 +28,7 @@
     "lucide-react": "^0.553.0",
     "multer": "^2.0.2",
     "node-cache": "^5.1.2",
+    "node-cron": "^4.2.1",
     "prisma": "^6.16.2",
     "tailwindcss": "^4.1.13"
   },

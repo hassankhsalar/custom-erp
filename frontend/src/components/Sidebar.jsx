@@ -15,7 +15,10 @@ import {
   Recycle,
   BookA,
   NotebookPen,
-  TableProperties
+  Calendar,
+  TableProperties,
+  Wallet,
+  Briefcase
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -212,6 +215,35 @@ const Sidebar = () => {
         { name: 'Bank Accounts', path: '/bank-accounts', icon: <TableProperties size={16} />, permissionKey: ['bank_account_read', 'bank_account_create'] },
         { name: 'General Ledger', path: '/accounts/general-ledger', icon: <TableProperties size={16} />, permissionKey: 'general_ledger_report' },
         { name: 'Balance Sheet', path: '/accounts/balance-sheet', icon: <TableProperties size={16} />, permissionKey: 'balance_sheet_report' },
+      ]
+    },
+    {
+      name: 'HRM',
+      icon: <Users color='white' size={18} />,
+      color: 'from-teal-500 to-emerald-500',
+      bgColor: 'bg-gradient-to-r from-teal-50 to-emerald-100/50',
+      textColor: 'text-teal-700',
+      permissionKey: ['hrm_read', 'hrm_employee_manage'],
+      subItems: [
+        { name: 'Employees', path: '/hrm/employees', icon: <Users size={16} />, permissionKey: 'hrm_employee_manage' },
+        { name: 'Attendance', path: '/hrm/attendance', icon: <ClipboardList size={16} />, permissionKey: 'clock_in_out_manage' },
+        { name: 'Holidays', path: '/hrm/holidays', icon: <Calendar size={16} />, permissionKey: 'holiday_manage' },
+        { name: 'Leave Categories', path: '/hrm/leave-categories', icon: <Calendar size={16} />, permissionKey: 'leave_category_manage' },
+        { name: 'Leave Requests', path: '/hrm/leave-requests', icon: <Calendar size={16} />, permissionKey: 'leave_read' },
+        { name: 'Payroll', path: '/hrm/payroll', icon: <Briefcase size={16} />, permissionKey: 'payroll_manage' }
+      ]
+    },
+    {
+      name: 'Expense',
+      icon: <Wallet color='white' size={18} />,
+      color: 'from-rose-500 to-pink-500',
+      bgColor: 'bg-gradient-to-r from-rose-50 to-pink-100/50',
+      textColor: 'text-rose-700',
+      permissionKey: ['expenses_read', 'salary_read'],
+      subItems: [
+        { name: 'Expense Category', path: '/expense/categories', icon: <Wallet size={16} />, permissionKey: 'expenses_read' },
+        { name: 'Expenses', path: '/expense/list', icon: <Wallet size={16} />, permissionKey: 'expenses_read' },
+        { name: 'Salaries', path: '/expense/salaries', icon: <Briefcase size={16} />, permissionKey: 'salary_read' }
       ]
     },
     {

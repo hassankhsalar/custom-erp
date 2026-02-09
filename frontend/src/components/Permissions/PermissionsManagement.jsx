@@ -139,7 +139,10 @@ export default function PermissionsManagement() {
 
     // Add Salary and HRM permissions
     'salary_create', 'salary_edit', 'salary_delete', 'salary_read',
-    'leave_approve', 'leave_read', 'holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read',
+    'leave_approve', 'leave_approve_all', 'leave_read', 'leave_request_create', 'leave_request_edit', 'leave_request_delete',
+    'holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read', 'holiday_manage',
+    'leave_category_manage', 'payroll_manage', 'approve_salary', 'approve_clock_in_out', 'add_salary', 'edit_salary',
+    'hrm_read', 'hrm_employee_manage', 'clock_in_out_manage',
     
     // Add Report permissions
     'general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report',
@@ -331,21 +334,28 @@ export default function PermissionsManagement() {
       key: 'salary',
       name: 'Salary',
       icon: <Briefcase size={18} className="text-green-600" />,
-      permissions: ['salary_create', 'salary_edit', 'salary_delete', 'salary_read']
+      permissions: ['salary_create', 'salary_edit', 'salary_delete', 'salary_read', 'add_salary', 'edit_salary', 'approve_salary', 'payroll_manage']
     },
     // Leave Management
     {
       key: 'leave',
       name: 'Leave',
       icon: <Calendar size={18} className="text-sky-500" />,
-      permissions: ['leave_approve', 'leave_read']
+      permissions: ['leave_request_create', 'leave_request_edit', 'leave_request_delete', 'leave_read', 'leave_approve', 'leave_approve_all']
     },
     // Holiday Management
     {
       key: 'holiday',
       name: 'Holiday',
       icon: <Calendar size={18} className="text-purple-500" />,
-      permissions: ['holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read']
+      permissions: ['holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read', 'holiday_manage']
+    },
+    // HRM Management
+    {
+      key: 'hrm',
+      name: 'HRM',
+      icon: <UsersIcon size={18} className="text-teal-500" />,
+      permissions: ['hrm_read', 'hrm_employee_manage', 'clock_in_out_manage', 'approve_clock_in_out', 'leave_category_manage', 'payroll_manage']
     },
     // Customer Management
     {

@@ -174,6 +174,9 @@ const balanceSheetRoutes = require('./routes/balanceSheetRoutes');
 const assignUserRoutes = require('./routes/assignUserRoutes');
 const permissionRoutes = require('./routes/permissionRoutes');
 const userPermissionRoutes = require('./routes/userPermissionRoutes');
+const hrmRoutes = require('./routes/hrmRoutes');
+const expenseRoutes = require('./routes/expenseRoutes');
+const { startSalaryCron } = require('./services/salaryCron');
 
 const uploadRoutes = require('./routes/uploadRoutes');
 
@@ -210,6 +213,8 @@ app.use('/api/balance-sheet', authenticateToken, balanceSheetRoutes);
 app.use('/api/assign-user', authenticateToken, assignUserRoutes);
 app.use('/api/permissions', authenticateToken, permissionRoutes);
 app.use('/api/user-management', authenticateToken, userPermissionRoutes);
+app.use('/api/hrm', authenticateToken, hrmRoutes);
+app.use('/api/expenses', authenticateToken, expenseRoutes);
 
 // serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));
@@ -219,6 +224,8 @@ const port = 3001;
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
+
+startSalaryCron();
 
 
 module.exports = {

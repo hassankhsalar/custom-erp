@@ -28,6 +28,16 @@ model User {
   entityAccount             EntityAccount[]
   cashRegisterAssignment    CashRegisterAssignment[]
   userAssociate              UserAssociate[]
+  employeeProfile            EmployeeProfile?
+  leaveRequests              LeaveRequest[]
+  leaveApprovals             LeaveApproval[]
+  salaries                   Salary[]
+  expenses                   Expense[]
+  managerOf                  UserManager[] @relation("Manager")
+  reportsTo                  UserManager[] @relation("Employee")
+  
+  clockIns     ClockInOut[]  @relation("ClockInOutUser")
+  approvals    ClockInOut[]  @relation("ClockInOutApprovedBy")
 }
 
 model Profile {
@@ -89,6 +99,150 @@ model BankAccount {
   withdraw_charge     Float?
   transactions        Transactions[]
   sales               Sale[]
+}
+
+model EmployeeProfile {
+  id           Int      @id @default(autoincrement())
+  userId       Int      @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  designation  String?
+  baseSalary   Float    @default(0)
+  salaryType   String   @default("monthly") // monthly, hourly
+  joiningDate  DateTime?
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model UserManager {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  managerId  Int
+  user       User     @relation("Employee", fields: [userId], references: [id], onDelete: Cascade)
+  manager    User     @relation("Manager", fields: [managerId], references: [id], onDelete: Cascade)
+  isPrimary  Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, managerId])
+  @@index([userId])
+  @@index([managerId])
+}
+
+model ClockInOut {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  user         User     @relation("ClockInOutUser", fields: [userId], references: [id], onDelete: Cascade)
+  clockIn      DateTime
+  clockOut     DateTime?
+  status       String   @default("open") // open, closed
+  approvedById Int?
+  approvedBy   User?    @relation("ClockInOutApprovedBy", fields: [approvedById], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([clockIn])
+}
+
+model Holiday {
+  id          Int      @id @default(autoincrement())
+  name        String
+  date        DateTime
+  isPaid      Boolean  @default(true)
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([date])
+}
+
+model LeaveCategory {
+  id          Int      @id @default(autoincrement())
+  name        String
+  isPaid      Boolean  @default(true)
+  maxDays     Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  leaveRequests LeaveRequest[]
+}
+
+model LeaveRequest {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId  Int
+  category    LeaveCategory @relation(fields: [categoryId], references: [id])
+  startDate   DateTime
+  endDate     DateTime
+  reason      String?
+  status      String   @default("pending") // pending, approved, rejected
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  approvals   LeaveApproval[]
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([startDate])
+}
+
+model LeaveApproval {
+  id            Int      @id @default(autoincrement())
+  leaveRequestId Int
+  leaveRequest   LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  approverId     Int
+  approver       User     @relation(fields: [approverId], references: [id])
+  status         String   // approved, rejected
+  note           String?
+  decidedAt      DateTime @default(now())
+
+  @@index([leaveRequestId])
+  @@index([approverId])
+}
+
+model Salary {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  month        Int
+  year         Int
+  baseSalary   Float
+  allowances   Float    @default(0)
+  deductions   Float    @default(0)
+  gross        Float
+  net          Float
+  status       String   @default("generated") // generated, approved, paid
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  expenses     Expense[]
+
+  @@unique([userId, month, year])
+  @@index([month, year])
+}
+
+model ExpenseCategory {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expenses  Expense[]
+}
+
+model Expense {
+  id          Int      @id @default(autoincrement())
+  categoryId  Int
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id])
+  amount      Float
+  date        DateTime
+  description String?
+  createdById Int?
+  createdBy   User?   @relation(fields: [createdById], references: [id])
+  salaryId    Int?
+  salary      Salary? @relation(fields: [salaryId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([date])
 }
 
 
