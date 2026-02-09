@@ -531,7 +531,7 @@ router.get("/wastage/products", async (req, res) => {
         GROUP BY pp.productId
       ) t
     `;
-    const totalCount = totalRows[0]?.count || 0;
+    const totalCount = Number(totalRows[0]?.count) || 0;
 
     const rows = await prisma.$queryRaw`
       SELECT pp.productId,
