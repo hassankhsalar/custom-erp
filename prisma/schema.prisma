@@ -86,6 +86,7 @@ model Accounts {
   transactions Transactions[]
   entityAssignments EntityAccount[]
   purchase     Purchase[]
+  expenses     Expense[]
 
   @@index([createdAt])
 }
@@ -231,6 +232,8 @@ model Expense {
   id          Int      @id @default(autoincrement())
   categoryId  Int
   category    ExpenseCategory @relation(fields: [categoryId], references: [id])
+  accountId   Int
+  account     Accounts @relation(fields: [accountId], references: [id])
   amount      Float
   date        DateTime
   description String?

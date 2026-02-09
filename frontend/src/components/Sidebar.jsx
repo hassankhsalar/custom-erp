@@ -257,7 +257,17 @@ const Sidebar = () => {
         { name: 'Sale Report', path: '/report/sale', icon: <BarChart3 size={16} />, permissionKey: ['sales_report'] },
         { name: 'Purchase Report', path: '/report/purchase', icon: <BarChart3 size={16} />, permissionKey: ['purchases_report'] },
         { name: 'Production Report', path: '/report/production', icon: <BarChart3 size={16} />, permissionKey: ['production_report'] },
-        { name: 'Wastage Report', path: '/report/wastage', icon: <BarChart3 size={16} />, permissionKey: ['wastage_report'] }
+        { name: 'Wastage Report', path: '/report/wastage', icon: <BarChart3 size={16} />, permissionKey: ['wastage_report'] },
+        { name: 'Trial Balance', path: '/report/trial-balance', icon: <BarChart3 size={16} />, permissionKey: ['trial_balance_report'] },
+        { name: 'Cash & Bank', path: '/report/cash-bank', icon: <BarChart3 size={16} />, permissionKey: ['cash_and_bank_report'] },
+        { name: 'Stock Report', path: '/report/stock', icon: <BarChart3 size={16} />, permissionKey: ['stock_report'] },
+        { name: 'Transfer Report', path: '/report/transfer', icon: <BarChart3 size={16} />, permissionKey: ['transfer_report'] },
+        { name: 'Profit & Loss', path: '/report/profit-loss', icon: <BarChart3 size={16} />, permissionKey: ['profit_loss_report'] },
+        { name: 'Purchase vs Sales', path: '/report/purchase-sales', icon: <BarChart3 size={16} />, permissionKey: ['purchase_sales_report'] },
+        { name: 'Customer Report', path: '/report/customer', icon: <BarChart3 size={16} />, permissionKey: ['customer_report'] },
+        { name: 'Supplier Report', path: '/report/supplier', icon: <BarChart3 size={16} />, permissionKey: ['supplier_report'] },
+        { name: 'Best/Worst Selling', path: '/report/best-selling', icon: <BarChart3 size={16} />, permissionKey: ['best_selling_product_report'] },
+        { name: 'Profit Calendar', path: '/report/profit-calendar', icon: <BarChart3 size={16} />, permissionKey: ['profit_calender_report'] }
       ]
     },
     {
