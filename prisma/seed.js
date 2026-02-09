@@ -101,16 +101,19 @@ async function main() {
         'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive',
         'damage_create', 'damage_edit', 'damage_delete', 'damage_read',
         'repairs_create', 'repairs_edit', 'repairs_delete', 'repairs_read',
+        
         'expenses_create', 'expenses_edit', 'expenses_delete', 'expenses_read',
         'salary_create', 'salary_edit', 'salary_delete', 'salary_read',
         'leave_approve', 'leave_approve_all', 'leave_read', 'leave_request_create', 'leave_request_edit', 'leave_request_delete',
         'holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read', 'holiday_manage',
         'leave_category_manage', 'payroll_manage', 'approve_salary', 'approve_clock_in_out', 'add_salary', 'edit_salary',
         'hrm_read', 'hrm_employee_manage', 'clock_in_out_manage',
+
         'general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report',
         'sales_report', 'purchases_report', 'production_report', 'wastage_report', 'stock_report', 'transfer_report',
         'profit_loss_report', 'purchase_sales_report', 'customer_report', 'supplier_report',
         'best_selling_product_report', 'worst_selling_product_report', 'profit_calender_report',
+        
         'user_create', 'user_edit', 'user_delete', 'user_read', 'user_activate_deactivate', 'user_logout', 'user_associate_create', 'user_activity_log_read',
         'hrm_settings_edit',
         'role_create', 'role_edit', 'role_delete', 'role_read',
