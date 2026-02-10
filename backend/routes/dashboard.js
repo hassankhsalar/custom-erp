@@ -216,7 +216,8 @@ async function getTopProducts(startDate) {
         saleId: { in: saleIds }
       },
       include: {
-        product: true
+        product: true,
+        material: true
       }
     });
 
@@ -226,7 +227,7 @@ async function getTopProducts(startDate) {
       const productId = item.productId;
       if (!productSales[productId]) {
         productSales[productId] = {
-          product: item.product,
+          product: item.productId ? item.product : item.material,
           totalQuantity: 0,
           totalRevenue: 0
         };

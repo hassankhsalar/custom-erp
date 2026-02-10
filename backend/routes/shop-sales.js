@@ -3,6 +3,7 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const router = express.Router();
 const { createTransaction } = require('../utils/transactionHelper');
+const { createNotification } = require('../utils/notificationHelper');
 
 // Get all shops for POS
 router.get("/shops", async (req, res) => {
@@ -242,6 +243,7 @@ router.post("/", async (req, res) => {
                 product_id: parseInt(item.itemId),
               },
             },
+            include: { product: true },
           });
 
           if (!shopProduct) {
@@ -274,6 +276,7 @@ router.post("/", async (req, res) => {
           });
 
           item.avg_cost = shopProduct.avg_cost;
+          item.alert_quantity = shopProduct.product.alert_quantity;
           totalCost += parseFloat(item.avg_cost) * parseFloat(item.quantity);
 
         } else if (item.type === "material") {
@@ -285,6 +288,9 @@ router.post("/", async (req, res) => {
                 material_id: parseInt(item.itemId),
               },
             },
+            include: {
+              material: true
+            }
           });
 
           if (!shopMaterial) {
@@ -317,8 +323,20 @@ router.post("/", async (req, res) => {
           });
 
           item.avg_cost = shopMaterial.avg_cost;
+          item.alert_quantity = shopMaterial.material.alert_quantity;
           totalCost += parseFloat(item.avg_cost) * parseFloat(item.quantity);
 
+        }
+
+        if(parseFloat(item.quantity) <= 0.001 || item.quantity < item.type === "product" ? item.alert_quantity : item.alert_quantity ) {
+          let shopName = await tx.shop.findUnique({
+            where: { id: parseInt(shopId) },
+            select: { name: true }
+          })
+          notificationData = {
+            title: "Item " + (item.type === "product" ? item.product.name : item.material.name) + " is low stock at " + shopName.name,
+          }
+          await createNotification(prisma, notificationData);
         }
 
         // Create sale item record
