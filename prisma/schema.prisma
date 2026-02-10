@@ -503,7 +503,7 @@ model StoreMaterial {
   material_id Int
   stock       Float @default(0)
   avg_cost   Float?
-  scrap      Int?
+  scrap      Float? @default(0)
   store    Store    @relation(fields: [store_id], references: [id])
   material Material @relation(fields: [material_id], references: [id])
 
@@ -515,7 +515,7 @@ model StoreProduct {
   product_id Int
   stock      Float @default(0)
   avg_cost  Float?
-  scrap      Int?
+  scrap      Float? @default(0)
   store   Store   @relation(fields: [store_id], references: [id])
   product Product @relation(fields: [product_id], references: [id])
 
@@ -739,7 +739,7 @@ model ShopProduct {
   product_id Int
   stock      Float @default(0)
   avg_cost  Float?
-  scrap      Int?
+  scrap      Float? @default(0)
   shop    Shop    @relation(fields: [shop_id], references: [id])
   product Product @relation(fields: [product_id], references: [id])
 
@@ -751,7 +751,7 @@ model ShopMaterial {
   material_id Int
   stock       Float @default(0)
   avg_cost   Float?
-  scrap      Int?
+  scrap      Float? @default(0)
   shop     Shop     @relation(fields: [shop_id], references: [id])
   material Material @relation(fields: [material_id], references: [id])
 
@@ -794,8 +794,8 @@ model FactoryProduct {
   factoryId Int
   productId Int
   stock     Float @default(0)
-  avg_cost Float?
-  scrap      Int?
+  avg_cost Float?  
+  scrap      Float? @default(0)
   factory   Factory @relation(fields: [factoryId], references: [id])
   product   Product @relation(fields: [productId], references: [id])
 
@@ -806,8 +806,8 @@ model FactoryMaterial {
   factoryId  Int
   materialId Int
   stock      Float @default(0)
-  avg_cost  Float?
-  scrap      Int?
+  avg_cost  Float? 
+  scrap      Float? @default(0)
   factory  Factory  @relation(fields: [factoryId], references: [id])
   material Material @relation(fields: [materialId], references: [id])
 
@@ -837,6 +837,7 @@ model ProductRepair {
   status          String @default("pending") // pending, in_progress, completed, failed
   from            String   //store, shop or factory
   fromId          Int
+  accountId       Int?
   createdAt       DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -866,6 +867,8 @@ model ScrapProductRecord {
   reason      String 
   note        String
   totalLoss   Float
+  fromType    String?   // Add this - "store", "shop", or "factory"
+  fromBranchId Int?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   scrapProduct ScrapProduct[]
@@ -898,6 +901,7 @@ model MaterialRepair {
   status          String @default("pending") // pending, in_progress, completed, failed
   from            String   //store, shop or factory
   fromId          Int
+  accountId       Int?
   createdAt       DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
