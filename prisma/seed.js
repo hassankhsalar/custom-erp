@@ -46,6 +46,8 @@ async function main() {
   await prisma.saleReturn.deleteMany();
   await prisma.saleItem.deleteMany();
   await prisma.sale.deleteMany();
+  await prisma.purchaseShipmentItem.deleteMany();
+  await prisma.purchaseShipment.deleteMany();
   await prisma.purchaseItem.deleteMany();
   await prisma.purchase.deleteMany();
   await prisma.transferItem.deleteMany();
@@ -199,6 +201,15 @@ async function main() {
   }));
   await prisma.supplier.createMany({ data: suppliersData });
   const suppliers = await prisma.supplier.findMany();
+  
+  const customersData = Array.from({ length: 200 }, (_, i) => ({
+    name: `Customer ${String(i + 1).padStart(3, '0')}`,
+    mobile: `01855${String(20000 + i).padStart(5, '0')}`,
+    email: `customer${i + 1}@example.com`,
+    address: ['Dhaka', 'Chittagong', 'Khulna', 'Sylhet', 'Rajshahi'][i % 5],
+  }));
+  await prisma.customer.createMany({ data: customersData, skipDuplicates: true });
+  const customers = await prisma.customer.findMany();
 
   const units = ['kg', 'piece', 'liter', 'box', 'meter'];
   const brands = ['bsrm', 'rfl', 'berger', 'akij', 'beximco'];
@@ -339,6 +350,7 @@ async function main() {
     withdraw_charge: randInt(1, 20),
   }));
   await prisma.bankAccount.createMany({ data: bankAccountData });
+  const bankAccounts = await prisma.bankAccount.findMany();
 
   const accountData = Array.from({ length: 6 }, (_, i) => ({
     name: `Account ${i + 1}`,
@@ -365,6 +377,10 @@ async function main() {
     });
   });
   await prisma.entityAccount.createMany({ data: entityAccounts });
+  const entityAccountMap = {};
+  entityAccounts.forEach((ea) => {
+    entityAccountMap[`${ea.entityType}-${ea.entityId}`] = ea.accountId;
+  });
 
   const cashRegisterAssignments = shops.map((shop, idx) => ({
     entityType: 'shop',
@@ -387,9 +403,44 @@ async function main() {
     }
   }
   await prisma.userAssociate.createMany({ data: userAssociates, skipDuplicates: true });
+  
+  const employeeProfiles = userList.slice(0, 15).map((u, idx) => ({
+    userId: u.id,
+    designation: ['Manager', 'Supervisor', 'Operator', 'Technician'][idx % 4],
+    baseSalary: randInt(12000, 40000),
+    salaryType: 'monthly',
+    joiningDate: new Date(Date.now() - randInt(30, 365) * 24 * 60 * 60 * 1000),
+    status: 'active',
+  }));
+  await prisma.employeeProfile.createMany({ data: employeeProfiles, skipDuplicates: true });
 
-  console.log('Seeding purchases (1000)...');
-  for (let i = 0; i < 1000; i += 1) {
+  const now = new Date();
+  const salaryRecords = [];
+  for (const profile of employeeProfiles) {
+    const base = profile.baseSalary || 0;
+    for (let mOffset = 0; mOffset < 3; mOffset += 1) {
+      const d = new Date(now.getFullYear(), now.getMonth() - mOffset, 1);
+      const allowances = randInt(0, 2000);
+      const deductions = randInt(0, 1000);
+      const gross = base + allowances;
+      const net = gross - deductions;
+      salaryRecords.push({
+        userId: profile.userId,
+        month: d.getMonth() + 1,
+        year: d.getFullYear(),
+        baseSalary: base,
+        allowances,
+        deductions,
+        gross,
+        net,
+        status: pick(['generated', 'approved', 'paid']),
+      });
+    }
+  }
+  await prisma.salary.createMany({ data: salaryRecords, skipDuplicates: true });
+
+  console.log('Seeding purchases (3000)...');
+  for (let i = 0; i < 3000; i += 1) {
     const destinationType = pick(['store', 'shop', 'factory']);
     const destinationId =
       destinationType === 'store'
@@ -433,7 +484,10 @@ async function main() {
       }
     }
 
-    await prisma.purchase.create({
+    const paidAmount = Number((total * randFloat(0.4, 1)).toFixed(2));
+    const accountId = entityAccountMap[`${destinationType}-${destinationId}`] || pick(accounts).id;
+
+    const purchase = await prisma.purchase.create({
       data: {
         reference: `PUR-${String(i + 1).padStart(6, '0')}`,
         supplierId: pick(suppliers).id,
@@ -441,16 +495,53 @@ async function main() {
         destinationId,
         grandTotal: Number(total.toFixed(2)),
         shippingCost: 0,
+        shippingStatus: 'received',
         discount: 0,
         tax: 0,
-        paidAmount: 0,
+        paidAmount,
+        accountId,
         purchaseItems: { create: purchaseItems },
       },
+      include: { purchaseItems: true }
+    });
+
+    if (purchase.paidAmount > 0) {
+      await prisma.transactions.create({
+        data: {
+          reference: `TXN-PUR-${purchase.id}`,
+          createdById: admin.id,
+          accountId,
+          purchaseId: purchase.id,
+          purpose: 'purchase',
+          added_to_account: false,
+          amount: purchase.paidAmount,
+          payment_method: pick(['cash', 'bank', 'mobile']),
+          current_account_balance: 0,
+        },
+      });
+    }
+
+    const shipmentItems = purchase.purchaseItems.map((pi) => ({
+      purchaseItemId: pi.id,
+      itemType: pi.itemType,
+      materialId: pi.materialId,
+      productId: pi.productId,
+      quantity: pi.quantity,
+      received_quantity: pi.quantity,
+    }));
+    await prisma.purchaseShipment.create({
+      data: {
+        purchaseId: purchase.id,
+        reference: `SHIP-${String(i + 1).padStart(6, '0')}`,
+        status: 'received',
+        receivedAt: new Date(),
+        items: { create: shipmentItems },
+      }
     });
   }
 
-  console.log('Seeding sales (1000)...');
-  for (let i = 0; i < 1000; i += 1) {
+  console.log('Seeding sales (4000)...');
+  for (let i = 0; i < 4000; i += 1) {
     const shop = pick(shops);
     const itemsCount = randInt(1, 3);
     const saleItems = [];
@@ -492,24 +583,50 @@ async function main() {
       }
     }
 
-    await prisma.sale.create({
+    const paymentType = pick(['cash', 'card', 'bank', 'mobile']);
+    const paidAmount = Number((totalAmount * randFloat(0.7, 1)).toFixed(2));
+    const bankAccount = (paymentType === 'bank' || paymentType === 'card') ? pick(bankAccounts) : null;
+
+    const sale = await prisma.sale.create({
       data: {
         reference: `SAL-${String(i + 1).padStart(6, '0')}`,
         shopId: shop.id,
-        customer: `Customer ${i + 1}`,
+        customerId: pick(customers).id,
         totalAmount: Number(totalAmount.toFixed(2)),
         discount: 0,
         grandTotal: Number(totalAmount.toFixed(2)),
         total_cost: Number(totalCost.toFixed(2)),
-        paymentType: pick(['cash', 'card', 'bank', 'mobile']),
+        paymentType,
+        paidAmount,
+        bankAccountId: bankAccount ? bankAccount.id : null,
+        bankName: bankAccount ? bankAccount.name : null,
         saleItems: { create: saleItems },
       },
     });
+
+    if (sale.paidAmount > 0) {
+      const accountId = entityAccountMap[`shop-${shop.id}`] || pick(accounts).id;
+      await prisma.transactions.create({
+        data: {
+          reference: `TXN-SAL-${sale.id}`,
+          createdById: admin.id,
+          accountId,
+          saleId: sale.id,
+          cashRegisterId: paymentType === 'cash' ? pick(cashRegisters).id : null,
+          bankAccountId: bankAccount ? bankAccount.id : null,
+          purpose: 'sale',
+          added_to_account: true,
+          amount: sale.paidAmount,
+          payment_method: paymentType,
+          current_account_balance: 0,
+        },
+      });
+    }
   }
 
-  console.log('Seeding transfers (3000)...');
+  console.log('Seeding transfers (6000)...');
   const transferStatuses = ['processing', 'pending', 'being_shipped', 'transferred', 'not_received'];
-  for (let i = 0; i < 3000; i += 1) {
+  for (let i = 0; i < 6000; i += 1) {
     const fromType = pick(['store', 'shop', 'factory']);
     let toType = pick(['store', 'shop', 'factory']);
     while (toType === fromType) {
