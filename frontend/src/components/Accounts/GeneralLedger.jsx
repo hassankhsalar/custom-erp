@@ -159,7 +159,7 @@ export default function GeneralLedger() {
                     <th className="p-3 text-left">Method</th>
                     <th className="p-3 text-left">Credit</th>
                     <th className="p-3 text-left">Debit</th>
-                    <th className="p-3 text-left">Balance</th>
+                    {filters.accountId && <th className="p-3 text-left">Balance</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -181,17 +181,19 @@ export default function GeneralLedger() {
                         )}
                       </td>
                       <td className="p-3">
-                        { t.added_to_account && t.added_to_account === false ? (
+                        { (!t.added_to_account) || (t.added_to_account && t.added_to_account != true) ? (
                           <span className="text-teal-500">${parseFloat(t.amount || 0).toFixed(2)}</span>
                         ) : (
                           <span className="text-gray-500">$0</span>
                         )}
                       </td>
-                      <td className="p-3">
-                        {t.current_account_balance !== null && t.current_account_balance !== undefined
-                          ? `$${parseFloat(t.current_account_balance).toFixed(2)}`
-                          : "-"}
-                      </td>
+                      { filters.accountId && (
+                        <td className="p-3">
+                          {t.current_account_balance !== null && t.current_account_balance !== undefined
+                            ? `$${parseFloat(t.current_account_balance).toFixed(2)}`
+                            : "-"}
+                        </td>
+                      )}
                     </tr>
                   ))}
                   {transactions.length === 0 && (
