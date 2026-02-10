@@ -113,7 +113,6 @@ const AddTransfer = () => {
         const resMaterials = await axios.get(API_ROUTES.MATERIALS, {
           headers: { Authorization: `Bearer ${token}` },
           params: { search: e.target.value },
-          headers
         })
         const materialsWithTag = (resMaterials.data.materials || []).map(m => ({ ...m, itemType: 'material' }));
 

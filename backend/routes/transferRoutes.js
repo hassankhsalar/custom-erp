@@ -5,6 +5,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
+const { createTransaction } = require('../utils/transactionHelper');
 
 const JWT_SECRET = 'your-secret-key'; // Replace with a strong secret key
 
@@ -170,6 +171,27 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
         status: status || 'processing',
       },
     });
+
+    // Create a transaction for the shipping cost amount
+    if (shipping_cost > 0) {
+      fromAccount = await prisma.accounts.findUnique({
+        where: { id: parseInt(fromId) }
+      });
+      
+      const transaction = {
+        reference: `TRANS-SHIP-${Date.now()}-${transfer.id}`,
+        createdById: req.user.userId,
+        accountId: fromAccount.id,
+        purpose: 'Shipping cost for transfer',
+        amount: parseFloat(shipping_cost),
+        added_to_account: false,
+        payment_method: 'cash',
+        current_account_balance: null,
+        note: `Shipping cost for transfer #${transfer.id} to ${to}`
+      };
+
+      await createTransaction(prisma, transaction);
+    }
 
     const parsedItems = JSON.parse(items);
 
