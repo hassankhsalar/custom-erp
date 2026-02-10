@@ -306,7 +306,6 @@ export default function ExpenseCategories() {
                   <thead className="bg-gray-100/80">
                     <tr>
                       <th className="p-4 text-left font-medium text-gray-700">Category</th>
-                      <th className="p-4 text-left font-medium text-gray-700">ID</th>
                       <th className="p-4 text-left font-medium text-gray-700">Actions</th>
                     </tr>
                   </thead>
@@ -343,14 +342,6 @@ export default function ExpenseCategories() {
                                 </div>
                               )}
                             </div>
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-2">
-                            <div className="p-2 bg-gradient-to-br from-gray-100 to-gray-50 rounded-lg">
-                              <Layers size={14} className="text-gray-600" />
-                            </div>
-                            <span className="font-mono text-sm text-gray-700">{category.id}</span>
                           </div>
                         </td>
                         <td className="p-4">

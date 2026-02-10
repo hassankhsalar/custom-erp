@@ -74,7 +74,7 @@ const ProductionReport = () => {
         <select
           value={factoryId}
           onChange={(e) => setFactoryId(e.target.value)}
-          className="border p-2 rounded"
+          className="border border-gray-400 p-2 rounded"
         >
           <option value="">Select Factory</option>
           {factories.map(f => (
@@ -85,13 +85,13 @@ const ProductionReport = () => {
           type="date"
           value={dateRange.startDate}
           onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-          className="border p-2 rounded"
+          className="border border-gray-400 p-2 rounded"
         />
         <input
           type="date"
           value={dateRange.endDate}
           onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-          className="border p-2 rounded"
+          className="border border-gray-400 p-2 rounded"
         />
         <button className="bg-blue-600 text-white px-3 rounded" onClick={applyFilter}>
           Apply

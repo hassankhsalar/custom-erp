@@ -2,9 +2,9 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
 import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X } from "lucide-react";
+import e from "cors";
 
-
-export default function ShopPOS() {
+export default function ShopPOS( props ) {
   const [shops, setShops] = useState([]);
   const [shopItems, setShopItems] = useState([]);
   const [shopId, setShopId] = useState("");
@@ -484,8 +484,8 @@ export default function ShopPOS() {
               <ClipboardList className="text-blue-600" size={38} />
             </div>
             <div>
-              <h1 className="text-md md:text-xl font-bold bg-gradient-to-r from-blue-500 to-blue-600 bg-clip-text text-transparent">
-                Point Of Sale
+              <h1 className="text-md md:text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent">
+                { props.title || "Point of Sale" }
               </h1>
             </div>
           </div>
