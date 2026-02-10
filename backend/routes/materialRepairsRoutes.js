@@ -3,6 +3,7 @@ const { PrismaClient } = require('@prisma/client');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { createTransaction } = require('../utils/transactionHelper');
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -39,7 +40,7 @@ const upload = multer({
 // Create a material repair request
 router.post('/', upload.single('document'), async (req, res) => {
   try {
-    const { fromType, fromId, shippingCost, note, destination, materials } = req.body;
+    const { fromType, fromId, shippingCost, note, destination, materials, accountId } = req.body;
     const documentPath = req.file ? req.file.path : null;
 
     // Parse materials from JSON string
@@ -50,17 +51,23 @@ router.post('/', upload.single('document'), async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Create the repair record
-    const repairRecord = await prisma.$transaction(async (prisma) => {
+    // Validate accountId if shipping cost is provided
+    if (parseFloat(shippingCost) > 0 && !accountId) {
+      return res.status(400).json({ error: 'Account is required for shipping cost' });
+    }
+
+    // Create the repair record and transaction in a single transaction
+    const result = await prisma.$transaction(async (prisma) => {
       // Create the main repair record
-      const repair = await prisma.materialRepair.create({
+      const materialRepair = await prisma.materialRepair.create({
         data: {
           destination,
           shippingCost: parseFloat(shippingCost) || 0,
           document: documentPath,
           from: fromType,
           fromId: parseInt(fromId),
-          note: note || ''
+          note: note || '',
+          accountId: accountId ? parseInt(accountId) : null
         }
       });
 
@@ -69,7 +76,7 @@ router.post('/', upload.single('document'), async (req, res) => {
         materialsArray.map(async (material) => {
           return await prisma.materialRepairItem.create({
             data: {
-              repairId: repair.id,
+              repairId: materialRepair.id,
               materialId: parseInt(material.materialId),
               quantity: parseFloat(material.quantity),
               success: parseFloat(material.success) || 0,
@@ -132,16 +139,78 @@ router.post('/', upload.single('document'), async (req, res) => {
         }
       }
 
-      return { repair, repairItems };
+      // Create transaction if shipping cost > 0 and account is selected
+      let transaction = null;
+      let updatedAccount = null;
+      
+      if (accountId && parseFloat(shippingCost) > 0) {
+        // Get the current account balance
+        const account = await prisma.accounts.findUnique({
+          where: { id: parseInt(accountId) }
+        });
+
+        if (!account) {
+          throw new Error('Account not found');
+        }
+
+        // Check if account has sufficient balance
+        if (account.balance < parseFloat(shippingCost)) {
+          throw new Error('Insufficient account balance for shipping cost');
+        }
+
+        // Create transaction for shipping cost
+        const transactionData = {
+          reference: `MAT-REPAIR-SHIP-${Date.now()}-${materialRepair.id}`,
+          createdById: req.user.userId,
+          accountId: parseInt(accountId),
+          purpose: 'Shipping cost for material repair',
+          amount: parseFloat(shippingCost),
+          added_to_account: false, // Money going out of account
+          payment_method: 'cash', // Default to cash
+          current_account_balance: account.balance - parseFloat(shippingCost),
+          note: `Shipping cost for material repair #${materialRepair.id} to ${destination}`
+        };
+
+        transaction = await createTransaction(prisma, transactionData);
+
+        // Update account balance
+        updatedAccount = await prisma.accounts.update({
+          where: { id: parseInt(accountId) },
+          data: {
+            balance: {
+              decrement: parseFloat(shippingCost)
+            }
+          }
+        });
+      }
+
+      return { materialRepair, repairItems, transaction, updatedAccount };
     });
 
     res.status(201).json({
       message: 'Material repair request created successfully',
-      repairRecord
+      data: result.materialRepair,
+      items: result.repairItems,
+      transaction: result.transaction,
+      account: result.updatedAccount
     });
   } catch (error) {
     console.error('Error creating material repair request:', error);
-    res.status(500).json({ error: 'Failed to create material repair request' });
+    
+    // Provide more specific error messages
+    if (error.message.includes('Account not found')) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+    
+    if (error.message.includes('Insufficient account balance')) {
+      return res.status(400).json({ error: 'Insufficient account balance' });
+    }
+    
+    if (error.code === 'P2002') {
+      return res.status(400).json({ error: 'Duplicate record found' });
+    }
+    
+    res.status(500).json({ error: error.message || 'Failed to create material repair request' });
   }
 });
 

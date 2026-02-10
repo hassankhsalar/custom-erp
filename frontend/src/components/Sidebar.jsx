@@ -299,16 +299,16 @@ const Sidebar = () => {
   ];
 
   return (
-    <div className={`${isCollapsed ? 'w-20' : 'w-64'} max-h-[100vh] overflow-y-auto bg-gradient-to-br from-white via-gray-50 to-white text-gray-800 p-6 min-h-full shadow-2xl backdrop-blur-sm border-r border-gray-200/50 transition-all duration-300 relative`}>
+    <div className={`${isCollapsed ? 'w-24' : 'w-64'} max-h-[100vh] overflow-y-auto bg-gradient-to-br from-white via-gray-50 to-white text-gray-800 p-6 min-h-full shadow-2xl backdrop-blur-sm border-r border-gray-200/50 transition-all duration-300 relative`}>
       {/* Collapse Toggle Button */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute -right-1 top-26 p-1.5 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-all hover:scale-110 z-10"
+        className="absolute -right-2 top-26 py-1 px-1.5 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-all hover:scale-110 z-10"
       >
         {isCollapsed ? (
-          <ChevronRight size={16} className="text-gray-600" />
+          <ChevronRight size={18} className="text-gray-600" />
         ) : (
-          <ChevronLeft size={16} className="text-gray-600" />
+          <ChevronLeft size={18} className="text-gray-600" />
         )}
       </button>
 
@@ -355,9 +355,9 @@ const Sidebar = () => {
                   <div className={`p-2 rounded-lg bg-gradient-to-r ${item.color} shadow-sm`}>
                     {item.icon}
                   </div>
-                  <span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all`}>
+                  {!isCollapsed && (<span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all`}>
                     {item.name}
-                  </span>
+                  </span>)}
                 </Link>
               ) : (
                 // Render dropdown if subItems exist
@@ -370,9 +370,9 @@ const Sidebar = () => {
                       <div className={`p-2 rounded-lg bg-gradient-to-r ${item.color} shadow-sm`}>
                         {item.icon}
                       </div>
-                      <span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all`}>
+                      {!isCollapsed && (<span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all`}>
                         {item.name}
-                      </span>
+                      </span>)}
                     </div>
                     {openMenus[item.name.toLowerCase()] ? (
                       <ChevronDown size={16} className="text-gray-500 group-hover:text-gray-700 transition-colors" />
