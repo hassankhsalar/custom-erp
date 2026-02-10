@@ -465,14 +465,16 @@ router.get("/transfer/overview", async (req, res) => {
 
     const buildGroup = async (direction, type) => {
       const places = await fetchPlaces(type);
+      const directionCol = direction === "from" ? "`from`" : "`to`";
+      const directionIdCol = direction === "from" ? "`fromId`" : "`toId`";
       const rows = await prisma.$queryRaw`
-        SELECT ${Prisma.raw(direction === "from" ? "fromId" : "toId")} as placeId,
+        SELECT ${Prisma.raw(directionIdCol)} as placeId,
                status,
                COUNT(*) as count
         FROM \`Transfer\` t
-        WHERE ${Prisma.raw(direction)} = ${type}
+        WHERE ${Prisma.raw(directionCol)} = ${type}
         ${dateClause}
-        GROUP BY ${Prisma.raw(direction === "from" ? "fromId" : "toId")}, status
+        GROUP BY ${Prisma.raw(directionIdCol)}, status
       `;
       const map = {};
       rows.forEach(r => {
@@ -521,8 +523,8 @@ router.get("/transfer/top-sender", async (req, res) => {
     const orderColumn = (mode || "transfer") === "product" ? "totalItems" : "totalTransfers";
 
     const rows = await prisma.$queryRaw`
-      SELECT t.from as placeType,
-             t.fromId as placeId,
+      SELECT t.\`from\` as placeType,
+             t.\`fromId\` as placeId,
              COUNT(DISTINCT t.id) as totalTransfers,
              SUM(t.shipping_cost) as totalShippingCost,
              SUM(ti.quantity) as totalItems,
@@ -531,7 +533,7 @@ router.get("/transfer/top-sender", async (req, res) => {
       LEFT JOIN \`TransferItem\` ti ON ti.transferId = t.id
       WHERE 1=1
       ${dateClause}
-      GROUP BY t.from, t.fromId
+      GROUP BY t.\`from\`, t.\`fromId\`
       ORDER BY ${Prisma.raw(orderColumn)} DESC
     `;
 
@@ -569,8 +571,8 @@ router.get("/transfer/top-receiver", async (req, res) => {
     const orderColumn = (mode || "transfer") === "product" ? "totalItems" : "totalTransfers";
 
     const rows = await prisma.$queryRaw`
-      SELECT t.to as placeType,
-             t.toId as placeId,
+      SELECT t.\`to\` as placeType,
+             t.\`toId\` as placeId,
              COUNT(DISTINCT t.id) as totalTransfers,
              SUM(t.shipping_cost) as totalShippingCost,
              SUM(ti.quantity) as totalItems,
@@ -579,7 +581,7 @@ router.get("/transfer/top-receiver", async (req, res) => {
       LEFT JOIN \`TransferItem\` ti ON ti.transferId = t.id
       WHERE 1=1
       ${dateClause}
-      GROUP BY t.to, t.toId
+      GROUP BY t.\`to\`, t.\`toId\`
       ORDER BY ${Prisma.raw(orderColumn)} DESC
     `;
 
