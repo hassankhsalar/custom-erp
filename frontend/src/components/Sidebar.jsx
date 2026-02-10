@@ -137,15 +137,15 @@ const Sidebar = () => {
 
     
     {
-      name: 'Scrap Record',
+      name: 'Damage Record',
       icon: <Recycle color='white' size={18} />,
       color: 'from-red-500 to-rose-500',
       bgColor: 'bg-gradient-to-r from-pink-50 to-rose-100/50',
       textColor: 'text-red-700',
       permissionKey: ['damage_read', 'damage_create'],
       subItems: [
-        { name: 'Products Scrap Records', path: '/scraprecord', icon: <Box size={16} />, permissionKey: 'damage_read' },
-        { name: 'Material Scrap Records', path: '/materialscraprecord', icon: <Package size={16} />, permissionKey: 'damage_read' },
+        { name: 'Products Damage Records', path: '/scraprecord', icon: <Box size={16} />, permissionKey: 'damage_read' },
+        { name: 'Material Damage Records', path: '/materialscraprecord', icon: <Package size={16} />, permissionKey: 'damage_read' },
       ] 
     },
 
@@ -158,9 +158,7 @@ const Sidebar = () => {
       permissionKey: ['material_read', 'material_create'],
       subItems: [
         { name: 'All Materials', path: '/materials/all', icon: <Layers size={16} />, permissionKey: 'material_read' },
-        { name: 'Add Material', path: '/materials/add', icon: <Package size={16} />, permissionKey: 'material_create' },
-        { name: 'Scrape Materials', path: '/materials/scrape', icon: <Database size={16} />, permissionKey: ['damage_read', 'material_create'] },
-        { name: 'Recover Materials', path: '/materials/recover', icon: <Database size={16} />, permissionKey: ['material_recover', 'material_create'] }
+        { name: 'Add Material', path: '/materials/add', icon: <Package size={16} />, permissionKey: 'material_create' }
       ]
     },
     {
@@ -184,8 +182,7 @@ const Sidebar = () => {
       permissionKey: ['store_read', 'store_create'],
       subItems: [
         { name: 'All Store', path: '/stores/all', icon: <Warehouse size={16} />, permissionKey: 'store_read' },
-        { name: 'Add Store', path: '/stores/add', icon: <Store size={16} />, permissionKey: 'store_create' },
-        { name: 'Manage Transfer', path: '/transfers', icon: <Truck size={16} />, permissionKey: ['transfers_read', 'transfers_create'] }
+        { name: 'Add Store', path: '/stores/add', icon: <Store size={16} />, permissionKey: 'store_create' }
       ]
     },
     {
@@ -263,7 +260,7 @@ const Sidebar = () => {
         { name: 'Cash & Bank', path: '/report/cash-bank', icon: <BarChart3 size={16} />, permissionKey: ['cash_and_bank_report'] },
         { name: 'Stock Report', path: '/report/stock', icon: <BarChart3 size={16} />, permissionKey: ['stock_report'] },
         { name: 'Transfer Report', path: '/report/transfer', icon: <BarChart3 size={16} />, permissionKey: ['transfer_report'] },
-        { name: 'Profit & Loss', path: '/report/profit-loss', icon: <BarChart3 size={16} />, permissionKey: ['profit_loss_report'] },
+        // { name: 'Profit & Loss', path: '/report/profit-loss', icon: <BarChart3 size={16} />, permissionKey: ['profit_loss_report'] },
         { name: 'Purchase vs Sales', path: '/report/purchase-sales', icon: <BarChart3 size={16} />, permissionKey: ['purchase_sales_report'] },
         { name: 'Customer Report', path: '/report/customer', icon: <BarChart3 size={16} />, permissionKey: ['customer_report'] },
         { name: 'Supplier Report', path: '/report/supplier', icon: <BarChart3 size={16} />, permissionKey: ['supplier_report'] },

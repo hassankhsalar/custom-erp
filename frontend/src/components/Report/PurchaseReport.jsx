@@ -63,7 +63,7 @@ const PurchaseReport = () => {
     return Array.from({ length: days }, (_, i) => {
       const date = new Date(y, m - 1, i + 1);
       return {
-        key: date.toISOString().slice(0, 10),
+        key: date.toLocaleDateString("en-CA").slice(0, 10),
         day: String(i + 1).padStart(2, "0"),
         weekday: date.toLocaleDateString("en-US", { weekday: "short" })
       };
@@ -73,7 +73,7 @@ const PurchaseReport = () => {
   const perDateMap = useMemo(() => {
     const map = {};
     perDateRows.forEach(r => {
-      map[r.date] = {
+      map[r.date.slice(0, 10)] = {
         purchaseCount: Number(r.purchaseCount || 0),
         totalAmount: Number(r.totalAmount || 0),
         shippingCost: Number(r.shippingCost || 0)
@@ -96,16 +96,16 @@ const PurchaseReport = () => {
         <>
           <div className="mb-4">
             <label className="text-sm text-gray-600 mr-2">Month</label>
-            <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="border p-2 rounded" />
+            <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="border border-gray-400 p-2 rounded" />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             {daysOfMonth.map(d => {
               const stats = perDateMap[d.key] || { purchaseCount: 0, totalAmount: 0, shippingCost: 0 };
               return (
-                <div key={d.key} className="border rounded p-3 bg-white">
+                <div key={d.key} className="border border-gray-300 rounded p-3 bg-white">
                   <div className="text-sm text-gray-500">{d.day} {d.weekday}</div>
-                  <div className="text-sm">Purchases: {stats.purchaseCount}</div>
-                  <div className="text-sm">Amount: {stats.totalAmount.toFixed(2)}</div>
+                  <div className="text-sm">Purchases: <span className="font-semibold">{stats.purchaseCount}</span></div>
+                  <div className="text-sm">Amount: <span className="font-semibold">{stats.totalAmount.toFixed(2)}</span></div>
                 </div>
               );
             })}
@@ -117,16 +117,16 @@ const PurchaseReport = () => {
         <>
           <div className="mb-4">
             <label className="text-sm text-gray-600 mr-2">Year</label>
-            <input type="number" value={year} onChange={(e) => setYear(e.target.value)} className="border p-2 rounded" />
+            <input type="number" value={year} onChange={(e) => setYear(e.target.value)} className="border border-gray-400 p-2 rounded" />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             {Array.from({ length: 12 }, (_, i) => {
               const row = perMonthRows.find(r => Number(r.month) === i + 1) || { purchaseCount: 0, totalAmount: 0, shippingCost: 0 };
               return (
-                <div key={i} className="border rounded p-3 bg-white">
+                <div key={i} className="border border-gray-300 rounded p-3 bg-white">
                   <div className="text-sm text-gray-500">{new Date(0, i).toLocaleString("en-US", { month: "long" })}</div>
-                  <div className="text-sm">Purchases: {row.purchaseCount || 0}</div>
-                  <div className="text-sm">Amount: {Number(row.totalAmount || 0).toFixed(2)}</div>
+                  <div className="text-sm">Purchases: <span className="font-semibold">{row.purchaseCount || 0}</span></div>
+                  <div className="text-sm">Amount: <span className="font-semibold">{Number(row.totalAmount || 0).toFixed(2)}</span></div>
                 </div>
               );
             })}
@@ -137,8 +137,8 @@ const PurchaseReport = () => {
       {tab === "all" && (
         <>
           <div className="flex gap-3 mb-4">
-            <input type="date" value={range.startDate} onChange={(e) => setRange(prev => ({ ...prev, startDate: e.target.value }))} className="border p-2 rounded" />
-            <input type="date" value={range.endDate} onChange={(e) => setRange(prev => ({ ...prev, endDate: e.target.value }))} className="border p-2 rounded" />
+            <input type="date" value={range.startDate} onChange={(e) => setRange(prev => ({ ...prev, startDate: e.target.value }))} className="border border-gray-400 p-2 rounded" />
+            <input type="date" value={range.endDate} onChange={(e) => setRange(prev => ({ ...prev, endDate: e.target.value }))} className="border border-gray-400 p-2 rounded" />
             <button className="bg-blue-600 text-white px-3 rounded" onClick={() => fetchAll(1, pagination.limit)}>Apply</button>
           </div>
           <div className="bg-white rounded shadow">
@@ -153,7 +153,7 @@ const PurchaseReport = () => {
               <tbody>
                 {allRows.map((r, idx) => (
                   <tr key={idx} className="border-t">
-                    <td className="p-2">{r.date}</td>
+                    <td className="p-2">{new Date(r.date).toLocaleString("en-US", { day: "numeric", month: "short", year: "numeric" })}</td>
                     <td className="p-2">{r.purchaseCount}</td>
                     <td className="p-2">{Number(r.totalAmount || 0).toFixed(2)}</td>
                   </tr>

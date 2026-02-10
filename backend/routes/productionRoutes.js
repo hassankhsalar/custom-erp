@@ -345,7 +345,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
       // Update production status
       const updatedProduction = await prisma.production.update({
         where: { id: parseInt(id) },
-        data: { status },
+        data: { status, updatedAt: new Date(), end_date: status === 'production_done' ? new Date() : null },
       });
 
       if (status === 'production_done') {
