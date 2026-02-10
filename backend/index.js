@@ -9,7 +9,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const JWT_SECRET = 'your-secret-key'; // Replace with a strong secret key
+const JWT_SECRET = 'your-secret-key';
 
 // Middleware to protect routes
 const authenticateToken = (req, res, next) => {
@@ -154,6 +154,7 @@ const purchaseRoutes = require('./routes/purchaseRoutes');
 const salesRoutes = require('./routes/salesRoutes');
 const shopRoutes = require('./routes/shopRoutes');
 const shopSalesRoutes = require('./routes/shop-sales');
+const customerRoutes = require('./routes/customerRoutes');
 // const storeToShopTransfersRoutes = require('./routes/store-to-shop-transfers');
 const dashboardRoutes = require('./routes/dashboard');
 const userRoutes = require('./routes/users');
@@ -177,6 +178,9 @@ const permissionRoutes = require('./routes/permissionRoutes');
 const userPermissionRoutes = require('./routes/userPermissionRoutes');
 const hrmRoutes = require('./routes/hrmRoutes');
 const expenseRoutes = require('./routes/expenseRoutes');
+const reportRoutes = require('./routes/reportRoutes');
+const reportExtraRoutes = require('./routes/reportExtraRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 const { startSalaryCron } = require('./services/salaryCron');
 
 const uploadRoutes = require('./routes/uploadRoutes');
@@ -193,6 +197,7 @@ app.use('/api/purchases', authenticateToken, purchaseRoutes);
 app.use('/api/sales', authenticateToken, salesRoutes);
 app.use('/api/shops', authenticateToken, shopRoutes);
 app.use('/api/shop-sales', authenticateToken, shopSalesRoutes);
+app.use('/api/customers', authenticateToken, customerRoutes);
 // app.use('/api/store-to-shop-transfers', storeToShopTransfersRoutes);
 app.use('/api/dash-board', dashboardRoutes);
 app.use('/api/users', authenticateToken, userRoutes);
@@ -217,6 +222,9 @@ app.use('/api/permissions', authenticateToken, permissionRoutes);
 app.use('/api/user-management', authenticateToken, userPermissionRoutes);
 app.use('/api/hrm', authenticateToken, hrmRoutes);
 app.use('/api/expenses', authenticateToken, expenseRoutes);
+app.use('/api/reports', authenticateToken, reportRoutes);
+app.use('/api/reports', authenticateToken, reportExtraRoutes);
+app.use('/api/notifications', authenticateToken, notificationRoutes);
 
 // serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));

@@ -132,7 +132,7 @@ router.get("/", async (req, res) => {
 
 // Helper functions
 async function getInventoryData() {
-  const [storeProducts, storeMaterials, shopProducts, shopMaterials] = await Promise.all([
+  const [storeProducts, storeMaterials, shopProducts, shopMaterials, factoryProducts, factoryMaterials] = await Promise.all([
     prisma.storeProduct.findMany({
       include: { product: true }
     }),
@@ -144,15 +144,23 @@ async function getInventoryData() {
     }),
     prisma.shopMaterial.findMany({
       include: { material: true }
+    }),
+    prisma.FactoryProduct.findMany({
+      include: { product: true }
+    }),
+    prisma.FactoryMaterial.findMany({
+      include: { material: true }
     })
   ]);
 
   // Calculate total inventory value across stores and shops
   const totalValue = 
-    storeProducts.reduce((sum, sp) => sum + (sp.stock * (sp.product?.cost || 0)), 0) +
-    storeMaterials.reduce((sum, sm) => sum + (sm.stock * (sm.material?.unit_cost || 0)), 0) +
-    shopProducts.reduce((sum, sp) => sum + (sp.stock * (sp.product?.cost || 0)), 0) +
-    shopMaterials.reduce((sum, sm) => sum + (sm.stock * (sm.material?.unit_cost || 0)), 0);
+    storeProducts.reduce((sum, sp) => sum + (sp.stock * (sp.avg_cost || 0)), 0) +
+    storeMaterials.reduce((sum, sm) => sum + (sm.stock * (sm.avg_cost || 0)), 0) +
+    shopProducts.reduce((sum, sp) => sum + (sp.stock * (sp.avg_cost || 0)), 0) +
+    shopMaterials.reduce((sum, sm) => sum + (sm.stock * (sm.avg_cost || 0)), 0)+
+    factoryProducts.reduce((sum, sp) => sum + (sp.stock * (sp.avg_cost || 0)), 0) +
+    factoryMaterials.reduce((sum, sm) => sum + (sm.stock * (sm.avg_cost || 0)), 0);
 
   const byCategory = [
     { category: 'Construction Materials', value: totalValue * 0.48 },
@@ -274,7 +282,7 @@ async function getLowStockItems() {
       type: 'product',
       location: sp.store?.name,
       current: sp.stock,
-      min: 10
+      min: sp.product?.alert_quantity || 0
     })),
     ...lowStoreMaterials.map(sm => ({
       id: `store-material-${sm.material_id}`,
@@ -282,7 +290,7 @@ async function getLowStockItems() {
       type: 'material',
       location: sm.store?.name,
       current: sm.stock,
-      min: 50
+      min: sm.material?.alert_quantity || 0
     })),
     ...lowShopProducts.map(sp => ({
       id: `shop-product-${sp.product_id}`,
@@ -290,7 +298,7 @@ async function getLowStockItems() {
       type: 'product',
       location: sp.shop?.name,
       current: sp.stock,
-      min: 5
+      min: sp.product?.alert_quantity || 0
     })),
     ...lowShopMaterials.map(sm => ({
       id: `shop-material-${sm.material_id}`,
@@ -298,7 +306,7 @@ async function getLowStockItems() {
       type: 'material',
       location: sm.shop?.name,
       current: sm.stock,
-      min: 25
+      min: sm.material?.alert_quantity || 0
     }))
   ];
 
