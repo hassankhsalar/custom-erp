@@ -4,7 +4,7 @@ import { API_ROUTES } from "../../config";
 import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X } from "lucide-react";
 import e from "cors";
 
-export default function ShopPOS() {
+export default function ShopPOS( props ) {
   const [shops, setShops] = useState([]);
   const [shopItems, setShopItems] = useState([]);
   const [shopId, setShopId] = useState("");
@@ -485,7 +485,7 @@ export default function ShopPOS() {
             </div>
             <div>
               <h1 className="text-md md:text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent">
-                Point Of Sale
+                { props.title || "Point of Sale" }
               </h1>
             </div>
           </div>

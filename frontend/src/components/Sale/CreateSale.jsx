@@ -1,10 +1,9 @@
 import React from 'react';
+import POS from './POS';
 
 const CreateSale = () => {
   return (
-    <div>
-      <h1>This is Create Sale Page</h1>
-    </div>
+    <POS title="Create Sale" />
   );
 };
 
