@@ -6,6 +6,29 @@ const prisma = new PrismaClient();
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 const { createTransaction } = require('../utils/transactionHelper');
+const { buildScope, ensureIdScope, buildTransferOrFilter } = require('../utils/associateScope');
+
+const userHasPermission = async (userId, permission) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { permission: true }
+  });
+  if (!user || !user.permission) return false;
+  if (["admin", "superadmin"].includes(user.permission.name)) return true;
+  const perms = user.permission.permissions || [];
+  return perms.includes(permission);
+};
+
+const hasTransferAccess = (scope, transfer) => {
+  if (scope.isAdmin) return true;
+  if (transfer.from === "shop" && scope.shops.has(transfer.fromId)) return true;
+  if (transfer.to === "shop" && scope.shops.has(transfer.toId)) return true;
+  if (transfer.from === "store" && scope.stores.has(transfer.fromId)) return true;
+  if (transfer.to === "store" && scope.stores.has(transfer.toId)) return true;
+  if (transfer.from === "factory" && scope.factories.has(transfer.fromId)) return true;
+  if (transfer.to === "factory" && scope.factories.has(transfer.toId)) return true;
+  return false;
+};
 
 const JWT_SECRET = 'your-secret-key'; // Replace with a strong secret key
 
@@ -25,41 +48,49 @@ const authenticateToken = (req, res, next) => {
 
 
 router.get('/', authenticateToken, async (req, res) => {
-  const { from, to, page = 1, search='' } = req.query;
-  const where = {};
-  if (from) {
-    where.from = from;
-  }
-  if (to) {
-    where.to = to;
-  }
-  if (search) {
-    where.OR = [
-      { reference: { contains: search } },
-      { note: { contains: search } },
-    ];
-  }
-  const [transfers, totalItems] = await prisma.$transaction([
-    prisma.transfer.findMany({
-      where,
-      skip: (page - 1) * 10,
-      take: 10,
-      include: {
-        transferItems: {
-          select: {
-            item: true,
-            itemId: true,
-            productId: true,
-            materialId: true,
-            quantity: true,
-            avg_cost: true,
+  try {
+    const { from, to, page = 1, search='' } = req.query;
+    const baseWhere = {};
+    if (from) {
+      baseWhere.from = from;
+    }
+    if (to) {
+      baseWhere.to = to;
+    }
+    if (search) {
+      baseWhere.OR = [
+        { reference: { contains: search } },
+        { note: { contains: search } },
+      ];
+    }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    const scopeFilter = buildTransferOrFilter(scope);
+    const where = Object.keys(baseWhere).length > 0
+      ? (scopeFilter ? { AND: [scopeFilter, baseWhere] } : baseWhere)
+      : (scopeFilter || {});
+
+    const [transfers, totalItems] = await prisma.$transaction([
+      prisma.transfer.findMany({
+        where,
+        skip: (page - 1) * 10,
+        take: 10,
+        include: {
+          transferItems: {
+            select: {
+              item: true,
+              itemId: true,
+              productId: true,
+              materialId: true,
+              quantity: true,
+              avg_cost: true,
+            },
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    }),
-    prisma.transfer.count({ where }),
-  ]);
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.transfer.count({ where }),
+    ]);
 
   const totalPages = Math.ceil(totalItems / 10);
 
@@ -146,11 +177,27 @@ router.get('/', authenticateToken, async (req, res) => {
     };
   });
 
-  res.json({
-    transfers: transfersWithNamesAndTotalProducts,
-    totalItems,
-    totalPages,
-  });
+    res.json({
+      transfers: transfersWithNamesAndTotalProducts,
+      totalItems,
+      totalPages,
+      associations: {
+        shops: Array.from(scope.shops),
+        stores: Array.from(scope.stores),
+        factories: Array.from(scope.factories)
+      }
+    });
+  } catch (error) {
+    if (error.status === 403) {
+      return res.json({
+        transfers: [],
+        totalItems: 0,
+        totalPages: 0,
+        associations: { shops: [], stores: [], factories: [] }
+      });
+    }
+    res.status(500).json({ error: error.message || "Failed to fetch transfers" });
+  }
 });
 
 router.post('/', authenticateToken, upload.single('document'), async (req, res) => {
@@ -158,6 +205,10 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
   const document = req.file;
 
   try {
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, from, parseInt(fromId));
+    ensureIdScope(scope, to, parseInt(toId));
+
     const transfer = await prisma.transfer.create({
       data: {
         reference: `TR-${Date.now()}`,
@@ -344,6 +395,9 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
     res.status(201).json(transfer);
   } catch (error) {
     console.error(error);
+    if (error.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     res.status(500).json({ error: 'Failed to create transfer' });
   }
 });
@@ -362,6 +416,36 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
 
       if (!transfer) {
         return res.status(404).json({ error: 'Transfer not found' });
+      }
+
+      const scope = await buildScope(prisma, req.user?.userId || 0);
+      if (!hasTransferAccess(scope, transfer)) {
+        const err = new Error("Forbidden");
+        err.status = 403;
+        throw err;
+      }
+
+      const userId = req.user?.userId || 0;
+      const canChangeStatus = await userHasPermission(userId, "transfers_change_status");
+      const canReceive = await userHasPermission(userId, "transfers_receive");
+      const isReceiving = status === "transferred" || status === "transfer_done";
+
+      if (canChangeStatus) {
+        // allowed
+      } else if (isReceiving) {
+        const toMatch =
+          (transfer.to === "shop" && scope.shops.has(transfer.toId)) ||
+          (transfer.to === "store" && scope.stores.has(transfer.toId)) ||
+          (transfer.to === "factory" && scope.factories.has(transfer.toId));
+        if (!canReceive || !toMatch) {
+          const err = new Error("Forbidden");
+          err.status = 403;
+          throw err;
+        }
+      } else {
+        const err = new Error("Forbidden");
+        err.status = 403;
+        throw err;
       }
 
       const newStatus = await prisma.transfer.update({
@@ -451,6 +535,9 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
     res.json(updatedTransfer);
   } catch (error) {
     console.error('Error updating transfer status:', error);
+    if (error.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     res.status(500).json({ error: `Failed to update transfer status: ${error.message}` });
   }
 });

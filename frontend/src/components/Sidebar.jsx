@@ -95,15 +95,7 @@ const Sidebar = () => {
       permissionKey: ['transfers_read', 'transfers_create'],
       subItems: [
         { name: 'Add Transfer', path: '/transfer/add', icon: <Truck size={16} />, permissionKey: 'transfers_create' },
-        { name: 'Store to store', path: '/transfer/store-to-store', icon: <Warehouse size={16} />, permissionKey: ['transfers_read', 'transfers_create'] },
-        { name: 'Store to factory', path: '/transfer/store-to-factory', icon: <Factory size={16} />, permissionKey: ['transfers_read', 'transfers_create'] },
-        { name: 'Store to Shop', path: '/transfer/store-to-shop', icon: <ShoppingBag size={16} />, permissionKey: ['transfers_read', 'transfers_create'] },
-        { name: 'Factory to factory', path: '/transfer/factory-to-factory', icon: <Factory size={16} />, permissionKey: ['transfers_read', 'transfers_create'] },
-        { name: 'Factory to store', path: '/transfer/factory-to-store', icon: <Warehouse size={16} />, permissionKey: ['transfers_read', 'transfers_create'] },
-        { name: 'Factory to shop', path: '/transfer/factory-to-shop', icon: <ShoppingBag size={16} />, permissionKey: ['transfers_read', 'transfers_create'] },
-        { name: 'Shop to shop', path: '/transfer/shop-to-shop', icon: <ShoppingBag size={16} />, permissionKey: ['transfers_read', 'transfers_create'] },
-        { name: 'Shop to store', path: '/transfer/shop-to-store', icon: <Warehouse size={16} />, permissionKey: ['transfers_read', 'transfers_create'] },
-        { name: 'Shop to factory', path: '/transfer/shop-to-factory', icon: <Factory size={16} />, permissionKey: ['transfers_read', 'transfers_create'] }
+        { name: 'All Transfers', path: '/transfers', icon: <Truck size={16} />, permissionKey: ['transfers_read'] }
       ]
     },
     {

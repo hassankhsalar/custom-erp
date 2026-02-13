@@ -1,6 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const jwt = require('jsonwebtoken');
+const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associateScope');
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -29,8 +30,13 @@ router.get('/', async (req, res) => {
   const pagination = req.query.pagination !== 'false';
 
   try {
+    const scope = await buildScope(prisma, req.user.userId);
+    if (!scope.isAdmin) {
+      ensureTypeScope(scope, 'store');
+    }
     const stores = await prisma.store.findMany({
       ...(pagination && { skip, take: limit }),
+      ...(scope?.isAdmin ? {} : { where: { id: { in: Array.from(scope.stores) } } }),
       include: {
         storeProducts: {
           include: {
@@ -60,6 +66,12 @@ router.get('/', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching stores:', error);
+    if (error.status === 403) {
+      return res.json({
+        stores: [],
+        ...(pagination && { currentPage: page, totalPages: 0, totalItems: 0 })
+      });
+    }
     res.status(500).json({ error: 'Failed to fetch stores' });
   }
 });
@@ -68,6 +80,8 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
   try {
+    const scope = await buildScope(prisma, req.user.userId);
+    ensureIdScope(scope, 'store', parseInt(id));
     const store = await prisma.store.findUnique({
       where: { id: parseInt(id) },
       include: {
@@ -90,6 +104,9 @@ router.get('/:id', async (req, res) => {
     res.json(store);
   } catch (error) {
     console.error('Error fetching store:', error);
+    if (error.status === 403) {
+      return res.json(null);
+    }
     res.status(500).json({ error: 'Failed to fetch store' });
   }
 });
@@ -98,6 +115,10 @@ router.get('/:id', async (req, res) => {
 router.post('/',  async (req, res) => {
   const { name, address, store_keeper, mobile, storeProducts, storeMaterials } = req.body;
   try {
+    const scope = await buildScope(prisma, req.user.userId);
+    if (!scope.isAdmin) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     const newStore = await prisma.store.create({
       data: {
         name,
@@ -130,6 +151,10 @@ router.put('/:id',  async (req, res) => {
   const { id } = req.params;
   const { name, address, store_keeper, mobile, storeProducts, storeMaterials } = req.body;
   try {
+    const scope = await buildScope(prisma, req.user.userId);
+    if (!scope.isAdmin) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     // First, delete existing store materials and products
     await prisma.storeMaterial.deleteMany({
       where: { store_id: parseInt(id) },
@@ -170,6 +195,10 @@ router.put('/:id',  async (req, res) => {
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
   try {
+    const scope = await buildScope(prisma, req.user.userId);
+    if (!scope.isAdmin) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     await prisma.store.delete({
       where: { id: parseInt(id) },
     });

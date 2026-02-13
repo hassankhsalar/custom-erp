@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { usePermission } from '../../hooks/usePermission';
 import { API_ROUTES } from '../../config';
 import { 
   Search, 
@@ -29,7 +30,9 @@ import {
 } from 'lucide-react';
 
 const TransferList = ({ fromType, toType, title }) => {
+  const { hasPermission } = usePermission();
   const [transfers, setTransfers] = useState([]);
+  const [associations, setAssociations] = useState({ shops: [], stores: [], factories: [] });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
@@ -38,6 +41,8 @@ const TransferList = ({ fromType, toType, title }) => {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [fromFilter, setFromFilter] = useState(fromType || 'all');
+  const [toFilter, setToFilter] = useState(toType || 'all');
   const [selectedTransfers, setSelectedTransfers] = useState([]);
 
   // Status Change Modal State
@@ -50,7 +55,7 @@ const TransferList = ({ fromType, toType, title }) => {
 
   useEffect(() => {
     fetchTransfers();
-  }, [fromType, toType, currentPage, statusFilter, itemsPerPage]);
+  }, [fromFilter, toFilter, currentPage, statusFilter, itemsPerPage]);
 
   const fetchTransfers = async () => {
     setLoading(true);
@@ -60,8 +65,8 @@ const TransferList = ({ fromType, toType, title }) => {
       const response = await axios.get(API_ROUTES.TRANSFERS, {
         headers: { Authorization: `Bearer ${token}` },
         params: {
-          from: fromType,
-          to: toType,
+          from: fromFilter !== 'all' ? fromFilter : undefined,
+          to: toFilter !== 'all' ? toFilter : undefined,
           page: currentPage,
           limit: itemsPerPage,
           status: statusFilter !== 'all' ? statusFilter : undefined,
@@ -71,6 +76,7 @@ const TransferList = ({ fromType, toType, title }) => {
       setTransfers(response.data.transfers);
       setTotalPages(response.data.totalPages);
       setTotalItems(response.data.totalItems);
+      setAssociations(response.data.associations || { shops: [], stores: [], factories: [] });
     } catch (error) {
       console.error('Error fetching transfers:', error);
       setError('Failed to fetch transfers. Please try again.');
@@ -85,7 +91,8 @@ const TransferList = ({ fromType, toType, title }) => {
 
   const openStatusModal = (transfer) => {
     setSelectedTransfer(transfer);
-    setNewStatus(transfer.status);
+    const allowed = getAllowedStatuses(transfer);
+    setNewStatus(allowed.includes(transfer.status) ? transfer.status : (allowed[0] || ''));
     setIsStatusModalOpen(true);
   };
 
@@ -105,6 +112,19 @@ const TransferList = ({ fromType, toType, title }) => {
 
   const handleStatusUpdate = async () => {
     try {
+      if (!selectedTransfer) return;
+      if (!newStatus) {
+        alert('No allowed status available.');
+        return;
+      }
+      const canChange = hasPermission('transfers_change_status');
+      const canReceive = hasPermission('transfers_receive');
+      const canReceiveHere = canReceiveTransfer(selectedTransfer);
+      const isReceivingStatus = newStatus === 'transferred' || newStatus === 'transfer_done';
+      if (!canChange && !(canReceive && canReceiveHere && isReceivingStatus)) {
+        alert('You do not have permission to change this status.');
+        return;
+      }
       const token = localStorage.getItem('token');
       await axios.put(`${API_ROUTES.TRANSFERS}/${selectedTransfer.id}/status`, 
         { status: newStatus },
@@ -173,6 +193,27 @@ const TransferList = ({ fromType, toType, title }) => {
           text: 'text-gray-600'
         };
     }
+  };
+
+  const canReceiveTransfer = (transfer) => {
+    if (!transfer) return false;
+    if (transfer.to === 'shop') return associations.shops.includes(transfer.toId);
+    if (transfer.to === 'store') return associations.stores.includes(transfer.toId);
+    if (transfer.to === 'factory') return associations.factories.includes(transfer.toId);
+    return false;
+  };
+
+  const canOpenStatusModal = (transfer) => {
+    if (!transfer) return false;
+    if (hasPermission('transfers_change_status')) return true;
+    return hasPermission('transfers_receive') && canReceiveTransfer(transfer);
+  };
+
+  const getAllowedStatuses = (transfer) => {
+    const allStatuses = ['processing', 'pending', 'being_shipped', 'transferred', 'not_received'];
+    if (hasPermission('transfers_change_status')) return allStatuses;
+    if (hasPermission('transfers_receive') && canReceiveTransfer(transfer)) return ['transferred'];
+    return [];
   };
 
   const formatStatus = (status) => {
@@ -330,6 +371,38 @@ const TransferList = ({ fromType, toType, title }) => {
                   <option value="being_shipped">Being Shipped</option>
                   <option value="transferred">Transferred</option>
                   <option value="not_received">Not Received</option>
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+              </div>
+              <div className="relative">
+                <select
+                  value={fromFilter}
+                  onChange={(e) => {
+                    setFromFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="appearance-none pl-4 pr-10 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 min-w-[140px]"
+                >
+                  <option value="all">From (All)</option>
+                  <option value="store">Store</option>
+                  <option value="shop">Shop</option>
+                  <option value="factory">Factory</option>
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+              </div>
+              <div className="relative">
+                <select
+                  value={toFilter}
+                  onChange={(e) => {
+                    setToFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="appearance-none pl-4 pr-10 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 min-w-[140px]"
+                >
+                  <option value="all">To (All)</option>
+                  <option value="store">Store</option>
+                  <option value="shop">Shop</option>
+                  <option value="factory">Factory</option>
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
               </div>
@@ -532,7 +605,7 @@ const TransferList = ({ fromType, toType, title }) => {
                                 >
                                   <Eye className="w-4 h-4" />
                                 </button>
-                                {transfer.status != 'transferred' && (
+                                {transfer.status != 'transferred' && canOpenStatusModal(transfer) && (
                                   <button
                                     onClick={() => openStatusModal(transfer)}
                                     disabled={transfer.status === 'transfer_done'}
@@ -734,7 +807,7 @@ const TransferList = ({ fromType, toType, title }) => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-3">Update to</label>
                   <div className="grid grid-cols-3 gap-2">
-                    {['processing', 'pending', 'being_shipped', 'transferred', 'not_received'].map((status) => {
+                    {getAllowedStatuses(selectedTransfer).map((status) => {
                       const colors = getStatusColor(status);
                       return (
                         <button
@@ -753,6 +826,9 @@ const TransferList = ({ fromType, toType, title }) => {
                       );
                     })}
                   </div>
+                  {getAllowedStatuses(selectedTransfer).length === 0 && (
+                    <p className="text-sm text-gray-500 mt-3">You do not have permission to update this transfer.</p>
+                  )}
                 </div>
               </div>
             </div>

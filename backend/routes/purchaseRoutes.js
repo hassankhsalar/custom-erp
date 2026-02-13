@@ -1,5 +1,6 @@
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
+const { buildScope, ensureHasAnyScope, ensureTypeScope, ensureIdScope, buildLocationOrFilter } = require('../utils/associateScope');
 const prisma = new PrismaClient();
 const router = express.Router();
 const { createTransaction } = require('../utils/transactionHelper');
@@ -105,6 +106,9 @@ router.post("/", async (req, res) => {
 
     // Validate that the destination exists
     await validateDestinationExists(actualDestinationType, actualDestinationId);
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, actualDestinationType, actualDestinationId);
 
     // Validate each item
     for (const item of items) {
@@ -358,6 +362,10 @@ router.post("/", async (req, res) => {
 
   } catch (err) {
     console.error("Purchase creation error:", err);
+
+    if (err.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     
     // Handle specific Prisma errors
     if (err.code === 'P2003') {
@@ -783,9 +791,15 @@ router.get('/', async (req, res) => {
     const limitNumber = Number.isFinite(limit) && limit > 0 ? limit : 10;
     const skip = (pageNumber - 1) * limitNumber;
 
-    const totalCount = usePagination ? await prisma.purchase.count() : null;
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    const locationFilter = buildLocationOrFilter(scope);
+
+    const totalCount = usePagination ? await prisma.purchase.count({
+      where: locationFilter
+    }) : null;
 
     const purchases = await prisma.purchase.findMany({
+      where: locationFilter,
       orderBy: { createdAt: 'desc' },
       skip: usePagination ? skip : undefined,
       take: usePagination ? limitNumber : undefined,
@@ -874,6 +888,20 @@ router.get('/', async (req, res) => {
     res.json(purchasesWithDestinations);
   } catch (error) {
     console.error('Error fetching purchases:', error);
+    if (error.status === 403) {
+      if (usePagination) {
+        return res.json({
+          data: [],
+          pagination: {
+            page: pageNumber,
+            limit: limitNumber,
+            totalCount: 0,
+            totalPages: 0
+          }
+        });
+      }
+      return res.json([]);
+    }
     res.status(500).json({ error: 'Failed to fetch purchases' });
   }
 });
@@ -921,6 +949,14 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Purchase not found' });
     }
 
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (purchase.destinationType && purchase.destinationId) {
+      ensureIdScope(scope, purchase.destinationType, purchase.destinationId);
+    } else {
+      ensureHasAnyScope(scope);
+    }
+
+
     // Fetch destination details
     let destination = null;
     if (purchase.destinationType && purchase.destinationId) {
@@ -962,6 +998,9 @@ router.get('/:id', async (req, res) => {
     res.json(formattedPurchase);
   } catch (error) {
     console.error('Error fetching purchase:', error);
+    if (error.status === 403) {
+      return res.json(null);
+    }
     res.status(500).json({ error: 'Failed to fetch purchase' });
   }
 });
@@ -994,6 +1033,19 @@ router.put('/:id', async (req, res) => {
 
     if (!existingPurchase) {
       return res.status(404).json({ error: 'Purchase not found' });
+    }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (existingPurchase.destinationType && existingPurchase.destinationId) {
+      ensureIdScope(scope, existingPurchase.destinationType, existingPurchase.destinationId);
+    } else {
+      ensureHasAnyScope(scope);
+    }
+
+    if (destinationType || destinationId) {
+      const nextType = destinationType || existingPurchase.destinationType;
+      const nextId = destinationId ? parseInt(destinationId) : existingPurchase.destinationId;
+      ensureIdScope(scope, nextType, nextId);
     }
 
     // Check if purchase has payments (cannot edit if paid)
@@ -1056,6 +1108,9 @@ router.put('/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating purchase:', error);
+    if (error.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Purchase not found' });
@@ -1196,6 +1251,9 @@ router.post('/:id/shipments', async (req, res) => {
     });
   } catch (error) {
     console.error('Error adding shipment:', error);
+    if (error.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     res.status(500).json({ error: error.message || 'Failed to add shipment' });
   }
 });
@@ -1206,6 +1264,22 @@ router.get('/:id/shipments', async (req, res) => {
     const purchaseId = parseInt(req.params.id);
     if (isNaN(purchaseId)) {
       return res.status(400).json({ error: 'Invalid purchase ID' });
+    }
+
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: purchaseId },
+      select: { id: true, destinationType: true, destinationId: true }
+    });
+
+    if (!purchase) {
+      return res.status(404).json({ error: 'Purchase not found' });
+    }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (purchase.destinationType && purchase.destinationId) {
+      ensureIdScope(scope, purchase.destinationType, purchase.destinationId);
+    } else {
+      ensureHasAnyScope(scope);
     }
 
     const shipments = await prisma.purchaseShipment.findMany({
@@ -1225,6 +1299,9 @@ router.get('/:id/shipments', async (req, res) => {
     res.json({ shipments });
   } catch (error) {
     console.error('Error fetching shipments:', error);
+    if (error.status === 403) {
+      return res.json({ shipments: [] });
+    }
     res.status(500).json({ error: 'Failed to fetch shipments' });
   }
 });
@@ -1370,6 +1447,9 @@ router.get('/:id/shipments', async (req, res) => {
 
   } catch (error) {
     console.error('Error recording payment:', error);
+    if (error.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     res.status(500).json({ error: error.message || 'Failed to record payment' });
   }
 });
@@ -1390,6 +1470,13 @@ router.get('/:id/payments', async (req, res) => {
 
     if (!purchase) {
       return res.status(404).json({ error: 'Purchase not found' });
+    }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (purchase.destinationType && purchase.destinationId) {
+      ensureIdScope(scope, purchase.destinationType, purchase.destinationId);
+    } else {
+      ensureHasAnyScope(scope);
     }
 
     // Get all transactions for this purchase
@@ -1431,6 +1518,13 @@ router.get('/:id/payments', async (req, res) => {
 
   } catch (error) {
     console.error('Error fetching payments:', error);
+    if (error.status === 403) {
+      return res.json({
+        purchase: null,
+        payments: [],
+        summary: { totalAmount: 0, totalPaid: 0, dueAmount: 0, status: "pending" }
+      });
+    }
     res.status(500).json({ error: 'Failed to fetch payment history' });
   }
 });
@@ -1485,6 +1579,9 @@ router.delete('/:id', async (req, res) => {
 
   } catch (error) {
     console.error('Error deleting purchase:', error);
+    if (error.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     
     if (error.code === 'P2025') {
       return res.status(404).json({ error: 'Purchase not found' });
@@ -1497,7 +1594,11 @@ router.delete('/:id', async (req, res) => {
 // GET purchase statistics
 router.get('/stats/summary', async (req, res) => {
   try {
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    const locationFilter = buildLocationOrFilter(scope);
+
     const purchases = await prisma.purchase.findMany({
+      where: locationFilter,
       include: {
         transactions: true
       }
@@ -1530,6 +1631,16 @@ router.get('/stats/summary', async (req, res) => {
 
   } catch (error) {
     console.error('Error fetching purchase stats:', error);
+    if (error.status === 403) {
+      return res.json({
+        totalPurchases: 0,
+        totalAmount: 0,
+        totalPaid: 0,
+        totalDue: 0,
+        statusCounts: {},
+        summary: { paidPercentage: 0, duePercentage: 0 }
+      });
+    }
     res.status(500).json({ error: 'Failed to fetch purchase statistics' });
   }
 });
@@ -1538,24 +1649,38 @@ router.get('/stats/summary', async (req, res) => {
 router.get("/destinations/:type", async (req, res) => {
   try {
     const { type } = req.params;
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (!scope.isAdmin) {
+      ensureTypeScope(scope, type);
+    }
+
+    const scopedIds =
+      type === "store" ? Array.from(scope.stores) :
+      type === "shop" ? Array.from(scope.shops) :
+      type === "factory" ? Array.from(scope.factories) : [];
+    const where = !scope.isAdmin ? { id: { in: scopedIds } } : undefined;
     
     let destinations = [];
     
     switch (type) {
       case "store":
         destinations = await prisma.store.findMany({
+          where,
           select: { id: true, name: true, address: true }
         });
         break;
         
       case "shop":
         destinations = await prisma.shop.findMany({
+          where,
           select: { id: true, name: true, address: true }
         });
         break;
         
       case "factory":
         destinations = await prisma.factory.findMany({
+          where,
           select: { id: true, name: true, address: true }
         });
         break;
@@ -1568,6 +1693,9 @@ router.get("/destinations/:type", async (req, res) => {
     
     res.json(destinations);
   } catch (err) {
+    if (err.status === 403) {
+      return res.json([]);
+    }
     res.status(500).json({ error: err.message });
   }
 });

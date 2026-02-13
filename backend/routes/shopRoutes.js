@@ -2,11 +2,17 @@ const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const router = express.Router();
+const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associateScope');
 
 // Get all shops
 router.get("/", async (req, res) => {
   try {
+    const scope = await buildScope(prisma, req.user.userId);
+    if (!scope.isAdmin) {
+      ensureTypeScope(scope, 'shop');
+    }
     const shops = await prisma.shop.findMany({
+      ...(scope?.isAdmin ? {} : { where: { id: { in: Array.from(scope.shops) } } }),
       include: {
         shopProducts: {
           include: {
@@ -38,6 +44,9 @@ router.get("/", async (req, res) => {
 
     res.json(shops);
   } catch (err) {
+    if (err.status === 403) {
+      return res.json([]);
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -45,6 +54,8 @@ router.get("/", async (req, res) => {
 // Get single shop by ID
 router.get("/:id", async (req, res) => {
   try {
+    const scope = await buildScope(prisma, req.user.userId);
+    ensureIdScope(scope, 'shop', parseInt(req.params.id));
     const shop = await prisma.shop.findUnique({
       where: { id: parseInt(req.params.id) },
       include: {
@@ -83,6 +94,9 @@ router.get("/:id", async (req, res) => {
 
     res.json(shop);
   } catch (err) {
+    if (err.status === 403) {
+      return res.json(null);
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -90,6 +104,10 @@ router.get("/:id", async (req, res) => {
 // Create new shop
 router.post("/", async (req, res) => {
   try {
+    const scope = await buildScope(prisma, req.user.userId);
+    if (!scope.isAdmin) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     const { name, address, shop_keeper, mobile, shopProducts, shopMaterials } = req.body;
 
     if (!name) {
@@ -185,6 +203,10 @@ router.post("/", async (req, res) => {
 // Update shop
 router.put("/:id", async (req, res) => {
   try {
+    const scope = await buildScope(prisma, req.user.userId);
+    if (!scope.isAdmin) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     const { name, address, shop_keeper, mobile, shopProducts, shopMaterials } = req.body;
 
     const result = await prisma.$transaction(async (tx) => {
@@ -264,6 +286,10 @@ router.put("/:id", async (req, res) => {
 // Delete shop
 router.delete("/:id", async (req, res) => {
   try {
+    const scope = await buildScope(prisma, req.user.userId);
+    if (!scope.isAdmin) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     await prisma.shop.delete({
       where: { id: parseInt(req.params.id) }
     });
@@ -280,6 +306,8 @@ router.delete("/:id", async (req, res) => {
 // Get shop stock
 router.get("/:id/stock", async (req, res) => {
   try {
+    const scope = await buildScope(prisma, req.user.userId);
+    ensureIdScope(scope, 'shop', parseInt(req.params.id));
     const shop = await prisma.shop.findUnique({
       where: { id: parseInt(req.params.id) },
       include: {
