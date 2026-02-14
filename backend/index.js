@@ -3,11 +3,13 @@ const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const { activityLoggerMiddleware, logActivity } = require('./utils/activityLogger');
 
 const prisma = new PrismaClient();
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(activityLoggerMiddleware);
 
 const JWT_SECRET = 'your-secret-key';
 
@@ -103,6 +105,16 @@ app.post('/api/login', async (req, res) => {
 
   if (await bcrypt.compare(password, user.password)) {
     const accessToken = jwt.sign({ userId: user.id }, JWT_SECRET);
+    await logActivity({
+      userId: user.id,
+      module: 'auth',
+      action: 'login',
+      description: 'User logged in',
+      status: 'success',
+      metadata: { identifier },
+      ipAddress: req.ip || null,
+      userAgent: req.headers['user-agent'] || null,
+    });
     res.json({ accessToken, username: user.username, name: user.name, email: user.email });
   } else {
     res.status(401).json({ error: 'Not Allowed' });
@@ -181,6 +193,7 @@ const expenseRoutes = require('./routes/expenseRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const reportExtraRoutes = require('./routes/reportExtraRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const activityLogRoutes = require('./routes/activityLogRoutes');
 const { startSalaryCron } = require('./services/salaryCron');
 
 const uploadRoutes = require('./routes/uploadRoutes');
@@ -225,6 +238,7 @@ app.use('/api/expenses', authenticateToken, expenseRoutes);
 app.use('/api/reports', authenticateToken, reportRoutes);
 app.use('/api/reports', authenticateToken, reportExtraRoutes);
 app.use('/api/notifications', authenticateToken, notificationRoutes);
+app.use('/api/activity-logs', authenticateToken, activityLogRoutes);
 
 // serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));

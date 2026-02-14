@@ -290,7 +290,8 @@ const Sidebar = () => {
       textColor: 'text-gray-700',
       permissionKey: ['general_settings_edit', 'admin'],
       subItems: [
-        { name: 'Settings', path: '/settings', icon: <Settings size={16} />, permissionKey: ['general_settings_edit', 'admin'] }
+        { name: 'Settings', path: '/settings', icon: <Settings size={16} />, permissionKey: ['general_settings_edit', 'admin'] },
+        { name: 'Activity Log', path: '/settings/activity-log', icon: <FileText size={16} />, permissionKey: ['general_settings_edit', 'admin'] }
       ]
     }
   ];

@@ -38,6 +38,28 @@ model User {
   
   clockIns     ClockInOut[]  @relation("ClockInOutUser")
   approvals    ClockInOut[]  @relation("ClockInOutApprovedBy")
+  activityLogs ActivityLog[]
+}
+
+model ActivityLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  module      String
+  action      String
+  description String?
+  entityId    Int?
+  status      String   @default("success")
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([module])
+  @@index([action])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model Profile {

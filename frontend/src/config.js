@@ -82,6 +82,8 @@ export const API_ROUTES = {
   NOTIFICATIONS_LATEST: `${API_BASE_URL}/notifications/latest`,
   NOTIFICATIONS_UNREAD_COUNT: `${API_BASE_URL}/notifications/unread-count`,
   NOTIFICATIONS_MARK_ALL_READ: `${API_BASE_URL}/notifications/mark-all-read`,
+  ACTIVITY_LOGS: `${API_BASE_URL}/activity-logs`,
+  ACTIVITY_LOGS_LOGOUT: `${API_BASE_URL}/activity-logs/logout`,
   
   //SHOP_SALES_RETURNS: `${API_BASE_URL}/shop-sales/returns/all`,
   SHOP_SALES_RETURNS_BACKUP: `${API_BASE_URL}/shop-sales/returns-list`,
