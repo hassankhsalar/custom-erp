@@ -18,6 +18,7 @@ import POS from "./components/Sale/POS";
 import AllSales from "./components/Sale/AllSales";
 import CreateSale from "./components/Sale/CreateSale";
 import SaleReturn from "./components/Sale/SaleReturn";
+import WarrantyList from "./components/Sale/WarrantyList";
 import AllMaterials from "./components/Materials/AllMaterials";
 import AddMaterial from "./components/Materials/AddMaterial";
 import ScrapeMaterials from "./components/Materials/ScrapeMaterials";
@@ -199,6 +200,9 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="sales_return_read" />}>
               <Route path="/sale/allreturns" element={<AllReturns />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="sales_read" />}>
+              <Route path="/sale/warranty" element={<WarrantyList />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="customer_read" />}>
               <Route path="/customers/all" element={<AllCustomers />} />

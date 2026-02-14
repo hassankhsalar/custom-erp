@@ -208,6 +208,9 @@ export default function ShopPOS( props ) {
         quantity: 1,
         unitPrice: salePrice,
         totalPrice: salePrice,
+        warrantyEnabled: false,
+        warrantyExpiryDate: "",
+        warrantyNotes: "",
         barcode: item.barcode,
         unit: item.unit,
         shop_stock: item.shop_stock,
@@ -284,6 +287,21 @@ export default function ShopPOS( props ) {
     setCartItems(updatedCart);
   };
 
+  const handleWarrantyToggle = (index, enabled) => {
+    const updated = [...cartItems];
+    updated[index].warrantyEnabled = !!enabled;
+    if (!enabled) {
+      updated[index].warrantyExpiryDate = "";
+    }
+    setCartItems(updated);
+  };
+
+  const handleWarrantyExpiryChange = (index, value) => {
+    const updated = [...cartItems];
+    updated[index].warrantyExpiryDate = value;
+    setCartItems(updated);
+  };
+
   const handleBatchChange = (index, value) => {
     const updated = [...cartItems];
     if (!value || value === "||") {
@@ -347,6 +365,10 @@ export default function ShopPOS( props ) {
         alert(`⚠️ Quantity must be greater than 0 for ${cartItem.name}.`);
         return false;
       }
+      if ((cartItem.type === "product" || cartItem.type === "material") && cartItem.warrantyEnabled && !cartItem.warrantyExpiryDate) {
+        alert(`⚠️ Select warranty expiry date for ${cartItem.name}.`);
+        return false;
+      }
     }
 
     return true;
@@ -374,6 +396,9 @@ export default function ShopPOS( props ) {
         unitPrice: item.unitPrice,
         batchNumber: item.batchNumber,
         expiryDate: item.expiryDate,
+        warrantyEnabled: (item.type === "product" || item.type === "material") ? !!item.warrantyEnabled : false,
+        warrantyExpiryDate: (item.type === "product" || item.type === "material") && item.warrantyEnabled ? (item.warrantyExpiryDate || null) : null,
+        warrantyNotes: (item.type === "product" || item.type === "material") ? (item.warrantyNotes || null) : null,
       })),
     };
 
@@ -856,6 +881,27 @@ export default function ShopPOS( props ) {
                                     {item.barcode && <span>{item.barcode}</span>}
                                     {item.unit && <span className="ml-2">| Unit: {item.unit}</span>}
                                   </div>
+                                  {(item.type === "product" || item.type === "material") && (
+                                    <div className="mt-2 flex flex-wrap gap-2 items-center">
+                                      <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                                        <input
+                                          type="checkbox"
+                                          checked={!!item.warrantyEnabled}
+                                          onChange={(e) => handleWarrantyToggle(index, e.target.checked)}
+                                        />
+                                        Warranty
+                                      </label>
+                                      {item.warrantyEnabled && (
+                                        <input
+                                          type="date"
+                                          value={item.warrantyExpiryDate || ""}
+                                          onChange={(e) => handleWarrantyExpiryChange(index, e.target.value)}
+                                          className="w-40 border border-gray-300 rounded px-2 py-1 text-xs"
+                                          title="Warranty expiry date"
+                                        />
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </td>

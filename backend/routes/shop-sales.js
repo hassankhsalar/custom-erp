@@ -186,6 +186,15 @@ router.post("/", async (req, res) => {
       if (!item.itemId) {
         return res.status(400).json({ error: "Each item must have itemId" });
       }
+      if (item.warrantyEnabled) {
+        if (!item.warrantyExpiryDate) {
+          return res.status(400).json({ error: "warrantyExpiryDate is required when warrantyEnabled is true" });
+        }
+        const exp = new Date(item.warrantyExpiryDate);
+        if (Number.isNaN(exp.getTime())) {
+          return res.status(400).json({ error: "Invalid warrantyExpiryDate" });
+        }
+      }
     }
     
     const normalizedPaymentType = (paymentType || "cash").toLowerCase();
@@ -383,10 +392,22 @@ router.post("/", async (req, res) => {
         }
 
         // Create sale item record
+        const warrantyEnabled = item.type === "product" && !!item.warrantyEnabled;
+        const warrantyStart = warrantyEnabled ? new Date() : null;
+        const warrantyEnd = warrantyEnabled && item.warrantyExpiryDate ? new Date(item.warrantyExpiryDate) : null;
+        const computedWarrantyDays = warrantyEnabled && warrantyStart && warrantyEnd
+          ? Math.max(0, Math.ceil((warrantyEnd.getTime() - warrantyStart.getTime()) / (1000 * 60 * 60 * 24)))
+          : 0;
+
         const saleItemData = {
           saleId: sale.id,
           batchNumber: item.batchNumber ? String(item.batchNumber).trim() : null,
           expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
+          warrantyDays: computedWarrantyDays,
+          warrantyStartDate: warrantyStart,
+          warrantyEndDate: warrantyEnd,
+          warrantySerial: item.warrantySerial ? String(item.warrantySerial).trim() : null,
+          warrantyNotes: item.warrantyNotes ? String(item.warrantyNotes).trim() : null,
           quantity: parseFloat(item.quantity),
           unitPrice: parseFloat(item.unitPrice),
           avg_cost: parseFloat(item.avg_cost),
@@ -404,6 +425,25 @@ router.post("/", async (req, res) => {
         const saleItem = await tx.saleItem.create({
           data: saleItemData,
         });
+
+        if ((item.type === "product" || item.type === "material") && warrantyEnabled && warrantyEnd) {
+          const warrantyCode = `WAR-${Date.now()}-${sale.id}-${saleItem.id}`;
+          await tx.userWarranty.create({
+            data: {
+              warrantyCode,
+              status: "active",
+              serialNumber: saleItemData.warrantySerial,
+              notes: saleItemData.warrantyNotes,
+              startDate: saleItemData.warrantyStartDate,
+              endDate: saleItemData.warrantyEndDate,
+              saleId: sale.id,
+              saleItemId: saleItem.id,
+              productId: item.type === "product" ? parseInt(item.itemId) : null,
+              materialId: item.type === "material" ? parseInt(item.itemId) : null,
+              customerId: customer || null,
+            },
+          });
+        }
 
         saleItems.push(saleItem);
       }
@@ -463,6 +503,180 @@ router.post("/", async (req, res) => {
     }
     
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/warranties", async (req, res) => {
+  try {
+    const { status, mobile, serial, customer, item, itemType, expiryFrom, expiryTo, page = 1, limit = 20 } = req.query;
+    const where = {};
+    if (status) where.status = String(status);
+    if (serial) where.serialNumber = { contains: String(serial) };
+    if (customer) {
+      where.customer = {
+        ...(where.customer || {}),
+        name: { contains: String(customer) }
+      };
+    }
+    if (mobile) {
+      where.customer = {
+        ...(where.customer || {}),
+        mobile: { contains: String(mobile) }
+      };
+    }
+    if (itemType === "product") {
+      where.product = { name: { contains: String(item || "") } };
+    } else if (itemType === "material") {
+      where.material = { name: { contains: String(item || "") } };
+    } else if (item) {
+      where.OR = [
+        { product: { name: { contains: String(item) } } },
+        { material: { name: { contains: String(item) } } },
+      ];
+    }
+    if (expiryFrom || expiryTo) {
+      where.endDate = {};
+      if (expiryFrom) where.endDate.gte = new Date(expiryFrom);
+      if (expiryTo) where.endDate.lte = new Date(expiryTo);
+    }
+
+    const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const take = parseInt(limit, 10);
+
+    const [rows, total] = await prisma.$transaction([
+      prisma.userWarranty.findMany({
+        where,
+        include: {
+          product: { select: { id: true, name: true, barcode: true } },
+          material: { select: { id: true, name: true, barcode: true } },
+          customer: { select: { id: true, name: true, mobile: true } },
+          sale: { select: { id: true, reference: true, createdAt: true } },
+          saleItem: { select: { id: true, quantity: true, unitPrice: true } },
+          claims: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          }
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take,
+      }),
+      prisma.userWarranty.count({ where }),
+    ]);
+
+    res.json({ data: rows, total, page: parseInt(page, 10), limit: take });
+  } catch (error) {
+    console.error("Warranty list error:", error);
+    res.status(500).json({ error: error.message || "Failed to fetch warranties" });
+  }
+});
+
+router.put("/warranties/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { notes, endDate, status } = req.body;
+    if (!id) {
+      return res.status(400).json({ error: "Invalid id" });
+    }
+    const updated = await prisma.userWarranty.update({
+      where: { id },
+      data: {
+        notes: notes !== undefined ? String(notes || "") : undefined,
+        endDate: endDate ? new Date(endDate) : undefined,
+        status: status ? String(status) : undefined,
+      },
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error("Warranty edit error:", error);
+    res.status(500).json({ error: error.message || "Failed to update warranty" });
+  }
+});
+
+router.delete("/warranties/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) {
+      return res.status(400).json({ error: "Invalid id" });
+    }
+    await prisma.userWarranty.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Warranty delete error:", error);
+    res.status(500).json({ error: error.message || "Failed to delete warranty" });
+  }
+});
+
+router.post("/warranties/:id/claims", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { receivingDate, providingDate, issueDescription, resolution, status = "received", note } = req.body;
+    if (!id || !receivingDate) {
+      return res.status(400).json({ error: "warranty id and receivingDate are required" });
+    }
+    const warranty = await prisma.userWarranty.findUnique({ where: { id } });
+    if (!warranty) {
+      return res.status(404).json({ error: "Warranty not found" });
+    }
+
+    const claim = await prisma.$transaction(async (tx) => {
+      const created = await tx.warrantyClaim.create({
+        data: {
+          warrantyId: id,
+          receivingDate: new Date(receivingDate),
+          providingDate: providingDate ? new Date(providingDate) : null,
+          issueDescription: issueDescription || null,
+          resolution: resolution || null,
+          status: String(status),
+          note: note || null,
+        },
+      });
+
+      await tx.userWarranty.update({
+        where: { id },
+        data: {
+          status: "claimed",
+          claimedAt: new Date(),
+          claimCount: { increment: 1 },
+        },
+      });
+
+      return created;
+    });
+
+    res.status(201).json(claim);
+  } catch (error) {
+    console.error("Warranty claim create error:", error);
+    res.status(500).json({ error: error.message || "Failed to create warranty claim" });
+  }
+});
+
+router.put("/warranties/:id/status", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { status, notes } = req.body;
+    if (!id || !status) {
+      return res.status(400).json({ error: "id and status are required" });
+    }
+    const allowed = ["active", "claimed", "expired", "void"];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ error: `Invalid status. Allowed: ${allowed.join(", ")}` });
+    }
+
+    const updated = await prisma.userWarranty.update({
+      where: { id },
+      data: {
+        status,
+        notes: notes !== undefined ? String(notes || "") : undefined,
+        claimedAt: status === "claimed" ? new Date() : undefined,
+        voidedAt: status === "void" ? new Date() : undefined,
+        claimCount: status === "claimed" ? { increment: 1 } : undefined,
+      },
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error("Warranty status update error:", error);
+    res.status(500).json({ error: error.message || "Failed to update warranty status" });
   }
 });
 
