@@ -5,6 +5,7 @@ const router = express.Router();
 const { createTransaction } = require('../utils/transactionHelper');
 const { createNotification } = require('../utils/notificationHelper');
 const { buildScope, ensureTypeScope, ensureIdScope } = require("../utils/associateScope");
+const { getAvailableBatches, decrementBatch } = require("../utils/batchDetails");
 
 // Get all shops for POS
 router.get("/shops", async (req, res) => {
@@ -122,6 +123,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
       shop_stock: sp.stock,
       global_stock: sp.product.stock,
       image: sp.product.image,
+      batches: getAvailableBatches(sp.batchDetails),
       minStock: 0
     }));
 
@@ -140,6 +142,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
       shop_stock: sm.stock,
       global_stock: sm.material.current_stock,
       image: sm.material.image,
+      batches: getAvailableBatches(sm.batchDetails),
       minStock: 0
     }));
 
@@ -275,6 +278,17 @@ router.post("/", async (req, res) => {
           }
 
           // Update shop product stock
+          const productUpdateData = {
+            stock: { decrement: parseFloat(item.quantity) },
+          };
+          if (item.batchNumber) {
+            productUpdateData.batchDetails = decrementBatch(
+              shopProduct.batchDetails,
+              { batchNumber: item.batchNumber, expiryDate: item.expiryDate },
+              parseFloat(item.quantity)
+            );
+          }
+
           await tx.shopProduct.update({
             where: {
               shop_id_product_id: {
@@ -282,9 +296,7 @@ router.post("/", async (req, res) => {
                 product_id: parseInt(item.itemId),
               },
             },
-            data: {
-              stock: { decrement: parseFloat(item.quantity) },
-            },
+            data: productUpdateData,
           });
 
           // Update global product stock
@@ -323,6 +335,17 @@ router.post("/", async (req, res) => {
           }
 
           // Update shop material stock
+          const materialUpdateData = {
+            stock: { decrement: parseFloat(item.quantity) },
+          };
+          if (item.batchNumber) {
+            materialUpdateData.batchDetails = decrementBatch(
+              shopMaterial.batchDetails,
+              { batchNumber: item.batchNumber, expiryDate: item.expiryDate },
+              parseFloat(item.quantity)
+            );
+          }
+
           await tx.shopMaterial.update({
             where: {
               shop_id_material_id: {
@@ -330,9 +353,7 @@ router.post("/", async (req, res) => {
                 material_id: parseInt(item.itemId),
               },
             },
-            data: {
-              stock: { decrement: parseFloat(item.quantity) },
-            },
+            data: materialUpdateData,
           });
 
           // Update global material stock
@@ -364,6 +385,8 @@ router.post("/", async (req, res) => {
         // Create sale item record
         const saleItemData = {
           saleId: sale.id,
+          batchNumber: item.batchNumber ? String(item.batchNumber).trim() : null,
+          expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
           quantity: parseFloat(item.quantity),
           unitPrice: parseFloat(item.unitPrice),
           avg_cost: parseFloat(item.avg_cost),

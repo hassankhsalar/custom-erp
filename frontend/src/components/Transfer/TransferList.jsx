@@ -167,13 +167,11 @@ const TransferList = ({ fromType, toType, title }) => {
           text: 'text-amber-600'
         };
       case 'being_shipped':
-      case 'being_shipped':
         return { 
           bg: 'bg-gradient-to-r from-blue-500 to-cyan-500', 
           iconBg: 'bg-blue-100',
           text: 'text-blue-600'
         };
-      case 'transferred':
       case 'transferred':
         return { 
           bg: 'bg-gradient-to-r from-emerald-500 to-green-500', 
@@ -217,9 +215,23 @@ const TransferList = ({ fromType, toType, title }) => {
   };
 
   const formatStatus = (status) => {
-    return status.replace(/_/g, ' ').replace(/\w\S*/g, function(txt){
-      return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
-    });
+    if (!status) return '';
+    switch (status) {
+      case 'processing':
+        return 'Processing';
+      case 'pending':
+        return 'Pending';
+      case 'being_shipped':
+        return 'On The Way';
+      case 'transferred':
+        return 'Transferred';
+      case 'not_received':
+        return 'Not Received';
+      default:
+        return status.replace(/_/g, ' ').replace(/\w\S*/g, function(txt){
+          return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+        });
+    }
   };
 
   const getStatusIcon = (status) => {
@@ -230,7 +242,6 @@ const TransferList = ({ fromType, toType, title }) => {
         return <AlertCircle className="w-4 h-4" />;
       case 'being_shipped':
         return <Truck className="w-4 h-4" />;
-      case 'transferred':
       case 'transferred':
         return <CheckCircle className="w-4 h-4" />;
       case 'not_received':

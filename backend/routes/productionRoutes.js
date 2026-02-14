@@ -2,6 +2,7 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const jwt = require('jsonwebtoken');
 const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associateScope');
+const { mergeIncomingBatch, parseDateOnly } = require('../utils/batchDetails');
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -87,6 +88,10 @@ router.post('/', authenticateToken, async (req, res) => {
             create: products.map(p => ({
               productId: parseInt(p.productId),
               code: p.code,
+              batchNumber: p.batchNumber ? String(p.batchNumber).trim() : null,
+              expiryDate: p.expiryDate ? new Date(p.expiryDate) : null,
+              manufactureDate: p.manufactureDate ? new Date(p.manufactureDate) : null,
+              batchNotes: p.batchNotes || null,
               quantity: parseFloat(p.quantity),
               unit_cost: parseFloat(p.unit_cost),
             })),
@@ -417,6 +422,10 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
             data: {
               received: parseFloat(p.received),
               scrap: parseFloat(p.scrap),
+              batchNumber: p.batchNumber ? String(p.batchNumber).trim() : undefined,
+              expiryDate: p.expiryDate ? new Date(p.expiryDate) : undefined,
+              manufactureDate: p.manufactureDate ? new Date(p.manufactureDate) : undefined,
+              batchNotes: p.batchNotes !== undefined ? p.batchNotes : undefined,
               unit_cost: finalUnitCost,
             },
           });
@@ -467,6 +476,12 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
                 },
                 scrap: scrapQuantity > 0 ? scrapQuantity : factoryProduct.scrap, // Update scrap field
                 avg_cost: newAvgCost,
+                batchDetails: mergeIncomingBatch(factoryProduct.batchDetails, {
+                  batchNumber: p.batchNumber || p.code,
+                  expiryDate: parseDateOnly(p.expiryDate),
+                  quantity: receivedQuantity,
+                  unitCost: baseUnitCost,
+                }),
               },
             });
           } else {
@@ -477,6 +492,12 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
                 stock: receivedQuantity,
                 scrap: scrapQuantity,
                 avg_cost: baseUnitCost,
+                batchDetails: mergeIncomingBatch(null, {
+                  batchNumber: p.batchNumber || p.code,
+                  expiryDate: parseDateOnly(p.expiryDate),
+                  quantity: receivedQuantity,
+                  unitCost: baseUnitCost,
+                }),
               }
             });
           }

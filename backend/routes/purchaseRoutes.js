@@ -4,6 +4,7 @@ const { buildScope, ensureHasAnyScope, ensureTypeScope, ensureIdScope, buildLoca
 const prisma = new PrismaClient();
 const router = express.Router();
 const { createTransaction } = require('../utils/transactionHelper');
+const { parseDateOnly, mergeIncomingBatch } = require('../utils/batchDetails');
 
 // Generate unique reference for transactions
 const generateTransactionReference = () => {
@@ -239,6 +240,10 @@ router.post("/", async (req, res) => {
           const purchaseItemData = {
             purchaseId: purchase.id,
             itemType: item.itemType,
+            batchNumber: item.batchNumber ? String(item.batchNumber).trim() : null,
+            expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
+            manufactureDate: item.manufactureDate ? new Date(item.manufactureDate) : null,
+            batchNotes: item.batchNotes || null,
             quantity: parseFloat(item.quantity),
             unitPrice: parseFloat(item.unitPrice),
             totalPrice: totalPrice,
@@ -268,7 +273,13 @@ router.post("/", async (req, res) => {
                 actualDestinationId,
                 parseInt(item.productId),
                 receivedQty,
-                parseFloat(item.unitPrice)
+                parseFloat(item.unitPrice),
+                {
+                  batchNumber: purchaseItemData.batchNumber,
+                  expiryDate: purchaseItemData.expiryDate,
+                  quantity: receivedQty,
+                  unitCost: parseFloat(item.unitPrice),
+                }
               );
             }
           } else {
@@ -279,7 +290,13 @@ router.post("/", async (req, res) => {
                 actualDestinationId,
                 parseInt(item.materialId),
                 receivedQty,
-                parseFloat(item.unitPrice)
+                parseFloat(item.unitPrice),
+                {
+                  batchNumber: purchaseItemData.batchNumber,
+                  expiryDate: purchaseItemData.expiryDate,
+                  quantity: receivedQty,
+                  unitCost: parseFloat(item.unitPrice),
+                }
               );
             }
           }
@@ -442,41 +459,41 @@ async function getDestinationDetails(destinationType, destinationId) {
 }
 
 // Helper function to update product stock
-async function updateProductStock(tx, destinationType, destinationId, productId, quantity, unitPrice) {
+async function updateProductStock(tx, destinationType, destinationId, productId, quantity, unitPrice, batchInfo = null) {
   switch (destinationType) {
     case "store":
-      await updateStoreProductStock(tx, destinationId, productId, quantity, unitPrice);
+      await updateStoreProductStock(tx, destinationId, productId, quantity, unitPrice, batchInfo);
       break;
       
     case "shop":
-      await updateShopProductStock(tx, destinationId, productId, quantity, unitPrice);
+      await updateShopProductStock(tx, destinationId, productId, quantity, unitPrice, batchInfo);
       break;
       
     case "factory":
-      await updateFactoryProductStock(tx, destinationId, productId, quantity, unitPrice);
+      await updateFactoryProductStock(tx, destinationId, productId, quantity, unitPrice, batchInfo);
       break;
   }
 }
 
 // Helper function to update material stock
-async function updateMaterialStock(tx, destinationType, destinationId, materialId, quantity, unitPrice) {
+async function updateMaterialStock(tx, destinationType, destinationId, materialId, quantity, unitPrice, batchInfo = null) {
   switch (destinationType) {
     case "store":
-      await updateStoreMaterialStock(tx, destinationId, materialId, quantity, unitPrice);
+      await updateStoreMaterialStock(tx, destinationId, materialId, quantity, unitPrice, batchInfo);
       break;
       
     case "shop":
-      await updateShopMaterialStock(tx, destinationId, materialId, quantity, unitPrice);
+      await updateShopMaterialStock(tx, destinationId, materialId, quantity, unitPrice, batchInfo);
       break;
       
     case "factory":
-      await updateFactoryMaterialStock(tx, destinationId, materialId, quantity, unitPrice);
+      await updateFactoryMaterialStock(tx, destinationId, materialId, quantity, unitPrice, batchInfo);
       break;
   }
 }
 
 // Store product stock update
-async function updateStoreProductStock(tx, storeId, productId, quantity, unitPrice) {
+async function updateStoreProductStock(tx, storeId, productId, quantity, unitPrice, batchInfo = null) {
   const existingStoreProduct = await tx.storeProduct.findUnique({
     where: {
       store_id_product_id: {
@@ -507,6 +524,7 @@ async function updateStoreProductStock(tx, storeId, productId, quantity, unitPri
       data: {
         stock: { increment: quantity },
         avg_cost: newAvgCost,
+        batchDetails: mergeIncomingBatch(existingStoreProduct.batchDetails, batchInfo),
       },
     });
   } else {
@@ -516,6 +534,7 @@ async function updateStoreProductStock(tx, storeId, productId, quantity, unitPri
         product_id: productId,
         stock: quantity,
         avg_cost: parseFloat(unitPrice),
+        batchDetails: mergeIncomingBatch(null, batchInfo),
       },
     });
   }
@@ -527,7 +546,7 @@ async function updateStoreProductStock(tx, storeId, productId, quantity, unitPri
 }
 
 // Shop product stock update
-async function updateShopProductStock(tx, shopId, productId, quantity, unitPrice) {
+async function updateShopProductStock(tx, shopId, productId, quantity, unitPrice, batchInfo = null) {
   const existingShopProduct = await tx.shopProduct.findUnique({
     where: {
       shop_id_product_id: {
@@ -558,6 +577,7 @@ async function updateShopProductStock(tx, shopId, productId, quantity, unitPrice
       data: {
         stock: { increment: quantity },
         avg_cost: newAvgCost,
+        batchDetails: mergeIncomingBatch(existingShopProduct.batchDetails, batchInfo),
       },
     });
   } else {
@@ -567,6 +587,7 @@ async function updateShopProductStock(tx, shopId, productId, quantity, unitPrice
         product_id: productId,
         stock: quantity,
         avg_cost: parseFloat(unitPrice),
+        batchDetails: mergeIncomingBatch(null, batchInfo),
       },
     });
   }
@@ -578,7 +599,7 @@ async function updateShopProductStock(tx, shopId, productId, quantity, unitPrice
 }
 
 // Factory product stock update
-async function updateFactoryProductStock(tx, factoryId, productId, quantity, unitPrice) {
+async function updateFactoryProductStock(tx, factoryId, productId, quantity, unitPrice, batchInfo = null) {
   const existingFactoryProduct = await tx.factoryProduct.findUnique({
     where: {
       factoryId_productId: {
@@ -609,6 +630,7 @@ async function updateFactoryProductStock(tx, factoryId, productId, quantity, uni
       data: {
         stock: { increment: quantity },
         avg_cost: newAvgCost,
+        batchDetails: mergeIncomingBatch(existingFactoryProduct.batchDetails, batchInfo),
       },
     });
   } else {
@@ -618,6 +640,7 @@ async function updateFactoryProductStock(tx, factoryId, productId, quantity, uni
         productId: productId,
         stock: quantity,
         avg_cost: parseFloat(unitPrice),
+        batchDetails: mergeIncomingBatch(null, batchInfo),
       },
     });
   }
@@ -629,7 +652,7 @@ async function updateFactoryProductStock(tx, factoryId, productId, quantity, uni
 }
 
 // Store material stock update (existing)
-async function updateStoreMaterialStock(tx, storeId, materialId, quantity, unitPrice) {
+async function updateStoreMaterialStock(tx, storeId, materialId, quantity, unitPrice, batchInfo = null) {
   const existingStoreMaterial = await tx.storeMaterial.findUnique({
     where: {
       store_id_material_id: {
@@ -660,6 +683,7 @@ async function updateStoreMaterialStock(tx, storeId, materialId, quantity, unitP
       data: {
         stock: { increment: quantity },
         avg_cost: newAvgCost,
+        batchDetails: mergeIncomingBatch(existingStoreMaterial.batchDetails, batchInfo),
       },
     });
   } else {
@@ -669,6 +693,7 @@ async function updateStoreMaterialStock(tx, storeId, materialId, quantity, unitP
         material_id: materialId,
         stock: quantity,
         avg_cost: parseFloat(unitPrice),
+        batchDetails: mergeIncomingBatch(null, batchInfo),
       },
     });
   }
@@ -680,7 +705,7 @@ async function updateStoreMaterialStock(tx, storeId, materialId, quantity, unitP
 }
 
 // Shop material stock update (existing)
-async function updateShopMaterialStock(tx, shopId, materialId, quantity, unitPrice) {
+async function updateShopMaterialStock(tx, shopId, materialId, quantity, unitPrice, batchInfo = null) {
   const existingShopMaterial = await tx.shopMaterial.findUnique({
     where: {
       shop_id_material_id: {
@@ -711,6 +736,7 @@ async function updateShopMaterialStock(tx, shopId, materialId, quantity, unitPri
       data: {
         stock: { increment: quantity },
         avg_cost: newAvgCost,
+        batchDetails: mergeIncomingBatch(existingShopMaterial.batchDetails, batchInfo),
       },
     });
   } else {
@@ -720,6 +746,7 @@ async function updateShopMaterialStock(tx, shopId, materialId, quantity, unitPri
         material_id: materialId,
         stock: quantity,
         avg_cost: parseFloat(unitPrice),
+        batchDetails: mergeIncomingBatch(null, batchInfo),
       },
     });
   }
@@ -731,7 +758,7 @@ async function updateShopMaterialStock(tx, shopId, materialId, quantity, unitPri
 }
 
 // Factory material stock update (existing)
-async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity, unitPrice) {
+async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity, unitPrice, batchInfo = null) {
   const existingFactoryMaterial = await tx.factoryMaterial.findUnique({
     where: {
       factoryId_materialId: {
@@ -762,6 +789,7 @@ async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity, u
       data: {
         stock: { increment: quantity },
         avg_cost: newAvgCost,
+        batchDetails: mergeIncomingBatch(existingFactoryMaterial.batchDetails, batchInfo),
       },
     });
   } else {
@@ -771,6 +799,7 @@ async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity, u
         materialId: materialId,
         stock: quantity,
         avg_cost: parseFloat(unitPrice),
+        batchDetails: mergeIncomingBatch(null, batchInfo),
       },
     });
   }
@@ -1077,6 +1106,10 @@ router.put('/:id', async (req, res) => {
               materialId: item.itemType === 'material' ? parseInt(item.itemId) : null,
               productId: item.itemType === 'product' ? parseInt(item.itemId) : null,
               itemType: item.itemType,
+              batchNumber: item.batchNumber ? String(item.batchNumber).trim() : null,
+              expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
+              manufactureDate: item.manufactureDate ? new Date(item.manufactureDate) : null,
+              batchNotes: item.batchNotes || null,
               quantity: parseFloat(item.quantity),
               unitPrice: parseFloat(item.unitPrice),
               totalPrice: parseFloat(item.totalPrice)
@@ -1219,7 +1252,13 @@ router.post('/:id/shipments', async (req, res) => {
             purchase.destinationId,
             purchaseItem.productId,
             receivedQty,
-            purchaseItem.unitPrice
+            purchaseItem.unitPrice,
+            {
+              batchNumber: purchaseItem.batchNumber,
+              expiryDate: parseDateOnly(purchaseItem.expiryDate),
+              quantity: receivedQty,
+              unitCost: purchaseItem.unitPrice,
+            }
           );
         } else {
           await updateMaterialStock(
@@ -1228,7 +1267,13 @@ router.post('/:id/shipments', async (req, res) => {
             purchase.destinationId,
             purchaseItem.materialId,
             receivedQty,
-            purchaseItem.unitPrice
+            purchaseItem.unitPrice,
+            {
+              batchNumber: purchaseItem.batchNumber,
+              expiryDate: parseDateOnly(purchaseItem.expiryDate),
+              quantity: receivedQty,
+              unitCost: purchaseItem.unitPrice,
+            }
           );
         }
 

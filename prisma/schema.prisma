@@ -504,6 +504,7 @@ model StoreMaterial {
   stock       Float @default(0)
   avg_cost   Float?
   scrap      Float? @default(0)
+  batchDetails Json?
   store    Store    @relation(fields: [store_id], references: [id])
   material Material @relation(fields: [material_id], references: [id])
 
@@ -516,6 +517,7 @@ model StoreProduct {
   stock      Float @default(0)
   avg_cost  Float?
   scrap      Float? @default(0)
+  batchDetails Json?
   store   Store   @relation(fields: [store_id], references: [id])
   product Product @relation(fields: [product_id], references: [id])
 
@@ -529,6 +531,10 @@ model ProductionProducts {
   productId      Int
   product        Product    @relation(fields: [productId], references: [id])
   code           String
+  batchNumber    String?
+  expiryDate     DateTime?
+  manufactureDate DateTime?
+  batchNotes     String?
   quantity       Float
   unit_cost      Float
   received       Float      @default(0)
@@ -597,6 +603,10 @@ model PurchaseItem {
   productId  Int?
   product    Product?  @relation(fields: [productId], references: [id])
   itemType   String   @default("material") // "material" or "product"
+  batchNumber    String?
+  expiryDate     DateTime?
+  manufactureDate DateTime?
+  batchNotes     String?
   quantity   Float
   unitPrice  Float
   totalPrice Float
@@ -680,6 +690,8 @@ model SaleItem {
   product    Product? @relation(fields: [productId], references: [id])
   materialId Int?
   material   Material? @relation(fields: [materialId], references: [id])
+  batchNumber String?
+  expiryDate DateTime?
   quantity   Float
   unitPrice  Float
   avg_cost   Float?
@@ -740,6 +752,7 @@ model ShopProduct {
   stock      Float @default(0)
   avg_cost  Float?
   scrap      Float? @default(0)
+  batchDetails Json?
   shop    Shop    @relation(fields: [shop_id], references: [id])
   product Product @relation(fields: [product_id], references: [id])
 
@@ -752,6 +765,7 @@ model ShopMaterial {
   stock       Float @default(0)
   avg_cost   Float?
   scrap      Float? @default(0)
+  batchDetails Json?
   shop     Shop     @relation(fields: [shop_id], references: [id])
   material Material @relation(fields: [material_id], references: [id])
 
@@ -785,6 +799,8 @@ model TransferItem {
   transfer   Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
   item       String
   itemId     Int
+  batchNumber String?
+  expiryDate DateTime?
   quantity   Float
   receivedQuantity   Float?
   avg_cost   Float?
@@ -796,6 +812,7 @@ model FactoryProduct {
   stock     Float @default(0)
   avg_cost Float?  
   scrap      Float? @default(0)
+  batchDetails Json?
   factory   Factory @relation(fields: [factoryId], references: [id])
   product   Product @relation(fields: [productId], references: [id])
 
@@ -808,6 +825,7 @@ model FactoryMaterial {
   stock      Float @default(0)
   avg_cost  Float? 
   scrap      Float? @default(0)
+  batchDetails Json?
   factory  Factory  @relation(fields: [factoryId], references: [id])
   material Material @relation(fields: [materialId], references: [id])
 
