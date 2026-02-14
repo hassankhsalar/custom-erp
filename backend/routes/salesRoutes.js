@@ -1,5 +1,6 @@
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
+const { buildScope, ensureIdScope } = require("../utils/associateScope");
 const prisma = new PrismaClient();
 const router = express.Router();
 const { createTransaction } = require('../utils/transactionHelper');
@@ -8,6 +9,9 @@ const { createTransaction } = require('../utils/transactionHelper');
 router.post("/", async (req, res) => {
   try {
     const { storeId, customer, paymentType, items, discount, bankAccountId } = req.body;
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "store", parseInt(storeId));
 
     let totalAmount = 0;
     items.forEach(i => {
@@ -104,6 +108,9 @@ router.post("/", async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error("Create Sale Error:", err);
+    if (err.status === 403) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
     res.status(500).json({ message: "Failed to create sale" });
   }
 });
@@ -111,7 +118,16 @@ router.post("/", async (req, res) => {
 // 📦 Get all sales
 router.get("/", async (req, res) => {
   try {
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (!scope.isAdmin && scope.stores.size === 0) {
+      const err = new Error("Forbidden");
+      err.status = 403;
+      throw err;
+    }
+    const where = scope.isAdmin ? {} : { storeId: { in: Array.from(scope.stores) } };
+
     const sales = await prisma.sale.findMany({
+      where,
       include: { 
         saleItems: {
           include: {
@@ -124,6 +140,9 @@ router.get("/", async (req, res) => {
     res.json(sales);
   } catch (err) {
     console.error("Get Sales Error:", err);
+    if (err.status === 403) {
+      return res.json([]);
+    }
     res.status(500).json({ message: "Failed to fetch sales" });
   }
 });
@@ -164,6 +183,9 @@ router.post("/return", async (req, res) => {
     if (!sale) {
       return res.status(404).json({ message: "Sale not found" });
     }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "store", sale.storeId);
 
     console.log("Found sale:", sale);
 
@@ -245,6 +267,9 @@ router.post("/return", async (req, res) => {
 
   } catch (err) {
     console.error("Sale Return Error Details:", err);
+    if (err.status === 403) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
     
     // Handle specific Prisma errors
     if (err.code === 'P2002') {

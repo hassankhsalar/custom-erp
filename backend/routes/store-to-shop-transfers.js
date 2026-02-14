@@ -2,6 +2,7 @@ const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const router = express.Router();
+const { buildScope, ensureIdScope } = require("../utils/associateScope");
 
 // Create transfer from store to shop
 router.post("/", async (req, res) => {
@@ -11,6 +12,10 @@ router.post("/", async (req, res) => {
     if (!storeId || !shopId || !items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "Store ID, Shop ID, and items are required" });
     }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "store", parseInt(storeId));
+    ensureIdScope(scope, "shop", parseInt(shopId));
 
     const result = await prisma.$transaction(async (tx) => {
       // Validate items and check stock (but don't deduct yet)
@@ -92,6 +97,9 @@ router.post("/", async (req, res) => {
 
   } catch (err) {
     console.error("Create transfer error:", err);
+    if (err.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     res.status(400).json({ error: err.message });
   }
 });
@@ -99,7 +107,21 @@ router.post("/", async (req, res) => {
 // Get all transfers
 router.get("/", async (req, res) => {
   try {
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (!scope.isAdmin && scope.stores.size === 0 && scope.shops.size === 0) {
+      return res.json([]);
+    }
+    const where = scope.isAdmin
+      ? {}
+      : {
+          OR: [
+            { storeId: { in: Array.from(scope.stores) } },
+            { shopId: { in: Array.from(scope.shops) } }
+          ]
+        };
+
     const transfers = await prisma.storeToShopTransfer.findMany({
+      where,
       include: {
         store: { select: { id: true, name: true } },
         shop: { select: { id: true, name: true } },
@@ -115,6 +137,9 @@ router.get("/", async (req, res) => {
 
     res.json(transfers);
   } catch (err) {
+    if (err.status === 403) {
+      return res.json([]);
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -138,6 +163,10 @@ router.patch("/:id/status", async (req, res) => {
       if (!transfer) {
         throw new Error("Transfer not found");
       }
+
+      const scope = await buildScope(prisma, req.user?.userId || 0);
+      ensureIdScope(scope, "store", transfer.storeId);
+      ensureIdScope(scope, "shop", transfer.shopId);
 
       // If changing to 'being_shipped', deduct stock from store
       if (status === 'being_shipped' && transfer.status === 'pending') {
@@ -276,6 +305,9 @@ router.patch("/:id/status", async (req, res) => {
 
   } catch (err) {
     console.error("Update transfer status error:", err);
+    if (err.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -283,7 +315,14 @@ router.patch("/:id/status", async (req, res) => {
 // Get shops for transfer
 router.get("/shops", async (req, res) => {
   try {
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (!scope.isAdmin && scope.shops.size === 0) {
+      return res.json([]);
+    }
+    const where = scope.isAdmin ? {} : { id: { in: Array.from(scope.shops) } };
+
     const shops = await prisma.shop.findMany({
+      where,
       select: {
         id: true,
         name: true,
@@ -294,6 +333,9 @@ router.get("/shops", async (req, res) => {
 
     res.json(shops);
   } catch (err) {
+    if (err.status === 403) {
+      return res.json([]);
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -319,8 +361,21 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ error: "Transfer not found" });
     }
 
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (!scope.isAdmin) {
+      const hasAccess =
+        scope.stores.has(transfer.storeId) ||
+        scope.shops.has(transfer.shopId);
+      if (!hasAccess) {
+        return res.json(null);
+      }
+    }
+
     res.json(transfer);
   } catch (err) {
+    if (err.status === 403) {
+      return res.json(null);
+    }
     res.status(500).json({ error: err.message });
   }
 });

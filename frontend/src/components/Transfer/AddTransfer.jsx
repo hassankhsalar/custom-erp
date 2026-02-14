@@ -95,7 +95,7 @@ const AddTransfer = () => {
 
   const handleSearch = async (e) => {
     setSearch(e.target.value);
-    if (e.target.value.length > 1) {
+    if (e.target.value.length > 1 && fromId) {
       try {
         const token = localStorage.getItem('token');
 
@@ -104,19 +104,15 @@ const AddTransfer = () => {
           setSearchResults([]);
           return;
         }
-        const resProducts = await axios.get(API_ROUTES.PRODUCTS_ALL, {
+        const res = await axios.get(`${API_ROUTES.TRANSFERS}/available-items`, {
           headers: { Authorization: `Bearer ${token}` },
-          params: { search: e.target.value },
+          params: {
+            from: fromType,
+            fromId,
+            search: e.target.value
+          },
         });
-        const productsWithTag = resProducts.data.products.map(p => ({ ...p, itemType: 'product' }));
-
-        const resMaterials = await axios.get(API_ROUTES.MATERIALS, {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { search: e.target.value },
-        })
-        const materialsWithTag = (resMaterials.data.materials || []).map(m => ({ ...m, itemType: 'material' }));
-
-      setSearchResults([...productsWithTag, ...materialsWithTag]);
+        setSearchResults(Array.isArray(res.data) ? res.data : []);
       
     } catch (error) {
       console.error('Error searching items:', error);
@@ -128,15 +124,59 @@ const AddTransfer = () => {
 };
 
   const handleAddItem = (item) => {
-    setItems([...items, { ...item, quantity: 1 }]);
+    const firstBatch = Array.isArray(item.batches) && item.batches.length > 0 ? item.batches[0] : null;
+    setItems([
+      ...items,
+      {
+        ...item,
+        quantity: 1,
+        batchNumber: firstBatch?.batchNumber || null,
+        expiryDate: firstBatch?.expiryDate || null,
+        batchAvailable: firstBatch?.quantity || item.stock || 0,
+      },
+    ]);
     setSearch('');
     setSearchResults([]);
   };
 
   const handleQuantityChange = (index, quantity) => {
-    const newItems = [...items];
-    newItems[index].quantity = parseInt(quantity) || 1;
-    setItems(newItems);
+    setItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        const nextQty = parseFloat(quantity) || 1;
+        return { ...item, quantity: Math.max(1, Math.min(nextQty, item.batchAvailable || nextQty)) };
+      })
+    );
+  };
+
+  const handleBatchChange = (index, value) => {
+    setItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        if (!value || value === '||') {
+          const fallbackAvailable = item.stock || item.batchAvailable || 1;
+          return {
+            ...item,
+            batchNumber: null,
+            expiryDate: null,
+            batchAvailable: fallbackAvailable,
+            quantity: Math.max(1, Math.min(item.quantity || 1, fallbackAvailable)),
+          };
+        }
+        const [batchNumber, expiryDateRaw] = String(value || '').split('||');
+        const selectedBatch = (item.batches || []).find(
+          (b) => b.batchNumber === batchNumber && String(b.expiryDate || '') === String(expiryDateRaw || '')
+        );
+        const available = selectedBatch?.quantity || 0;
+        return {
+          ...item,
+          batchNumber: selectedBatch?.batchNumber || '',
+          expiryDate: selectedBatch?.expiryDate || null,
+          batchAvailable: available,
+          quantity: Math.max(1, Math.min(item.quantity || 1, available || 1)),
+        };
+      })
+    );
   };
 
   const handleRemoveItem = (index) => {
@@ -146,6 +186,11 @@ const AddTransfer = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const invalidItem = items.find((item) => !item.quantity || parseFloat(item.quantity) <= 0);
+    if (invalidItem) {
+      alert(`Select a valid quantity for ${invalidItem.name}`);
+      return;
+    }
     const formData = new FormData();
     formData.append('from', fromType);
     formData.append('to', toType);
@@ -439,6 +484,7 @@ const AddTransfer = () => {
                     <tr className="bg-gradient-to-r from-gray-50/50 to-gray-100/50 backdrop-blur-sm">
                       <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">Item Name</th>
                       <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">Type</th>
+                      <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">Batch</th>
                       <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">Quantity</th>
                       <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">Action</th>
                     </tr>
@@ -471,12 +517,27 @@ const AddTransfer = () => {
                           </span>
                         </td>
                         <td className="p-4">
+                          <select
+                            value={`${item.batchNumber || ''}||${item.expiryDate || ''}`}
+                            onChange={(e) => handleBatchChange(index, e.target.value)}
+                            className="w-52 glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
+                          >
+                            <option value="||">No batch</option>
+                            {(item.batches || []).map((batch) => (
+                              <option key={`${batch.batchNumber}-${batch.expiryDate || 'none'}`} value={`${batch.batchNumber}||${batch.expiryDate || ''}`}>
+                                {`${batch.batchNumber} | Exp: ${batch.expiryDate || 'N/A'}`}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="p-4">
                           <input
                             type="number"
                             value={item.quantity}
                             onChange={(e) => handleQuantityChange(index, e.target.value)}
                             className="w-32 glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
                             min="1"
+                            max={item.batchAvailable || 1}
                           />
                         </td>
                         <td className="p-4">

@@ -2,6 +2,13 @@ const express = require("express");
 const { PrismaClient, Prisma } = require("@prisma/client");
 const prisma = new PrismaClient();
 const router = express.Router();
+const { buildScope, ensureHasAnyScope, ensureIdScope, buildLocationOrFilter, buildTransferOrFilter } = require("../utils/associateScope");
+
+const getScope = async (req) => {
+  const scope = await buildScope(prisma, req.user?.userId || 0);
+  ensureHasAnyScope(scope);
+  return scope;
+};
 
 const sum = (arr, key) => arr.reduce((s, r) => s + (parseFloat(r[key]) || 0), 0);
 
@@ -21,11 +28,37 @@ const parseDateRange = (startDate, endDate) => {
   return { start, end };
 };
 
+const buildSaleScopeSql = (scope) => {
+  if (scope.isAdmin) return Prisma.sql`1=1`;
+  const clauses = [];
+  const shopIds = Array.from(scope.shops || []);
+  const storeIds = Array.from(scope.stores || []);
+  if (shopIds.length) clauses.push(Prisma.sql`shopId IN (${Prisma.join(shopIds)})`);
+  if (storeIds.length) clauses.push(Prisma.sql`storeId IN (${Prisma.join(storeIds)})`);
+  if (!clauses.length) return Prisma.sql`1=0`;
+  return Prisma.sql`(${Prisma.join(clauses, Prisma.sql` OR `)})`;
+};
+
+const buildPurchaseScopeSql = (scope) => {
+  if (scope.isAdmin) return Prisma.sql`1=1`;
+  const clauses = [];
+  const shopIds = Array.from(scope.shops || []);
+  const storeIds = Array.from(scope.stores || []);
+  const factoryIds = Array.from(scope.factories || []);
+  if (shopIds.length) clauses.push(Prisma.sql`(destinationType = 'shop' AND destinationId IN (${Prisma.join(shopIds)}))`);
+  if (storeIds.length) clauses.push(Prisma.sql`(destinationType = 'store' AND destinationId IN (${Prisma.join(storeIds)}))`);
+  if (factoryIds.length) clauses.push(Prisma.sql`(destinationType = 'factory' AND destinationId IN (${Prisma.join(factoryIds)}))`);
+  if (!clauses.length) return Prisma.sql`1=0`;
+  return Prisma.sql`(${Prisma.join(clauses, Prisma.sql` OR `)})`;
+};
+
 router.get("/sales/per-date", async (req, res) => {
   try {
     const { month } = req.query; // YYYY-MM
     const range = parseMonthRange(month);
     if (!range) return res.status(400).json({ error: "month is required (YYYY-MM)" });
+    const scope = await getScope(req);
+    const scopeSql = buildSaleScopeSql(scope);
 
     const rows = await prisma.$queryRaw`
       SELECT DATE(createdAt) as date,
@@ -33,7 +66,7 @@ router.get("/sales/per-date", async (req, res) => {
              SUM(grandTotal) as totalAmount,
              SUM(COALESCE(total_cost, 0)) as totalCost
       FROM \`Sale\`
-      WHERE createdAt >= ${range.start} AND createdAt <= ${range.end}
+      WHERE createdAt >= ${range.start} AND createdAt <= ${range.end} AND ${scopeSql}
       GROUP BY DATE(createdAt)
       ORDER BY DATE(createdAt) ASC
     `;
@@ -47,6 +80,9 @@ router.get("/sales/per-date", async (req, res) => {
       }))
     });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ rows: [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -55,6 +91,8 @@ router.get("/sales/per-month", async (req, res) => {
   try {
     const year = parseInt(req.query.year, 10);
     if (!year) return res.status(400).json({ error: "year is required" });
+    const scope = await getScope(req);
+    const scopeSql = buildSaleScopeSql(scope);
 
     const rows = await prisma.$queryRaw`
       SELECT MONTH(createdAt) as month,
@@ -62,7 +100,7 @@ router.get("/sales/per-month", async (req, res) => {
              SUM(grandTotal) as totalAmount,
              SUM(COALESCE(total_cost, 0)) as totalCost
       FROM \`Sale\`
-      WHERE YEAR(createdAt) = ${year}
+      WHERE YEAR(createdAt) = ${year} AND ${scopeSql}
       GROUP BY MONTH(createdAt)
       ORDER BY MONTH(createdAt) ASC
     `;
@@ -77,6 +115,9 @@ router.get("/sales/per-month", async (req, res) => {
       }))
     });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ rows: [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -89,9 +130,12 @@ router.get("/sales/all", async (req, res) => {
     const offset = (page - 1) * limit;
     const { start, end } = parseDateRange(startDate, endDate);
 
+    const scope = await getScope(req);
+    const scopeSql = buildSaleScopeSql(scope);
+
     const whereClause = start && end
-      ? Prisma.sql`WHERE createdAt >= ${start} AND createdAt <= ${end}`
-      : Prisma.sql`WHERE 1=1`;
+      ? Prisma.sql`WHERE createdAt >= ${start} AND createdAt <= ${end} AND ${scopeSql}`
+      : Prisma.sql`WHERE ${scopeSql}`;
 
     const totalRows = await prisma.$queryRaw`
       SELECT COUNT(*) as count FROM (
@@ -130,6 +174,14 @@ router.get("/sales/all", async (req, res) => {
       }
     });
   } catch (err) {
+    if (err.status === 403) {
+      const page = parseInt(req.query.page || "1", 10);
+      const limit = parseInt(req.query.limit || "10", 10);
+      return res.json({
+        rows: [],
+        pagination: { page, limit, totalCount: 0, totalPages: 0 }
+      });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -139,6 +191,8 @@ router.get("/purchases/per-date", async (req, res) => {
     const { month } = req.query; // YYYY-MM
     const range = parseMonthRange(month);
     if (!range) return res.status(400).json({ error: "month is required (YYYY-MM)" });
+    const scope = await getScope(req);
+    const scopeSql = buildPurchaseScopeSql(scope);
 
     const rows = await prisma.$queryRaw`
       SELECT DATE(createdAt) as date,
@@ -146,7 +200,7 @@ router.get("/purchases/per-date", async (req, res) => {
              SUM(grandTotal) as totalAmount,
              SUM(COALESCE(shippingCost, 0)) as shippingCost
       FROM \`Purchase\`
-      WHERE createdAt >= ${range.start} AND createdAt <= ${range.end}
+      WHERE createdAt >= ${range.start} AND createdAt <= ${range.end} AND ${scopeSql}
       GROUP BY DATE(createdAt)
       ORDER BY DATE(createdAt) ASC
     `;
@@ -160,6 +214,9 @@ router.get("/purchases/per-date", async (req, res) => {
       }))
     });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ rows: [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -168,6 +225,8 @@ router.get("/purchases/per-month", async (req, res) => {
   try {
     const year = parseInt(req.query.year, 10);
     if (!year) return res.status(400).json({ error: "year is required" });
+    const scope = await getScope(req);
+    const scopeSql = buildPurchaseScopeSql(scope);
 
     const rows = await prisma.$queryRaw`
       SELECT MONTH(createdAt) as month,
@@ -175,7 +234,7 @@ router.get("/purchases/per-month", async (req, res) => {
              SUM(grandTotal) as totalAmount,
              SUM(COALESCE(shippingCost, 0)) as shippingCost
       FROM \`Purchase\`
-      WHERE YEAR(createdAt) = ${year}
+      WHERE YEAR(createdAt) = ${year} AND ${scopeSql}
       GROUP BY MONTH(createdAt)
       ORDER BY MONTH(createdAt) ASC
     `;
@@ -190,6 +249,9 @@ router.get("/purchases/per-month", async (req, res) => {
       }))
     });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ rows: [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -202,9 +264,12 @@ router.get("/purchases/all", async (req, res) => {
     const offset = (page - 1) * limit;
     const { start, end } = parseDateRange(startDate, endDate);
 
+    const scope = await getScope(req);
+    const scopeSql = buildPurchaseScopeSql(scope);
+
     const whereClause = start && end
-      ? Prisma.sql`WHERE createdAt >= ${start} AND createdAt <= ${end}`
-      : Prisma.sql`WHERE 1=1`;
+      ? Prisma.sql`WHERE createdAt >= ${start} AND createdAt <= ${end} AND ${scopeSql}`
+      : Prisma.sql`WHERE ${scopeSql}`;
 
     const totalRows = await prisma.$queryRaw`
       SELECT COUNT(*) as count FROM (
@@ -243,6 +308,14 @@ router.get("/purchases/all", async (req, res) => {
       }
     });
   } catch (err) {
+    if (err.status === 403) {
+      const page = parseInt(req.query.page || "1", 10);
+      const limit = parseInt(req.query.limit || "10", 10);
+      return res.json({
+        rows: [],
+        pagination: { page, limit, totalCount: 0, totalPages: 0 }
+      });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -288,31 +361,56 @@ router.get("/cash-bank", async (req, res) => {
 
 router.get("/sales", async (req, res) => {
   try {
-    const sales = await prisma.sale.findMany({ select: { grandTotal: true, createdAt: true } });
+    const scope = await getScope(req);
+    const sales = await prisma.sale.findMany({ 
+      where: buildSaleScopeWhere(scope),
+      select: { grandTotal: true, createdAt: true } 
+    });
     res.json({ totalSales: sum(sales, "grandTotal"), count: sales.length });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ totalSales: 0, count: 0 });
+    }
     res.status(500).json({ error: err.message });
   }
 });
 
 router.get("/purchases", async (req, res) => {
   try {
-    const purchases = await prisma.purchase.findMany({ select: { grandTotal: true, createdAt: true } });
+    const scope = await getScope(req);
+    const purchaseWhere = buildLocationOrFilter(scope);
+    const purchases = await prisma.purchase.findMany({ 
+      where: purchaseWhere,
+      select: { grandTotal: true, createdAt: true } 
+    });
     res.json({ totalPurchases: sum(purchases, "grandTotal"), count: purchases.length });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ totalPurchases: 0, count: 0 });
+    }
     res.status(500).json({ error: err.message });
   }
 });
 
 router.get("/production", async (req, res) => {
   try {
-    const productions = await prisma.production.findMany({ select: { status: true } });
+    const scope = await getScope(req);
+    if (!scope.isAdmin && scope.factories.size === 0) {
+      const err = new Error("Forbidden");
+      err.status = 403;
+      throw err;
+    }
+    const where = scope.isAdmin ? {} : { factoryId: { in: Array.from(scope.factories) } };
+    const productions = await prisma.production.findMany({ where, select: { status: true } });
     const byStatus = productions.reduce((acc, p) => {
       acc[p.status] = (acc[p.status] || 0) + 1;
       return acc;
     }, {});
     res.json({ count: productions.length, byStatus });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ count: 0, byStatus: {} });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -322,6 +420,8 @@ router.get("/production/summary", async (req, res) => {
   try {
     const factoryId = parseInt(req.query.factoryId);
     if (!factoryId) return res.status(400).json({ error: "factoryId is required" });
+    const scope = await getScope(req);
+    ensureIdScope(scope, "factory", factoryId);
     const { startDate, endDate } = req.query;
     const { start, end } = parseDateRange(startDate, endDate);
 
@@ -342,6 +442,9 @@ router.get("/production/summary", async (req, res) => {
 
     res.json({ count: productions.length, byStatus });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ count: 0, byStatus: {} });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -350,6 +453,8 @@ router.get("/production/products", async (req, res) => {
   try {
     const factoryId = parseInt(req.query.factoryId);
     if (!factoryId) return res.status(400).json({ error: "factoryId is required" });
+    const scope = await getScope(req);
+    ensureIdScope(scope, "factory", factoryId);
     const { startDate, endDate } = req.query;
     const { start, end } = parseDateRange(startDate, endDate);
     const page = parseInt(req.query.page || "1", 10);
@@ -430,6 +535,14 @@ router.get("/production/products", async (req, res) => {
       }
     });
   } catch (err) {
+    if (err.status === 403) {
+      const page = parseInt(req.query.page || "1", 10);
+      const limit = parseInt(req.query.limit || "10", 10);
+      return res.json({
+        rows: [],
+        pagination: { page, limit, totalCount: 0, totalPages: 0 }
+      });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -439,6 +552,8 @@ router.get("/wastage/materials", async (req, res) => {
   try {
     const factoryId = parseInt(req.query.factoryId);
     if (!factoryId) return res.status(400).json({ error: "factoryId is required" });
+    const scope = await getScope(req);
+    ensureIdScope(scope, "factory", factoryId);
     const { startDate, endDate } = req.query;
     const { start, end } = parseDateRange(startDate, endDate);
     const page = parseInt(req.query.page || "1", 10);
@@ -503,6 +618,14 @@ router.get("/wastage/materials", async (req, res) => {
       }
     });
   } catch (err) {
+    if (err.status === 403) {
+      const page = parseInt(req.query.page || "1", 10);
+      const limit = parseInt(req.query.limit || "10", 10);
+      return res.json({
+        rows: [],
+        pagination: { page, limit, totalCount: 0, totalPages: 0 }
+      });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -511,6 +634,8 @@ router.get("/wastage/products", async (req, res) => {
   try {
     const factoryId = parseInt(req.query.factoryId);
     if (!factoryId) return res.status(400).json({ error: "factoryId is required" });
+    const scope = await getScope(req);
+    ensureIdScope(scope, "factory", factoryId);
     const { startDate, endDate } = req.query;
     const { start, end } = parseDateRange(startDate, endDate);
     const page = parseInt(req.query.page || "1", 10);
@@ -574,6 +699,14 @@ router.get("/wastage/products", async (req, res) => {
       }
     });
   } catch (err) {
+    if (err.status === 403) {
+      const page = parseInt(req.query.page || "1", 10);
+      const limit = parseInt(req.query.limit || "10", 10);
+      return res.json({
+        rows: [],
+        pagination: { page, limit, totalCount: 0, totalPages: 0 }
+      });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -585,8 +718,15 @@ router.get("/stock/products", async (req, res) => {
     const page = parseInt(req.query.page || "1", 10);
     const limit = parseInt(req.query.limit || "10", 10);
     const offset = (page - 1) * limit;
+    const scope = await getScope(req);
 
     if (!placeType) {
+      if (!scope.isAdmin) {
+        return res.json({
+          rows: [],
+          pagination: { page, limit, totalCount: 0, totalPages: 0 }
+        });
+      }
       const total = await prisma.product.count();
       const rows = await prisma.product.findMany({
         skip: offset,
@@ -600,7 +740,19 @@ router.get("/stock/products", async (req, res) => {
     }
 
     if (placeType === "store") {
-      const where = placeId ? { store_id: parseInt(placeId) } : {};
+      const storeId = placeId ? parseInt(placeId) : null;
+      if (!scope.isAdmin) {
+        if (storeId) ensureIdScope(scope, "store", storeId);
+        if (!storeId && scope.stores.size === 0) {
+          return res.json({
+            rows: [],
+            pagination: { page, limit, totalCount: 0, totalPages: 0 }
+          });
+        }
+      }
+      const where = storeId
+        ? { store_id: storeId }
+        : scope.isAdmin ? {} : { store_id: { in: Array.from(scope.stores) } };
       const total = await prisma.storeProduct.count({ where });
       const rows = await prisma.storeProduct.findMany({
         where,
@@ -624,7 +776,19 @@ router.get("/stock/products", async (req, res) => {
     }
 
     if (placeType === "shop") {
-      const where = placeId ? { shop_id: parseInt(placeId) } : {};
+      const shopId = placeId ? parseInt(placeId) : null;
+      if (!scope.isAdmin) {
+        if (shopId) ensureIdScope(scope, "shop", shopId);
+        if (!shopId && scope.shops.size === 0) {
+          return res.json({
+            rows: [],
+            pagination: { page, limit, totalCount: 0, totalPages: 0 }
+          });
+        }
+      }
+      const where = shopId
+        ? { shop_id: shopId }
+        : scope.isAdmin ? {} : { shop_id: { in: Array.from(scope.shops) } };
       const total = await prisma.shopProduct.count({ where });
       const rows = await prisma.shopProduct.findMany({
         where,
@@ -648,7 +812,19 @@ router.get("/stock/products", async (req, res) => {
     }
 
     if (placeType === "factory") {
-      const where = placeId ? { factoryId: parseInt(placeId) } : {};
+      const factoryId = placeId ? parseInt(placeId) : null;
+      if (!scope.isAdmin) {
+        if (factoryId) ensureIdScope(scope, "factory", factoryId);
+        if (!factoryId && scope.factories.size === 0) {
+          return res.json({
+            rows: [],
+            pagination: { page, limit, totalCount: 0, totalPages: 0 }
+          });
+        }
+      }
+      const where = factoryId
+        ? { factoryId }
+        : scope.isAdmin ? {} : { factoryId: { in: Array.from(scope.factories) } };
       const total = await prisma.factoryProduct.count({ where });
       const rows = await prisma.factoryProduct.findMany({
         where,
@@ -673,6 +849,9 @@ router.get("/stock/products", async (req, res) => {
 
     res.status(400).json({ error: "Invalid placeType" });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ count: 0, byStatus: {} });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -683,8 +862,15 @@ router.get("/stock/materials", async (req, res) => {
     const page = parseInt(req.query.page || "1", 10);
     const limit = parseInt(req.query.limit || "10", 10);
     const offset = (page - 1) * limit;
+    const scope = await getScope(req);
 
     if (!placeType) {
+      if (!scope.isAdmin) {
+        return res.json({
+          rows: [],
+          pagination: { page, limit, totalCount: 0, totalPages: 0 }
+        });
+      }
       const total = await prisma.material.count();
       const rows = await prisma.material.findMany({
         skip: offset,
@@ -698,7 +884,19 @@ router.get("/stock/materials", async (req, res) => {
     }
 
     if (placeType === "store") {
-      const where = placeId ? { store_id: parseInt(placeId) } : {};
+      const storeId = placeId ? parseInt(placeId) : null;
+      if (!scope.isAdmin) {
+        if (storeId) ensureIdScope(scope, "store", storeId);
+        if (!storeId && scope.stores.size === 0) {
+          return res.json({
+            rows: [],
+            pagination: { page, limit, totalCount: 0, totalPages: 0 }
+          });
+        }
+      }
+      const where = storeId
+        ? { store_id: storeId }
+        : scope.isAdmin ? {} : { store_id: { in: Array.from(scope.stores) } };
       const total = await prisma.storeMaterial.count({ where });
       const rows = await prisma.storeMaterial.findMany({
         where,
@@ -722,7 +920,19 @@ router.get("/stock/materials", async (req, res) => {
     }
 
     if (placeType === "shop") {
-      const where = placeId ? { shop_id: parseInt(placeId) } : {};
+      const shopId = placeId ? parseInt(placeId) : null;
+      if (!scope.isAdmin) {
+        if (shopId) ensureIdScope(scope, "shop", shopId);
+        if (!shopId && scope.shops.size === 0) {
+          return res.json({
+            rows: [],
+            pagination: { page, limit, totalCount: 0, totalPages: 0 }
+          });
+        }
+      }
+      const where = shopId
+        ? { shop_id: shopId }
+        : scope.isAdmin ? {} : { shop_id: { in: Array.from(scope.shops) } };
       const total = await prisma.shopMaterial.count({ where });
       const rows = await prisma.shopMaterial.findMany({
         where,
@@ -746,7 +956,19 @@ router.get("/stock/materials", async (req, res) => {
     }
 
     if (placeType === "factory") {
-      const where = placeId ? { factoryId: parseInt(placeId) } : {};
+      const factoryId = placeId ? parseInt(placeId) : null;
+      if (!scope.isAdmin) {
+        if (factoryId) ensureIdScope(scope, "factory", factoryId);
+        if (!factoryId && scope.factories.size === 0) {
+          return res.json({
+            rows: [],
+            pagination: { page, limit, totalCount: 0, totalPages: 0 }
+          });
+        }
+      }
+      const where = factoryId
+        ? { factoryId }
+        : scope.isAdmin ? {} : { factoryId: { in: Array.from(scope.factories) } };
       const total = await prisma.factoryMaterial.count({ where });
       const rows = await prisma.factoryMaterial.findMany({
         where,
@@ -771,6 +993,9 @@ router.get("/stock/materials", async (req, res) => {
 
     res.status(400).json({ error: "Invalid placeType" });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ totalSales: 0, totalPurchases: 0, totalExpenses: 0, profit: 0 });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -803,21 +1028,27 @@ router.get("/stock", async (req, res) => {
 
 router.get("/transfer", async (req, res) => {
   try {
-    const transfers = await prisma.transfer.findMany({ select: { status: true } });
+    const scope = await getScope(req);
+    const transferWhere = buildTransferOrFilter(scope);
+    const transfers = await prisma.transfer.findMany({ where: transferWhere, select: { status: true } });
     const byStatus = transfers.reduce((acc, t) => {
       acc[t.status] = (acc[t.status] || 0) + 1;
       return acc;
     }, {});
     res.json({ count: transfers.length, byStatus });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ totalSales: 0, totalPurchases: 0 });
+    }
     res.status(500).json({ error: err.message });
   }
 });
 
 router.get("/profit-loss", async (req, res) => {
   try {
-    const sales = await prisma.sale.findMany({ select: { grandTotal: true } });
-    const purchases = await prisma.purchase.findMany({ select: { grandTotal: true } });
+    const scope = await getScope(req);
+    const sales = await prisma.sale.findMany({ where: buildSaleScopeWhere(scope), select: { grandTotal: true } });
+    const purchases = await prisma.purchase.findMany({ where: buildLocationOrFilter(scope), select: { grandTotal: true } });
     const expenses = await prisma.expense.findMany({ select: { amount: true } }).catch(() => []);
     const totalSales = sum(sales, "grandTotal");
     const totalPurchases = sum(purchases, "grandTotal");
@@ -825,23 +1056,31 @@ router.get("/profit-loss", async (req, res) => {
     const profit = totalSales - totalPurchases - totalExpenses;
     res.json({ totalSales, totalPurchases, totalExpenses, profit });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ rows: [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });
 
 router.get("/purchase-sales", async (req, res) => {
   try {
-    const sales = await prisma.sale.findMany({ select: { grandTotal: true } });
-    const purchases = await prisma.purchase.findMany({ select: { grandTotal: true } });
+    const scope = await getScope(req);
+    const sales = await prisma.sale.findMany({ where: buildSaleScopeWhere(scope), select: { grandTotal: true } });
+    const purchases = await prisma.purchase.findMany({ where: buildLocationOrFilter(scope), select: { grandTotal: true } });
     res.json({ totalSales: sum(sales, "grandTotal"), totalPurchases: sum(purchases, "grandTotal") });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ rows: [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });
 
 router.get("/customer", async (req, res) => {
   try {
-    const sales = await prisma.sale.findMany({ select: { customer: true, grandTotal: true } });
+    const scope = await getScope(req);
+    const sales = await prisma.sale.findMany({ where: buildSaleScopeWhere(scope), select: { customer: true, grandTotal: true } });
     const byCustomer = {};
     sales.forEach(s => {
       const key = s.customer || "Walk-in";
@@ -850,13 +1089,18 @@ router.get("/customer", async (req, res) => {
     const rows = Object.entries(byCustomer).map(([customer, total]) => ({ customer, total }));
     res.json({ rows });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ rows: [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });
 
 router.get("/supplier", async (req, res) => {
   try {
+    const scope = await getScope(req);
     const purchases = await prisma.purchase.findMany({
+      where: buildLocationOrFilter(scope),
       select: { grandTotal: true, supplier: { select: { name: true } } }
     });
     const bySupplier = {};
@@ -867,6 +1111,9 @@ router.get("/supplier", async (req, res) => {
     const rows = Object.entries(bySupplier).map(([supplier, total]) => ({ supplier, total }));
     res.json({ rows });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ rows: [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -874,7 +1121,9 @@ router.get("/supplier", async (req, res) => {
 router.get("/best-selling", async (req, res) => {
   try {
     const sort = (req.query.sort || "best").toLowerCase();
+    const scope = await getScope(req);
     const items = await prisma.saleItem.findMany({
+      where: { sale: buildSaleScopeWhere(scope) },
       include: { product: true, material: true }
     });
     const byItem = {};
@@ -888,14 +1137,18 @@ router.get("/best-selling", async (req, res) => {
     const rows = Object.values(byItem).sort((a, b) => sort === "worst" ? a.quantity - b.quantity : b.quantity - a.quantity);
     res.json({ rows });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ rows: [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });
 
 router.get("/profit-calendar", async (req, res) => {
   try {
-    const sales = await prisma.sale.findMany({ select: { grandTotal: true, createdAt: true } });
-    const purchases = await prisma.purchase.findMany({ select: { grandTotal: true, createdAt: true } });
+    const scope = await getScope(req);
+    const sales = await prisma.sale.findMany({ where: buildSaleScopeWhere(scope), select: { grandTotal: true, createdAt: true } });
+    const purchases = await prisma.purchase.findMany({ where: buildLocationOrFilter(scope), select: { grandTotal: true, createdAt: true } });
     const expenses = await prisma.expense.findMany({ select: { amount: true, date: true } }).catch(() => []);
 
     const byMonth = {};
@@ -920,6 +1173,9 @@ router.get("/profit-calendar", async (req, res) => {
 
     res.json({ rows });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ rows: [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });

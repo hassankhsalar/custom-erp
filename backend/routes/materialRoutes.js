@@ -19,22 +19,62 @@ router.post('/', async (req, res) => {
 
 // Get all materials
 router.get('/', async (req, res) => {
-  const { search } = req.query;
-  const where = {};
-
-  if (search) {
-    where.name = {
-      contains: search,
-    };
-  }
-
   try {
-    const materials = await prisma.material.findMany({ where });
-    res.json({ materials });
+    const { search, page = 1, limit = 10 } = req.query;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const where = {};
+
+    if (search) {
+      where.OR = [
+        {
+          name: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          brand: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          sku: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+      ];
+    }
+
+    // Get total count for pagination
+    const totalCount = await prisma.material.count({ where });
+
+    // Get materials with pagination
+    const materials = await prisma.material.findMany({
+      where,
+      skip,
+      take: limitNum,
+      orderBy: {
+        name: 'asc',
+      },
+    });
+
+    res.json({
+      materials,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limitNum),
+      currentPage: pageNum,
+    });
   } catch (error) {
+    console.error('Error fetching materials:', error);
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // Get a single material by ID
 router.get('/:id', async (req, res) => {

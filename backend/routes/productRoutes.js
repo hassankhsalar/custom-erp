@@ -4,6 +4,7 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 const router = express.Router();
+const { buildScope, ensureIdScope } = require("../utils/associateScope");
 
 // Create a new product with materials
 router.post('/', async (req, res) => {
@@ -170,6 +171,9 @@ router.get('/store/:storeId', async (req, res) => {
   try {
     const storeId = parseInt(req.params.storeId);
 
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "store", storeId);
+
     const products = await prisma.product.findMany({
       include: {
         storeProducts: {
@@ -192,6 +196,9 @@ router.get('/store/:storeId', async (req, res) => {
     res.json(formatted);
   } catch (error) {
     console.error("❌ Error fetching products for store:", error);
+    if (error.status === 403) {
+      return res.json([]);
+    }
     res.status(500).json({ error: error.message });
   }
 });

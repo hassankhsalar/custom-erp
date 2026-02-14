@@ -78,7 +78,7 @@ async function main() {
 
   const defaultPermission = await prisma.permission.create({
     data: {
-      name: 'default',
+      name: 'admin',
       permissions: [
         'material_create', 'material_read', 'material_edit', 'material_delete',
         'product_read', 'product_create', 'product_edit', 'product_delete',

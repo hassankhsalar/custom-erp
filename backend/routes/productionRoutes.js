@@ -1,6 +1,8 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const jwt = require('jsonwebtoken');
+const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associateScope');
+const { mergeIncomingBatch, parseDateOnly } = require('../utils/batchDetails');
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -36,6 +38,8 @@ router.post('/', authenticateToken, async (req, res) => {
   const { start_date, estimated_end_date, factoryId, status, products, materials } = req.body;
 //, attachments removed
   try {
+    const scope = await buildScope(prisma, req.user.userId);
+    ensureIdScope(scope, 'factory', parseInt(factoryId));
     const reference = await generateReference();
 
     const result = await prisma.$transaction(async (prisma) => {
@@ -84,6 +88,10 @@ router.post('/', authenticateToken, async (req, res) => {
             create: products.map(p => ({
               productId: parseInt(p.productId),
               code: p.code,
+              batchNumber: p.batchNumber ? String(p.batchNumber).trim() : null,
+              expiryDate: p.expiryDate ? new Date(p.expiryDate) : null,
+              manufactureDate: p.manufactureDate ? new Date(p.manufactureDate) : null,
+              batchNotes: p.batchNotes || null,
               quantity: parseFloat(p.quantity),
               unit_cost: parseFloat(p.unit_cost),
             })),
@@ -131,7 +139,12 @@ router.get('/', authenticateToken, async (req, res) => {
   const skip = (page - 1) * limit;
 
   try {
+    const scope = await buildScope(prisma, req.user.userId);
+    if (!scope.isAdmin) {
+      ensureTypeScope(scope, 'factory');
+    }
     const productions = await prisma.production.findMany({
+      ...(scope?.isAdmin ? {} : { where: { factoryId: { in: Array.from(scope.factories) } } }),
       skip,
       take: limit,
       include: {
@@ -152,7 +165,9 @@ router.get('/', authenticateToken, async (req, res) => {
       },
     });
 
-    const totalProductions = await prisma.production.count();
+    const totalProductions = await prisma.production.count({
+      ...(scope?.isAdmin ? {} : { where: { factoryId: { in: Array.from(scope.factories) } } })
+    });
 
     res.json({
       productions,
@@ -191,6 +206,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
     if (!production) {
       return res.status(404).json({ error: 'Production not found' });
     }
+    const scope = await buildScope(prisma, req.user.userId);
+    ensureIdScope(scope, 'factory', production.factoryId);
     res.json(production);
   } catch (error) {
     console.error('Error fetching production:', error);
@@ -204,12 +221,17 @@ router.put('/:id', authenticateToken, async (req, res) => {
   const { start_date, estimated_end_date, factoryId, status, products, materials } = req.body;
 //, attachments
   try {
+    const scope = await buildScope(prisma, req.user.userId);
+    ensureIdScope(scope, 'factory', parseInt(factoryId));
     const result = await prisma.$transaction(async (prisma) => {
       // Get the old production to find the old materials
       const oldProduction = await prisma.production.findUnique({
         where: { id: parseInt(id) },
         include: { productionMaterials: true },
       });
+      if (oldProduction) {
+        ensureIdScope(scope, 'factory', oldProduction.factoryId);
+      }
 
       // Restore stock for old materials
       if (oldProduction && oldProduction.productionMaterials) {
@@ -321,6 +343,15 @@ router.put('/:id', authenticateToken, async (req, res) => {
 router.delete('/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
+    const production = await prisma.production.findUnique({
+      where: { id: parseInt(id) },
+      select: { factoryId: true }
+    });
+    if (!production) {
+      return res.status(404).json({ error: 'Production not found' });
+    }
+    const scope = await buildScope(prisma, req.user.userId);
+    ensureIdScope(scope, 'factory', production.factoryId);
     // Delete associated production products first
     await prisma.productionProducts.deleteMany({
       where: { productionId: parseInt(id) },
@@ -341,6 +372,15 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
   const { status, products, materials } = req.body;
 
   try {
+    const production = await prisma.production.findUnique({
+      where: { id: parseInt(id) },
+      select: { factoryId: true }
+    });
+    if (!production) {
+      return res.status(404).json({ error: 'Production not found' });
+    }
+    const scope = await buildScope(prisma, req.user.userId);
+    ensureIdScope(scope, 'factory', production.factoryId);
     const result = await prisma.$transaction(async (prisma) => {
       // Update production status
       const updatedProduction = await prisma.production.update({
@@ -370,9 +410,6 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
           ? totalMaterialCost / totalFineProducts
           : 0;
 
-        const production = await prisma.production.findUnique({
-          where: { id: parseInt(id) },
-        });
         const factoryId = production.factoryId;
         
         // Update products with received and scrap quantities
@@ -385,6 +422,10 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
             data: {
               received: parseFloat(p.received),
               scrap: parseFloat(p.scrap),
+              batchNumber: p.batchNumber ? String(p.batchNumber).trim() : undefined,
+              expiryDate: p.expiryDate ? new Date(p.expiryDate) : undefined,
+              manufactureDate: p.manufactureDate ? new Date(p.manufactureDate) : undefined,
+              batchNotes: p.batchNotes !== undefined ? p.batchNotes : undefined,
               unit_cost: finalUnitCost,
             },
           });
@@ -435,6 +476,12 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
                 },
                 scrap: scrapQuantity > 0 ? scrapQuantity : factoryProduct.scrap, // Update scrap field
                 avg_cost: newAvgCost,
+                batchDetails: mergeIncomingBatch(factoryProduct.batchDetails, {
+                  batchNumber: p.batchNumber || p.code,
+                  expiryDate: parseDateOnly(p.expiryDate),
+                  quantity: receivedQuantity,
+                  unitCost: baseUnitCost,
+                }),
               },
             });
           } else {
@@ -445,6 +492,12 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
                 stock: receivedQuantity,
                 scrap: scrapQuantity,
                 avg_cost: baseUnitCost,
+                batchDetails: mergeIncomingBatch(null, {
+                  batchNumber: p.batchNumber || p.code,
+                  expiryDate: parseDateOnly(p.expiryDate),
+                  quantity: receivedQuantity,
+                  unitCost: baseUnitCost,
+                }),
               }
             });
           }

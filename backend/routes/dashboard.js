@@ -1,5 +1,6 @@
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
+const { buildScope, ensureHasAnyScope, buildLocationOrFilter, buildTransferOrFilter } = require("../utils/associateScope");
 const prisma = new PrismaClient();
 const router = express.Router();
 
@@ -19,6 +20,14 @@ router.get("/", async (req, res) => {
     const startDate = dateRanges[range];
     const previousStartDate = new Date(startDate.getTime() - (startDate.getTime() - new Date().getTime()));
 
+    const userId = req.user?.userId;
+    const scope = userId ? await buildScope(prisma, userId) : { isAdmin: true, shops: new Set(), stores: new Set(), factories: new Set() };
+    ensureHasAnyScope(scope);
+
+    const saleScopeWhere = buildSaleScopeWhere(scope);
+    const purchaseScopeWhere = buildLocationOrFilter(scope);
+    const transferScopeWhere = buildTransferOrFilter(scope);
+
     // Fetch all data in parallel
     const [
       currentSales,
@@ -34,7 +43,7 @@ router.get("/", async (req, res) => {
     ] = await Promise.all([
       // Current period sales count
       prisma.sale.count({
-        where: { createdAt: { gte: startDate } }
+        where: { ...saleScopeWhere, createdAt: { gte: startDate } }
       }),
       // Previous period sales count
       prisma.sale.count({
@@ -42,12 +51,13 @@ router.get("/", async (req, res) => {
           createdAt: { 
             gte: previousStartDate,
             lt: startDate
-          } 
+          },
+          ...saleScopeWhere
         }
       }),
       // Current period revenue
       prisma.sale.aggregate({
-        where: { createdAt: { gte: startDate } },
+        where: { ...saleScopeWhere, createdAt: { gte: startDate } },
         _sum: { grandTotal: true }
       }),
       // Previous period revenue
@@ -56,22 +66,23 @@ router.get("/", async (req, res) => {
           createdAt: { 
             gte: previousStartDate,
             lt: startDate
-          } 
+          },
+          ...saleScopeWhere
         },
         _sum: { grandTotal: true }
       }),
       // Inventory data
-      getInventoryData(),
+      getInventoryData(scope),
       // Transfer data
-      getTransferData(),
+      getTransferData(transferScopeWhere),
       // Top products
-      getTopProducts(startDate),
+      getTopProducts(startDate, saleScopeWhere),
       // Low stock items
-      getLowStockItems(),
+      getLowStockItems(scope),
       // Recent activities
-      getRecentActivities(),
+      getRecentActivities(saleScopeWhere, purchaseScopeWhere, transferScopeWhere),
       // Shop performance (since sales are only in shops)
-      getShopPerformance(startDate)
+      getShopPerformance(startDate, scope)
     ]);
 
     // Calculate KPIs with trends
@@ -107,7 +118,7 @@ router.get("/", async (req, res) => {
         }
       },
       sales: {
-        monthlyRevenue: await getMonthlyRevenue(),
+        monthlyRevenue: await getMonthlyRevenue(saleScopeWhere),
         topProducts
       },
       inventory: {
@@ -126,29 +137,71 @@ router.get("/", async (req, res) => {
     res.json(dashboardData);
   } catch (err) {
     console.error("Dashboard error:", err);
+    if (err.status === 403) {
+      return res.json({
+        kpis: {
+          revenue: { value: "$0", change: "0%", trend: "up" },
+          sales: { value: "0", change: "0%", trend: "up" },
+          inventory: { value: "$0", change: "0%", trend: "up" },
+          transfers: { value: "0", change: "0", trend: "down" }
+        },
+        sales: { monthlyRevenue: [], topProducts: [] },
+        inventory: { byCategory: [], lowStock: [] },
+        transfers: { statusOverview: {} },
+        recentActivity: [],
+        performance: { shops: [] }
+      });
+    }
     res.status(500).json({ error: err.message });
   }
 });
 
+function buildSaleScopeWhere(scope) {
+  if (!scope || scope.isAdmin) return {};
+  const ors = [];
+  if (scope.shops.size > 0) ors.push({ shopId: { in: Array.from(scope.shops) } });
+  if (scope.stores.size > 0) ors.push({ storeId: { in: Array.from(scope.stores) } });
+  if (ors.length === 0) {
+    return { id: -1 };
+  }
+  return { OR: ors };
+}
+
+function buildIdWhere(scope, field, set) {
+  if (!scope || scope.isAdmin) return {};
+  if (!set || set.size === 0) return { [field]: -1 };
+  return { [field]: { in: Array.from(set) } };
+}
+
 // Helper functions
-async function getInventoryData() {
+async function getInventoryData(scope) {
+  const storeWhere = buildIdWhere(scope, "store_id", scope?.stores);
+  const shopWhere = buildIdWhere(scope, "shop_id", scope?.shops);
+  const factoryWhere = buildIdWhere(scope, "factoryId", scope?.factories);
+
   const [storeProducts, storeMaterials, shopProducts, shopMaterials, factoryProducts, factoryMaterials] = await Promise.all([
     prisma.storeProduct.findMany({
+      where: storeWhere,
       include: { product: true }
     }),
     prisma.storeMaterial.findMany({
+      where: storeWhere,
       include: { material: true }
     }),
     prisma.shopProduct.findMany({
+      where: shopWhere,
       include: { product: true }
     }),
     prisma.shopMaterial.findMany({
+      where: shopWhere,
       include: { material: true }
     }),
     prisma.FactoryProduct.findMany({
+      where: factoryWhere,
       include: { product: true }
     }),
     prisma.FactoryMaterial.findMany({
+      where: factoryWhere,
       include: { material: true }
     })
   ]);
@@ -171,9 +224,10 @@ async function getInventoryData() {
   return { totalValue, byCategory };
 }
 
-async function getTransferData() {
+async function getTransferData(transferWhere) {
   const transfers = await prisma.transfer.groupBy({
     by: ['status'],
+    where: transferWhere,
     _count: { id: true }
   });
 
@@ -196,11 +250,11 @@ async function getTransferData() {
   return { statusOverview, pendingCount };
 }
 
-async function getTopProducts(startDate) {
+async function getTopProducts(startDate, saleScopeWhere) {
   try {
     // First get sales in the date range
     const salesInRange = await prisma.sale.findMany({
-      where: { createdAt: { gte: startDate } },
+      where: { ...saleScopeWhere, createdAt: { gte: startDate } },
       select: { id: true }
     });
     
@@ -254,24 +308,27 @@ async function getTopProducts(startDate) {
   }
 }
 
-async function getLowStockItems() {
+async function getLowStockItems(scope) {
+  const storeWhere = buildIdWhere(scope, "store_id", scope?.stores);
+  const shopWhere = buildIdWhere(scope, "shop_id", scope?.shops);
+
   const [lowStoreProducts, lowStoreMaterials, lowShopProducts, lowShopMaterials] = await Promise.all([
     // Low stock in stores
     prisma.storeProduct.findMany({
-      where: { stock: { lt: 10 } },
+      where: { ...storeWhere, stock: { lt: 10 } },
       include: { product: true, store: true }
     }),
     prisma.storeMaterial.findMany({
-      where: { stock: { lt: 50 } },
+      where: { ...storeWhere, stock: { lt: 50 } },
       include: { material: true, store: true }
     }),
     // Low stock in shops
     prisma.shopProduct.findMany({
-      where: { stock: { lt: 5 } },
+      where: { ...shopWhere, stock: { lt: 5 } },
       include: { product: true, shop: true }
     }),
     prisma.shopMaterial.findMany({
-      where: { stock: { lt: 25 } },
+      where: { ...shopWhere, stock: { lt: 25 } },
       include: { material: true, shop: true }
     })
   ]);
@@ -314,9 +371,10 @@ async function getLowStockItems() {
   return lowStockItems.slice(0, 5);
 }
 
-async function getRecentActivities() {
+async function getRecentActivities(saleScopeWhere, purchaseScopeWhere, transferScopeWhere) {
   const [recentSales, recentTransfers, recentPurchases] = await Promise.all([
     prisma.sale.findMany({
+      where: saleScopeWhere,
       take: 5,
       orderBy: { createdAt: 'desc' },
       include: { 
@@ -329,11 +387,13 @@ async function getRecentActivities() {
       }
     }),
     prisma.transfer.findMany({
+      where: transferScopeWhere,
       take: 5,
       orderBy: { createdAt: 'desc' }
     }),
 
     prisma.purchase.findMany({
+      where: purchaseScopeWhere,
       take: 3,
       orderBy: { createdAt: 'desc' },
       include: { supplier: true }
@@ -367,14 +427,21 @@ async function getRecentActivities() {
   return activities.sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 5);
 }
 
-async function getShopPerformance(startDate) {
+async function getShopPerformance(startDate, scope) {
   try {
+    if (!scope || scope.isAdmin) {
+      // continue
+    } else if (scope.shops.size === 0) {
+      return [];
+    }
+
+    const shopWhere = !scope || scope.isAdmin
+      ? { shopId: { not: null }, createdAt: { gte: startDate } }
+      : { shopId: { in: Array.from(scope.shops) }, createdAt: { gte: startDate } };
+
     const shopSales = await prisma.sale.groupBy({
       by: ['shopId'],
-      where: { 
-        shopId: { not: null },
-        createdAt: { gte: startDate }
-      },
+      where: shopWhere,
       _sum: { grandTotal: true },
       _count: { id: true }
     });
@@ -401,7 +468,7 @@ async function getShopPerformance(startDate) {
   }
 }
 
-async function getMonthlyRevenue() {
+async function getMonthlyRevenue(saleScopeWhere) {
   try {
     const now = new Date();
     const startMonth = new Date(now.getFullYear(), now.getMonth() - 5, 1);
@@ -409,6 +476,7 @@ async function getMonthlyRevenue() {
 
     const sales = await prisma.sale.findMany({
       where: {
+        ...saleScopeWhere,
         createdAt: { gte: startMonth, lte: endDate }
       },
       select: {

@@ -18,6 +18,7 @@ import POS from "./components/Sale/POS";
 import AllSales from "./components/Sale/AllSales";
 import CreateSale from "./components/Sale/CreateSale";
 import SaleReturn from "./components/Sale/SaleReturn";
+import WarrantyList from "./components/Sale/WarrantyList";
 import AllMaterials from "./components/Materials/AllMaterials";
 import AddMaterial from "./components/Materials/AddMaterial";
 import ScrapeMaterials from "./components/Materials/ScrapeMaterials";
@@ -59,17 +60,8 @@ import AllCustomers from "./components/Customer/AllCustomers";
 import AddCustomer from "./components/Customer/AddCustomer";
 import StoreDetails from "./components/Stores/StoreDetails";
 import StoreToShopTransfer from "./components/Stores/StoreToShopTransfer";
-import TransferManagement from "./components/Stores/TransferManagement";
+import TransferList from "./components/Transfer/TransferList";
 import AddTransfer from "./components/Transfer/AddTransfer";
-import StoreToStore from "./components/Transfer/StoreToStore";
-import StoreToFactory from "./components/Transfer/StoreToFactory";
-import StoreToShop from "./components/Transfer/StoreToShop";
-import FactoryToFactory from "./components/Transfer/FactoryToFactory";
-import FactoryToStore from "./components/Transfer/FactoryToStore";
-import FactoryToShop from "./components/Transfer/FactoryToShop";
-import ShopToShop from "./components/Transfer/ShopToShop";
-import ShopToStore from "./components/Transfer/ShopToStore";
-import ShopToFactory from "./components/Transfer/ShopToFactory";
 import Navbar from "./components/Navbar";
 import Notifications from "./components/Notifications";
 import UserProfile from "./components/UserProfile";
@@ -222,6 +214,9 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="sales_return_read" />}>
               <Route path="/sale/allreturns" element={<AllReturns />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="sales_read" />}>
+              <Route path="/sale/warranty" element={<WarrantyList />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="customer_read" />}>
               <Route path="/customers/all" element={<AllCustomers />} />
@@ -445,52 +440,10 @@ function App() {
             </Route>
 
             <Route element={<PermissionRoute requiredPermission="transfers_read" />}>
-              <Route path="/transfers" element={<TransferManagement />} />
+              <Route path="/transfers" element={<TransferList title="All Transfers" />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="transfers_create" />}>
               <Route path="/transfer/add" element={<AddTransfer />} />
-            </Route>
-            <Route element={<PermissionRoute requiredPermission="transfers_read" />}>
-              <Route path="/transfer/store-to-store" element={<StoreToStore />} />
-            </Route>
-            <Route element={<PermissionRoute requiredPermission="transfers_read" />}>
-              <Route
-                path="/transfer/store-to-factory"
-                element={<StoreToFactory />}
-              />
-            </Route>
-            <Route element={<PermissionRoute requiredPermission="transfers_read" />}>
-              <Route path="/transfer/store-to-shop" element={<StoreToShop />} />
-            </Route>
-            <Route element={<PermissionRoute requiredPermission="transfers_read" />}>
-              <Route
-                path="/transfer/factory-to-factory"
-                element={<FactoryToFactory />}
-              />
-            </Route>
-            <Route element={<PermissionRoute requiredPermission="transfers_read" />}>
-              <Route
-                path="/transfer/factory-to-store"
-                element={<FactoryToStore />}
-              />
-            </Route>
-            <Route element={<PermissionRoute requiredPermission="transfers_read" />}>
-              <Route
-                path="/transfer/factory-to-shop"
-                element={<FactoryToShop />}
-              />
-            </Route>
-            <Route element={<PermissionRoute requiredPermission="transfers_read" />}>
-              <Route path="/transfer/shop-to-shop" element={<ShopToShop />} />
-            </Route>
-            <Route element={<PermissionRoute requiredPermission="transfers_read" />}>
-              <Route path="/transfer/shop-to-store" element={<ShopToStore />} />
-            </Route>
-            <Route element={<PermissionRoute requiredPermission="transfers_read" />}>
-              <Route
-                path="/transfer/shop-to-factory"
-                element={<ShopToFactory />}
-              />
             </Route>
             <Route element={<PermissionRoute requiredPermission="notification_read" />}>
               <Route path="/notifications" element={<Notifications />} />

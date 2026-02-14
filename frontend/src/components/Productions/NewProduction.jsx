@@ -169,6 +169,10 @@ const NewProduction = () => {
         quantity: 1, 
         unit_cost: product.cost, 
         moved_to_store: 0,
+        batchNumber: '',
+        expiryDate: '',
+        manufactureDate: '',
+        batchNotes: '',
         image: product.image || product.photo || product.thumbnail
       }];
     });
@@ -227,6 +231,10 @@ const NewProduction = () => {
         products: selectedProducts.map(p => ({
           productId: p.id,
           code: p.barcode || '',
+          batchNumber: p.batchNumber || null,
+          expiryDate: p.expiryDate || null,
+          manufactureDate: p.manufactureDate || null,
+          batchNotes: p.batchNotes || null,
           quantity: p.quantity,
           unit_cost: p.unit_cost,
           moved_to_store: p.moved_to_store,
@@ -555,6 +563,8 @@ const NewProduction = () => {
                         <tr>
                           <th className="p-3 text-left font-medium text-gray-700">Product</th>
                           <th className="p-3 text-left font-medium text-gray-700">Code</th>
+                          <th className="p-3 text-left font-medium text-gray-700">Batch</th>
+                          <th className="p-3 text-left font-medium text-gray-700">Expiry</th>
                           <th className="p-3 text-left font-medium text-gray-700">Quantity</th>
                           <th className="p-3 text-left font-medium text-gray-700">Action</th>
                         </tr>
@@ -591,6 +601,23 @@ const NewProduction = () => {
                                 </div>
                               </td>
                               <td className="p-3 font-mono text-gray-600">{product.barcode}</td>
+                              <td className="p-3">
+                                <input
+                                  type="text"
+                                  value={product.batchNumber || ''}
+                                  onChange={(e) => handleProductChange(index, 'batchNumber', e.target.value)}
+                                  className="w-32 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none"
+                                  placeholder="Batch no."
+                                />
+                              </td>
+                              <td className="p-3">
+                                <input
+                                  type="date"
+                                  value={product.expiryDate || ''}
+                                  onChange={(e) => handleProductChange(index, 'expiryDate', e.target.value)}
+                                  className="w-36 px-3 py-2 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-lg focus:outline-none"
+                                />
+                              </td>
                               <td className="p-3">
                                 <input
                                   type="number"
