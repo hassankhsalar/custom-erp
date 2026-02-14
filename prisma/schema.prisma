@@ -416,6 +416,7 @@ model Material {
   materialRepairItem  MaterialRepairItem[]
   ScrapMaterial       ScrapMaterial[]
   purchaseShipmentItems PurchaseShipmentItem[]
+  warranties            UserWarranty[]
 }
 
 model Product {
@@ -427,6 +428,7 @@ model Product {
   wholesale_price         Float
   cost                    Float
   barcode                 String?                  @unique
+  defaultWarrantyDays     Int?                     @default(0)
   category                String?
   stock                   Int                      @default(0)
   created_at              DateTime                 @default(now())
@@ -436,6 +438,7 @@ model Product {
   productionProducts      ProductionProducts[]
   storeProducts           StoreProduct[]
   saleItem                SaleItem[]
+  warranties              UserWarranty[]
   saleReturnItem           SaleReturnItem[]
   shopProduct             ShopProduct[]
   
@@ -504,6 +507,7 @@ model StoreMaterial {
   stock       Float @default(0)
   avg_cost   Float?
   scrap      Float? @default(0)
+  batchDetails Json?
   store    Store    @relation(fields: [store_id], references: [id])
   material Material @relation(fields: [material_id], references: [id])
 
@@ -516,6 +520,7 @@ model StoreProduct {
   stock      Float @default(0)
   avg_cost  Float?
   scrap      Float? @default(0)
+  batchDetails Json?
   store   Store   @relation(fields: [store_id], references: [id])
   product Product @relation(fields: [product_id], references: [id])
 
@@ -529,6 +534,10 @@ model ProductionProducts {
   productId      Int
   product        Product    @relation(fields: [productId], references: [id])
   code           String
+  batchNumber    String?
+  expiryDate     DateTime?
+  manufactureDate DateTime?
+  batchNotes     String?
   quantity       Float
   unit_cost      Float
   received       Float      @default(0)
@@ -597,6 +606,10 @@ model PurchaseItem {
   productId  Int?
   product    Product?  @relation(fields: [productId], references: [id])
   itemType   String   @default("material") // "material" or "product"
+  batchNumber    String?
+  expiryDate     DateTime?
+  manufactureDate DateTime?
+  batchNotes     String?
   quantity   Float
   unitPrice  Float
   totalPrice Float
@@ -664,6 +677,7 @@ model Sale {
   paymentType String       @default("cash") // e.g. cash, card, mobile
   createdAt   DateTime     @default(now())
   saleItems   SaleItem[]
+  warranties  UserWarranty[]
   saleReturns SaleReturn[]
   isReturned  Boolean      @default(false)
   returnedAt  DateTime?
@@ -680,13 +694,22 @@ model SaleItem {
   product    Product? @relation(fields: [productId], references: [id])
   materialId Int?
   material   Material? @relation(fields: [materialId], references: [id])
+  batchNumber String?
+  expiryDate DateTime?
+  warrantyDays Int?      @default(0)
+  warrantyStartDate DateTime?
+  warrantyEndDate DateTime?
+  warrantySerial String?
+  warrantyNotes String?
   quantity   Float
   unitPrice  Float
   avg_cost   Float?
   totalPrice Float
+  userWarranties UserWarranty[]
 
   @@index([productId])
   @@index([materialId])
+  @@index([warrantySerial])
 }
 
 model SaleReturn {
@@ -740,6 +763,7 @@ model ShopProduct {
   stock      Float @default(0)
   avg_cost  Float?
   scrap      Float? @default(0)
+  batchDetails Json?
   shop    Shop    @relation(fields: [shop_id], references: [id])
   product Product @relation(fields: [product_id], references: [id])
 
@@ -752,6 +776,7 @@ model ShopMaterial {
   stock       Float @default(0)
   avg_cost   Float?
   scrap      Float? @default(0)
+  batchDetails Json?
   shop     Shop     @relation(fields: [shop_id], references: [id])
   material Material @relation(fields: [material_id], references: [id])
 
@@ -785,6 +810,8 @@ model TransferItem {
   transfer   Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
   item       String
   itemId     Int
+  batchNumber String?
+  expiryDate DateTime?
   quantity   Float
   receivedQuantity   Float?
   avg_cost   Float?
@@ -796,6 +823,7 @@ model FactoryProduct {
   stock     Float @default(0)
   avg_cost Float?  
   scrap      Float? @default(0)
+  batchDetails Json?
   factory   Factory @relation(fields: [factoryId], references: [id])
   product   Product @relation(fields: [productId], references: [id])
 
@@ -808,6 +836,7 @@ model FactoryMaterial {
   stock      Float @default(0)
   avg_cost  Float? 
   scrap      Float? @default(0)
+  batchDetails Json?
   factory  Factory  @relation(fields: [factoryId], references: [id])
   material Material @relation(fields: [materialId], references: [id])
 
@@ -965,9 +994,65 @@ model Customer {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   sales           Sale[]
+  warranties      UserWarranty[]
 
   @@index([name])
   @@index([mobile])
+}
+
+model UserWarranty {
+  id              Int       @id @default(autoincrement())
+  warrantyCode    String    @unique
+  status          String    @default("active")
+  serialNumber    String?
+  notes           String?
+  startDate       DateTime
+  endDate         DateTime
+  claimCount      Int       @default(0)
+  claimedAt       DateTime?
+  voidedAt        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  saleId          Int
+  sale            Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  saleItemId      Int
+  saleItem        SaleItem  @relation(fields: [saleItemId], references: [id], onDelete: Cascade)
+  productId       Int?
+  product         Product?  @relation(fields: [productId], references: [id])
+  materialId      Int?
+  material        Material? @relation(fields: [materialId], references: [id])
+  customerId      Int?
+  customer        Customer? @relation(fields: [customerId], references: [id])
+  claims          WarrantyClaim[]
+
+  @@index([saleId])
+  @@index([saleItemId])
+  @@index([productId])
+  @@index([materialId])
+  @@index([customerId])
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+model WarrantyClaim {
+  id               Int          @id @default(autoincrement())
+  warrantyId       Int
+  warranty         UserWarranty @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
+  receivingDate    DateTime
+  providingDate    DateTime?
+  issueDescription String?
+  resolution       String?
+  status           String       @default("received")
+  note             String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([warrantyId])
+  @@index([receivingDate])
+  @@index([providingDate])
+  @@index([status])
 }
 
 

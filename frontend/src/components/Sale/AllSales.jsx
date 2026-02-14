@@ -711,7 +711,7 @@ export default function AllSales() {
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Customer</h4>
-                  <p className="text-lg font-semibold">{selectedSale.customer || "-"}</p>
+                  <p className="text-lg font-semibold">{selectedSale.customer.name || "-"}</p>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Grand Total</h4>

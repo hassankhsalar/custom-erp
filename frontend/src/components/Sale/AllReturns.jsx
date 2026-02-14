@@ -201,7 +201,7 @@ export default function AllReturns() {
       r.reference,
       r.sale?.reference || "N/A",
       r.shop?.name || "N/A",
-      r.sale?.customer || "Walk-in",
+      r.sale?.customer.name || "Walk-in",
       `$${(r.totalAmount || 0).toFixed(2)}`,
       new Date(r.createdAt).toLocaleDateString(),
       r.returnItems?.length || 0,
@@ -304,7 +304,7 @@ export default function AllReturns() {
                     <div className="space-y-2">
                       <p><span className="font-medium">Sale Reference:</span> {sale.reference}</p>
                       <p><span className="font-medium">Sale Date:</span> {new Date(sale.createdAt).toLocaleDateString()}</p>
-                      <p><span className="font-medium">Customer:</span> {sale.customer || "Walk-in"}</p>
+                      <p><span className="font-medium">Customer:</span> {sale.customer.name || "Walk-in"}</p>
                       <p><span className="font-medium">Payment Type:</span> {sale.paymentType || "Cash"}</p>
                       <p><span className="font-medium">Original Total:</span> ${(sale.grandTotal || sale.totalAmount || 0).toFixed(2)}</p>
                     </div>
@@ -645,7 +645,7 @@ export default function AllReturns() {
                         {new Date(returnItem.sale?.createdAt).toLocaleDateString()}
                       </p>
                       <p className="text-xs text-gray-400">
-                        Customer: {returnItem.sale?.customer || "Walk-in"}
+                        Customer: {returnItem.sale?.customer.name || "Walk-in"}
                       </p>
                     </td>
                     <td className="p-4">

@@ -39,12 +39,12 @@ const debounce = (func, delay) => {
 export default function Expenses() {
   const [expenses, setExpenses] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [form, setForm] = useState({ 
-    categoryId: "", 
-    amount: "", 
-    date: new Date().toISOString().split('T')[0], 
-    description: "" 
-  });
+  // const [form, setForm] = useState({ 
+  //   categoryId: "", 
+  //   amount: "", 
+  //   date: new Date().toISOString().split('T')[0], 
+  //   description: "" 
+  // });
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [categorySearchQuery, setCategorySearchQuery] = useState("");
@@ -57,7 +57,8 @@ export default function Expenses() {
   const categoryRef = useRef(null);
   const [accounts, setAccounts] = useState([]);
   const [salaries, setSalaries] = useState([]);
-  // const [form, setForm] = useState({ categoryId: "", accountId: "", amount: "", date: "", description: "", salaryId: "" });
+  const [form, setForm] = useState({ categoryId: "", accountId: "", amount: "", date: "", description: "", salaryId: "" });
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const token = localStorage.getItem("token");
 
   const fetchExpenses = async () => {
@@ -152,6 +153,9 @@ export default function Expenses() {
     if (!form.categoryId) {
       errors.categoryId = "Please select an expense category";
     }
+    if (!form.accountId) {
+      errors.accountId = "Please select an account";
+    }
     if (!form.amount || parseFloat(form.amount) <= 0) {
       errors.amount = "Please enter a valid amount greater than 0";
     }
@@ -184,12 +188,15 @@ export default function Expenses() {
       });
       setForm({ 
         categoryId: "", 
+        accountId: "",
         amount: "", 
         date: new Date().toISOString().split('T')[0], 
-        description: "" 
+        description: "",
+        salaryId: ""
       });
       setCategorySearchQuery("");
       setFormErrors({});
+      setShowCreateModal(false);
       fetchExpenses();
     } catch (error) {
       console.error("Error creating expense:", error);
@@ -325,9 +332,11 @@ export default function Expenses() {
   const clearForm = () => {
     setForm({ 
       categoryId: "", 
+      accountId: "",
       amount: "", 
       date: new Date().toISOString().split('T')[0], 
-      description: "" 
+      description: "",
+      salaryId: ""
     });
     setCategorySearchQuery("");
     setFormErrors({});
@@ -373,6 +382,13 @@ export default function Expenses() {
               >
                 <RefreshCw size={18} />
                 Refresh
+              </button>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all duration-300"
+              >
+                <Plus size={18} />
+                Create Expense
               </button>
             </div>
           </div>
@@ -475,222 +491,9 @@ export default function Expenses() {
         )}
 
         {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          {/* New Expense Form */}
-          <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2.5 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl">
-                <Plus size={20} className="text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-gray-800">Add New Expense</h2>
-                <p className="text-sm text-gray-600">Record a new business expense</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleSubmit} noValidate className="space-y-4">
-              {/* Category Search */}
-              <div className="relative" ref={categoryRef}>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Expense Category <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Search for expense category..."
-                    value={categorySearchQuery}
-                    onChange={(e) => handleCategorySearch(e.target.value)}
-                    onFocus={() => setShowCategoryDropdown(true)}
-                    className={`w-full px-4 py-2.5 border ${
-                      formErrors.categoryId ? 'border-red-300' : form.categoryId ? 'border-emerald-300' : 'border-white/40'
-                    } bg-white/60 backdrop-blur-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 pr-10`}
-                  />
-                  {(categorySearchQuery || form.categoryId) && (
-                    <button
-                      type="button"
-                      onClick={clearCategorySelection}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    >
-                      <X size={16} />
-                    </button>
-                  )}
-                </div>
-                
-                {/* Error message */}
-                {formErrors.categoryId && (
-                  <p className="text-red-500 text-xs mt-1 ml-1">{formErrors.categoryId}</p>
-                )}
-                
-                {/* Selected category confirmation */}
-                {form.categoryId && !formErrors.categoryId && (
-                  <div className="mt-2 px-3 py-2 bg-gradient-to-r from-emerald-50/50 to-green-50/50 rounded-lg border border-emerald-200/50">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle size={14} className="text-emerald-600" />
-                      <span className="text-sm font-medium text-emerald-700">
-                        Selected: {categories.find(c => c.id === form.categoryId)?.name || 'Unknown Category'}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                
-                {showCategoryDropdown && (
-                  <div className="absolute z-10 w-full mt-1 bg-white/95 backdrop-blur-lg border border-white/60 rounded-xl shadow-xl max-h-60 overflow-y-auto">
-                    {searchingCategories ? (
-                      <div className="p-4 text-center">
-                        <div className="w-5 h-5 border-2 border-blue-500/30 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
-                        <p className="text-sm text-gray-500 mt-2">Searching categories...</p>
-                      </div>
-                    ) : filteredCategories.length === 0 ? (
-                      <div className="p-4 text-center text-gray-500">
-                        {categorySearchQuery ? 
-                          `No categories found for "${categorySearchQuery}"` : 
-                          "No expense categories available"}
-                      </div>
-                    ) : (
-                      filteredCategories.map((category) => (
-                        <div
-                          key={category.id}
-                          className="p-3 hover:bg-blue-50/50 cursor-pointer border-b border-white/30 last:border-b-0"
-                          onClick={() => selectCategory(category)}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${getCategoryColor(category.name)}`}>
-                              <Tag size={16} className="text-white" />
-                            </div>
-                            <div className="flex-1">
-                              <div className="font-medium text-gray-800">
-                                {category.name}
-                              </div>
-                              {category.description && (
-                                <div className="text-xs text-gray-500 mt-1">
-                                  {category.description}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-                
-                {/* Category Suggestions */}
-                {!showCategoryDropdown && categories.length > 0 && !form.categoryId && (
-                  <div className="mt-2">
-                    <p className="text-xs text-gray-500 mb-2">Common categories:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {categories.slice(0, 4).map((category) => (
-                        <button
-                          type="button"
-                          key={category.id}
-                          onClick={() => selectCategory(category)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 text-xs font-medium rounded-lg hover:bg-blue-100 transition-colors"
-                        >
-                          <Tag size={12} />
-                          {category.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Amount <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0.00"
-                      value={form.amount}
-                      onChange={(e) => {
-                        setForm({ ...form, amount: e.target.value });
-                        setFormErrors(prev => ({ ...prev, amount: null }));
-                      }}
-                      className={`w-full pl-10 pr-4 py-2.5 border ${
-                        formErrors.amount ? 'border-red-300' : 'border-white/40'
-                      } bg-white/60 backdrop-blur-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30`}
-                    />
-                  </div>
-                  {formErrors.amount && (
-                    <p className="text-red-500 text-xs mt-1 ml-1">{formErrors.amount}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Date <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                      type="date"
-                      value={form.date}
-                      onChange={(e) => {
-                        setForm({ ...form, date: e.target.value });
-                        setFormErrors(prev => ({ ...prev, date: null }));
-                      }}
-                      className={`w-full pl-10 pr-4 py-2.5 border ${
-                        formErrors.date ? 'border-red-300' : 'border-white/40'
-                      } bg-white/60 backdrop-blur-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30`}
-                    />
-                  </div>
-                  {formErrors.date && (
-                    <p className="text-red-500 text-xs mt-1 ml-1">{formErrors.date}</p>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Description (Optional)
-                </label>
-                <textarea
-                  placeholder="Add details about this expense..."
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  rows="3"
-                  className="w-full px-4 py-2.5 border border-white/40 bg-white/60 backdrop-blur-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-none"
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                >
-                  {loading ? (
-                    <>
-                      <RefreshCw className="animate-spin" size={20} />
-                      Adding...
-                    </>
-                  ) : (
-                    <>
-                      <Plus size={20} />
-                      Add Expense
-                    </>
-                  )}
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={clearForm}
-                  className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300"
-                >
-                  Clear
-                </button>
-              </div>
-            </form>
-          </div>
-
+        <div className="grid grid-cols-1 gap-6 mb-6">
           {/* Expenses Table */}
-          <div className="lg:col-span-2 backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
+          <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl">
@@ -758,7 +561,7 @@ export default function Expenses() {
                 <p className="text-gray-600 mb-6">
                   {searchQuery || dateFilter !== "all" ? 
                     "No matching expenses found. Try adjusting your filters." : 
-                    "Add your first expense using the form on the left."}
+                    "Add your first expense using the Create Expense button."}
                 </p>
               </div>
             ) : (
@@ -930,6 +733,180 @@ export default function Expenses() {
           </div>
         </div>
       </div>
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowCreateModal(false)}></div>
+          <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+            <div className="sticky top-0 z-10 p-6 border-b border-white/50 bg-gradient-to-r from-blue-500/10 to-cyan-500/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl shadow-lg">
+                    <Plus className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800">Create Expense</h2>
+                    <p className="text-gray-600">Record a new business expense</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  className="p-2 bg-white/60 rounded-lg hover:bg-white/80 transition-colors duration-300"
+                >
+                  <X size={20} className="text-gray-600" />
+                </button>
+              </div>
+            </div>
+  
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+              <form onSubmit={handleSubmit} noValidate className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Expense Category <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={form.categoryId}
+                    onChange={(e) => {
+                      setForm({ ...form, categoryId: e.target.value });
+                      setFormErrors(prev => ({ ...prev, categoryId: null }));
+                    }}
+                    className={`w-full px-4 py-2.5 border ${
+                      formErrors.categoryId ? 'border-red-300' : 'border-white/40'
+                    } bg-white/60 backdrop-blur-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30`}
+                  >
+                    <option value="">Select category</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                  {formErrors.categoryId && (
+                    <p className="text-red-500 text-xs mt-1 ml-1">{formErrors.categoryId}</p>
+                  )}
+                </div>
+  
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Account <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={form.accountId}
+                    onChange={(e) => {
+                      setForm({ ...form, accountId: e.target.value });
+                      setFormErrors(prev => ({ ...prev, accountId: null }));
+                    }}
+                    className={`w-full px-4 py-2.5 border ${
+                      formErrors.accountId ? 'border-red-300' : 'border-white/40'
+                    } bg-white/60 backdrop-blur-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30`}
+                  >
+                    <option value="">Select account</option>
+                    {accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({acc.account_number})
+                      </option>
+                    ))}
+                  </select>
+                  {formErrors.accountId && (
+                    <p className="text-red-500 text-xs mt-1 ml-1">{formErrors.accountId}</p>
+                  )}
+                </div>
+  
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Amount <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={form.amount}
+                        onChange={(e) => {
+                          setForm({ ...form, amount: e.target.value });
+                          setFormErrors(prev => ({ ...prev, amount: null }));
+                        }}
+                        className={`w-full pl-10 pr-4 py-2.5 border ${
+                          formErrors.amount ? 'border-red-300' : 'border-white/40'
+                        } bg-white/60 backdrop-blur-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30`}
+                      />
+                    </div>
+                    {formErrors.amount && (
+                      <p className="text-red-500 text-xs mt-1 ml-1">{formErrors.amount}</p>
+                    )}
+                  </div>
+  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Date <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                      <input
+                        type="date"
+                        value={form.date}
+                        onChange={(e) => {
+                          setForm({ ...form, date: e.target.value });
+                          setFormErrors(prev => ({ ...prev, date: null }));
+                        }}
+                        className={`w-full pl-10 pr-4 py-2.5 border ${
+                          formErrors.date ? 'border-red-300' : 'border-white/40'
+                        } bg-white/60 backdrop-blur-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30`}
+                      />
+                    </div>
+                    {formErrors.date && (
+                      <p className="text-red-500 text-xs mt-1 ml-1">{formErrors.date}</p>
+                    )}
+                  </div>
+                </div>
+  
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Description (Optional)
+                  </label>
+                  <textarea
+                    placeholder="Add details about this expense..."
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    rows="3"
+                    className="w-full px-4 py-2.5 border border-white/40 bg-white/60 backdrop-blur-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 resize-none"
+                  />
+                </div>
+  
+                <div className="flex gap-3 mb-8">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <>
+                        <RefreshCw className="animate-spin" size={20} />
+                        Adding...
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={20} />
+                        Add Expense
+                      </>
+                    )}
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={clearForm}
+                    className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     );
   };
