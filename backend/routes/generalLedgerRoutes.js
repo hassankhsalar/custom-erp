@@ -6,7 +6,10 @@ const prisma = new PrismaClient();
 // General Ledger - list transactions with optional filters
 router.get('/', async (req, res) => {
   try {
-    const { startDate, endDate, accountId } = req.query;
+    const { startDate, endDate, accountId, page = 1, limit = 10 } = req.query;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
 
     const where = {};
     if (accountId) {
@@ -18,6 +21,10 @@ router.get('/', async (req, res) => {
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
+    // Get total count for pagination
+    const totalCount = await prisma.transactions.count({ where });
+
+    // Get paginated transactions
     const transactions = await prisma.transactions.findMany({
       where,
       include: {
@@ -27,7 +34,9 @@ router.get('/', async (req, res) => {
         purchase: true,
         createdBy: { select: { id: true, name: true, email: true } }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limitNum
     });
 
     const totals = transactions.reduce((acc, t) => {
@@ -45,6 +54,12 @@ router.get('/', async (req, res) => {
         totalAmount: totals.total,
         totalDebit: totals.debit,
         totalCredit: totals.credit
+      },
+      pagination: {
+        currentPage: pageNum,
+        totalPages: Math.ceil(totalCount / limitNum),
+        totalCount,
+        limit: limitNum
       }
     });
   } catch (error) {
