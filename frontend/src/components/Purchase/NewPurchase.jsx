@@ -350,6 +350,10 @@ const fetchBankAccounts = async () => {
       unitPrice: standardPrice.toString(), // Default unit price
       total: standardPrice, // Default total
       receivedQuantity: "1",
+      batchNumber: "",
+      expiryDate: "",
+      manufactureDate: "",
+      batchNotes: "",
       originalStandardPrice: standardPrice, // Store original standard price for comparison if needed
     };
 
@@ -436,6 +440,10 @@ const fetchBankAccounts = async () => {
           itemType: item.itemType,
           materialId: item.itemType === "material" ? parseInt(item.materialId) : undefined,
           productId: item.itemType === "product" ? parseInt(item.productId) : undefined,
+          batchNumber: item.batchNumber || null,
+          expiryDate: item.expiryDate || null,
+          manufactureDate: item.manufactureDate || null,
+          batchNotes: item.batchNotes || null,
           quantity: parseFloat(item.quantity),
           unitPrice: parseFloat(item.unitPrice),
           receivedQuantity: item.receivedQuantity !== undefined && item.receivedQuantity !== null
@@ -784,28 +792,6 @@ const fetchBankAccounts = async () => {
                     return (
                       <div key={item.uniqueId} className="backdrop-blur-sm bg-white/50 border border-white/60 rounded-xl p-5 shadow-lg">
                         <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${item.itemType === "material" ? "bg-blue-100" : "bg-green-100"}`}>
-                              {item.itemType === "material" ?
-                                <Package className="text-blue-600" size={18} /> :
-                                <Tag className="text-green-600" size={18} />
-                              }
-                            </div>
-                            <h3 className="font-medium text-gray-800">
-                              {item.name} ({item.itemType})
-                            </h3>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => removePurchaseItem(item.uniqueId)}
-                            className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                           {/* Item Image and Details */}
                           <div className="col-span-1 md:col-span-2 flex items-center gap-3">
                             <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 bg-gray-50">
@@ -831,83 +817,153 @@ const fetchBankAccounts = async () => {
                             </div>
                           </div>
 
-                          {/* Quantity */}
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Quantity *
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0.01"
-                              value={item.quantity}
-                              onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'quantity', e.target.value)}
-                              required
-                              className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400"
-                            />
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removePurchaseItem(item.uniqueId)}
+                            className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
 
-                          {/* Recieved Quantity */}
+                        <div className="flex flex-col md:flex-row gap-4">
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Received Quantity
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              max={item.quantity}
-                              value={item.receivedQuantity ?? ""}
-                              onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'receivedQuantity', e.target.value)}
-                              className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400"
-                            />
-                          </div>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                              {/* Quantity */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Quantity *
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0.01"
+                                  value={item.quantity}
+                                  onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'quantity', e.target.value)}
+                                  required
+                                  className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400"
+                                />
+                              </div>
 
-                          {/* Unit Price */}
+                              {/* Recieved Quantity */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Received Quantity
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  max={item.quantity}
+                                  value={item.receivedQuantity ?? ""}
+                                  onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'receivedQuantity', e.target.value)}
+                                  className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400"
+                                />
+                              </div>
+
+                              {/* Unit Price */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Unit Price *
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min={ item.avg_cost ? item.avg_cost : 0.001 }
+                                  value={item.unitPrice}
+                                  onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'unitPrice', e.target.value)}
+                                  required
+                                  className={`w-full p-2 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400 ${
+                                    standardPrice > 0 && currentPrice === standardPrice
+                                      ? "bg-green-50/60 border-green-200/50"
+                                      : standardPrice > 0 && currentPrice !== standardPrice
+                                      ? "bg-yellow-50/60 border-yellow-200/50"
+                                      : "bg-white/60 border-gray-200/50"
+                                  }`}
+                                />
+                                {standardPrice > 0 && (
+                                  <p className={`mt-1 text-xs ${
+                                    currentPrice <= standardPrice
+                                      ? "text-green-600"
+                                      : "text-yellow-600"
+                                  }`}>
+                                    Standard: ${standardPrice.toFixed(2)}
+                                    {currentPrice !== standardPrice && " (modified)"}
+                                  </p>
+                                )}
+                              </div>
+                              
+                              {/* Batch Number */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Batch Number
+                                </label>
+                                <input
+                                  type="text"
+                                  value={item.batchNumber || ""}
+                                  onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'batchNumber', e.target.value)}
+                                  className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl"
+                                  placeholder="e.g. BATCH-001"
+                                />
+                              </div>
+
+                              {/* Expiry Date */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Expiry Date
+                                </label>
+                                <input
+                                  type="date"
+                                  value={item.expiryDate || ""}
+                                  onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'expiryDate', e.target.value)}
+                                  className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl"
+                                />
+                              </div>
+
+                              {/* Mfg Date */}
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Mfg Date
+                                </label>
+                                <input
+                                  type="date"
+                                  value={item.manufactureDate || ""}
+                                  onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'manufactureDate', e.target.value)}
+                                  className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl"
+                                />
+                              </div>
+
+                              {/* Batch Notes */}
+                              <div className="col-span-full md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  Batch Notes
+                                </label>
+                                <input
+                                  type="text"
+                                  value={item.batchNotes || ""}
+                                  onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'batchNotes', e.target.value)}
+                                  className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl"
+                                  placeholder="Optional notes for this batch"
+                                />
+                              </div>                        
+                            </div>
+                          </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Unit Price *
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min={ item.avg_cost ? item.avg_cost : 0.001 }
-                              value={item.unitPrice}
-                              onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'unitPrice', e.target.value)}
-                              required
-                              className={`w-full p-2 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400 ${
-                                standardPrice > 0 && currentPrice === standardPrice
-                                  ? "bg-green-50/60 border-green-200/50"
-                                  : standardPrice > 0 && currentPrice !== standardPrice
-                                  ? "bg-yellow-50/60 border-yellow-200/50"
-                                  : "bg-white/60 border-gray-200/50"
-                              }`}
-                            />
-                            {standardPrice > 0 && (
-                              <p className={`mt-1 text-xs ${
-                                currentPrice <= standardPrice
-                                  ? "text-green-600"
-                                  : "text-yellow-600"
-                              }`}>
-                                Standard: ${standardPrice.toFixed(2)}
-                                {currentPrice !== standardPrice && " (modified)"}
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Total */}
-                          <div className="col-span-full md:col-span-1">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              Total
-                            </label>
-                            <input
-                              type="text"
-                              value={`$${parseFloat(item.total).toFixed(2)}`}
-                              readOnly
-                              className="w-full p-2 bg-gradient-to-r from-blue-50/60 to-purple-50/60 border border-gray-300/50 rounded-xl text-lg font-bold text-blue-700"
-                            />
+                            {/* Total */}
+                            <div className="col-span-full md:col-span-1">
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Total
+                              </label>
+                              <input
+                                type="text"
+                                value={`$${parseFloat(item.total).toFixed(2)}`}
+                                readOnly
+                                className="w-full p-2 bg-gradient-to-r from-blue-50/60 to-purple-50/60 border border-gray-300/50 rounded-xl text-lg font-bold text-blue-700"
+                              />
+                            </div>
                           </div>
                         </div>
+
                       </div>
                     );
                   })

@@ -3,11 +3,34 @@ const { PrismaClient, Prisma } = require("@prisma/client");
 
 const prisma = new PrismaClient();
 const router = express.Router();
+const { buildScope, ensureHasAnyScope } = require("../utils/associateScope");
 
 const parseDateRange = (startDate, endDate) => {
   const start = startDate ? new Date(startDate) : null;
   const end = endDate ? new Date(endDate) : null;
   return { start, end };
+};
+
+const buildTransferScopeSql = (scope) => {
+  if (scope.isAdmin) return Prisma.sql`1=1`;
+  const clauses = [];
+  const shopIds = Array.from(scope.shops || []);
+  const storeIds = Array.from(scope.stores || []);
+  const factoryIds = Array.from(scope.factories || []);
+  if (shopIds.length) {
+    clauses.push(Prisma.sql`(t.\`from\` = 'shop' AND t.\`fromId\` IN (${Prisma.join(shopIds)}))`);
+    clauses.push(Prisma.sql`(t.\`to\` = 'shop' AND t.\`toId\` IN (${Prisma.join(shopIds)}))`);
+  }
+  if (storeIds.length) {
+    clauses.push(Prisma.sql`(t.\`from\` = 'store' AND t.\`fromId\` IN (${Prisma.join(storeIds)}))`);
+    clauses.push(Prisma.sql`(t.\`to\` = 'store' AND t.\`toId\` IN (${Prisma.join(storeIds)}))`);
+  }
+  if (factoryIds.length) {
+    clauses.push(Prisma.sql`(t.\`from\` = 'factory' AND t.\`fromId\` IN (${Prisma.join(factoryIds)}))`);
+    clauses.push(Prisma.sql`(t.\`to\` = 'factory' AND t.\`toId\` IN (${Prisma.join(factoryIds)}))`);
+  }
+  if (!clauses.length) return Prisma.sql`1=0`;
+  return Prisma.sql`(${Prisma.join(clauses, Prisma.sql` OR `)})`;
 };
 
 router.get("/cash-bank/details", async (req, res) => {
@@ -444,6 +467,9 @@ router.get("/transfer/overview", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const { start, end } = parseDateRange(startDate, endDate);
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureHasAnyScope(scope);
+    const scopeSql = buildTransferScopeSql(scope);
     const dateClause = start && end
       ? Prisma.sql`AND t.createdAt >= ${start} AND t.createdAt <= ${end}`
       : Prisma.sql``;
@@ -451,7 +477,7 @@ router.get("/transfer/overview", async (req, res) => {
     const statusRows = await prisma.$queryRaw`
       SELECT t.status, COUNT(*) as count
       FROM \`Transfer\` t
-      WHERE 1=1
+      WHERE 1=1 AND ${scopeSql}
       ${dateClause}
       GROUP BY t.status
     `;
@@ -473,6 +499,7 @@ router.get("/transfer/overview", async (req, res) => {
                COUNT(*) as count
         FROM \`Transfer\` t
         WHERE ${Prisma.raw(directionCol)} = ${type}
+          AND ${scopeSql}
         ${dateClause}
         GROUP BY ${Prisma.raw(directionIdCol)}, status
       `;
@@ -509,6 +536,14 @@ router.get("/transfer/overview", async (req, res) => {
       to: { shops: toShops, stores: toStores, factories: toFactories }
     });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({
+        totalCount: 0,
+        byStatus: {},
+        from: { shops: [], stores: [], factories: [] },
+        to: { shops: [], stores: [], factories: [] }
+      });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -517,6 +552,9 @@ router.get("/transfer/top-sender", async (req, res) => {
   try {
     const { startDate, endDate, mode } = req.query;
     const { start, end } = parseDateRange(startDate, endDate);
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureHasAnyScope(scope);
+    const scopeSql = buildTransferScopeSql(scope);
     const dateClause = start && end
       ? Prisma.sql`AND t.createdAt >= ${start} AND t.createdAt <= ${end}`
       : Prisma.sql``;
@@ -531,7 +569,7 @@ router.get("/transfer/top-sender", async (req, res) => {
              COUNT(DISTINCT CONCAT(IFNULL(ti.productId,''),'-',IFNULL(ti.materialId,''),'-',ti.item)) as itemTypeCount
       FROM \`Transfer\` t
       LEFT JOIN \`TransferItem\` ti ON ti.transferId = t.id
-      WHERE 1=1
+      WHERE 1=1 AND ${scopeSql}
       ${dateClause}
       GROUP BY t.\`from\`, t.\`fromId\`
       ORDER BY ${Prisma.raw(orderColumn)} DESC
@@ -557,6 +595,9 @@ router.get("/transfer/top-sender", async (req, res) => {
       }))
     });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ rows: [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -565,6 +606,9 @@ router.get("/transfer/top-receiver", async (req, res) => {
   try {
     const { startDate, endDate, mode } = req.query;
     const { start, end } = parseDateRange(startDate, endDate);
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureHasAnyScope(scope);
+    const scopeSql = buildTransferScopeSql(scope);
     const dateClause = start && end
       ? Prisma.sql`AND t.createdAt >= ${start} AND t.createdAt <= ${end}`
       : Prisma.sql``;
@@ -579,7 +623,7 @@ router.get("/transfer/top-receiver", async (req, res) => {
              COUNT(DISTINCT CONCAT(IFNULL(ti.productId,''),'-',IFNULL(ti.materialId,''),'-',ti.item)) as itemTypeCount
       FROM \`Transfer\` t
       LEFT JOIN \`TransferItem\` ti ON ti.transferId = t.id
-      WHERE 1=1
+      WHERE 1=1 AND ${scopeSql}
       ${dateClause}
       GROUP BY t.\`to\`, t.\`toId\`
       ORDER BY ${Prisma.raw(orderColumn)} DESC
@@ -605,6 +649,9 @@ router.get("/transfer/top-receiver", async (req, res) => {
       }))
     });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ rows: [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -613,6 +660,9 @@ router.get("/transfer/top-items", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const { start, end } = parseDateRange(startDate, endDate);
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureHasAnyScope(scope);
+    const scopeSql = buildTransferScopeSql(scope);
     const page = parseInt(req.query.page || "1", 10);
     const limit = parseInt(req.query.limit || "10", 10);
     const offset = (page - 1) * limit;
@@ -627,6 +677,7 @@ router.get("/transfer/top-items", async (req, res) => {
         FROM \`TransferItem\` ti
         JOIN \`Transfer\` t ON t.id = ti.transferId
         WHERE (ti.productId IS NOT NULL OR ti.materialId IS NOT NULL)
+          AND ${scopeSql}
         ${dateClause}
         GROUP BY COALESCE(ti.productId, ti.materialId), ti.item
       ) x
@@ -640,14 +691,14 @@ router.get("/transfer/top-items", async (req, res) => {
         FROM \`TransferItem\` ti
         JOIN \`Transfer\` t ON t.id = ti.transferId
         JOIN \`Product\` p ON p.id = ti.productId
-        WHERE ti.productId IS NOT NULL
+        WHERE ti.productId IS NOT NULL AND ${scopeSql}
         ${dateClause}
         UNION ALL
         SELECT 'material' as itemType, m.id as itemId, m.name, m.brand as category, m.image, m.unit as unit, ti.quantity
         FROM \`TransferItem\` ti
         JOIN \`Transfer\` t ON t.id = ti.transferId
         JOIN \`Material\` m ON m.id = ti.materialId
-        WHERE ti.materialId IS NOT NULL
+        WHERE ti.materialId IS NOT NULL AND ${scopeSql}
         ${dateClause}
       ) t
       GROUP BY itemType, itemId, name, category, image, unit
@@ -663,6 +714,14 @@ router.get("/transfer/top-items", async (req, res) => {
       pagination: { page, limit, totalCount, totalPages: Math.ceil(totalCount / limit) }
     });
   } catch (err) {
+    if (err.status === 403) {
+      const page = parseInt(req.query.page || "1", 10);
+      const limit = parseInt(req.query.limit || "10", 10);
+      return res.json({
+        rows: [],
+        pagination: { page, limit, totalCount: 0, totalPages: 0 }
+      });
+    }
     res.status(500).json({ error: err.message });
   }
 });

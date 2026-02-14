@@ -4,11 +4,20 @@ const prisma = new PrismaClient();
 const router = express.Router();
 const { createTransaction } = require('../utils/transactionHelper');
 const { createNotification } = require('../utils/notificationHelper');
+const { buildScope, ensureTypeScope, ensureIdScope } = require("../utils/associateScope");
+const { getAvailableBatches, decrementBatch } = require("../utils/batchDetails");
 
 // Get all shops for POS
 router.get("/shops", async (req, res) => {
   try {
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (!scope.isAdmin) {
+      ensureTypeScope(scope, "shop");
+    }
+    const where = scope.isAdmin ? {} : { id: { in: Array.from(scope.shops) } };
+
     const shops = await prisma.shop.findMany({
+      where,
       select: {
         id: true,
         name: true,
@@ -20,6 +29,9 @@ router.get("/shops", async (req, res) => {
     });
     res.json(shops);
   } catch (err) {
+    if (err.status === 403) {
+      return res.json([]);
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -29,6 +41,9 @@ router.get("/items/shop/:shopId", async (req, res) => {
   try {
     const { shopId } = req.params;
     const { search } = req.query;
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", parseInt(shopId));
     
     // Fetch shop products
     const shopProducts = await prisma.shopProduct.findMany({
@@ -108,6 +123,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
       shop_stock: sp.stock,
       global_stock: sp.product.stock,
       image: sp.product.image,
+      batches: getAvailableBatches(sp.batchDetails),
       minStock: 0
     }));
 
@@ -126,6 +142,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
       shop_stock: sm.stock,
       global_stock: sm.material.current_stock,
       image: sm.material.image,
+      batches: getAvailableBatches(sm.batchDetails),
       minStock: 0
     }));
 
@@ -136,6 +153,9 @@ router.get("/items/shop/:shopId", async (req, res) => {
 
     res.json(items);
   } catch (err) {
+    if (err.status === 403) {
+      return res.json([]);
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -144,6 +164,8 @@ router.get("/items/shop/:shopId", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const { shopId, customerId, paymentType, discount, items, bankAccountId, paidAmount } = req.body;
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", parseInt(shopId));
 
     // Validate required fields
     if (!shopId || !items || !Array.isArray(items) || items.length === 0) {
@@ -163,6 +185,15 @@ router.post("/", async (req, res) => {
       }
       if (!item.itemId) {
         return res.status(400).json({ error: "Each item must have itemId" });
+      }
+      if (item.warrantyEnabled) {
+        if (!item.warrantyExpiryDate) {
+          return res.status(400).json({ error: "warrantyExpiryDate is required when warrantyEnabled is true" });
+        }
+        const exp = new Date(item.warrantyExpiryDate);
+        if (Number.isNaN(exp.getTime())) {
+          return res.status(400).json({ error: "Invalid warrantyExpiryDate" });
+        }
       }
     }
     
@@ -231,6 +262,7 @@ router.post("/", async (req, res) => {
       const saleItems = [];
       let totalCost = 0;
       let customer = customerId ? parseInt(customerId) : null;
+      let stockAfterSale = 0;
       
       for (const item of items) {
         // Check stock based on item type
@@ -255,6 +287,17 @@ router.post("/", async (req, res) => {
           }
 
           // Update shop product stock
+          const productUpdateData = {
+            stock: { decrement: parseFloat(item.quantity) },
+          };
+          if (item.batchNumber) {
+            productUpdateData.batchDetails = decrementBatch(
+              shopProduct.batchDetails,
+              { batchNumber: item.batchNumber, expiryDate: item.expiryDate },
+              parseFloat(item.quantity)
+            );
+          }
+
           await tx.shopProduct.update({
             where: {
               shop_id_product_id: {
@@ -262,9 +305,7 @@ router.post("/", async (req, res) => {
                 product_id: parseInt(item.itemId),
               },
             },
-            data: {
-              stock: { decrement: parseFloat(item.quantity) },
-            },
+            data: productUpdateData,
           });
 
           // Update global product stock
@@ -278,6 +319,7 @@ router.post("/", async (req, res) => {
           item.avg_cost = shopProduct.avg_cost;
           item.alert_quantity = shopProduct.product.alert_quantity;
           totalCost += parseFloat(item.avg_cost) * parseFloat(item.quantity);
+          stockAfterSale = shopProduct.stock - parseFloat(item.quantity);
 
         } else if (item.type === "material") {
           // Check and update shop material stock
@@ -302,6 +344,17 @@ router.post("/", async (req, res) => {
           }
 
           // Update shop material stock
+          const materialUpdateData = {
+            stock: { decrement: parseFloat(item.quantity) },
+          };
+          if (item.batchNumber) {
+            materialUpdateData.batchDetails = decrementBatch(
+              shopMaterial.batchDetails,
+              { batchNumber: item.batchNumber, expiryDate: item.expiryDate },
+              parseFloat(item.quantity)
+            );
+          }
+
           await tx.shopMaterial.update({
             where: {
               shop_id_material_id: {
@@ -309,9 +362,7 @@ router.post("/", async (req, res) => {
                 material_id: parseInt(item.itemId),
               },
             },
-            data: {
-              stock: { decrement: parseFloat(item.quantity) },
-            },
+            data: materialUpdateData,
           });
 
           // Update global material stock
@@ -325,10 +376,11 @@ router.post("/", async (req, res) => {
           item.avg_cost = shopMaterial.avg_cost;
           item.alert_quantity = shopMaterial.material.alert_quantity;
           totalCost += parseFloat(item.avg_cost) * parseFloat(item.quantity);
+          stockAfterSale = shopMaterial.stock - parseFloat(item.quantity);
 
         }
 
-        if(parseFloat(item.quantity) <= 0.001 || item.quantity < item.type === "product" ? item.alert_quantity : item.alert_quantity ) {
+        if( item.alert_quantity > 0 && stockAfterSale <= item.alert_quantity ) {
           let shopName = await tx.shop.findUnique({
             where: { id: parseInt(shopId) },
             select: { name: true }
@@ -340,8 +392,22 @@ router.post("/", async (req, res) => {
         }
 
         // Create sale item record
+        const warrantyEnabled = item.type === "product" && !!item.warrantyEnabled;
+        const warrantyStart = warrantyEnabled ? new Date() : null;
+        const warrantyEnd = warrantyEnabled && item.warrantyExpiryDate ? new Date(item.warrantyExpiryDate) : null;
+        const computedWarrantyDays = warrantyEnabled && warrantyStart && warrantyEnd
+          ? Math.max(0, Math.ceil((warrantyEnd.getTime() - warrantyStart.getTime()) / (1000 * 60 * 60 * 24)))
+          : 0;
+
         const saleItemData = {
           saleId: sale.id,
+          batchNumber: item.batchNumber ? String(item.batchNumber).trim() : null,
+          expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
+          warrantyDays: computedWarrantyDays,
+          warrantyStartDate: warrantyStart,
+          warrantyEndDate: warrantyEnd,
+          warrantySerial: item.warrantySerial ? String(item.warrantySerial).trim() : null,
+          warrantyNotes: item.warrantyNotes ? String(item.warrantyNotes).trim() : null,
           quantity: parseFloat(item.quantity),
           unitPrice: parseFloat(item.unitPrice),
           avg_cost: parseFloat(item.avg_cost),
@@ -359,6 +425,25 @@ router.post("/", async (req, res) => {
         const saleItem = await tx.saleItem.create({
           data: saleItemData,
         });
+
+        if ((item.type === "product" || item.type === "material") && warrantyEnabled && warrantyEnd) {
+          const warrantyCode = `WAR-${Date.now()}-${sale.id}-${saleItem.id}`;
+          await tx.userWarranty.create({
+            data: {
+              warrantyCode,
+              status: "active",
+              serialNumber: saleItemData.warrantySerial,
+              notes: saleItemData.warrantyNotes,
+              startDate: saleItemData.warrantyStartDate,
+              endDate: saleItemData.warrantyEndDate,
+              saleId: sale.id,
+              saleItemId: saleItem.id,
+              productId: item.type === "product" ? parseInt(item.itemId) : null,
+              materialId: item.type === "material" ? parseInt(item.itemId) : null,
+              customerId: customer || null,
+            },
+          });
+        }
 
         saleItems.push(saleItem);
       }
@@ -408,6 +493,10 @@ router.post("/", async (req, res) => {
 
   } catch (err) {
     console.error("Sale creation error:", err);
+
+    if (err.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     
     if (err.message.includes("Insufficient stock") || err.message.includes("not found in shop")) {
       return res.status(400).json({ error: err.message });
@@ -417,11 +506,193 @@ router.post("/", async (req, res) => {
   }
 });
 
+router.get("/warranties", async (req, res) => {
+  try {
+    const { status, mobile, serial, customer, item, itemType, expiryFrom, expiryTo, page = 1, limit = 20 } = req.query;
+    const where = {};
+    if (status) where.status = String(status);
+    if (serial) where.serialNumber = { contains: String(serial) };
+    if (customer) {
+      where.customer = {
+        ...(where.customer || {}),
+        name: { contains: String(customer) }
+      };
+    }
+    if (mobile) {
+      where.customer = {
+        ...(where.customer || {}),
+        mobile: { contains: String(mobile) }
+      };
+    }
+    if (itemType === "product") {
+      where.product = { name: { contains: String(item || "") } };
+    } else if (itemType === "material") {
+      where.material = { name: { contains: String(item || "") } };
+    } else if (item) {
+      where.OR = [
+        { product: { name: { contains: String(item) } } },
+        { material: { name: { contains: String(item) } } },
+      ];
+    }
+    if (expiryFrom || expiryTo) {
+      where.endDate = {};
+      if (expiryFrom) where.endDate.gte = new Date(expiryFrom);
+      if (expiryTo) where.endDate.lte = new Date(expiryTo);
+    }
+
+    const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const take = parseInt(limit, 10);
+
+    const [rows, total] = await prisma.$transaction([
+      prisma.userWarranty.findMany({
+        where,
+        include: {
+          product: { select: { id: true, name: true, barcode: true } },
+          material: { select: { id: true, name: true, barcode: true } },
+          customer: { select: { id: true, name: true, mobile: true } },
+          sale: { select: { id: true, reference: true, createdAt: true } },
+          saleItem: { select: { id: true, quantity: true, unitPrice: true } },
+          claims: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          }
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take,
+      }),
+      prisma.userWarranty.count({ where }),
+    ]);
+
+    res.json({ data: rows, total, page: parseInt(page, 10), limit: take });
+  } catch (error) {
+    console.error("Warranty list error:", error);
+    res.status(500).json({ error: error.message || "Failed to fetch warranties" });
+  }
+});
+
+router.put("/warranties/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { notes, endDate, status } = req.body;
+    if (!id) {
+      return res.status(400).json({ error: "Invalid id" });
+    }
+    const updated = await prisma.userWarranty.update({
+      where: { id },
+      data: {
+        notes: notes !== undefined ? String(notes || "") : undefined,
+        endDate: endDate ? new Date(endDate) : undefined,
+        status: status ? String(status) : undefined,
+      },
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error("Warranty edit error:", error);
+    res.status(500).json({ error: error.message || "Failed to update warranty" });
+  }
+});
+
+router.delete("/warranties/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) {
+      return res.status(400).json({ error: "Invalid id" });
+    }
+    await prisma.userWarranty.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Warranty delete error:", error);
+    res.status(500).json({ error: error.message || "Failed to delete warranty" });
+  }
+});
+
+router.post("/warranties/:id/claims", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { receivingDate, providingDate, issueDescription, resolution, status = "received", note } = req.body;
+    if (!id || !receivingDate) {
+      return res.status(400).json({ error: "warranty id and receivingDate are required" });
+    }
+    const warranty = await prisma.userWarranty.findUnique({ where: { id } });
+    if (!warranty) {
+      return res.status(404).json({ error: "Warranty not found" });
+    }
+
+    const claim = await prisma.$transaction(async (tx) => {
+      const created = await tx.warrantyClaim.create({
+        data: {
+          warrantyId: id,
+          receivingDate: new Date(receivingDate),
+          providingDate: providingDate ? new Date(providingDate) : null,
+          issueDescription: issueDescription || null,
+          resolution: resolution || null,
+          status: String(status),
+          note: note || null,
+        },
+      });
+
+      await tx.userWarranty.update({
+        where: { id },
+        data: {
+          status: "claimed",
+          claimedAt: new Date(),
+          claimCount: { increment: 1 },
+        },
+      });
+
+      return created;
+    });
+
+    res.status(201).json(claim);
+  } catch (error) {
+    console.error("Warranty claim create error:", error);
+    res.status(500).json({ error: error.message || "Failed to create warranty claim" });
+  }
+});
+
+router.put("/warranties/:id/status", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { status, notes } = req.body;
+    if (!id || !status) {
+      return res.status(400).json({ error: "id and status are required" });
+    }
+    const allowed = ["active", "claimed", "expired", "void"];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ error: `Invalid status. Allowed: ${allowed.join(", ")}` });
+    }
+
+    const updated = await prisma.userWarranty.update({
+      where: { id },
+      data: {
+        status,
+        notes: notes !== undefined ? String(notes || "") : undefined,
+        claimedAt: status === "claimed" ? new Date() : undefined,
+        voidedAt: status === "void" ? new Date() : undefined,
+        claimCount: status === "claimed" ? { increment: 1 } : undefined,
+      },
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error("Warranty status update error:", error);
+    res.status(500).json({ error: error.message || "Failed to update warranty status" });
+  }
+});
+
 // Get all shop sales with both product and material details
 router.get("/", async (req, res) => {
   try {
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (!scope.isAdmin && scope.shops.size === 0) {
+      const err = new Error("Forbidden");
+      err.status = 403;
+      throw err;
+    }
+    const where = scope.isAdmin ? { shopId: { not: null } } : { shopId: { in: Array.from(scope.shops) } };
+
     const sales = await prisma.sale.findMany({
-      where: { shopId: { not: null } },
+      where,
       include: {
         shop: {
           select: {
@@ -475,6 +746,9 @@ router.get("/", async (req, res) => {
 
     res.json(sales);
   } catch (err) {
+    if (err.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -500,6 +774,9 @@ router.post("/:id/payments", async (req, res) => {
     if (!sale) {
       return res.status(404).json({ error: "Sale not found" });
     }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", sale.shopId);
 
     const dueAmount = Math.max(0, (parseFloat(sale.grandTotal) || 0) - (parseFloat(sale.paidAmount) || 0));
     if (dueAmount.toFixed(2) < paymentAmount.toFixed(2)) {
@@ -561,6 +838,9 @@ router.post("/:id/payments", async (req, res) => {
       transaction: result.txn
     });
   } catch (err) {
+    if (err.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -572,6 +852,17 @@ router.get("/:id/payments", async (req, res) => {
     if (isNaN(saleId)) {
       return res.status(400).json({ error: "Invalid sale ID" });
     }
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      select: { id: true, shopId: true }
+    });
+    if (!sale) {
+      return res.status(404).json({ error: "Sale not found" });
+    }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", sale.shopId);
 
     const transactions = await prisma.transactions.findMany({
       where: { saleId },
@@ -585,6 +876,9 @@ router.get("/:id/payments", async (req, res) => {
 
     res.json({ payments: transactions });
   } catch (err) {
+    if (err.status === 403) {
+      return res.json({ payments: [] });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -602,6 +896,9 @@ router.put("/:id", async (req, res) => {
     if (!sale) {
       return res.status(404).json({ error: "Sale not found" });
     }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", sale.shopId);
 
     if ((parseFloat(sale.paidAmount) || 0) > 0) {
       return res.status(400).json({ error: "Cannot edit sale with payments" });
@@ -621,6 +918,9 @@ router.put("/:id", async (req, res) => {
 
     res.json(updatedSale);
   } catch (err) {
+    if (err.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -640,6 +940,9 @@ router.delete("/:id", async (req, res) => {
     if (!sale) {
       return res.status(404).json({ error: "Sale not found" });
     }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", sale.shopId);
     if ((parseFloat(sale.paidAmount) || 0) > 0) {
       return res.status(400).json({ error: "Cannot delete sale with payments" });
     }
@@ -685,6 +988,9 @@ router.delete("/:id", async (req, res) => {
 
     res.json({ success: true, message: "Sale deleted successfully" });
   } catch (err) {
+    if (err.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -741,11 +1047,17 @@ router.get("/returns/:id", async (req, res) => {
       });
     }
 
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", saleReturn.shopId);
+
     res.json(saleReturn);
   } catch (err) {
     console.error(`❌ Error in /returns/${req.params.id}:`, err.message);
     console.error("Full error:", err);
     
+    if (err.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     res.status(500).json({ 
       error: "Failed to fetch sale return",
       details: err.message 
@@ -761,6 +1073,9 @@ router.get("/return-eligible", async (req, res) => {
     if (!shopId) {
       return res.status(400).json({ error: 'Shop ID is required' });
     }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", parseInt(shopId));
 
     // Get all sales for the shop, then filter in JavaScript
     const allSales = await prisma.sale.findMany({
@@ -815,6 +1130,9 @@ router.get("/return-eligible", async (req, res) => {
     res.json(eligibleSales);
   } catch (error) {
     console.error('Error fetching return-eligible sales:', error);
+    if (error.status === 403) {
+      return res.json([]);
+    }
     res.status(500).json({ 
       error: 'Failed to fetch sales',
       details: error.message 
@@ -847,6 +1165,8 @@ router.post("/return", async (req, res) => {
       }
     }
 
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+
     const result = await prisma.$transaction(async (tx) => {
       // Get the original sale to validate
       const originalSale = await tx.sale.findUnique({
@@ -865,6 +1185,8 @@ router.post("/return", async (req, res) => {
       if (!originalSale) {
         throw new Error("Sale not found");
       }
+
+      ensureIdScope(scope, "shop", originalSale.shopId);
 
       if (!originalSale.shopId) {
         throw new Error("This sale is not associated with a shop");
@@ -1037,6 +1359,10 @@ router.post("/return", async (req, res) => {
 
   } catch (err) {
     console.error("Return processing error:", err);
+
+    if (err.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     
     if (err.message.includes("Sale not found") || 
         err.message.includes("not associated with a shop") ||
@@ -1054,8 +1380,16 @@ router.post("/return", async (req, res) => {
 router.get("/returns-list", async (req, res) => {
   
   try {
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (!scope.isAdmin && scope.shops.size === 0) {
+      const err = new Error("Forbidden");
+      err.status = 403;
+      throw err;
+    }
+    const where = scope.isAdmin ? { shopId: { not: null } } : { shopId: { in: Array.from(scope.shops) } };
+
     const saleReturns = await prisma.saleReturn.findMany({
-      where: { shopId: { not: null } },
+      where,
       include: {
         shop: {
           select: {
@@ -1100,6 +1434,9 @@ router.get("/returns-list", async (req, res) => {
     res.json(saleReturns);
   } catch (err) {
     console.error("❌ Error in /returns-list:", err);
+    if (err.status === 403) {
+      return res.json([]);
+    }
     res.status(500).json({ 
       error: "Failed to fetch returns",
       details: err.message 
@@ -1138,8 +1475,14 @@ router.get("/returns/:id", async (req, res) => {
       return res.status(404).json({ error: "Sale return not found" });
     }
 
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", saleReturn.shopId);
+
     res.json(saleReturn);
   } catch (err) {
+    if (err.status === 403) {
+      return res.json(null);
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -1147,6 +1490,17 @@ router.get("/returns/:id", async (req, res) => {
 // Get returns for a specific sale
 router.get("/returns/sale/:saleId", async (req, res) => {
   try {
+    const sale = await prisma.sale.findUnique({
+      where: { id: parseInt(req.params.saleId) },
+      select: { id: true, shopId: true }
+    });
+    if (!sale) {
+      return res.status(404).json({ error: "Sale not found" });
+    }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", sale.shopId);
+
     const saleReturns = await prisma.saleReturn.findMany({
       where: { 
         saleId: parseInt(req.params.saleId)
@@ -1165,6 +1519,9 @@ router.get("/returns/sale/:saleId", async (req, res) => {
 
     res.json(saleReturns);
   } catch (err) {
+    if (err.status === 403) {
+      return res.json([]);
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -1172,12 +1529,20 @@ router.get("/returns/sale/:saleId", async (req, res) => {
 // Get sale returns statistics (updated for materials)
 router.get("/returns/stats", async (req, res) => {
   try {
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (!scope.isAdmin && scope.shops.size === 0) {
+      const err = new Error("Forbidden");
+      err.status = 403;
+      throw err;
+    }
+    const where = scope.isAdmin ? { shopId: { not: null } } : { shopId: { in: Array.from(scope.shops) } };
+
     const totalReturns = await prisma.saleReturn.count({
-      where: { shopId: { not: null } }
+      where
     });
 
     const totalReturnAmount = await prisma.saleReturn.aggregate({
-      where: { shopId: { not: null } },
+      where,
       _sum: {
         totalAmount: true
       }
@@ -1186,7 +1551,7 @@ router.get("/returns/stats", async (req, res) => {
     // Get unique shops with returns
     const shopsWithReturns = await prisma.saleReturn.groupBy({
       by: ['shopId'],
-      where: { shopId: { not: null } },
+      where,
       _count: {
         id: true
       }
@@ -1201,6 +1566,13 @@ router.get("/returns/stats", async (req, res) => {
     });
   } catch (err) {
     console.error("Error fetching stats:", err);
+    if (err.status === 403) {
+      return res.json({
+        totalReturns: 0,
+        totalReturnAmount: 0,
+        uniqueShopCount: 0
+      });
+    }
     res.status(500).json({ error: err.message });
   }
 });

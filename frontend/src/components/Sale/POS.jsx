@@ -170,9 +170,13 @@ export default function ShopPOS( props ) {
 
   // Add item to cart and update local stock
   const handleAddToCart = (item) => {
+    const selectedBatch = Array.isArray(item.batches) && item.batches.length > 0 ? item.batches[0] : null;
     // Check if item already exists in cart
     const existingIndex = cartItems.findIndex(cartItem => 
-      cartItem.itemId === item.id && cartItem.type === item.type
+      cartItem.itemId === item.id &&
+      cartItem.type === item.type &&
+      String(cartItem.batchNumber || '') === String(selectedBatch?.batchNumber || '') &&
+      String(cartItem.expiryDate || '') === String(selectedBatch?.expiryDate || '')
     );
 
     if (existingIndex !== -1) {
@@ -181,8 +185,8 @@ export default function ShopPOS( props ) {
       const newQuantity = updatedCart[existingIndex].quantity + 1;
       
       // Check stock availability
-      if (newQuantity > item.shop_stock) {
-        alert(`Insufficient stock for ${item.name}. Available: ${item.shop_stock}`);
+      if (newQuantity > updatedCart[existingIndex].batchAvailable) {
+        alert(`Insufficient stock for ${item.name}. Available: ${updatedCart[existingIndex].batchAvailable}`);
         return;
       }
       
@@ -204,28 +208,22 @@ export default function ShopPOS( props ) {
         quantity: 1,
         unitPrice: salePrice,
         totalPrice: salePrice,
+        warrantyEnabled: false,
+        warrantyExpiryDate: "",
+        warrantyNotes: "",
         barcode: item.barcode,
         unit: item.unit,
         shop_stock: item.shop_stock,
+        batches: item.batches || [],
+        batchNumber: selectedBatch?.batchNumber || null,
+        expiryDate: selectedBatch?.expiryDate || null,
+        batchAvailable: selectedBatch?.quantity || item.shop_stock,
         original_price: salePrice, // Store original price for reference
         image: item.image // Store image for display
       };
       
       setCartItems([...cartItems, newItem]);
     }
-
-    // Update local stock state
-    const updatedShopItems = shopItems.map(shopItem => {
-      if (shopItem.id === item.id && shopItem.type === item.type) {
-        return {
-          ...shopItem,
-          shop_stock: shopItem.shop_stock - 1
-        };
-      }
-      return shopItem;
-    });
-    
-    setShopItems(updatedShopItems);
 
     // Clear search
     setSearchQuery("");
@@ -238,19 +236,8 @@ export default function ShopPOS( props ) {
     
     const updatedCart = [...cartItems];
     const item = updatedCart[index];
-    const originalQuantity = item.quantity;
-    const quantityDifference = newQuantity - originalQuantity;
-    
-    // Find the item in shop items to check stock
-    const shopItem = shopItems.find(si => 
-      si.id === item.itemId && si.type === item.type
-    );
-    
-    if (!shopItem) return;
-    
-    // Check if we're increasing quantity beyond available stock
-    if (quantityDifference > 0 && shopItem.shop_stock < quantityDifference) {
-      alert(`Insufficient stock for ${item.name}. Available: ${shopItem.shop_stock}`);
+    if (newQuantity > item.batchAvailable) {
+      alert(`Insufficient stock for ${item.name}. Available: ${item.batchAvailable}`);
       return;
     }
     
@@ -258,57 +245,16 @@ export default function ShopPOS( props ) {
     updatedCart[index].quantity = newQuantity;
     updatedCart[index].totalPrice = newQuantity * updatedCart[index].unitPrice;
     setCartItems(updatedCart);
-    
-    // Update local stock
-    const updatedShopItems = shopItems.map(si => {
-      if (si.id === item.itemId && si.type === item.type) {
-        return {
-          ...si,
-          shop_stock: si.shop_stock - quantityDifference
-        };
-      }
-      return si;
-    });
-    
-    setShopItems(updatedShopItems);
   };
 
   // Remove item from cart and restore local stock
   const handleRemoveFromCart = (index) => {
-    const itemToRemove = cartItems[index];
     const updatedCart = cartItems.filter((_, i) => i !== index);
     setCartItems(updatedCart);
-    
-    // Restore stock
-    const updatedShopItems = shopItems.map(si => {
-      if (si.id === itemToRemove.itemId && si.type === itemToRemove.type) {
-        return {
-          ...si,
-          shop_stock: si.shop_stock + itemToRemove.quantity
-        };
-      }
-      return si;
-    });
-    
-    setShopItems(updatedShopItems);
   };
 
   // Clear cart and restore all stock
   const handleClearCart = () => {
-    // Restore all stock from cart
-    const updatedShopItems = [...shopItems];
-    
-    cartItems.forEach(cartItem => {
-      const index = updatedShopItems.findIndex(si => 
-        si.id === cartItem.itemId && si.type === cartItem.type
-      );
-      
-      if (index !== -1) {
-        updatedShopItems[index].shop_stock += cartItem.quantity;
-      }
-    });
-    
-    setShopItems(updatedShopItems);
     setCartItems([]);
     setDiscount(0);
     setSelectedCustomer(null); // Clear selected customer
@@ -339,6 +285,46 @@ export default function ShopPOS( props ) {
     updatedCart[itemIndex].totalPrice = newPrice * updatedCart[itemIndex].quantity;
 
     setCartItems(updatedCart);
+  };
+
+  const handleWarrantyToggle = (index, enabled) => {
+    const updated = [...cartItems];
+    updated[index].warrantyEnabled = !!enabled;
+    if (!enabled) {
+      updated[index].warrantyExpiryDate = "";
+    }
+    setCartItems(updated);
+  };
+
+  const handleWarrantyExpiryChange = (index, value) => {
+    const updated = [...cartItems];
+    updated[index].warrantyExpiryDate = value;
+    setCartItems(updated);
+  };
+
+  const handleBatchChange = (index, value) => {
+    const updated = [...cartItems];
+    if (!value || value === "||") {
+      updated[index].batchNumber = null;
+      updated[index].expiryDate = null;
+      updated[index].batchAvailable = updated[index].shop_stock;
+      updated[index].quantity = Math.min(updated[index].quantity, updated[index].batchAvailable || 1);
+      updated[index].totalPrice = updated[index].quantity * updated[index].unitPrice;
+      setCartItems(updated);
+      return;
+    }
+    const [batchNumber, expiryDateRaw] = String(value || '').split("||");
+    const selected = (updated[index].batches || []).find(
+      (b) => b.batchNumber === batchNumber && String(b.expiryDate || '') === String(expiryDateRaw || '')
+    );
+    if (!selected) return;
+    updated[index].batchNumber = selected.batchNumber;
+    updated[index].expiryDate = selected.expiryDate || null;
+    updated[index].batchAvailable = selected.quantity;
+    updated[index].quantity = Math.min(updated[index].quantity, selected.quantity || 1);
+    updated[index].quantity = Math.max(updated[index].quantity, 1);
+    updated[index].totalPrice = updated[index].quantity * updated[index].unitPrice;
+    setCartItems(updated);
   };
 
   // Validate form before submission
@@ -379,6 +365,10 @@ export default function ShopPOS( props ) {
         alert(`⚠️ Quantity must be greater than 0 for ${cartItem.name}.`);
         return false;
       }
+      if ((cartItem.type === "product" || cartItem.type === "material") && cartItem.warrantyEnabled && !cartItem.warrantyExpiryDate) {
+        alert(`⚠️ Select warranty expiry date for ${cartItem.name}.`);
+        return false;
+      }
     }
 
     return true;
@@ -404,6 +394,11 @@ export default function ShopPOS( props ) {
         type: item.type,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
+        batchNumber: item.batchNumber,
+        expiryDate: item.expiryDate,
+        warrantyEnabled: (item.type === "product" || item.type === "material") ? !!item.warrantyEnabled : false,
+        warrantyExpiryDate: (item.type === "product" || item.type === "material") && item.warrantyEnabled ? (item.warrantyExpiryDate || null) : null,
+        warrantyNotes: (item.type === "product" || item.type === "material") ? (item.warrantyNotes || null) : null,
       })),
     };
 
@@ -836,6 +831,7 @@ export default function ShopPOS( props ) {
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Item</th>
+                        <th className="p-4 text-left text-sm font-semibold text-gray-700">Batch</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Price</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Quantity</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Total</th>
@@ -885,8 +881,43 @@ export default function ShopPOS( props ) {
                                     {item.barcode && <span>{item.barcode}</span>}
                                     {item.unit && <span className="ml-2">| Unit: {item.unit}</span>}
                                   </div>
+                                  {(item.type === "product" || item.type === "material") && (
+                                    <div className="mt-2 flex flex-wrap gap-2 items-center">
+                                      <label className="inline-flex items-center gap-2 text-xs text-gray-700">
+                                        <input
+                                          type="checkbox"
+                                          checked={!!item.warrantyEnabled}
+                                          onChange={(e) => handleWarrantyToggle(index, e.target.checked)}
+                                        />
+                                        Warranty
+                                      </label>
+                                      {item.warrantyEnabled && (
+                                        <input
+                                          type="date"
+                                          value={item.warrantyExpiryDate || ""}
+                                          onChange={(e) => handleWarrantyExpiryChange(index, e.target.value)}
+                                          className="w-40 border border-gray-300 rounded px-2 py-1 text-xs"
+                                          title="Warranty expiry date"
+                                        />
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
+                            </td>
+                            <td className="p-4">
+                              <select
+                                value={`${item.batchNumber || ''}||${item.expiryDate || ''}`}
+                                onChange={(e) => handleBatchChange(index, e.target.value)}
+                                className="min-w-48 border border-gray-300 rounded-lg p-2"
+                              >
+                                <option value="||">No batch</option>
+                                {(item.batches || []).map((batch) => (
+                                  <option key={`${batch.batchNumber}-${batch.expiryDate || 'none'}`} value={`${batch.batchNumber}||${batch.expiryDate || ''}`}>
+                                    {`${batch.batchNumber} | Exp: ${batch.expiryDate || 'N/A'}`}
+                                  </option>
+                                ))}
+                              </select>
                             </td>
                             <td className="p-4">
                               <div className="flex items-center gap-2">
@@ -916,7 +947,7 @@ export default function ShopPOS( props ) {
                                 <input
                                   type="number"
                                   min="1"
-                                  max={item.shop_stock + item.quantity} // Current stock + quantity in cart
+                                  max={item.batchAvailable || 1}
                                   value={item.quantity}
                                   onChange={(e) => handleUpdateQuantity(index, parseInt(e.target.value) || 1)}
                                   className="w-16 border border-gray-300 p-2 text-center rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -924,13 +955,13 @@ export default function ShopPOS( props ) {
                                 <button
                                   onClick={() => handleUpdateQuantity(index, item.quantity + 1)}
                                   className="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-lg hover:bg-gray-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                  disabled={item.quantity >= item.shop_stock + item.quantity}
+                                  disabled={item.quantity >= (item.batchAvailable || 1)}
                                 >
                                   <span className="text-gray-700">+</span>
                                 </button>
                               </div>
                               <div className="text-xs text-gray-500 mt-2">
-                                Available: {item.shop_stock} (-{ item.quantity} = {item.shop_stock - item.quantity})
+                                Available in batch: {item.batchAvailable || 0}
                               </div>
                             </td>
                             <td className="p-4">
