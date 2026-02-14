@@ -52,6 +52,7 @@ import TransferReport from "./components/Report/TransferReport";
 import AllUser from "./components/Users/AllUser";
 import CreateUser from "./components/Users/CreateUser";
 import Settings from "./components/Settings/Settings";
+import ActivityLog from "./components/Settings/ActivityLog";
 import AddShop from "./components/Shop/AddShop";
 import AllShop from "./components/Shop/AllShop";
 import AllReturns from "./components/Sale/AllReturns";
@@ -109,7 +110,20 @@ export const AuthProvider = ({ children }) => {
     refetch(); // Refetch user data after login
   };
 
-  const logout = () => {
+  const logout = async () => {
+    const existingToken = localStorage.getItem("token");
+    if (existingToken) {
+      try {
+        await fetch(API_ROUTES.ACTIVITY_LOGS_LOGOUT, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${existingToken}`,
+          },
+        });
+      } catch (_) {
+        // Keep logout flow non-blocking
+      }
+    }
     setToken(null);
     localStorage.removeItem("token");
     localStorage.removeItem("userEmail"); // Clear user email on logout
@@ -326,6 +340,9 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="general_settings_edit" />}>
               <Route path="/settings" element={<Settings />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="general_settings_edit" />}>
+              <Route path="/settings/activity-log" element={<ActivityLog />} />
             </Route>
 
             <Route element={<PermissionRoute requiredPermission="account_create" />}>
