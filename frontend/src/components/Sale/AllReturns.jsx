@@ -441,7 +441,7 @@ export default function AllReturns() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="max-w-7xl rounded-t-2xl mx-auto p-6">
       {/* Return Details Modal */}
       <ReturnDetailsModal />
       

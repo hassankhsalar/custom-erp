@@ -474,7 +474,7 @@ export default function ShopPOS( props ) {
   const outOfStockItems = shopItems.filter(item => item.shop_stock <= 0);
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 p-2">
+    <div className="min-h-screen rounded-t-2xl w-full bg-gray-50 p-2">
       {/* Header */}
 
       <div className="glass-card m-3 md:m-4 border border-white/20 backdrop-blur-xl">
