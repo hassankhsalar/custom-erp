@@ -593,6 +593,38 @@ router.put("/warranties/:id", async (req, res) => {
   }
 });
 
+router.get("/warranties/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) {
+      return res.status(400).json({ error: "Invalid id" });
+    }
+
+    const warranty = await prisma.userWarranty.findUnique({
+      where: { id },
+      include: {
+        product: { select: { id: true, name: true, barcode: true, category: true } },
+        material: { select: { id: true, name: true, barcode: true, unit: true, brand: true } },
+        customer: { select: { id: true, name: true, mobile: true, email: true, address: true } },
+        sale: { select: { id: true, reference: true, createdAt: true, shopId: true, paymentType: true, grandTotal: true } },
+        saleItem: { select: { id: true, quantity: true, unitPrice: true, totalPrice: true, batchNumber: true, expiryDate: true } },
+        claims: {
+          orderBy: { createdAt: "desc" }
+        }
+      }
+    });
+
+    if (!warranty) {
+      return res.status(404).json({ error: "Warranty not found" });
+    }
+
+    res.json(warranty);
+  } catch (error) {
+    console.error("Warranty details error:", error);
+    res.status(500).json({ error: error.message || "Failed to fetch warranty details" });
+  }
+});
+
 router.delete("/warranties/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);

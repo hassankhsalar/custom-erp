@@ -49,6 +49,7 @@ import PurchaseSalesReport from "./components/Report/PurchaseSalesReport";
 import CustomerReport from "./components/Report/CustomerReport";
 import SupplierReport from "./components/Report/SupplierReport";
 import TransferReport from "./components/Report/TransferReport";
+import DailyStockReport from "./components/Report/DailyStockReport";
 import AllUser from "./components/Users/AllUser";
 import CreateUser from "./components/Users/CreateUser";
 import Settings from "./components/Settings/Settings";
@@ -313,6 +314,9 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="stock_report" />}>
               <Route path="/report/stock" element={<StockReport />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="stock_report" />}>
+              <Route path="/report/daily-stock" element={<DailyStockReport />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="transfer_report" />}>
               <Route path="/report/transfer" element={<TransferReport />} />
