@@ -252,6 +252,7 @@ const Sidebar = () => {
         { name: 'Trial Balance', path: '/report/trial-balance', icon: <BarChart3 size={16} />, permissionKey: ['trial_balance_report'] },
         { name: 'Cash & Bank', path: '/report/cash-bank', icon: <BarChart3 size={16} />, permissionKey: ['cash_and_bank_report'] },
         { name: 'Stock Report', path: '/report/stock', icon: <BarChart3 size={16} />, permissionKey: ['stock_report'] },
+        { name: 'Daily Stock Report', path: '/report/daily-stock', icon: <BarChart3 size={16} />, permissionKey: ['stock_report'] },
         { name: 'Transfer Report', path: '/report/transfer', icon: <BarChart3 size={16} />, permissionKey: ['transfer_report'] },
         // { name: 'Profit & Loss', path: '/report/profit-loss', icon: <BarChart3 size={16} />, permissionKey: ['profit_loss_report'] },
         { name: 'Purchase vs Sales', path: '/report/purchase-sales', icon: <BarChart3 size={16} />, permissionKey: ['purchase_sales_report'] },

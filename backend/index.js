@@ -195,6 +195,9 @@ const reportExtraRoutes = require('./routes/reportExtraRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const activityLogRoutes = require('./routes/activityLogRoutes');
 const { startSalaryCron } = require('./services/salaryCron');
+const { testCron } = require('./services/testCron');
+const { startDailyStockCron } = require('./services/dailyStockCron');
+const dailyStockReportRoutes = require('./routes/dailyStockReportRoutes');
 
 const uploadRoutes = require('./routes/uploadRoutes');
 
@@ -237,6 +240,7 @@ app.use('/api/hrm', authenticateToken, hrmRoutes);
 app.use('/api/expenses', authenticateToken, expenseRoutes);
 app.use('/api/reports', authenticateToken, reportRoutes);
 app.use('/api/reports', authenticateToken, reportExtraRoutes);
+app.use('/api/reports', authenticateToken, dailyStockReportRoutes);
 app.use('/api/notifications', authenticateToken, notificationRoutes);
 app.use('/api/activity-logs', authenticateToken, activityLogRoutes);
 
@@ -250,6 +254,8 @@ app.listen(port, () => {
 });
 
 startSalaryCron();
+startDailyStockCron();
+testCron();
 
 
 module.exports = {

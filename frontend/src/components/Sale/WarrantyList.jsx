@@ -14,6 +14,7 @@ export default function WarrantyList() {
     expiryTo: "",
   });
   const [claimModal, setClaimModal] = useState({ open: false, warranty: null });
+  const [viewModal, setViewModal] = useState({ open: false, loading: false, data: null });
   const [claimForm, setClaimForm] = useState({
     receivingDate: "",
     providingDate: "",
@@ -94,6 +95,21 @@ export default function WarrantyList() {
     });
   };
 
+  const openViewModal = async (id) => {
+    setViewModal({ open: true, loading: true, data: null });
+    try {
+      const res = await fetch(API_ROUTES.SHOP_WARRANTY_BY_ID(id), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load warranty details");
+      setViewModal({ open: true, loading: false, data });
+    } catch (error) {
+      alert(error.message || "Failed to load warranty details");
+      setViewModal({ open: false, loading: false, data: null });
+    }
+  };
+
   const submitClaim = async () => {
     if (!claimModal.warranty) return;
     if (!claimForm.receivingDate) {
@@ -167,6 +183,7 @@ export default function WarrantyList() {
                   <td className="p-3">{row.endDate ? new Date(row.endDate).toLocaleDateString() : "-"}</td>
                   <td className="p-3">{row.status}</td>
                   <td className="p-3 space-x-2">
+                    <button className="px-2 py-1 border rounded text-green-700" onClick={() => openViewModal(row.id)}>View</button>
                     <button className="px-2 py-1 border rounded" onClick={() => handleEdit(row)}>Edit</button>
                     <button className="px-2 py-1 border rounded text-red-600" onClick={() => handleDelete(row.id)}>Delete</button>
                     <button className="px-2 py-1 border rounded text-blue-600" onClick={() => openClaimModal(row)}>Warranty Claim</button>
@@ -194,7 +211,89 @@ export default function WarrantyList() {
           </div>
         </div>
       )}
+
+      {viewModal.open && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-lg w-full max-w-4xl p-4 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Warranty Details</h2>
+              <button className="px-3 py-1 border rounded" onClick={() => setViewModal({ open: false, loading: false, data: null })}>Close</button>
+            </div>
+
+            {viewModal.loading ? (
+              <div className="py-6">Loading...</div>
+            ) : viewModal.data ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                  <div className="border rounded p-3">
+                    <div><b>Warranty Code:</b> {viewModal.data.warrantyCode || "-"}</div>
+                    <div><b>Status:</b> {viewModal.data.status || "-"}</div>
+                    <div><b>Serial:</b> {viewModal.data.serialNumber || "-"}</div>
+                    <div><b>Start Date:</b> {viewModal.data.startDate ? new Date(viewModal.data.startDate).toLocaleDateString() : "-"}</div>
+                    <div><b>End Date:</b> {viewModal.data.endDate ? new Date(viewModal.data.endDate).toLocaleDateString() : "-"}</div>
+                    <div><b>Claim Count:</b> {viewModal.data.claimCount ?? 0}</div>
+                    <div><b>Notes:</b> {viewModal.data.notes || "-"}</div>
+                  </div>
+                  <div className="border rounded p-3">
+                    <div><b>Customer:</b> {viewModal.data.customer?.name || "Walk-in"}</div>
+                    <div><b>Mobile:</b> {viewModal.data.customer?.mobile || "-"}</div>
+                    <div><b>Email:</b> {viewModal.data.customer?.email || "-"}</div>
+                    <div><b>Address:</b> {viewModal.data.customer?.address || "-"}</div>
+                    <div><b>Sale Ref:</b> {viewModal.data.sale?.reference || "-"}</div>
+                    <div><b>Sale Date:</b> {viewModal.data.sale?.createdAt ? new Date(viewModal.data.sale.createdAt).toLocaleString() : "-"}</div>
+                  </div>
+                  <div className="border rounded p-3 md:col-span-2">
+                    <div><b>Item:</b> {viewModal.data.product?.name || viewModal.data.material?.name || "-"}</div>
+                    <div><b>Type:</b> {viewModal.data.productId ? "Product" : viewModal.data.materialId ? "Material" : "-"}</div>
+                    <div><b>Barcode:</b> {viewModal.data.product?.barcode || viewModal.data.material?.barcode || "-"}</div>
+                    <div><b>Quantity:</b> {viewModal.data.saleItem?.quantity ?? "-"}</div>
+                    <div><b>Unit Price:</b> {viewModal.data.saleItem?.unitPrice ?? "-"}</div>
+                    <div><b>Total Price:</b> {viewModal.data.saleItem?.totalPrice ?? "-"}</div>
+                    <div><b>Batch:</b> {viewModal.data.saleItem?.batchNumber || "-"}</div>
+                    <div><b>Batch Expiry:</b> {viewModal.data.saleItem?.expiryDate ? new Date(viewModal.data.saleItem.expiryDate).toLocaleDateString() : "-"}</div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold mb-2">Claims</h3>
+                  <div className="border rounded overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="p-2 text-left">Receiving Date</th>
+                          <th className="p-2 text-left">Providing Date</th>
+                          <th className="p-2 text-left">Status</th>
+                          <th className="p-2 text-left">Issue</th>
+                          <th className="p-2 text-left">Resolution</th>
+                          <th className="p-2 text-left">Note</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {!viewModal.data.claims || viewModal.data.claims.length === 0 ? (
+                          <tr><td className="p-2" colSpan={6}>No claims found</td></tr>
+                        ) : (
+                          viewModal.data.claims.map((claim) => (
+                            <tr key={claim.id} className="border-t">
+                              <td className="p-2">{claim.receivingDate ? new Date(claim.receivingDate).toLocaleDateString() : "-"}</td>
+                              <td className="p-2">{claim.providingDate ? new Date(claim.providingDate).toLocaleDateString() : "-"}</td>
+                              <td className="p-2">{claim.status || "-"}</td>
+                              <td className="p-2">{claim.issueDescription || "-"}</td>
+                              <td className="p-2">{claim.resolution || "-"}</td>
+                              <td className="p-2">{claim.note || "-"}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="py-6">No data</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
