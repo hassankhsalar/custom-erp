@@ -1077,4 +1077,39 @@ model WarrantyClaim {
   @@index([status])
 }
 
+model DailyStockSnapshot {
+  id           Int                     @id @default(autoincrement())
+  snapshotDate DateTime
+  runAt        DateTime                @default(now())
+  filePath     String?
+  totalItems   Int                     @default(0)
+  createdAt    DateTime                @default(now())
+  items        DailyStockSnapshotItem[]
+
+  @@unique([snapshotDate])
+  @@index([runAt])
+}
+
+model DailyStockSnapshotItem {
+  id          Int                @id @default(autoincrement())
+  snapshotId  Int
+  snapshot    DailyStockSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  placeType   String
+  placeId     Int
+  placeName   String
+  itemType    String
+  itemId      Int
+  itemName    String
+  unit        String?
+  category    String?
+  stock       Float
+  avgCost     Float?
+  scrap       Float?             @default(0)
+  createdAt   DateTime           @default(now())
+
+  @@index([snapshotId])
+  @@index([placeType, placeId])
+  @@index([itemType, itemId])
+}
+
 
