@@ -95,6 +95,29 @@ const getStockModelConfig = (locationType, itemType, locationId, itemId) => {
   throw new Error(`Invalid location type: ${locationType}`);
 };
 
+const updateRequisitionStatusFromSections = async (requisitionId) => {
+  if (!requisitionId) return;
+  const sections = await prisma.requisitionSection.findMany({
+    where: { requisitionId: parseInt(requisitionId) },
+    select: { status: true },
+  });
+  if (!sections.length) return;
+  const statuses = new Set(sections.map((s) => s.status));
+  let nextStatus = "segmented";
+  if (statuses.size === 1 && statuses.has("rejected")) {
+    nextStatus = "rejected";
+  } else if (statuses.has("in_process") || statuses.has("transfer_ordered") || statuses.has("production_ordered")) {
+    nextStatus = "in_process";
+  } else if (!statuses.has("pending") && !statuses.has("in_process") && !statuses.has("transfer_ordered") && !statuses.has("production_ordered")) {
+    nextStatus = statuses.has("rejected") ? "partially_approved" : "approved";
+  }
+
+  await prisma.requisition.update({
+    where: { id: parseInt(requisitionId) },
+    data: { status: nextStatus },
+  });
+};
+
 
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -337,7 +360,7 @@ router.get('/available-items', authenticateToken, async (req, res) => {
 });
 
 router.post('/', authenticateToken, upload.single('document'), async (req, res) => {
-  const { from, to, fromId, toId, items, shipping_cost, note, status } = req.body;
+  const { from, to, fromId, toId, items, shipping_cost, note, status, requisitionId, requisitionSectionId } = req.body;
   const document = req.file;
 
   try {
@@ -356,6 +379,8 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
         note,
         document: document ? document.path : null,
         status: status || 'processing',
+        requisitionId: requisitionId ? parseInt(requisitionId) : null,
+        requisitionSectionId: requisitionSectionId ? parseInt(requisitionSectionId) : null,
       },
     });
 
@@ -444,6 +469,16 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
           batchDetails: newBatchDetails,
         },
       });
+    }
+
+    if (requisitionSectionId) {
+      await prisma.requisitionSection.update({
+        where: { id: parseInt(requisitionSectionId) },
+        data: { status: "in_process" },
+      });
+      if (requisitionId) {
+        await updateRequisitionStatusFromSections(requisitionId);
+      }
     }
 
     res.status(201).json(transfer);

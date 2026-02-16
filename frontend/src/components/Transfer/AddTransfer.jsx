@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
+import { useLocation } from 'react-router-dom';
 import { 
   Truck, 
   Package, 
@@ -18,6 +19,8 @@ import {
 } from "lucide-react";
 
 const AddTransfer = () => {
+  const location = useLocation();
+  const requisitionOrder = location.state?.requisitionOrder || null;
   const [fromType, setFromType] = useState('store');
   const [toType, setToType] = useState('store');
   const [fromId, setFromId] = useState('');
@@ -33,6 +36,10 @@ const AddTransfer = () => {
   const [shops, setShops] = useState([]);
   const [factories, setFactories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [requisitionLink, setRequisitionLink] = useState({
+    requisitionId: null,
+    requisitionSectionId: null,
+  });
   const token = localStorage.getItem('token');
 
   useEffect(() => {
@@ -66,18 +73,52 @@ const AddTransfer = () => {
   }, []);
 
   useEffect(() => {
+    if (!requisitionOrder) return;
+    const requesterType = requisitionOrder?.requisition?.requesterType;
+    const requesterId = requisitionOrder?.requisition?.requesterId;
+    const sourceType = requisitionOrder?.destinationType;
+    const sourceId = requisitionOrder?.destinationId;
+
+    if (sourceType && sourceId) {
+      setFromType(sourceType);
+      setFromId(String(sourceId));
+    }
+    if (requesterType && requesterId) {
+      setToType(requesterType);
+      setToId(String(requesterId));
+    }
+
+    const mappedItems = (requisitionOrder.items || []).map((it) => ({
+      id: it.itemType === "product" ? it.productId : it.materialId,
+      name: it.itemType === "product" ? it.product?.name : it.material?.name,
+      itemType: it.itemType,
+      quantity: it.quantity || 1,
+      stock: it.quantity || 0,
+      batches: [],
+      batchNumber: null,
+      expiryDate: null,
+      batchAvailable: it.quantity || 1,
+    }));
+    setItems(mappedItems);
+    setRequisitionLink({
+      requisitionId: requisitionOrder.requisitionId,
+      requisitionSectionId: requisitionOrder.id,
+    });
+  }, [requisitionOrder]);
+
+  useEffect(() => {
     const dataMap = {
       store: stores,
       shop: shops,
       factory: factories,
     };
     const data = dataMap[fromType];
-    if (data && data.length > 0) {
+    if (data && data.length > 0 && !data.some((row) => String(row.id) === String(fromId))) {
       setFromId(data[0].id);
-    } else {
+    } else if (!data || data.length === 0) {
       setFromId('');
     }
-  }, [fromType, stores, shops, factories]);
+  }, [fromType, stores, shops, factories, fromId]);
 
   useEffect(() => {
     const dataMap = {
@@ -86,12 +127,12 @@ const AddTransfer = () => {
       factory: factories,
     };
     const data = dataMap[toType];
-    if (data && data.length > 0) {
+    if (data && data.length > 0 && !data.some((row) => String(row.id) === String(toId))) {
       setToId(data[0].id);
-    } else {
+    } else if (!data || data.length === 0) {
       setToId('');
     }
-  }, [toType, stores, shops, factories]);
+  }, [toType, stores, shops, factories, toId]);
 
   const handleSearch = async (e) => {
     setSearch(e.target.value);
@@ -199,6 +240,8 @@ const AddTransfer = () => {
     formData.append('shipping_cost', shippingCost);
     formData.append('note', note);
     formData.append('status', status);
+    if (requisitionLink.requisitionId) formData.append('requisitionId', requisitionLink.requisitionId);
+    if (requisitionLink.requisitionSectionId) formData.append('requisitionSectionId', requisitionLink.requisitionSectionId);
     if (document) {
       formData.append('document', document);
     }
@@ -211,8 +254,19 @@ const AddTransfer = () => {
           Authorization: `Bearer ${token}`,
         },
       });
+      if (requisitionLink.requisitionSectionId) {
+        try {
+          await axios.post(
+            API_ROUTES.REQUISITION_SECTION_COMPLETE(requisitionLink.requisitionSectionId),
+            { status: 'done', note: 'Completed by transfer creation' },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        } catch {
+          // Non-blocking: transfer already created
+        }
+      }
       alert('Transfer created successfully');
-      location.reload();
+      window.location.reload();
     } catch (error) {
       alert('Failed to create transfer');
       console.error('Submission error:', error);
@@ -418,6 +472,13 @@ const AddTransfer = () => {
 
         {/* Right Column - Items */}
         <div className="space-y-6">
+          {requisitionOrder && (
+            <div className="glass-card p-4 border border-indigo-200 bg-indigo-50/50 rounded-xl">
+              <p className="text-sm text-indigo-700 font-semibold">
+                Requisition Order: {requisitionOrder?.requisition?.reference} / Section {requisitionOrder?.sectionNo}
+              </p>
+            </div>
+          )}
           {/* Search Card */}
           <div className="glass-card p-6 border border-white/20 backdrop-blur-xl">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">

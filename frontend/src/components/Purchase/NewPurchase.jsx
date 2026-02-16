@@ -1,13 +1,20 @@
 import { useEffect, useState, useRef } from "react";
 import { Plus, Trash2, Package, Tag, Truck, Building2, Store, Factory, ShoppingBag, Check, Image as ImageIcon, CreditCard, DollarSign, Percent, Truck as ShippingIcon } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { API_ROUTES } from "../../config";
 
 export default function NewPurchase() {
+  const location = useLocation();
+  const requisitionOrder = location.state?.requisitionOrder || null;
+  const [requisitionLink, setRequisitionLink] = useState({
+    requisitionId: null,
+    requisitionSectionId: null,
+  });
   const [materials, setMaterials] = useState([]);
   const [products, setProducts] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [destinations, setDestinations] = useState([]);
   const [destinationType, setDestinationType] = useState("store");
-  const [destinationId, setDestinationId] = useState("");
   const [searchState, setSearchState] = useState({
     searchTerm: "",
     showSearchResults: false,
@@ -62,6 +69,53 @@ export default function NewPurchase() {
     fetchDestinations();
     fetchBankAccounts();
   }, [destinationType]);
+
+  useEffect(() => {
+    if (!requisitionOrder) return;
+    const destinationTypeFromOrder = requisitionOrder.destinationType || requisitionOrder.destination?.type;
+    const destinationIdFromOrder = requisitionOrder.destinationId || requisitionOrder.destination?.id;
+    if (destinationTypeFromOrder && destinationIdFromOrder) {
+      setDestinationType(destinationTypeFromOrder);
+      setForm((prev) => ({
+        ...prev,
+        destinationType: destinationTypeFromOrder,
+        destinationId: String(destinationIdFromOrder),
+      }));
+    }
+
+    const mapped = (requisitionOrder.items || []).map((it) => {
+      const isProduct = it.itemType === "product";
+      const itemEntity = isProduct ? it.product : it.material;
+      const defaultPrice = isProduct ? (itemEntity?.cost || 0) : (itemEntity?.unit_cost || 0);
+      const qty = parseFloat(it.quantity || 1);
+      return {
+        uniqueId: `${it.itemType}-${isProduct ? it.productId : it.materialId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        itemType: it.itemType,
+        materialId: isProduct ? "" : String(it.materialId || ""),
+        productId: isProduct ? String(it.productId || "") : "",
+        name: itemEntity?.name || "",
+        image: itemEntity?.image || null,
+        unit: isProduct ? "unit" : (itemEntity?.unit || ""),
+        quantity: String(qty),
+        unitPrice: String(defaultPrice),
+        total: qty * defaultPrice,
+        receivedQuantity: String(qty),
+        batchNumber: "",
+        expiryDate: "",
+        manufactureDate: "",
+        batchNotes: "",
+        originalStandardPrice: defaultPrice,
+      };
+    });
+    if (mapped.length > 0) {
+      setPurchaseItems(mapped);
+    }
+
+    setRequisitionLink({
+      requisitionId: requisitionOrder.requisitionId,
+      requisitionSectionId: requisitionOrder.id,
+    });
+  }, [requisitionOrder]);
 
  const fetchMaterials = async () => {
   try {
@@ -297,20 +351,8 @@ const fetchBankAccounts = async () => {
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleDestinationTypeChange = (e) => {
-    const newType = e.target.value;
-    setDestinationType(newType);
-    setDestinationId("");
-    setForm(prev => ({ 
-      ...prev, 
-      destinationType: newType,
-      destinationId: ""
-    }));
-  };
-
   const handleDestinationChange = (e) => {
     const newId = e.target.value;
-    setDestinationId(newId);
     setForm(prev => ({ ...prev, destinationId: newId }));
   };
 
@@ -460,6 +502,17 @@ const fetchBankAccounts = async () => {
         
       const data = await res.json();
       if (res.ok) {
+        if (requisitionLink.requisitionSectionId) {
+          try {
+            await fetch(API_ROUTES.REQUISITION_SECTION_COMPLETE(requisitionLink.requisitionSectionId), {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ status: "done", note: "Completed by purchase creation" }),
+            });
+          } catch {
+            // Non-blocking: purchase already created
+          }
+        }
         setMessage("✅ Purchase created successfully with transaction!");
         // Reset form
         setForm({
@@ -477,7 +530,6 @@ const fetchBankAccounts = async () => {
           reference: `PUR-${Date.now()}`
         });
         setDestinationType("store");
-        setDestinationId("");
         setPurchaseItems([]);
         setSearchState({
           searchTerm: "",
@@ -542,6 +594,11 @@ const fetchBankAccounts = async () => {
                   New Purchase Order
                 </h1>
                 <p className="text-gray-600 mt-1">Create a new purchase order for materials or products</p>
+                {requisitionOrder?.requisition?.reference && (
+                  <p className="text-sm text-indigo-700 mt-1">
+                    Requisition Order: {requisitionOrder.requisition.reference} / Section {requisitionOrder.sectionNo}
+                  </p>
+                )}
               </div>
             </div>
             <div className="hidden md:block px-4 py-2 bg-white/60 backdrop-blur-sm rounded-lg border border-white/80">

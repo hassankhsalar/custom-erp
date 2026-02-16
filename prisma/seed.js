@@ -101,6 +101,7 @@ async function main() {
         'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_add_payment',
         'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read',
         'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive',
+        'requisition_create', 'requisition_read', 'requisition_update', 'requisition_delete', 'requisition_approve', 'requisition_segment', 'requisition_order_accept',
         'damage_create', 'damage_edit', 'damage_delete', 'damage_read',
         'repairs_create', 'repairs_edit', 'repairs_delete', 'repairs_read',
         
