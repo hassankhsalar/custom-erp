@@ -255,7 +255,7 @@ app.listen(port, () => {
 
 startSalaryCron();
 startDailyStockCron();
-testCron();
+// testCron();
 
 
 module.exports = {

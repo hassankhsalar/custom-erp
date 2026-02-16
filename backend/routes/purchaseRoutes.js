@@ -174,7 +174,7 @@ router.post("/", async (req, res) => {
     const calculatedGrandTotal = amountAfterDiscount + taxAmount + parseFloat(shippingCost);
     
     // Validate that paid amount is not greater than grand total
-    if ((parseFloat(paidAmount) - calculatedGrandTotal) > 0 ) {
+    if ((parseFloat(paidAmount).toFixed(2) - calculatedGrandTotal.toFixed(2)) > 0 ) {
       return res.status(400).json({ 
         error: "Paid amount cannot exceed grand total from" 
       });

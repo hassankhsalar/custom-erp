@@ -404,7 +404,7 @@ const fetchBankAccounts = async () => {
 
     // Validate paid amount
     const paidAmount = parseFloat(form.paidAmount) || 0;
-    if ((paidAmount - financialBreakdown.grandTotal) > 0 && paidAmount > 0) {
+    if ((paidAmount.toFixed(2) - financialBreakdown.grandTotal.toFixed(2)) > 0 && paidAmount > 0) {
       setMessage(`❌ Paid amount cannot exceed grand total` );
       setLoading(false);
       return;

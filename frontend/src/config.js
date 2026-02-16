@@ -34,6 +34,7 @@ export const API_ROUTES = {
   SHOP_WARRANTY_BY_ID: (id) => `${API_BASE_URL}/shop-sales/warranties/${id}`,
   SHOP_WARRANTY_CLAIMS: (id) => `${API_BASE_URL}/shop-sales/warranties/${id}/claims`,
   SHOP_SALES_SHOPS: `${API_BASE_URL}/shop-sales/shops`,
+  SHOP_SALES_CASH_REGISTERS: (shopId) => `${API_BASE_URL}/shop-sales/cash-registers/shop/${shopId}`,
   SHOP_SALES_ITEMS: (shopId) => `${API_BASE_URL}/shop-sales/items/shop/${shopId}`,
   SHOP_SALES_BY_ID: (id) => `${API_BASE_URL}/shop-sales/${id}`,
   
