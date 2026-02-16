@@ -15,6 +15,13 @@ export const API_ROUTES = {
   PRODUCTS_ALL: `${API_BASE_URL}/products/all-products`,
 
   FACTORIES: `${API_BASE_URL}/factories`,
+  FACTORY_INVENTORY_FACTORIES: `${API_BASE_URL}/factories/allfactories`,
+  FACTORY_INVENTORY: (factoryId) => `${API_BASE_URL}/factories/inventory/${factoryId}`,
+  FACTORY_INVENTORY_SUMMARY: (factoryId) => `${API_BASE_URL}/factories/inventory/${factoryId}/summary`,
+
+
+
+
   PRODUCTIONS: `${API_BASE_URL}/productions`,
   STORES: `${API_BASE_URL}/stores`,
   SALES: `${API_BASE_URL}/sales`,

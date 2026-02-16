@@ -6,20 +6,38 @@ const router = express.Router();
 // Get all customers
 router.get("/", async (req, res) => {
   try {
-    const { search } = req.query;
+    const { search, page = 1, limit = 10 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const take = parseInt(limit);
+
+    // Build where clause for search
+    const where = search
+      ? {
+          OR: [
+            { name: { contains: search } },
+            { mobile: { contains: search } },
+            { email: { contains: search } },
+          ],
+        }
+      : {};
+
+    // Get total count for pagination
+    const totalCount = await prisma.customer.count({ where });
+
+    // Get paginated customers
     const customers = await prisma.customer.findMany({
-      where: search
-        ? {
-            OR: [
-              { name: { contains: search } },
-              { mobile: { contains: search } },
-              { email: { contains: search } },
-            ],
-          }
-        : {},
+      where,
       orderBy: { name: "asc" },
+      skip,
+      take,
     });
-    res.json(customers);
+
+    res.json({
+      customers,
+      totalCount,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(totalCount / take),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

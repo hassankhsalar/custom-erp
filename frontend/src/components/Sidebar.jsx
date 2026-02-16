@@ -163,7 +163,8 @@ const Sidebar = () => {
       permissionKey: ['factory_read', 'factory_create'],
       subItems: [
         { name: 'All Factory', path: '/factories/all', icon: <Factory size={16} />, permissionKey: 'factory_read' },
-        { name: 'Add Factory', path: '/factories/add', icon: <Building size={16} />, permissionKey: 'factory_create' }
+        { name: 'Add Factory', path: '/factories/add', icon: <Building size={16} />, permissionKey: 'factory_create' },
+        { name: 'Inventory', path: '/factoryinventory', icon: <Building size={16} />, permissionKey: 'factory_read' }
       ]
     },
     {
@@ -175,7 +176,8 @@ const Sidebar = () => {
       permissionKey: ['store_read', 'store_create'],
       subItems: [
         { name: 'All Store', path: '/stores/all', icon: <Warehouse size={16} />, permissionKey: 'store_read' },
-        { name: 'Add Store', path: '/stores/add', icon: <Store size={16} />, permissionKey: 'store_create' }
+        { name: 'Add Store', path: '/stores/add', icon: <Store size={16} />, permissionKey: 'store_create' },
+        { name: 'Inventory', path: '/storeinventory', icon: <Store size={16} />, permissionKey: 'store_read' }
       ]
     },
     {
@@ -187,7 +189,8 @@ const Sidebar = () => {
       permissionKey: ['shop_read', 'shop_create'],
       subItems: [
         { name: 'All Shop', path: '/shop/all', icon: <ShoppingBag size={16} />, permissionKey: 'shop_read' },
-        { name: 'Add Shop', path: '/shop/add', icon: <Store size={16} />, permissionKey: 'shop_create' }
+        { name: 'Add Shop', path: '/shop/add', icon: <Store size={16} />, permissionKey: 'shop_create' },
+        { name: 'Inventory', path: '/shopinventory', icon: <Store size={16} />, permissionKey: 'shop_read' }
       ]
     },
     {

@@ -1,316 +1,654 @@
+
 import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
-import StoreProductsModal from './StoreProductsModal';
-import StoreMaterialsModal from './StoreMaterialsModal';
-import { FilePenLine, Trash, Eye, Plus, ChevronLeft, ChevronRight, Store, MapPin, User, Phone, Package, Box } from 'lucide-react';
+import {
+  Store,
+  User,
+  Phone,
+  MapPin,
+  Edit,
+  Trash2,
+  Plus,
+  AlertCircle,
+  CheckCircle,
+  Building2,
+  Users,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Eye,
+  X,
+  Package,
+  Box
+} from 'lucide-react';
 
 const AllStore = () => {
   const [stores, setStores] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [showProductsModal, setShowProductsModal] = useState(false);
-  const [showMaterialsModal, setShowMaterialsModal] = useState(false);
-  const [currentStoreProducts, setCurrentStoreProducts] = useState([]);
-  const [currentStoreMaterials, setCurrentStoreMaterials] = useState([]);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [modal, setModal] = useState({ isOpen: false, type: null, data: null });
+  const token = localStorage.getItem('token');
+  const navigate = useNavigate();
+  const [totalStores, setTotalStores] = useState(0);
 
   useEffect(() => {
-    fetchStores(currentPage);
-  }, [currentPage]);
+    const fetchStores = async () => {
+      if (!token) {
+        alert('Authentication required. Please login.');
+        navigate('/login');
+        return;
+      }
 
-  const fetchStores = async (page) => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_ROUTES.STORES}?page=${page}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setStores(response.data.stores);
-      setCurrentPage(response.data.currentPage);
-      setTotalPages(response.data.totalPages);
-    } catch (error) {
-      console.error('Error fetching stores:', error);
+      try {
+        setLoading(true);
+        const response = await axios.get(`${API_ROUTES.STORES}?pagination=false`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        // Handle both array response and paginated response
+        const storesData = response.data.stores || response.data;
+        setStores(storesData);
+        setTotalPages(Math.ceil(storesData.length / itemsPerPage));
+        setTotalStores(storesData.length);
+      } catch (error) {
+        console.error('Error fetching stores:', error);
+        
+        if (error.response?.status === 401) {
+          alert('Session expired. Please login again.');
+          localStorage.removeItem('token');
+          navigate('/login');
+        } else if (error.response?.status === 403) {
+          alert('Permission denied. You do not have access to stores.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    if (token) {
+      fetchStores();
     }
-  };
+  }, [token, navigate, itemsPerPage]);
 
   const handleDelete = async (id) => {
+    if (!token) {
+      alert('Authentication required. Please login.');
+      navigate('/login');
+      return;
+    }
+
     if (window.confirm('Are you sure you want to delete this store?')) {
       try {
-        const token = localStorage.getItem('token');
         await axios.delete(`${API_ROUTES.STORES}/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
         });
-        fetchStores(currentPage); // Refresh the list
+        
+        // Refetch stores after deletion
+        const response = await axios.get(`${API_ROUTES.STORES}?pagination=false`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        const storesData = response.data.stores || response.data;
+        setStores(storesData);
+        setTotalPages(Math.ceil(storesData.length / itemsPerPage));
+        setTotalStores(storesData.length);
+        alert('Store deleted successfully!');
       } catch (error) {
         console.error('Error deleting store:', error);
+        
+        if (error.response?.status === 401) {
+          alert('Session expired. Please login again.');
+          localStorage.removeItem('token');
+          navigate('/login');
+        } else if (error.response?.status === 403) {
+          alert('Permission denied. You cannot delete stores.');
+        } else {
+          alert('Error deleting store. Please try again.');
+        }
       }
     }
   };
 
-  const openProductsModal = (products) => {
-    setCurrentStoreProducts(products);
-    setShowProductsModal(true);
+  const openDetailsModal = (store) => {
+    setModal({ isOpen: true, type: 'details', data: store });
   };
 
-  const closeProductsModal = () => {
-    setShowProductsModal(false);
-    setCurrentStoreProducts([]);
+  const closeModal = () => {
+    setModal({ isOpen: false, type: null, data: null });
   };
 
-  const openMaterialsModal = (materials) => {
-    setCurrentStoreMaterials(materials);
-    setShowMaterialsModal(true);
+  const getContactStatus = (store) => {
+    const hasPhone = store.mobile && store.mobile.trim() !== '';
+    const hasKeeper = store.store_keeper && store.store_keeper.trim() !== '';
+    
+    if (hasPhone && hasKeeper) {
+      return {
+        text: 'Complete Contact',
+        color: 'bg-gradient-to-r from-emerald-500 to-green-500',
+        icon: <CheckCircle size={14} />
+      };
+    } else if (hasPhone || hasKeeper) {
+      return {
+        text: 'Partial Contact',
+        color: 'bg-gradient-to-r from-amber-500 to-orange-500',
+        icon: <AlertCircle size={14} />
+      };
+    } else {
+      return {
+        text: 'No Contact',
+        color: 'bg-gradient-to-r from-red-500 to-rose-500',
+        icon: <AlertCircle size={14} />
+      };
+    }
   };
 
-  const closeMaterialsModal = () => {
-    setShowMaterialsModal(false);
-    setCurrentStoreMaterials([]);
+  // Get current page items
+  const getCurrentPageItems = () => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return stores.slice(startIndex, endIndex);
   };
+
+  // Pagination controls
+  const nextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const prevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const goToPage = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  // Calculate statistics
+  const storesWithKeeper = stores.filter(s => s.store_keeper && s.store_keeper.trim() !== '').length;
+  const storesWithPhone = stores.filter(s => s.mobile && s.mobile.trim() !== '').length;
+  const totalProducts = stores.reduce((sum, store) => sum + (store.storeProducts?.length || 0), 0);
+  const totalMaterials = stores.reduce((sum, store) => sum + (store.storeMaterials?.length || 0), 0);
+
+  const currentStores = getCurrentPageItems();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
-      {/* Header with glass effect */}
-      <div className="glass-card rounded-2xl p-6 mb-8 border border-white/30 shadow-xl backdrop-blur-sm">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              All Stores
-            </h1>
-            <p className="text-gray-600 mt-2">Manage your store inventory and details</p>
-          </div>
-          <Link 
-            to="/stores/add" 
-            className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold rounded-xl transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.02]"
-          >
-            <Plus size={20} />
-            Add New Store
-          </Link>
-        </div>
+    <div className="min-h-screen w-full bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-4 md:p-6">
+      {/* Background decorative elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-emerald-300/20 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-teal-300/20 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-cyan-300/10 rounded-full blur-3xl"></div>
       </div>
 
-      {/* Stats Cards with glass effect */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="glass-card rounded-xl p-5 border border-white/30 shadow-lg backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 text-sm">Total Stores</p>
-              <p className="text-2xl font-bold text-gray-800">Active</p>
+      <div className="relative w-full mx-auto">
+        {/* Header Card */}
+        <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-emerald-100/50 mb-6 p-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-4 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl shadow-lg">
+                <Store className="text-white" size={36} />
+              </div>
+              <div>
+                <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                  All Stores
+                </h1>
+                <p className="text-gray-600 mt-2">Manage your store locations and contacts</p>
+              </div>
             </div>
-            <div className="p-3 bg-blue-500/10 rounded-lg">
-              <Store className="text-blue-500" size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-card rounded-xl p-5 border border-white/30 shadow-lg backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 text-sm">Store Keepers</p>
-              <p className="text-2xl font-bold text-gray-800">{stores.length}</p>
-            </div>
-            <div className="p-3 bg-green-500/10 rounded-lg">
-              <User className="text-green-500" size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-card rounded-xl p-5 border border-white/30 shadow-lg backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 text-sm">Total Products</p>
-              <p className="text-2xl font-bold text-gray-800">
-                {stores.reduce((sum, store) => sum + (store.storeProducts?.length || 0), 0)}
-              </p>
-            </div>
-            <div className="p-3 bg-purple-500/10 rounded-lg">
-              <Package className="text-purple-500" size={24} />
+            
+            <div className="flex items-center gap-4">
+              <Link 
+                to="/stores/add" 
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+              >
+                <Plus size={20} />
+                New Store
+              </Link>
             </div>
           </div>
         </div>
 
-        <div className="glass-card rounded-xl p-5 border border-white/30 shadow-lg backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 text-sm">Total Materials</p>
-              <p className="text-2xl font-bold text-gray-800">
-                {stores.reduce((sum, store) => sum + (store.storeMaterials?.length || 0), 0)}
-              </p>
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+          <div className="backdrop-blur-lg bg-gradient-to-br from-emerald-50/60 to-teal-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Stores</p>
+                <p className="text-2xl font-bold text-emerald-600">{totalStores}</p>
+              </div>
+              <div className="p-3 bg-emerald-100 rounded-xl">
+                <Store size={24} className="text-emerald-600" />
+              </div>
             </div>
-            <div className="p-3 bg-orange-500/10 rounded-lg">
-              <Box className="text-orange-500" size={24} />
+          </div>
+          
+          <div className="backdrop-blur-lg bg-gradient-to-br from-emerald-50/60 to-green-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">With Store Keeper</p>
+                <p className="text-2xl font-bold text-emerald-600">{storesWithKeeper}</p>
+              </div>
+              <div className="p-3 bg-emerald-100 rounded-xl">
+                <Users size={24} className="text-emerald-600" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="backdrop-blur-lg bg-gradient-to-br from-purple-50/60 to-violet-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Products</p>
+                <p className="text-2xl font-bold text-purple-600">{totalProducts}</p>
+              </div>
+              <div className="p-3 bg-purple-100 rounded-xl">
+                <Package size={24} className="text-purple-600" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="backdrop-blur-lg bg-gradient-to-br from-amber-50/60 to-orange-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Materials</p>
+                <p className="text-2xl font-bold text-amber-600">{totalMaterials}</p>
+              </div>
+              <div className="p-3 bg-amber-100 rounded-xl">
+                <Box size={24} className="text-amber-600" />
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Main Table Container with glass effect */}
-      <div className="glass-card rounded-2xl border border-white/30 shadow-2xl backdrop-blur-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full">
-            <thead>
-              <tr className="bg-gradient-to-r from-blue-500/10 to-purple-500/10">
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    <Store size={16} />
-                    Store Name
-                  </div>
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    <MapPin size={16} />
-                    Address
-                  </div>
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    <User size={16} />
-                    Store Keeper
-                  </div>
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    <Phone size={16} />
-                    Mobile
-                  </div>
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Products
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Materials
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200/50">
-              {stores.map((store, index) => (
-                <tr 
-                  key={store.id} 
-                  className="hover:bg-white/30 transition-colors duration-200"
-                  style={{
-                    animationDelay: `${index * 50}ms`,
-                    animation: 'fadeInUp 0.5s ease forwards'
-                  }}
-                >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{store.name}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-600 max-w-xs truncate">{store.address}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{store.store_keeper}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{store.mobile}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <button
-                      onClick={() => openProductsModal(store.storeProducts)}
-                      className="group flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500/10 to-blue-600/10 hover:from-blue-500/20 hover:to-blue-600/20 text-blue-600 hover:text-blue-700 font-medium rounded-lg transition-all duration-300 border border-blue-200 hover:border-blue-300"
+        {/* Main Content */}
+        <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-600 rounded-full animate-spin"></div>
+                <p className="text-gray-600">Loading stores...</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto rounded-xl border border-white/60">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100/80">
+                    <tr>
+                      <th className="p-4 text-left font-medium text-gray-700">Store Info</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Contact Status</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Location</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentStores.map((store, index) => {
+                      const contactStatus = getContactStatus(store);
+                      
+                      return (
+                        <tr key={store.id} className={`border-t border-white/50 hover:bg-white/30 transition-colors duration-200 ${
+                          index % 2 === 0 ? 'bg-white/10' : ''
+                        }`}>
+                          <td className="p-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
+                                <Building2 size={20} className="text-emerald-600" />
+                              </div>
+                              <div>
+                                <p className="font-semibold text-gray-800">{store.name}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <User size={12} className="text-gray-400" />
+                                  <p className="text-xs text-gray-500">{store.store_keeper || 'No keeper'}</p>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex flex-col items-start gap-2">
+                              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-semibold ${contactStatus.color}`}>
+                                {contactStatus.icon}
+                                {contactStatus.text}
+                              </div>
+                              <div className="text-sm text-gray-700">
+                                <div className="flex items-center gap-2">
+                                  <Phone size={12} className="text-gray-400" />
+                                  <span>{store.mobile || 'No phone'}</span>
+                                </div>
+                                
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-start gap-2">
+                              <MapPin size={14} className="text-gray-400 mt-0.5" />
+                              <div>
+                                <p className="font-medium text-gray-800">{store.address || 'No address'}</p>
+                                {store.address && (
+                                  <p className="text-xs text-gray-500 mt-1">Location details available</p>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => openDetailsModal(store)}
+                                className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors duration-300"
+                                title="View Details"
+                              >
+                                <Eye size={16} />
+                              </button>
+                              
+                              <Link
+                                to={`/stores/edit/${store.id}`}
+                                className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
+                                title="Edit"
+                              >
+                                <Edit size={16} />
+                              </Link>
+                              
+                              <button
+                                onClick={() => handleDelete(store.id)}
+                                className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                title="Delete"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                
+                {stores.length === 0 && !loading && (
+                  <div className="text-center py-12">
+                    <div className="p-4 bg-white/50 rounded-xl inline-block mb-4">
+                      <Store size={48} className="text-gray-300" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-700 mb-2">No Stores Found</h3>
+                    <p className="text-gray-600 mb-6">Get started by adding your first store location</p>
+                    <Link 
+                      to="/stores/add" 
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold rounded-xl hover:shadow-lg transition-all duration-300"
                     >
-                      <Package size={16} />
-                      View ({store.storeProducts?.length || 0})
-                    </button>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <button
-                      onClick={() => openMaterialsModal(store.storeMaterials)}
-                      className="group flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500/10 to-orange-600/10 hover:from-orange-500/20 hover:to-orange-600/20 text-orange-600 hover:text-orange-700 font-medium rounded-lg transition-all duration-300 border border-orange-200 hover:border-orange-300"
-                    >
-                      <Box size={16} />
-                      View ({store.storeMaterials?.length || 0})
-                    </button>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                      <Plus size={20} />
+                      Add First Store
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              {/* Pagination Controls */}
+              {stores.length > 0 && (
+                <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl p-4 mt-4">
+                  <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      {/* Items per page selector */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">Show:</span>
+                        <select
+                          value={itemsPerPage}
+                          onChange={(e) => {
+                            setItemsPerPage(Number(e.target.value));
+                            setCurrentPage(1);
+                          }}
+                          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                        >
+                          <option value="5">5</option>
+                          <option value="10">10</option>
+                          <option value="20">20</option>
+                          <option value="50">50</option>
+                        </select>
+                        <span className="text-sm text-gray-600">per page</span>
+                      </div>
+
+                      {/* Page info */}
+                      <div className="text-sm text-gray-700">
+                        Showing <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
+                        <span className="font-semibold">
+                          {Math.min(currentPage * itemsPerPage, stores.length)}
+                        </span>{" "}
+                        of <span className="font-semibold">{totalStores}</span> stores
+                      </div>
+                    </div>
+
+                    {/* Pagination buttons */}
                     <div className="flex items-center gap-2">
-                      <Link
-                        to={`/stores/edit/${store.id}`}
-                        className="group p-2 bg-gradient-to-r from-green-500/10 to-green-600/10 hover:from-green-500/20 hover:to-green-600/20 text-green-600 hover:text-green-700 rounded-lg transition-all duration-300 border border-green-200 hover:border-green-300 hover:scale-105"
-                        title="Edit"
-                      >
-                        <FilePenLine size={18} />
-                      </Link>
-                      <Link
-                        to={`/stores/details/${store.id}`}
-                        className="group p-2 bg-gradient-to-r from-blue-500/10 to-blue-600/10 hover:from-blue-500/20 hover:to-blue-600/20 text-blue-600 hover:text-blue-700 rounded-lg transition-all duration-300 border border-blue-200 hover:border-blue-300 hover:scale-105"
-                        title="Details"
-                      >
-                        <Eye size={18} />
-                      </Link>
+                      {/* First page */}
                       <button
-                        onClick={() => handleDelete(store.id)}
-                        className="group p-2 bg-gradient-to-r from-red-500/10 to-red-600/10 hover:from-red-500/20 hover:to-red-600/20 text-red-600 hover:text-red-700 rounded-lg transition-all duration-300 border border-red-200 hover:border-red-300 hover:scale-105"
-                        title="Delete"
+                        onClick={() => goToPage(1)}
+                        disabled={currentPage === 1}
+                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                        title="First page"
                       >
-                        <Trash size={18} />
+                        <ChevronsLeft size={16} className="text-gray-600" />
+                      </button>
+
+                      {/* Previous page */}
+                      <button
+                        onClick={prevPage}
+                        disabled={currentPage === 1}
+                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                        title="Previous page"
+                      >
+                        <ChevronLeft size={16} className="text-gray-600" />
+                      </button>
+
+                      {/* Page numbers */}
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let pageNum;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => goToPage(pageNum)}
+                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                                currentPage === pageNum
+                                  ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white"
+                                  : "hover:bg-white/50 text-gray-700"
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+
+                        {totalPages > 5 && currentPage < totalPages - 2 && (
+                          <>
+                            <span className="mx-1 text-gray-400">...</span>
+                            <button
+                              onClick={() => goToPage(totalPages)}
+                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                                currentPage === totalPages
+                                  ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white"
+                                  : "hover:bg-white/50 text-gray-700"
+                              }`}
+                            >
+                              {totalPages}
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Next page */}
+                      <button
+                        onClick={nextPage}
+                        disabled={currentPage === totalPages}
+                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                        title="Next page"
+                      >
+                        <ChevronRight size={16} className="text-gray-600" />
+                      </button>
+
+                      {/* Last page */}
+                      <button
+                        onClick={() => goToPage(totalPages)}
+                        disabled={currentPage === totalPages}
+                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                        title="Last page"
+                      >
+                        <ChevronsRight size={16} className="text-gray-600" />
                       </button>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination with glass effect */}
-        <div className="glass-card border-t border-white/30 p-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">
-              Showing <span className="font-semibold">{stores.length}</span> stores
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="group flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-white/30 hover:bg-white/50 border border-white/30 hover:border-white/50"
-              >
-                <ChevronLeft size={18} />
-                Previous
-              </button>
-              <div className="flex items-center gap-2 mx-4">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  const pageNum = Math.max(1, Math.min(currentPage - 2, totalPages - 4)) + i;
-                  if (pageNum > totalPages) return null;
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => setCurrentPage(pageNum)}
-                      className={`w-10 h-10 rounded-lg transition-all duration-300 ${
-                        currentPage === pageNum
-                          ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg'
-                          : 'bg-white/30 hover:bg-white/50 text-gray-700'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-              </div>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-                className="group flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-white/30 hover:bg-white/50 border border-white/30 hover:border-white/50"
-              >
-                Next
-                <ChevronRight size={18} />
-              </button>
-            </div>
-          </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
-      {/* Modals */}
-      {showProductsModal && (
-        <StoreProductsModal products={currentStoreProducts} onClose={closeProductsModal} />
-      )}
-      {showMaterialsModal && (
-        <StoreMaterialsModal materials={currentStoreMaterials} onClose={closeMaterialsModal} />
-      )}
+      {/* Store Details Modal */}
+      {modal.isOpen && modal.type === 'details' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeModal}></div>
+          <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="sticky top-0 z-10 p-6 border-b border-white/50 bg-gradient-to-r from-emerald-500/10 to-teal-500/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl shadow-lg">
+                    <Store className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800">Store Details</h2>
+                    <p className="text-gray-600">{modal.data.name}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={closeModal}
+                  className="p-2 bg-white/60 rounded-lg hover:bg-white/80 transition-colors duration-300"
+                >
+                  <X size={20} className="text-gray-600" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {/* Store Information */}
+                <div className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-5">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Store Information</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-sm text-gray-600 font-medium">Store Name</p>
+                      <p className="font-medium text-lg text-gray-800">{modal.data.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 font-medium">Contact Status</p>
+                      <div className="mt-2">
+                        {(() => {
+                          const status = getContactStatus(modal.data);
+                          return (
+                            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-sm font-semibold ${status.color}`}>
+                              {status.icon}
+                              {status.text}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Location Information */}
+                <div className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-5">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                    <MapPin size={20} className="text-emerald-600" />
+                    Location Details
+                  </h3>
+                  <div className="flex items-start gap-3">
+                    <MapPin size={18} className="text-gray-400 mt-0.5" />
+                    <div>
+                      <p className="font-medium text-gray-800">
+                        {modal.data.address || 'No address provided'}
+                      </p>
+                      {modal.data.address && (
+                        <p className="text-sm text-gray-500 mt-2">
+                          Full store location and address information
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-      
+              {/* Contact Information */}
+              <div className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-5 mb-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Contact Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 bg-gradient-to-r from-emerald-50/50 to-emerald-100/30 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <User size={16} className="text-emerald-600" />
+                      <p className="text-sm font-medium text-gray-700">Store Keeper</p>
+                    </div>
+                    <p className="text-lg font-bold text-emerald-600">
+                      {modal.data.store_keeper || 'Not assigned'}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-gradient-to-r from-teal-50/50 to-teal-100/30 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Phone size={16} className="text-teal-600" />
+                      <p className="text-sm font-medium text-gray-700">Phone</p>
+                    </div>
+                    <p className="text-lg font-bold text-teal-600">
+                      {modal.data.mobile || 'Not provided'}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-gradient-to-r from-purple-50/50 to-purple-100/30 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Package size={16} className="text-purple-600" />
+                      <p className="text-sm font-medium text-gray-700">Products</p>
+                    </div>
+                    <p className="text-lg font-bold text-purple-600">
+                      {modal.data.storeProducts?.length || 0}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+            
+            <div className="sticky bottom-0 p-6 border-t border-white/50">
+              <div className="flex justify-end gap-3">
+                
+                <button
+                  onClick={closeModal}
+                  className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
+                >
+                  Close Details
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

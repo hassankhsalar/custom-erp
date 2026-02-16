@@ -98,6 +98,10 @@ import { API_ROUTES } from "./config";
 
 import { useCurrentUser } from "./hooks/useCurrentUser";
 import { usePermission } from "./hooks/usePermission";
+import FactoryInventory from "./components/Factory/FactoryInventory";
+import StoreInventory from "./components/Stores/StoreInventory";
+import ShopInventory from "./components/Shop/ShopInventory";
+import EditShop from "./components/Shop/EditShop";
 
 const AuthContext = createContext(null);
 
@@ -270,11 +274,18 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="factory_create" />}>
               <Route path="/factories/add" element={<AddFactory />} />
             </Route>
+            
+            <Route element={<PermissionRoute requiredPermission="factory_read" />}>
+              <Route path="/factoryinventory" element={<FactoryInventory />} />
+            </Route>
             <Route element={<PermissionRoute requiredPermission="factory_edit" />}>
               <Route path="/factories/edit/:id" element={<EditFactory />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="store_read" />}>
               <Route path="/stores/all" element={<AllStore />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="store_read" />}>
+              <Route path="/storeinventory" element={<StoreInventory />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="store_create" />}>
               <Route path="/stores/add" element={<AddStore />} />
@@ -291,8 +302,14 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="shop_create" />}>
               <Route path="/shop/add" element={<AddShop />} />
             </Route>
+            <Route element={<PermissionRoute requiredPermission="shop_create" />}>
+              <Route path="/shop/edit/:id" element={<EditShop />} />
+            </Route>
             <Route element={<PermissionRoute requiredPermission="shop_read" />}>
               <Route path="/shop/all" element={<AllShop />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="shop_read" />}>
+              <Route path="/shopinventory" element={<ShopInventory />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="sales_report" />}>
               <Route path="/report/sale" element={<SaleReport />} />
