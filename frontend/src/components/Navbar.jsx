@@ -75,7 +75,7 @@ const Navbar = () => {
     return (
         <>
             {/* Glass Navbar */}
-            <nav className="w-full rounded-2xl mx-2 mt-2 px-4 md:px-8 py-3 backdrop-blur-xl border border-white/20 shadow-xl bg-white/70 z-50 relative">
+            <nav className="w-full rounded-2xl mt-2 px-4 md:px-8 py-3 backdrop-blur-xl border border-white/20 shadow-xl bg-white/70 z-50 relative">
                 <div className="flex items-center justify-between w-full">
                     
                     {/* Logo and Brand */}

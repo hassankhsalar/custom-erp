@@ -173,10 +173,10 @@ const AuthenticatedLayout = () => {
           <Sidebar />
         </div>
       <div className="w-full">
-        <div className="h-25 w-full mx-auto">
+        <div className="h-25 w-full mx-auto px-2">
         <Navbar />
       </div>
-        <div style={{ flexGrow: 1, padding: "0px" }}>
+        <div className="rounded-t-2xl mx-2" style={{ flexGrow: 1, padding: "0px" }}>
           <Outlet /> {/* This is where nested routes will render */}
         </div>
       </div>
