@@ -623,7 +623,7 @@ export default function AllPurchase() {
               <tbody>
                 {currentItems.map((purchase) => {
                   const dueAmount = calculateDueAmount(purchase);
-                  const isPaid = dueAmount <= 0;
+                  const isPaid = dueAmount.toFixed(2) <= 0.00;
                   
                   return (
                     <tr

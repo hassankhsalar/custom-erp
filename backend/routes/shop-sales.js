@@ -163,7 +163,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
 // Create a new sale for shop (updated for products & materials)
 router.post("/", async (req, res) => {
   try {
-    const { shopId, customerId, paymentType, discount, items, bankAccountId, paidAmount } = req.body;
+    const { shopId, customerId, paymentType, discount, items, bankAccountId, paidAmount, cashRegisterId } = req.body;
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, "shop", parseInt(shopId));
 
@@ -207,6 +207,9 @@ router.post("/", async (req, res) => {
     if (["bank", "card"].includes(normalizedPaymentType) && paid > 0 && !bankAccountId) {
       return res.status(400).json({ error: "Bank account is required for card/bank payments" });
     }
+    if (normalizedPaymentType === "cash" && paid > 0 && !cashRegisterId) {
+      return res.status(400).json({ error: "Cash register is required for cash payments" });
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       // Calculate totals
@@ -236,10 +239,36 @@ router.post("/", async (req, res) => {
 
       // Create the sale
       let bankRecord = null;
+      let cashRegisterRecord = null;
       if (["bank", "card"].includes(normalizedPaymentType) && bankAccountId && finalPaidAmount > 0) {
         bankRecord = await tx.bankAccount.update({
           where: { id: parseInt(bankAccountId) },
           data: { current_balance: { increment: finalPaidAmount } }
+        });
+      }
+      if (normalizedPaymentType === "cash" && cashRegisterId && finalPaidAmount > 0) {
+        const registerId = parseInt(cashRegisterId);
+        const assignment = await tx.cashRegisterAssignment.findFirst({
+          where: {
+            entityType: "shop",
+            entityId: parseInt(shopId),
+            cashRegisterId: registerId,
+            isActive: true,
+          },
+        });
+        if (!assignment) {
+          throw new Error("Selected cash register is not assigned to this shop");
+        }
+        const existingRegister = await tx.cashRegister.findUnique({
+          where: { id: registerId },
+          select: { id: true, status: true }
+        });
+        if (!existingRegister || existingRegister.status !== "active") {
+          throw new Error("Selected cash register is not active");
+        }
+        cashRegisterRecord = await tx.cashRegister.update({
+          where: { id: registerId },
+          data: { cash_in_hand: { increment: finalPaidAmount } },
         });
       }
 
@@ -470,6 +499,7 @@ router.post("/", async (req, res) => {
         await createTransaction(tx, {
           reference: `SALE-${Date.now()}`,
           createdById,
+          cashRegisterId: cashRegisterRecord ? cashRegisterRecord.id : null,
           accountId: entityAccount.accountId,
           bankAccountId: bankRecord ? bankRecord.id : null,
           saleId: sale.id,
@@ -502,6 +532,40 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: err.message });
     }
     
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/cash-registers/shop/:shopId", async (req, res) => {
+  try {
+    const shopId = parseInt(req.params.shopId, 10);
+    if (!shopId) {
+      return res.status(400).json({ error: "Invalid shopId" });
+    }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", shopId);
+
+    const assignments = await prisma.cashRegisterAssignment.findMany({
+      where: {
+        entityType: "shop",
+        entityId: shopId,
+        isActive: true,
+        cashRegister: { status: "active" },
+      },
+      include: {
+        cashRegister: {
+          select: { id: true, name: true, status: true, cash_in_hand: true },
+        },
+      },
+      orderBy: { assignedAt: "desc" },
+    });
+
+    res.json(assignments.map((a) => a.cashRegister));
+  } catch (err) {
+    if (err.status === 403) {
+      return res.json([]);
+    }
     res.status(500).json({ error: err.message });
   }
 });
@@ -793,7 +857,7 @@ router.post("/:id/payments", async (req, res) => {
       return res.status(400).json({ error: "Invalid sale ID" });
     }
 
-    const { amount, payment_method, bankAccountId, note } = req.body;
+    const { amount, payment_method, bankAccountId, cashRegisterId, note } = req.body;
     const paymentAmount = parseFloat(amount);
     if (!paymentAmount || paymentAmount <= 0) {
       return res.status(400).json({ error: "Payment amount must be greater than 0" });
@@ -829,10 +893,36 @@ router.post("/:id/payments", async (req, res) => {
 
     const result = await prisma.$transaction(async (tx) => {
       let bankRecord = null;
+      let cashRegisterRecord = null;
       if (["bank", "card"].includes((payment_method || "cash").toLowerCase()) && bankAccountId) {
         bankRecord = await tx.bankAccount.update({
           where: { id: parseInt(bankAccountId) },
           data: { current_balance: { increment: paymentAmount } }
+        });
+      }
+      if ((payment_method || "cash").toLowerCase() === "cash" && cashRegisterId) {
+        const registerId = parseInt(cashRegisterId);
+        const assignment = await tx.cashRegisterAssignment.findFirst({
+          where: {
+            entityType: "shop",
+            entityId: sale.shopId,
+            cashRegisterId: registerId,
+            isActive: true,
+          },
+        });
+        if (!assignment) {
+          throw new Error("Selected cash register is not assigned to this shop");
+        }
+        const existingRegister = await tx.cashRegister.findUnique({
+          where: { id: registerId },
+          select: { id: true, status: true }
+        });
+        if (!existingRegister || existingRegister.status !== "active") {
+          throw new Error("Selected cash register is not active");
+        }
+        cashRegisterRecord = await tx.cashRegister.update({
+          where: { id: registerId },
+          data: { cash_in_hand: { increment: paymentAmount } },
         });
       }
 
@@ -850,6 +940,7 @@ router.post("/:id/payments", async (req, res) => {
       const txn = await createTransaction(tx, {
         reference: `SALE-${Date.now()}`,
         createdById,
+        cashRegisterId: cashRegisterRecord ? cashRegisterRecord.id : null,
         accountId: entityAccount.accountId,
         bankAccountId: bankRecord ? bankRecord.id : null,
         saleId: updatedSale.id,

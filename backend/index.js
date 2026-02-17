@@ -198,6 +198,7 @@ const { startSalaryCron } = require('./services/salaryCron');
 const { testCron } = require('./services/testCron');
 const { startDailyStockCron } = require('./services/dailyStockCron');
 const dailyStockReportRoutes = require('./routes/dailyStockReportRoutes');
+const requisitionRoutes = require('./routes/requisitionRoutes');
 
 const uploadRoutes = require('./routes/uploadRoutes');
 
@@ -243,6 +244,7 @@ app.use('/api/reports', authenticateToken, reportExtraRoutes);
 app.use('/api/reports', authenticateToken, dailyStockReportRoutes);
 app.use('/api/notifications', authenticateToken, notificationRoutes);
 app.use('/api/activity-logs', authenticateToken, activityLogRoutes);
+app.use('/api/requisitions', authenticateToken, requisitionRoutes);
 
 // serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));
@@ -255,7 +257,7 @@ app.listen(port, () => {
 
 startSalaryCron();
 startDailyStockCron();
-testCron();
+// testCron();
 
 
 module.exports = {

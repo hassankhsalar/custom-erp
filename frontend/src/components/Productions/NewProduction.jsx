@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
 import { 
   Factory, 
@@ -22,6 +22,8 @@ import {
 } from 'lucide-react';
 
 const NewProduction = () => {
+  const location = useLocation();
+  const requisitionOrder = location.state?.requisitionOrder || null;
   const [formData, setFormData] = useState({
     start_date: '',
     estimated_end_date: '',
@@ -29,13 +31,16 @@ const NewProduction = () => {
     status: 'pending',
   });
   const [factories, setFactories] = useState([]);
-  const [stores, setStores] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [selectedMaterials, setSelectedMaterials] = useState([]);
   const [factoryMaterialMap, setFactoryMaterialMap] = useState({});
   const [loading, setLoading] = useState(false);
+  const [requisitionLink, setRequisitionLink] = useState({
+    requisitionId: null,
+    requisitionSectionId: null,
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -47,11 +52,6 @@ const NewProduction = () => {
           headers: { Authorization: `Bearer ${token}` },
         });
         setFactories(factoryResponse.data);
-
-        const storeResponse = await axios.get(API_ROUTES.STORES, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setStores(storeResponse.data.stores);
       } catch (error) {
         console.error('Error fetching initial data:', error);
       } finally {
@@ -133,6 +133,48 @@ const NewProduction = () => {
     };
     fetchFactoryMaterials();
   }, [formData.factoryId]);
+
+  useEffect(() => {
+    if (!requisitionOrder) return;
+    const today = new Date();
+    const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const fmt = (d) => d.toISOString().slice(0, 10);
+
+    if (requisitionOrder.destinationType === "factory" && requisitionOrder.destinationId) {
+      setFormData((prev) => ({
+        ...prev,
+        factoryId: String(requisitionOrder.destinationId),
+        start_date: prev.start_date || fmt(today),
+        estimated_end_date: prev.estimated_end_date || fmt(nextWeek),
+      }));
+    }
+
+    const orderProducts = (requisitionOrder.items || [])
+      .filter((it) => it.itemType === "product")
+      .map((it) => ({
+        id: it.productId,
+        name: it.product?.name,
+        barcode: it.product?.barcode || '',
+        materials: it.product?.materials || [],
+        quantity: it.quantity || 1,
+        unit_cost: it.product?.cost || 0,
+        moved_to_store: 0,
+        batchNumber: '',
+        expiryDate: '',
+        manufactureDate: '',
+        batchNotes: '',
+        image: it.product?.image || null
+      }));
+
+    if (orderProducts.length > 0) {
+      setSelectedProducts(orderProducts);
+    }
+
+    setRequisitionLink({
+      requisitionId: requisitionOrder.requisitionId,
+      requisitionSectionId: requisitionOrder.id,
+    });
+  }, [requisitionOrder]);
 
   // Helper function to get image URL
   const getImageUrl = (imagePath) => {
@@ -228,6 +270,8 @@ const NewProduction = () => {
       const token = localStorage.getItem('token');
       const payload = {
         ...formData,
+        requisitionId: requisitionLink.requisitionId,
+        requisitionSectionId: requisitionLink.requisitionSectionId,
         products: selectedProducts.map(p => ({
           productId: p.id,
           code: p.barcode || '',
@@ -239,11 +283,22 @@ const NewProduction = () => {
           unit_cost: p.unit_cost,
           moved_to_store: p.moved_to_store,
         })),
-        materials: selectedMaterials.map(({ storeId, ...material }) => material),
+        materials: selectedMaterials.map((material) => material),
       };
       await axios.post(API_ROUTES.PRODUCTIONS, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (requisitionLink.requisitionSectionId) {
+        try {
+          await axios.post(
+            API_ROUTES.REQUISITION_SECTION_COMPLETE(requisitionLink.requisitionSectionId),
+            { status: 'done', note: 'Completed by production creation' },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+        } catch {
+          // Non-blocking: production already created
+        }
+      }
       navigate('/productions/all');
     } catch (error) {
       alert('Error creating production: ' + error.response?.data?.error || error.message);
@@ -289,6 +344,11 @@ const NewProduction = () => {
                   New Production Order
                 </h1>
                 <p className="text-gray-600 mt-2">Create a new production batch in your factory</p>
+                {requisitionOrder && (
+                  <p className="text-sm text-indigo-700 mt-1">
+                    Requisition Order: {requisitionOrder?.requisition?.reference} / Section {requisitionOrder?.sectionNo}
+                  </p>
+                )}
               </div>
             </div>
             <div className="hidden md:block px-6 py-3 bg-white/60 backdrop-blur-sm rounded-xl border border-white/80">

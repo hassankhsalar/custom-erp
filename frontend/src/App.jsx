@@ -94,6 +94,9 @@ import Salaries from "./components/Expense/Salaries";
 import AssignUser from "./components/Users/AssignUser";
 import AllAssignedUsers from "./components/Users/AllAssignedUsers";
 import PermissionsManagement from "./components/Permissions/PermissionsManagement";
+import NewRequisition from "./components/Requisition/NewRequisition";
+import RequisitionList from "./components/Requisition/RequisitionList";
+import RequisitionView from "./components/Requisition/RequisitionView";
 import { API_ROUTES } from "./config";
 
 import { useCurrentUser } from "./hooks/useCurrentUser";
@@ -465,6 +468,18 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="transfers_create" />}>
               <Route path="/transfer/add" element={<AddTransfer />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="requisition_create" />}>
+              <Route path="/requisition/create" element={<NewRequisition />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="requisition_update" />}>
+              <Route path="/requisition/edit/:id" element={<NewRequisition />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="requisition_read" />}>
+              <Route path="/requisition/list" element={<RequisitionList />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="requisition_read" />}>
+              <Route path="/requisition/view/:id" element={<RequisitionView />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="notification_read" />}>
               <Route path="/notifications" element={<Notifications />} />
