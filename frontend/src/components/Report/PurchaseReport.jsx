@@ -351,14 +351,14 @@ const PurchaseReport = () => {
                         </div>
                         
                         <div className="space-y-2">
-                          <div className="flex items-center justify-between">
+                          <div className="flex flex-col items-left justify-between">
                             <span className="text-xs text-gray-600">Purchases</span>
                             <span className={`font-semibold ${hasPurchases ? "text-emerald-600" : "text-gray-400"}`}>
                               {stats.purchaseCount}
                             </span>
                           </div>
                           
-                          <div className="flex items-center justify-between">
+                          <div className="flex flex-col items-left justify-between">
                             <span className="text-xs text-gray-600">Amount</span>
                             <span className={`font-semibold ${hasPurchases ? "text-blue-600" : "text-gray-400"}`}>
                               ${stats.totalAmount.toFixed(2)}
@@ -366,7 +366,7 @@ const PurchaseReport = () => {
                           </div>
                           
                           {stats.shippingCost > 0 && (
-                            <div className="flex items-center justify-between pt-2 border-t border-white/40">
+                            <div className="flex flex-col items-left justify-between pt-2 border-t border-white/40">
                               <span className="text-xs text-gray-600">Shipping</span>
                               <span className="text-xs font-medium text-amber-600">
                                 ${stats.shippingCost.toFixed(2)}

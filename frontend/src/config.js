@@ -34,6 +34,7 @@ export const API_ROUTES = {
   SHOP_WARRANTY_BY_ID: (id) => `${API_BASE_URL}/shop-sales/warranties/${id}`,
   SHOP_WARRANTY_CLAIMS: (id) => `${API_BASE_URL}/shop-sales/warranties/${id}/claims`,
   SHOP_SALES_SHOPS: `${API_BASE_URL}/shop-sales/shops`,
+  SHOP_SALES_CASH_REGISTERS: (shopId) => `${API_BASE_URL}/shop-sales/cash-registers/shop/${shopId}`,
   SHOP_SALES_ITEMS: (shopId) => `${API_BASE_URL}/shop-sales/items/shop/${shopId}`,
   SHOP_SALES_BY_ID: (id) => `${API_BASE_URL}/shop-sales/${id}`,
   
@@ -95,6 +96,19 @@ export const API_ROUTES = {
   SHOP_SALES_RETURNS_BACKUP: `${API_BASE_URL}/shop-sales/returns-list`,
   //transfer routes
   TRANSFERS: `${API_BASE_URL}/transfers`,
+  REQUISITIONS: `${API_BASE_URL}/requisitions`,
+  REQUISITION_PLACES: `${API_BASE_URL}/requisitions/places`,
+  REQUISITION_ITEM_LOOKUP: `${API_BASE_URL}/requisitions/lookup/items`,
+  REQUISITION_TRANSFER_ORDERS: `${API_BASE_URL}/requisitions/orders/transfer`,
+  REQUISITION_PRODUCTION_ORDERS: `${API_BASE_URL}/requisitions/orders/production`,
+  REQUISITION_PURCHASE_ORDERS: `${API_BASE_URL}/requisitions/orders/purchase`,
+  REQUISITION_BY_ID: (id) => `${API_BASE_URL}/requisitions/${id}`,
+  REQUISITION_SECTIONS: (id) => `${API_BASE_URL}/requisitions/${id}/sections`,
+  REQUISITION_APPROVE: (id) => `${API_BASE_URL}/requisitions/${id}/approve`,
+  REQUISITION_REJECT: (id) => `${API_BASE_URL}/requisitions/${id}/reject`,
+  REQUISITION_SECTION_ACTION: (sectionId) => `${API_BASE_URL}/requisitions/sections/${sectionId}/action`,
+  REQUISITION_SECTION_COMPLETE: (sectionId) => `${API_BASE_URL}/requisitions/sections/${sectionId}/complete`,
+  REQUISITION_CHILD: (id) => `${API_BASE_URL}/requisitions/${id}/child`,
   
   STORE_TO_SHOP_TRANSFERS: `${API_BASE_URL}/store-to-shop-transfers`,
   STORE_TO_SHOP_TRANSFERS_SHOPS: `${API_BASE_URL}/store-to-shop-transfers/shops`,

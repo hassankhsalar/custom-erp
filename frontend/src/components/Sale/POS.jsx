@@ -20,6 +20,8 @@ export default function ShopPOS( props ) {
   const [paymentType, setPaymentType] = useState("cash");
   const [bankAccounts, setBankAccounts] = useState([]);
   const [bankAccountId, setBankAccountId] = useState("");
+  const [cashRegisters, setCashRegisters] = useState([]);
+  const [cashRegisterId, setCashRegisterId] = useState("");
   const [paidAmount, setPaidAmount] = useState(0);
   const [paidAmountTouched, setPaidAmountTouched] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -105,6 +107,8 @@ export default function ShopPOS( props ) {
   useEffect(() => {
     if (!shopId) {
       setShopItems([]);
+      setCashRegisters([]);
+      setCashRegisterId("");
       return;
     }
 
@@ -126,6 +130,33 @@ export default function ShopPOS( props ) {
       .catch((err) => {
         console.error("Error fetching shop items:", err);
         setShopItems([]);
+      });
+  }, [shopId]);
+
+  useEffect(() => {
+    if (!shopId) return;
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    fetch(API_ROUTES.SHOP_SALES_CASH_REGISTERS(shopId), {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch cash registers");
+        return res.json();
+      })
+      .then((data) => {
+        const registers = Array.isArray(data) ? data : [];
+        setCashRegisters(registers);
+        if (registers.length === 1) {
+          setCashRegisterId(String(registers[0].id));
+        } else {
+          setCashRegisterId("");
+        }
+      })
+      .catch(() => {
+        setCashRegisters([]);
+        setCashRegisterId("");
       });
   }, [shopId]);
 
@@ -348,6 +379,10 @@ export default function ShopPOS( props ) {
       alert("⚠️ Please select a bank account for card payments.");
       return false;
     }
+    if (paymentType === "cash" && (parseFloat(paidAmount) || 0) > 0 && !cashRegisterId) {
+      alert("⚠️ Please select a cash register for cash payments.");
+      return false;
+    }
 
     if (paidAmount < 0) {
       alert("⚠️ Paid amount cannot be negative.");
@@ -387,6 +422,7 @@ export default function ShopPOS( props ) {
       customerId: selectedCustomer ? selectedCustomer.id : null,
       paymentType,
       bankAccountId: paymentType === "card" ? parseInt(bankAccountId) : null,
+      cashRegisterId: paymentType === "cash" ? parseInt(cashRegisterId) : null,
       discount: Math.max(0, parseFloat(discount) || 0),
       paidAmount: parseFloat(paidAmount) || 0,
       items: cartItems.map(item => ({
@@ -731,6 +767,24 @@ export default function ShopPOS( props ) {
                     {bankAccounts.map((bank) => (
                       <option key={bank.id} value={bank.id}>
                         {bank.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {paymentType === "cash" && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cash Register</label>
+                  <select
+                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
+                    value={cashRegisterId}
+                    onChange={(e) => setCashRegisterId(e.target.value)}
+                  >
+                    <option value="">Select Cash Register</option>
+                    {cashRegisters.map((register) => (
+                      <option key={register.id} value={register.id}>
+                        {register.name} (In hand: {Number(register.cash_in_hand || 0).toFixed(2)})
                       </option>
                     ))}
                   </select>
