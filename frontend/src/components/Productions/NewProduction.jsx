@@ -41,6 +41,7 @@ const NewProduction = () => {
     requisitionId: null,
     requisitionSectionId: null,
   });
+  const [prefillFactoryId, setPrefillFactoryId] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -140,10 +141,14 @@ const NewProduction = () => {
     const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
     const fmt = (d) => d.toISOString().slice(0, 10);
 
-    if (requisitionOrder.destinationType === "factory" && requisitionOrder.destinationId) {
+    const destinationType = requisitionOrder.destinationType || requisitionOrder.destination?.type;
+    const destinationId = requisitionOrder.destinationId || requisitionOrder.destination?.id;
+    if (destinationType === "factory" && destinationId) {
+      const nextFactoryId = String(destinationId);
+      setPrefillFactoryId(nextFactoryId);
       setFormData((prev) => ({
         ...prev,
-        factoryId: String(requisitionOrder.destinationId),
+        factoryId: nextFactoryId,
         start_date: prev.start_date || fmt(today),
         estimated_end_date: prev.estimated_end_date || fmt(nextWeek),
       }));
@@ -175,6 +180,16 @@ const NewProduction = () => {
       requisitionSectionId: requisitionOrder.id,
     });
   }, [requisitionOrder]);
+
+  useEffect(() => {
+    if (!prefillFactoryId || !factories.length) return;
+    const exists = factories.some((factory) => String(factory.id) === String(prefillFactoryId));
+    if (!exists) return;
+    setFormData((prev) => {
+      if (String(prev.factoryId) === String(prefillFactoryId)) return prev;
+      return { ...prev, factoryId: String(prefillFactoryId) };
+    });
+  }, [prefillFactoryId, factories]);
 
   // Helper function to get image URL
   const getImageUrl = (imagePath) => {
@@ -418,7 +433,7 @@ const NewProduction = () => {
                     >
                       <option value="">Select Factory</option>
                       {factories.map(factory => (
-                        <option key={factory.id} value={factory.id}>{factory.name}</option>
+                        <option key={factory.id} value={String(factory.id)}>{factory.name}</option>
                       ))}
                     </select>
                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">

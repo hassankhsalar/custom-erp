@@ -8,6 +8,7 @@ import {
   LogIn, Shield, AlertCircle,
   Building2, Sparkles
 } from 'lucide-react';
+import logo from "/logo.png";
 
 const Login = () => {
   const [identifier, setIdentifier] = useState('');
@@ -47,20 +48,6 @@ const Login = () => {
       </div>
 
       <div className="relative w-full max-w-lg">
-        {/* Floating Brand Card */}
-        <div className="absolute -top-20 left-1/2 transform -translate-x-1/2">
-          <div className="flex flex-col items-center gap-3">
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-600 to-purple-600 shadow-2xl">
-              <Building2 size={32} className="text-white" />
-            </div>
-            <div className="text-center">
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                BSP
-              </h1>
-              <p className="text-sm text-gray-500">Inventory Management</p>
-            </div>
-          </div>
-        </div>
 
         {/* Main Login Card */}
         <div className="glass-card mt-14 rounded-3xl border border-white/40 backdrop-blur-sm p-8 shadow-2xl">
@@ -68,7 +55,7 @@ const Login = () => {
           <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
               <div className="p-3 rounded-xl bg-gradient-to-r from-blue-500/10 to-purple-500/10">
-                <Shield size={24} className="text-blue-600" />
+                <img src={logo} alt="Company Logo" className="w-20 h-20 object-contain" />
               </div>
             </div>
             <h2 className="text-3xl font-bold text-gray-800">Welcome Back</h2>

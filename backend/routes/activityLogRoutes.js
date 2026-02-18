@@ -19,6 +19,8 @@ router.get("/", async (req, res) => {
       search,
       startDate,
       endDate,
+      fromDateTime,
+      toDateTime,
     } = req.query;
 
     const where = {};
@@ -36,10 +38,21 @@ router.get("/", async (req, res) => {
       ];
     }
 
-    if (startDate || endDate) {
+    const from = fromDateTime || startDate;
+    const to = toDateTime || endDate;
+    if (from || to) {
       where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate);
-      if (endDate) where.createdAt.lte = new Date(endDate);
+      if (from) {
+        const parsedFrom = new Date(from);
+        if (!Number.isNaN(parsedFrom.getTime())) where.createdAt.gte = parsedFrom;
+      }
+      if (to) {
+        const parsedTo = new Date(to);
+        if (!Number.isNaN(parsedTo.getTime())) where.createdAt.lte = parsedTo;
+      }
+      if (Object.keys(where.createdAt).length === 0) {
+        delete where.createdAt;
+      }
     }
 
     const [rows, total] = await prisma.$transaction([
