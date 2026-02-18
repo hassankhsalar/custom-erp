@@ -99,6 +99,10 @@ export const API_ROUTES = {
   NOTIFICATIONS_MARK_ALL_READ: `${API_BASE_URL}/notifications/mark-all-read`,
   ACTIVITY_LOGS: `${API_BASE_URL}/activity-logs`,
   ACTIVITY_LOGS_LOGOUT: `${API_BASE_URL}/activity-logs/logout`,
+  MASTER_DATA: `${API_BASE_URL}/master-data`,
+  MASTER_DATA_UNITS: `${API_BASE_URL}/master-data/units`,
+  MASTER_DATA_BRANDS: `${API_BASE_URL}/master-data/brands`,
+  MASTER_DATA_PRODUCT_CATEGORIES: `${API_BASE_URL}/master-data/product-categories`,
   
   //SHOP_SALES_RETURNS: `${API_BASE_URL}/shop-sales/returns/all`,
   SHOP_SALES_RETURNS_BACKUP: `${API_BASE_URL}/shop-sales/returns-list`,

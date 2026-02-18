@@ -446,6 +446,45 @@ model Material {
   requisitionSectionItems RequisitionSectionItem[]
 }
 
+model Unit {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Brand {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ProductCategory {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+  @@index([status])
+  @@index([createdAt])
+}
+
 model Product {
   id                      Int                      @id @default(autoincrement())
   name                    String
