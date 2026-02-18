@@ -15,6 +15,7 @@ export default function WarrantyList() {
   });
   const [claimModal, setClaimModal] = useState({ open: false, warranty: null });
   const [viewModal, setViewModal] = useState({ open: false, loading: false, data: null });
+  const [claimUpdateMap, setClaimUpdateMap] = useState({});
   const [claimForm, setClaimForm] = useState({
     receivingDate: "",
     providingDate: "",
@@ -103,10 +104,55 @@ export default function WarrantyList() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load warranty details");
+      const initialMap = {};
+      (data.claims || []).forEach((claim) => {
+        initialMap[claim.id] = {
+          status: claim.status || "received",
+          providingDate: claim.providingDate ? new Date(claim.providingDate).toISOString().slice(0, 10) : "",
+          issueDescription: claim.issueDescription || "",
+          resolution: claim.resolution || "",
+          note: claim.note || "",
+        };
+      });
+      setClaimUpdateMap(initialMap);
       setViewModal({ open: true, loading: false, data });
     } catch (error) {
       alert(error.message || "Failed to load warranty details");
       setViewModal({ open: false, loading: false, data: null });
+    }
+  };
+
+  const updateClaimField = (claimId, key, value) => {
+    setClaimUpdateMap((prev) => ({
+      ...prev,
+      [claimId]: {
+        ...(prev[claimId] || {}),
+        [key]: value,
+      },
+    }));
+  };
+
+  const submitClaimUpdate = async (warrantyId, claimId) => {
+    const payload = claimUpdateMap[claimId];
+    if (!payload?.status) {
+      alert("Status is required");
+      return;
+    }
+    try {
+      const res = await fetch(API_ROUTES.SHOP_WARRANTY_CLAIM_BY_ID(warrantyId, claimId), {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update claim");
+      await openViewModal(warrantyId);
+      await fetchWarranties();
+    } catch (error) {
+      alert(error.message || "Failed to update claim");
     }
   };
 
@@ -207,6 +253,10 @@ export default function WarrantyList() {
               <tr><td className="p-6 text-center text-gray-600" colSpan={6}>No warranties found</td></tr>
             ) : (
               rows.map((row) => (
+                (() => {
+                  const latestStatus = String(row?.claims?.[0]?.status || "").toLowerCase();
+                  const canCreateClaim = !latestStatus || ["handover", "hand_over", "completed", "closed", "resolved"].includes(latestStatus);
+                  return (
                 <tr key={row.id} className="border-t border-white/50 hover:bg-white/30 transition-colors duration-200">
                   <td className="p-4">
                     <div className="font-semibold text-gray-800">{row.warrantyCode}</div>
@@ -225,10 +275,19 @@ export default function WarrantyList() {
                     <button className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition" onClick={() => openViewModal(row.id)} title="View">View</button>
                     <button className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition" onClick={() => handleEdit(row)} title="Edit">Edit</button>
                     <button className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition" onClick={() => handleDelete(row.id)} title="Delete">Delete</button>
-                    <button className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition text-xs font-medium" onClick={() => openClaimModal(row)}>Warranty Claim</button>
+                    <button
+                      className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition text-xs font-medium"
+                      disabled={!canCreateClaim}
+                      title={!canCreateClaim ? "Previous claim is still open" : "Create warranty claim"}
+                      onClick={() => openClaimModal(row)}
+                    >
+                      {canCreateClaim ? "Warranty Claim" : "Claim Open"}
+                    </button>
                     </div>
                   </td>
                 </tr>
+                  );
+                })()
               ))
             )}
           </tbody>
@@ -308,20 +367,66 @@ export default function WarrantyList() {
                           <th className="p-2 text-left">Issue</th>
                           <th className="p-2 text-left">Resolution</th>
                           <th className="p-2 text-left">Note</th>
+                          <th className="p-2 text-left">Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {!viewModal.data.claims || viewModal.data.claims.length === 0 ? (
-                          <tr><td className="p-2" colSpan={6}>No claims found</td></tr>
+                          <tr><td className="p-2" colSpan={7}>No claims found</td></tr>
                         ) : (
                           viewModal.data.claims.map((claim) => (
                             <tr key={claim.id} className="border-t">
                               <td className="p-2">{claim.receivingDate ? new Date(claim.receivingDate).toLocaleDateString() : "-"}</td>
-                              <td className="p-2">{claim.providingDate ? new Date(claim.providingDate).toLocaleDateString() : "-"}</td>
-                              <td className="p-2">{claim.status || "-"}</td>
-                              <td className="p-2">{claim.issueDescription || "-"}</td>
-                              <td className="p-2">{claim.resolution || "-"}</td>
-                              <td className="p-2">{claim.note || "-"}</td>
+                              <td className="p-2">
+                                <input
+                                  type="date"
+                                  className="border border-gray-300 rounded p-1"
+                                  value={claimUpdateMap[claim.id]?.providingDate || ""}
+                                  onChange={(e) => updateClaimField(claim.id, "providingDate", e.target.value)}
+                                />
+                              </td>
+                              <td className="p-2">
+                                <select
+                                  className="border border-gray-300 rounded p-1"
+                                  value={claimUpdateMap[claim.id]?.status || "received"}
+                                  onChange={(e) => updateClaimField(claim.id, "status", e.target.value)}
+                                >
+                                  <option value="received">Received</option>
+                                  <option value="in_process">In Process</option>
+                                  <option value="completed">Completed</option>
+                                  <option value="hand_over">Hand Over</option>
+                                  <option value="void">Void</option>
+                                </select>
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  className="border border-gray-300 rounded p-1 w-full"
+                                  value={claimUpdateMap[claim.id]?.issueDescription || ""}
+                                  onChange={(e) => updateClaimField(claim.id, "issueDescription", e.target.value)}
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  className="border border-gray-300 rounded p-1 w-full"
+                                  value={claimUpdateMap[claim.id]?.resolution || ""}
+                                  onChange={(e) => updateClaimField(claim.id, "resolution", e.target.value)}
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input
+                                  className="border border-gray-300 rounded p-1 w-full"
+                                  value={claimUpdateMap[claim.id]?.note || ""}
+                                  onChange={(e) => updateClaimField(claim.id, "note", e.target.value)}
+                                />
+                              </td>
+                              <td className="p-2">
+                                <button
+                                  className="px-2 py-1 bg-indigo-600 text-white rounded text-xs"
+                                  onClick={() => submitClaimUpdate(viewModal.data.id, claim.id)}
+                                >
+                                  Update
+                                </button>
+                              </td>
                             </tr>
                           ))
                         )}
