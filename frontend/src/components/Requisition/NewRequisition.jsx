@@ -2,7 +2,23 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { API_ROUTES } from "../../config";
-import { ClipboardList, Search, Plus, Trash2, Save } from "lucide-react";
+import { 
+  ClipboardList, 
+  Search, 
+  Plus, 
+  Trash2, 
+  Save,
+  ArrowLeft,
+  Package,
+  DollarSign,
+  Building2,
+  Store,
+  Factory,
+  ShoppingBag,
+  FileText,
+  AlertCircle,
+  X
+} from "lucide-react";
 
 const NewRequisition = () => {
   const { id } = useParams();
@@ -188,201 +204,380 @@ const NewRequisition = () => {
     }
   };
 
+  const getRequesterIcon = (type) => {
+    switch(type) {
+      case 'shop': return <ShoppingBag size={18} className="text-purple-500" />;
+      case 'store': return <Store size={18} className="text-blue-500" />;
+      case 'factory': return <Factory size={18} className="text-amber-500" />;
+      default: return <Building2 size={18} className="text-gray-500" />;
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4 md:p-6">
-      <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl p-6 mb-6">
-        <div className="flex items-center gap-3">
-          <ClipboardList className="text-indigo-600" size={32} />
-          <div>
-            <h1 className="text-3xl font-bold text-indigo-700">{isEdit ? "Edit Requisition" : "New Requisition"}</h1>
-            <p className="text-gray-600">Create material/product requisition for shop/store/factory</p>
-            {!isEdit && parentRequisitionId && (
-              <p className="text-sm text-emerald-700 mt-1">
-                Creating child requisition for parent #{parentRequisitionId}
-              </p>
-            )}
-            {!isEdit && sourceOrder?.requisition?.reference && (
-              <p className="text-sm text-indigo-700 mt-1">
-                Source production order: {sourceOrder.requisition.reference} / Section {sourceOrder.sectionNo}
-              </p>
-            )}
-          </div>
-        </div>
+    <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+      {/* Background decorative elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-300/20 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-300/20 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-emerald-300/10 rounded-full blur-3xl"></div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="backdrop-blur-lg bg-white/40 border border-white/60 rounded-2xl shadow-xl p-6">
-          <h2 className="text-lg font-semibold mb-4">Requisition Info</h2>
-          <div className="space-y-4">
-            <input
-              type="text"
-              placeholder="Title (optional)"
-              value={form.title}
-              onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-              className="w-full p-3 rounded-xl border border-gray-300 bg-white/70"
-            />
-            <textarea
-              placeholder="Note"
-              value={form.note}
-              onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))}
-              className="w-full p-3 rounded-xl border border-gray-300 bg-white/70"
-              rows={4}
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <select
-                value={form.requestType}
-                onChange={(e) => setForm((p) => ({ ...p, requestType: e.target.value }))}
-                className="w-full p-3 rounded-xl border border-gray-300 bg-white/70"
-              >
-                <option value="items">items</option>
-                <option value="money">money</option>
-              </select>
-              <input
-                type="text"
-                placeholder="Currency (e.g. BDT, USD)"
-                value={form.currency}
-                onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
-                className="w-full p-3 rounded-xl border border-gray-300 bg-white/70"
-              />
-            </div>
-            {form.requestType === "money" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="Requested amount"
-                  value={form.requestedAmount}
-                  onChange={(e) => setForm((p) => ({ ...p, requestedAmount: e.target.value }))}
-                  className="w-full p-3 rounded-xl border border-gray-300 bg-white/70"
-                />
-                <input
-                  type="text"
-                  placeholder="Amount purpose"
-                  value={form.amountPurpose}
-                  onChange={(e) => setForm((p) => ({ ...p, amountPurpose: e.target.value }))}
-                  className="w-full p-3 rounded-xl border border-gray-300 bg-white/70"
-                />
+      <div className="relative w-full mx-auto">
+        {/* Header Card */}
+        <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-indigo-100/50 p-6 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-4 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg">
+                <ClipboardList className="text-white" size={36} />
               </div>
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <select
-                value={form.requesterType}
-                onChange={(e) => setForm((p) => ({ ...p, requesterType: e.target.value, requesterId: "" }))}
-                className="w-full p-3 rounded-xl border border-gray-300 bg-white/70"
-                disabled={isEdit}
-              >
-                <option value="shop">Shop</option>
-                <option value="store">Store</option>
-                <option value="factory">Factory</option>
-              </select>
-              <select
-                value={form.requesterId}
-                onChange={(e) => setForm((p) => ({ ...p, requesterId: e.target.value }))}
-                className="w-full p-3 rounded-xl border border-gray-300 bg-white/70"
-                disabled={isEdit}
-              >
-                {requesterOptions.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {row.name}
-                  </option>
-                ))}
-              </select>
+              <div>
+                <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                  {isEdit ? "Edit Requisition" : "New Requisition"}
+                </h1>
+                <p className="text-gray-600 mt-2">
+                  Create material/product requisition for shop, store, or factory
+                </p>
+                {!isEdit && parentRequisitionId && (
+                  <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm">
+                    <AlertCircle size={14} />
+                    Creating child requisition for parent #{parentRequisitionId}
+                  </div>
+                )}
+                {!isEdit && sourceOrder?.requisition?.reference && (
+                  <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+                    <FileText size={14} />
+                    Source: {sourceOrder.requisition.reference} / Section {sourceOrder.sectionNo}
+                  </div>
+                )}
+              </div>
             </div>
+            
+            <button
+              onClick={() => navigate("/requisition/list")}
+              className="flex items-center gap-2 px-6 py-3 bg-white/60 hover:bg-white/80 text-gray-700 font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border border-white/60"
+            >
+              <ArrowLeft size={20} />
+              Back to List
+            </button>
           </div>
         </div>
 
-        {form.requestType === "items" && (
-        <div className="backdrop-blur-lg bg-white/40 border border-white/60 rounded-2xl shadow-xl p-6">
-          <h2 className="text-lg font-semibold mb-4">Add Items</h2>
-          <div className="relative">
-            <Search className="absolute left-3 top-3.5 text-gray-400" size={18} />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => handleSearch(e.target.value)}
-              className="w-full pl-10 p-3 rounded-xl border border-gray-300 bg-white/70"
-              placeholder="Search item..."
-            />
-          </div>
-          {results.length > 0 && (
-            <div className="mt-3 max-h-64 overflow-y-auto border border-gray-200 rounded-xl bg-white">
-              {results.map((row) => (
-                <button
-                  type="button"
-                  key={`${row.itemType}-${row.itemId}`}
-                  onClick={() => addItem(row)}
-                  className="w-full p-3 border-b text-left hover:bg-gray-50 flex items-center justify-between"
-                >
+        {/* Main Form Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Requisition Info Card */}
+          <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="flex items-center gap-2 mb-6">
+              <div className="p-2 bg-indigo-100 rounded-lg">
+                <FileText size={20} className="text-indigo-600" />
+              </div>
+              <h2 className="text-xl font-semibold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                Requisition Information
+              </h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Title (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="Enter requisition title"
+                  value={form.title}
+                  onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+                  className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Note</label>
+                <textarea
+                  placeholder="Add any notes or comments..."
+                  value={form.note}
+                  onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))}
+                  className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                  rows={4}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Request Type</label>
+                  <select
+                    value={form.requestType}
+                    onChange={(e) => setForm((p) => ({ ...p, requestType: e.target.value }))}
+                    className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                  >
+                    <option value="items"> Items</option>
+                    <option value="money"> Money</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Currency</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., BDT, USD"
+                    value={form.currency}
+                    onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
+                    className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                  />
+                </div>
+              </div>
+
+              {form.requestType === "money" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-fadeIn">
                   <div>
-                    <p className="font-medium">{row.name}</p>
-                    <p className="text-xs text-gray-500">{row.itemType} | stock: {row.stock}</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Requested Amount</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={form.requestedAmount}
+                        onChange={(e) => setForm((p) => ({ ...p, requestedAmount: e.target.value }))}
+                        className="w-full pl-8 p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                      />
+                    </div>
                   </div>
-                  <Plus size={16} className="text-indigo-600" />
-                </button>
-              ))}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Purpose</label>
+                    <input
+                      type="text"
+                      placeholder="Reason for money request"
+                      value={form.amountPurpose}
+                      onChange={(e) => setForm((p) => ({ ...p, amountPurpose: e.target.value }))}
+                      className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Requester Type</label>
+                  <select
+                    value={form.requesterType}
+                    onChange={(e) => setForm((p) => ({ ...p, requesterType: e.target.value, requesterId: "" }))}
+                    className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                    disabled={isEdit}
+                  >
+                    <option value="shop"> Shop</option>
+                    <option value="store"> Store</option>
+                    <option value="factory"> Factory</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Requester</label>
+                  <select
+                    value={form.requesterId}
+                    onChange={(e) => setForm((p) => ({ ...p, requesterId: e.target.value }))}
+                    className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                    disabled={isEdit}
+                  >
+                    <option value="">Select {form.requesterType}</option>
+                    {requesterOptions.map((row) => (
+                      <option key={row.id} value={row.id}>
+                        {row.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {form.requesterId && (
+                <div className="mt-4 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                  <div className="flex items-center gap-2">
+                    {getRequesterIcon(form.requesterType)}
+                    <span className="text-sm text-gray-600">Selected:</span>
+                    <span className="font-medium text-indigo-700">
+                      {requesterOptions.find(r => String(r.id) === form.requesterId)?.name}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Add Items Card */}
+          {form.requestType === "items" && (
+            <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <Package size={20} className="text-purple-600" />
+                </div>
+                <h2 className="text-xl font-semibold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  Add Items
+                </h2>
+              </div>
+
+              <div className="relative">
+                <Search className="absolute left-3 top-3.5 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  className="w-full pl-10 p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-purple-500/30 focus:border-transparent transition-all duration-300"
+                  placeholder="Search for products or materials..."
+                />
+              </div>
+
+              {results.length > 0 && (
+                <div className="mt-3 max-h-64 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                  {results.map((row) => (
+                    <button
+                      type="button"
+                      key={`${row.itemType}-${row.itemId}`}
+                      onClick={() => addItem(row)}
+                      className="w-full p-3 border-b last:border-b-0 text-left hover:bg-gradient-to-r hover:from-purple-50 hover:to-indigo-50 flex items-center justify-between group transition-all duration-200"
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-800 group-hover:text-indigo-700">{row.name}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            row.itemType === 'product' 
+                              ? 'bg-blue-100 text-blue-700' 
+                              : 'bg-green-100 text-green-700'
+                          }`}>
+                            {row.itemType}
+                          </span>
+                          <span className="text-xs text-gray-500">Stock: {row.stock}</span>
+                        </div>
+                      </div>
+                      <Plus size={18} className="text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {search.length >= 2 && results.length === 0 && (
+                <div className="mt-3 p-4 bg-gray-50 rounded-xl text-center text-gray-500">
+                  No items found matching "{search}"
+                </div>
+              )}
             </div>
           )}
         </div>
-        )}
-      </div>
 
-      {form.requestType === "items" && (
-      <div className="backdrop-blur-lg bg-white/40 border border-white/60 rounded-2xl shadow-xl p-6 mt-6">
-        <h2 className="text-lg font-semibold mb-4">Item List ({items.length})</h2>
-        {items.length === 0 ? (
-          <p className="text-gray-500">No items selected.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-100/80">
-                <tr>
-                  <th className="p-3 text-left">Name</th>
-                  <th className="p-3 text-left">Type</th>
-                  <th className="p-3 text-left">Quantity</th>
-                  <th className="p-3 text-left">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((it, idx) => (
-                  <tr key={`${it.itemType}-${it.itemId}`} className="border-t">
-                    <td className="p-3">{it.name}</td>
-                    <td className="p-3">{it.itemType}</td>
-                    <td className="p-3">
-                      <input
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        value={it.quantity}
-                        onChange={(e) => updateItem(idx, "quantity", e.target.value)}
-                        className="w-28 p-2 rounded-lg border border-gray-300"
-                      />
-                    </td>
-                    <td className="p-3">
-                      <button type="button" onClick={() => removeItem(idx)} className="text-red-600">
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* Item List Table */}
+        {form.requestType === "items" && (
+          <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mt-6">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-emerald-100 rounded-lg">
+                  <Package size={20} className="text-emerald-600" />
+                </div>
+                <h2 className="text-xl font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                  Selected Items ({items.length})
+                </h2>
+              </div>
+              {items.length > 0 && (
+                <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm">
+                  {items.reduce((sum, it) => sum + (parseFloat(it.quantity) || 0), 0)} total quantity
+                </span>
+              )}
+            </div>
+
+            {items.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="p-4 bg-white/50 rounded-full inline-block mb-4">
+                  <Package size={48} className="text-gray-300" />
+                </div>
+                <p className="text-gray-500 text-lg">No items selected yet</p>
+                <p className="text-gray-400 text-sm mt-1">Search and add items from the panel above</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-white/60">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100/80">
+                    <tr>
+                      <th className="p-4 text-left font-medium text-gray-700">Item Name</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Type</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Quantity</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((it, idx) => (
+                      <tr key={`${it.itemType}-${it.itemId}`} className="border-t border-white/50 hover:bg-white/30 transition-colors">
+                        <td className="p-4 font-medium text-gray-800">{it.name}</td>
+                        <td className="p-4">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            it.itemType === 'product' 
+                              ? 'bg-blue-100 text-blue-700' 
+                              : 'bg-green-100 text-green-700'
+                          }`}>
+                            {it.itemType}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={it.quantity}
+                            onChange={(e) => updateItem(idx, "quantity", e.target.value)}
+                            className="w-28 p-2 rounded-lg border border-gray-300 bg-white/70 focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                          />
+                        </td>
+                        <td className="p-4">
+                          <button 
+                            type="button" 
+                            onClick={() => removeItem(idx)} 
+                            className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                            title="Remove item"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
-      </div>
-      )}
 
-      <div className="mt-6 flex justify-end">
-        <button
-          type="button"
-          onClick={submit}
-          disabled={loading}
-          className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-semibold flex items-center gap-2"
-        >
-          <Save size={18} />
-          {loading ? "Saving..." : isEdit ? "Update Requisition" : "Create Requisition"}
-        </button>
+        {/* Submit Button */}
+        <div className="mt-6 flex justify-end gap-4">
+          <button
+            type="button"
+            onClick={() => navigate("/requisition/list")}
+            className="px-6 py-3 rounded-xl bg-white/60 hover:bg-white/80 text-gray-700 font-semibold shadow-lg hover:shadow-xl transition-all duration-300 border border-white/60 flex items-center gap-2"
+          >
+            <X size={18} />
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={loading}
+            className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save size={18} />
+                {isEdit ? "Update Requisition" : "Create Requisition"}
+              </>
+            )}
+          </button>
+        </div>
       </div>
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 };

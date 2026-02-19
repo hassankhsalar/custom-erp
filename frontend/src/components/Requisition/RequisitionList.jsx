@@ -2,7 +2,35 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
-import { ClipboardList, Eye, Edit, Check, X, Truck, Factory, Plus, GitBranchPlus } from "lucide-react";
+import { 
+  ClipboardList, 
+  Eye, 
+  Edit, 
+  Check, 
+  X, 
+  Truck, 
+  Factory, 
+  Plus, 
+  GitBranchPlus,
+  Search,
+  Filter,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  ShoppingBag,
+  Store,
+  Building2,
+  Package,
+  DollarSign,
+  AlertCircle,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Layers,
+  ArrowUpDown,
+  MoreVertical
+} from "lucide-react";
 import { useAuth } from "../../App";
 
 const RequisitionList = () => {
@@ -212,259 +240,638 @@ const RequisitionList = () => {
     });
   };
 
+  const getStatusBadge = (status) => {
+    const statusConfig = {
+      pending: { color: 'bg-amber-100 text-amber-700', icon: <Clock size={12} /> },
+      segmented: { color: 'bg-blue-100 text-blue-700', icon: <Layers size={12} /> },
+      in_process: { color: 'bg-purple-100 text-purple-700', icon: <Clock size={12} /> },
+      approved: { color: 'bg-green-100 text-green-700', icon: <CheckCircle size={12} /> },
+      rejected: { color: 'bg-red-100 text-red-700', icon: <XCircle size={12} /> },
+    };
+    const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-700', icon: <AlertCircle size={12} /> };
+    
+    return (
+      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${config.color}`}>
+        {config.icon}
+        {status}
+      </span>
+    );
+  };
+
+  const getRequesterIcon = (type) => {
+    switch(type) {
+      case 'shop': return <ShoppingBag size={14} className="text-purple-500" />;
+      case 'store': return <Store size={14} className="text-blue-500" />;
+      case 'factory': return <Factory size={14} className="text-amber-500" />;
+      default: return <Building2 size={14} className="text-gray-500" />;
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4 md:p-6">
-      <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl p-6 mb-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <ClipboardList className="text-indigo-600" size={30} />
-            <div>
-              <h1 className="text-3xl font-bold text-indigo-700">Requisition List</h1>
-              <p className="text-gray-600">Track requisitions and process transfer/production orders</p>
+    <div className="min-h-screen  rounded-t-2xl w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+      {/* Background decorative elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-300/20 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-300/20 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-emerald-300/10 rounded-full blur-3xl"></div>
+      </div>
+
+      <div className="relative w-full mx-auto">
+        {/* Header Card */}
+        <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-indigo-100/50 p-6 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-4 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg">
+                <ClipboardList className="text-white" size={36} />
+              </div>
+              <div>
+                <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                  Requisition Management
+                </h1>
+                <p className="text-gray-600 mt-2">Track requisitions and process transfer/production orders</p>
+              </div>
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => navigate("/requisition/create")}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+            >
+              <Plus size={20} />
+              Create Requisition
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-2 mb-6 inline-flex flex-wrap gap-2">
+          {[
+            { id: "requisitions", label: "Requisitions", icon: <ClipboardList size={16} /> },
+            { id: "transfer_orders", label: "Transfer Orders", icon: <Truck size={16} /> },
+            { id: "production_orders", label: "Production Orders", icon: <Factory size={16} /> },
+            { id: "purchase_orders", label: "Purchase Orders", icon: <ShoppingBag size={16} /> }
+          ].map((item) => (
+            <button
+              key={item.id}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 flex items-center gap-2 ${
+                tab === item.id
+                  ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg"
+                  : "bg-white/50 text-gray-700 hover:bg-white/80"
+              }`}
+              onClick={() => setTab(item.id)}
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Filters Section - Only for Requisitions */}
+        {tab === "requisitions" && (
+          <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Filter size={18} className="text-indigo-600" />
+              <h2 className="text-lg font-semibold text-gray-800">Filters & Search</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search reference/title..."
+                  className="w-full pl-10 p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                />
+              </div>
+              
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+              >
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="segmented">Segmented</option>
+                <option value="in_process">In Process</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+              >
+                <option value="createdAt">Sort by Created Date</option>
+                <option value="reference">Sort by Reference</option>
+                <option value="status">Sort by Status</option>
+              </select>
+
+              <select
+                value={sortDirection}
+                onChange={(e) => setSortDirection(e.target.value)}
+                className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+              >
+                <option value="desc">Descending</option>
+                <option value="asc">Ascending</option>
+              </select>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => navigate("/requisition/create")}
-            className="px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-semibold"
-          >
-            Create Requisition
-          </button>
-        </div>
-      </div>
+        )}
 
-      <div className="mb-4 flex gap-2">
-        <button className={`px-4 py-2 rounded-lg ${tab === "requisitions" ? "bg-indigo-600 text-white" : "bg-white"}`} onClick={() => setTab("requisitions")}>Requisitions</button>
-        <button className={`px-4 py-2 rounded-lg ${tab === "transfer_orders" ? "bg-indigo-600 text-white" : "bg-white"}`} onClick={() => setTab("transfer_orders")}>Transfer Orders</button>
-        <button className={`px-4 py-2 rounded-lg ${tab === "production_orders" ? "bg-indigo-600 text-white" : "bg-white"}`} onClick={() => setTab("production_orders")}>Production Orders</button>
-        <button className={`px-4 py-2 rounded-lg ${tab === "purchase_orders" ? "bg-indigo-600 text-white" : "bg-white"}`} onClick={() => setTab("purchase_orders")}>Purchase Orders</button>
-      </div>
-
-      {tab === "requisitions" && (
-        <div className="backdrop-blur-lg bg-white/40 border border-white/60 rounded-2xl shadow-xl p-4 mb-4 flex flex-wrap gap-3">
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search reference/title..." className="p-2 rounded-lg border border-gray-300 bg-white/70" />
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="p-2 rounded-lg border border-gray-300 bg-white/70">
-            <option value="">All Status</option>
-            <option value="pending">pending</option>
-            <option value="segmented">segmented</option>
-            <option value="in_process">in_process</option>
-            <option value="approved">approved</option>
-            <option value="rejected">rejected</option>
-          </select>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="p-2 rounded-lg border border-gray-300 bg-white/70">
-            <option value="createdAt">Created At</option>
-            <option value="reference">Reference</option>
-            <option value="status">Status</option>
-          </select>
-          <select value={sortDirection} onChange={(e) => setSortDirection(e.target.value)} className="p-2 rounded-lg border border-gray-300 bg-white/70">
-            <option value="desc">Desc</option>
-            <option value="asc">Asc</option>
-          </select>
-        </div>
-      )}
-
-      <div className="backdrop-blur-lg bg-white/40 border border-white/60 rounded-2xl shadow-xl p-4">
-        {loading ? (
-          <div className="p-6">Loading...</div>
-        ) : tab === "requisitions" ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-100/80">
-                <tr>
-                  <th className="p-3 text-left">Reference</th>
-                  <th className="p-3 text-left">Requester</th>
-                  <th className="p-3 text-left">Items</th>
-                  <th className="p-3 text-left">Status</th>
-                  <th className="p-3 text-left">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id} className="border-t">
-                    <td className="p-3">{row.reference}</td>
-                    <td className="p-3">{row.requesterType} - {row.requesterName || row.requesterId}</td>
-                    <td className="p-3">{(row.items || []).length}</td>
-                    <td className="p-3">{row.status}</td>
-                    <td className="p-3">
-                      <div className="flex flex-wrap gap-2">
-                        <button className="p-2 rounded bg-blue-50 text-blue-700" onClick={() => navigate(`/requisition/view/${row.id}`)} title="View"><Eye size={15} /></button>
-                        {!row.isSegmented && row.requesterUserId === currentUser?.id && (
-                          <button className="p-2 rounded bg-teal-50 text-teal-700" onClick={() => navigate(`/requisition/edit/${row.id}`)} title="Edit"><Edit size={15} /></button>
-                        )}
-                        {isAdmin && row.status === "pending" && (
-                          <>
-                            <button className="p-2 rounded bg-green-50 text-green-700" onClick={() => approve(row.id)} title="Approve"><Check size={15} /></button>
-                            <button className="p-2 rounded bg-red-50 text-red-700" onClick={() => reject(row.id)} title="Reject"><X size={15} /></button>
-                            <button className="p-2 rounded bg-purple-50 text-purple-700" onClick={() => openSegment(row)} title="Segment"><Plus size={15} /></button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-100/80">
-                <tr>
-                  <th className="p-3 text-left">Requisition</th>
-                  <th className="p-3 text-left">Section</th>
-                  <th className="p-3 text-left">Items</th>
-                  <th className="p-3 text-left">Destination</th>
-                  <th className="p-3 text-left">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id} className="border-t">
-                    <td className="p-3">{row.requisition?.reference}</td>
-                    <td className="p-3">{row.title || `Section ${row.sectionNo}`} ({row.status})</td>
-                    <td className="p-3">{(row.items || []).length}</td>
-                    <td className="p-3">{row.destinationType || "-"} {row.destinationId || ""}</td>
-                    <td className="p-3">
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => acceptOrder(row, tab === "transfer_orders" ? "transfer" : tab === "production_orders" ? "production" : "purchase")}
-                          className="px-3 py-2 rounded-lg bg-gradient-to-r from-indigo-600 to-blue-600 text-white text-xs font-semibold inline-flex items-center gap-2"
+        {/* Main Content */}
+        <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin"></div>
+                <p className="text-gray-600">Loading data...</p>
+              </div>
+            </div>
+          ) : (
+            <>
+              {tab === "requisitions" ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-100/80">
+                      <tr>
+                        <th className="p-4 text-left font-medium text-gray-700">Reference</th>
+                        <th className="p-4 text-left font-medium text-gray-700">Requester</th>
+                        <th className="p-4 text-left font-medium text-gray-700">Items</th>
+                        <th className="p-4 text-left font-medium text-gray-700">Status</th>
+                        <th className="p-4 text-left font-medium text-gray-700">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row, index) => (
+                        <tr
+                          key={row.id}
+                          className={`border-t border-white/50 hover:bg-white/30 transition-colors duration-200 ${
+                            index % 2 === 0 ? 'bg-white/10' : ''
+                          }`}
                         >
-                          {tab === "transfer_orders" ? <Truck size={14} /> : tab === "production_orders" ? <Factory size={14} /> : <Plus size={14} />}
-                          Order Accept
-                        </button>
-                        {tab === "production_orders" && (
-                          <button
-                            type="button"
-                            onClick={() => addChildRequisition(row)}
-                            className="px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-xs font-semibold inline-flex items-center gap-2"
-                          >
-                            <GitBranchPlus size={14} />
-                            Add Requisition
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          <td className="p-4">
+                            <div>
+                              <span className="font-medium text-indigo-600">{row.reference}</span>
+                              {row.title && (
+                                <div className="text-xs text-gray-500 mt-1">{row.title}</div>
+                              )}
+                            </div>
+                          </td>
+                          
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                                {row.requesterName?.charAt(0) || 'R'}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-1">
+                                  {getRequesterIcon(row.requesterType)}
+                                  <span className="font-medium text-gray-800">{row.requesterName || `ID: ${row.requesterId}`}</span>
+                                </div>
+                                <span className="text-xs text-gray-500 capitalize">{row.requesterType}</span>
+                              </div>
+                            </div>
+                          </td>
+                          
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <Package size={14} className="text-gray-400" />
+                              <span className="font-medium">{(row.items || []).length}</span>
+                              {row.requestType === 'money' && (
+                                <span className="flex items-center gap-1 text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                                  <DollarSign size={10} />
+                                  {row.currency} {row.requestedAmount}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          
+                          <td className="p-4">
+                            {getStatusBadge(row.status)}
+                          </td>
+                          
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <button
+                                className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-300"
+                                onClick={() => navigate(`/requisition/view/${row.id}`)}
+                                title="View Details"
+                              >
+                                <Eye size={16} />
+                              </button>
+                              
+                              {!row.isSegmented && row.requesterUserId === currentUser?.id && (
+                                <button
+                                  className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
+                                  onClick={() => navigate(`/requisition/edit/${row.id}`)}
+                                  title="Edit"
+                                >
+                                  <Edit size={16} />
+                                </button>
+                              )}
+                              
+                              {isAdmin && row.status === "pending" && (
+                                <>
+                                  <button
+                                    className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors duration-300"
+                                    onClick={() => approve(row.id)}
+                                    title="Approve"
+                                  >
+                                    <Check size={16} />
+                                  </button>
+                                  
+                                  <button
+                                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                    onClick={() => reject(row.id)}
+                                    title="Reject"
+                                  >
+                                    <X size={16} />
+                                  </button>
+                                  
+                                  <button
+                                    className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors duration-300"
+                                    onClick={() => openSegment(row)}
+                                    title="Segment"
+                                  >
+                                    <Layers size={16} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-100/80">
+                      <tr>
+                        <th className="p-4 text-left font-medium text-gray-700">Requisition</th>
+                        <th className="p-4 text-left font-medium text-gray-700">Section</th>
+                        <th className="p-4 text-left font-medium text-gray-700">Items</th>
+                        <th className="p-4 text-left font-medium text-gray-700">Destination</th>
+                        <th className="p-4 text-left font-medium text-gray-700">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row, index) => (
+                        <tr
+                          key={row.id}
+                          className={`border-t border-white/50 hover:bg-white/30 transition-colors duration-200 ${
+                            index % 2 === 0 ? 'bg-white/10' : ''
+                          }`}
+                        >
+                          <td className="p-4">
+                            <span className="font-medium text-indigo-600">{row.requisition?.reference}</span>
+                          </td>
+                          
+                          <td className="p-4">
+                            <div>
+                              <div className="font-medium text-gray-800">{row.title || `Section ${row.sectionNo}`}</div>
+                              <div className="mt-1">{getStatusBadge(row.status)}</div>
+                            </div>
+                          </td>
+                          
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <Package size={14} className="text-gray-400" />
+                              <span className="font-medium">{(row.items || []).length}</span>
+                            </div>
+                          </td>
+                          
+                          <td className="p-4">
+                            {row.destinationType ? (
+                              <div className="flex items-center gap-2">
+                                {getRequesterIcon(row.destinationType)}
+                                <span className="capitalize">{row.destinationType}</span>
+                                {row.destinationId && <span className="text-gray-500">#{row.destinationId}</span>}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          
+                          <td className="p-4">
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => acceptOrder(row, tab === "transfer_orders" ? "transfer" : tab === "production_orders" ? "production" : "purchase")}
+                                className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-semibold inline-flex items-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg"
+                              >
+                                {tab === "transfer_orders" ? <Truck size={14} /> : tab === "production_orders" ? <Factory size={14} /> : <ShoppingBag size={14} />}
+                                Accept Order
+                              </button>
+                              
+                              {tab === "production_orders" && (
+                                <button
+                                  type="button"
+                                  onClick={() => addChildRequisition(row)}
+                                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white text-xs font-semibold inline-flex items-center gap-2 transition-all duration-300 shadow-md hover:shadow-lg"
+                                >
+                                  <GitBranchPlus size={14} />
+                                  Add Requisition
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Empty State */}
+              {rows.length === 0 && (
+                <div className="text-center py-12">
+                  <div className="p-4 bg-white/50 rounded-full inline-block mb-4">
+                    <ClipboardList size={48} className="text-gray-300" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">No {tab.replace('_', ' ')} found</h3>
+                  <p className="text-gray-600 mb-6">There are no items to display at the moment.</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Pagination - Only for Requisitions */}
+        {tab === "requisitions" && meta.total > 0 && (
+          <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-4 mt-4">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="text-sm text-gray-700">
+                  Total <span className="font-semibold text-indigo-600">{meta.total}</span> requisitions
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage(1)}
+                  disabled={page <= 1}
+                  className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                  title="First page"
+                >
+                  <ChevronsLeft size={16} className="text-gray-600" />
+                </button>
+
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                  title="Previous page"
+                >
+                  <ChevronLeft size={16} className="text-gray-600" />
+                </button>
+
+                <span className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-sm font-medium">
+                  Page {page} of {meta.totalPages}
+                </span>
+
+                <button
+                  onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
+                  disabled={page >= meta.totalPages}
+                  className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                  title="Next page"
+                >
+                  <ChevronRight size={16} className="text-gray-600" />
+                </button>
+
+                <button
+                  onClick={() => setPage(meta.totalPages)}
+                  disabled={page >= meta.totalPages}
+                  className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                  title="Last page"
+                >
+                  <ChevronsRight size={16} className="text-gray-600" />
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      {tab === "requisitions" && (
-        <div className="mt-4 flex items-center justify-between">
-          <p className="text-sm text-gray-600">Total: {meta.total}</p>
-          <div className="flex gap-2">
-            <button disabled={page <= 1} className="px-3 py-2 rounded bg-white border disabled:opacity-50" onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</button>
-            <span className="px-3 py-2">{page}/{meta.totalPages}</span>
-            <button disabled={page >= meta.totalPages} className="px-3 py-2 rounded bg-white border disabled:opacity-50" onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}>Next</button>
-          </div>
-        </div>
-      )}
-
+      {/* Segment Modal */}
       {segmentModal.open && segmentModal.requisition && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setSegmentModal({ open: false, requisition: null })}></div>
-          <div className="relative bg-white w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">Segment Requisition {segmentModal.requisition.reference}</h2>
-              <button type="button" onClick={addSection} className="px-3 py-2 rounded-lg bg-indigo-50 text-indigo-700 inline-flex items-center gap-2">
-                <Plus size={15} /> Add Section
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {sections.map((section, sIdx) => (
-                <div key={sIdx} className="border rounded-xl p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-3">
-                    <input className="p-2 border rounded-lg" value={section.title} onChange={(e) => updateSection(sIdx, "title", e.target.value)} placeholder="Section title" />
-                    <select className="p-2 border rounded-lg" value={section.actionType} onChange={(e) => updateSection(sIdx, "actionType", e.target.value)}>
-                      {segmentModal.requisition?.requestType === "money" ? (
-                        <>
-                          <option value="approval">approval</option>
-                          <option value="rejected">rejected</option>
-                        </>
-                      ) : (
-                        <>
-                          <option value="transfer_order">transfer_order</option>
-                          <option value="production_order">production_order</option>
-                          <option value="purchase_order">purchase_order</option>
-                          <option value="rejected">rejected</option>
-                        </>
-                      )}
-                    </select>
-                    <select className="p-2 border rounded-lg" value={section.destinationType} onChange={(e) => updateSection(sIdx, "destinationType", e.target.value)}>
-                      <option value="">destination type</option>
-                      <option value="shop">shop</option>
-                      <option value="store">store</option>
-                      <option value="factory">factory</option>
-                    </select>
-                    <select className="p-2 border rounded-lg" value={section.destinationId} onChange={(e) => updateSection(sIdx, "destinationId", e.target.value)}>
-                      <option value="">destination</option>
-                      {(placeOptions[section.destinationType] || []).map((row) => (
-                        <option key={row.id} value={row.id}>{row.name}</option>
-                      ))}
-                    </select>
-                    <input className="p-2 border rounded-lg" value={section.note} onChange={(e) => updateSection(sIdx, "note", e.target.value)} placeholder="note" />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSegmentModal({ open: false, requisition: null })}></div>
+          <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+            <div className="sticky top-0 z-10 p-6 border-b border-white/50 bg-gradient-to-r from-indigo-500/10 to-purple-600/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
+                    <Layers className="text-white" size={24} />
                   </div>
-                  {segmentModal.requisition?.requestType === "money" && (
-                    <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-sm text-yellow-800 mb-3">
-                      Money requisition: {segmentModal.requisition.currency || "BDT"} {segmentModal.requisition.requestedAmount || 0} ({segmentModal.requisition.amountPurpose || "No purpose"})
-                    </div>
-                  )}
-                  {segmentModal.requisition?.requestType === "items" && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="border rounded-lg p-3">
-                      <p className="font-semibold mb-2">Available Items</p>
-                      <div className="space-y-2 max-h-56 overflow-y-auto">
-                        {(segmentModal.requisition.items || []).map((it) => {
-                          const row = {
-                            requisitionItemId: it.id,
-                            itemType: it.itemType,
-                            itemId: it.itemType === "product" ? it.productId : it.materialId,
-                            name: it.itemType === "product" ? it.product?.name : it.material?.name,
-                            quantity: it.requestedQty,
-                          };
-                          const selected = section.items.some((x) => x.requisitionItemId === it.id);
-                          return (
-                            <label key={it.id} className="flex items-center justify-between text-sm">
-                              <span>{row.name} ({row.itemType})</span>
-                              <input type="checkbox" checked={selected} onChange={() => toggleItemInSection(sIdx, row)} />
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <div className="border rounded-lg p-3">
-                      <p className="font-semibold mb-2">Selected Items</p>
-                      <div className="space-y-2 max-h-56 overflow-y-auto">
-                        {section.items.map((it) => (
-                          <div key={it.requisitionItemId} className="flex items-center justify-between gap-2 text-sm">
-                            <span>{it.name}</span>
-                            <input
-                              type="number"
-                              className="w-24 p-1 border rounded"
-                              value={it.quantity}
-                              min="0.01"
-                              step="0.01"
-                              onChange={(e) => updateSectionItemQty(sIdx, it.requisitionItemId, e.target.value)}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800">Segment Requisition</h2>
+                    <p className="text-gray-600">{segmentModal.requisition.reference}</p>
                   </div>
-                  )}
                 </div>
-              ))}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={addSection}
+                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium inline-flex items-center gap-2 hover:shadow-lg transition-all duration-300"
+                  >
+                    <Plus size={16} />
+                    Add Section
+                  </button>
+                  <button
+                    onClick={() => setSegmentModal({ open: false, requisition: null })}
+                    className="p-2 bg-white/60 rounded-lg hover:bg-white/80 transition-colors duration-300"
+                  >
+                    <X size={20} className="text-gray-600" />
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div className="mt-4 flex justify-end gap-2">
-              <button className="px-4 py-2 rounded-lg border" onClick={() => setSegmentModal({ open: false, requisition: null })}>Cancel</button>
-              <button className="px-4 py-2 rounded-lg bg-indigo-600 text-white" onClick={submitSegmentation}>Save Segments</button>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+              <div className="space-y-6">
+                {sections.map((section, sIdx) => (
+                  <div key={sIdx} className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs flex items-center justify-center">
+                        {sIdx + 1}
+                      </div>
+                      Section {sIdx + 1}
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                      <input
+                        className="p-3 rounded-xl border border-gray-300 bg-white/70 focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                        value={section.title}
+                        onChange={(e) => updateSection(sIdx, "title", e.target.value)}
+                        placeholder="Section title"
+                      />
+                      
+                      <select
+                        className="p-3 rounded-xl border border-gray-300 bg-white/70 focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                        value={section.actionType}
+                        onChange={(e) => updateSection(sIdx, "actionType", e.target.value)}
+                      >
+                        {segmentModal.requisition?.requestType === "money" ? (
+                          <>
+                            <option value="approval">Approval</option>
+                            <option value="rejected">Rejected</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="transfer_order">Transfer Order</option>
+                            <option value="production_order">Production Order</option>
+                            <option value="purchase_order">Purchase Order</option>
+                            <option value="rejected">Rejected</option>
+                          </>
+                        )}
+                      </select>
+
+                      <select
+                        className="p-3 rounded-xl border border-gray-300 bg-white/70 focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                        value={section.destinationType}
+                        onChange={(e) => updateSection(sIdx, "destinationType", e.target.value)}
+                      >
+                        <option value="">Select destination type</option>
+                        <option value="shop">Shop</option>
+                        <option value="store">Store</option>
+                        <option value="factory">Factory</option>
+                      </select>
+
+                      <select
+                        className="p-3 rounded-xl border border-gray-300 bg-white/70 focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                        value={section.destinationId}
+                        onChange={(e) => updateSection(sIdx, "destinationId", e.target.value)}
+                        disabled={!section.destinationType}
+                      >
+                        <option value="">Select destination</option>
+                        {(placeOptions[section.destinationType] || []).map((row) => (
+                          <option key={row.id} value={row.id}>{row.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <input
+                      className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300 mb-4"
+                      value={section.note}
+                      onChange={(e) => updateSection(sIdx, "note", e.target.value)}
+                      placeholder="Section note (optional)"
+                    />
+
+                    {segmentModal.requisition?.requestType === "money" && (
+                      <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 mb-4">
+                        <div className="flex items-center gap-2 text-amber-800">
+                          <DollarSign size={18} />
+                          <span className="font-medium">Money Requisition:</span>
+                          <span>{segmentModal.requisition.currency || "BDT"} {segmentModal.requisition.requestedAmount || 0}</span>
+                          <span className="text-sm text-amber-600">({segmentModal.requisition.amountPurpose || "No purpose"})</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {segmentModal.requisition?.requestType === "items" && (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="border border-white/40 rounded-xl p-4 bg-white/30">
+                          <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                            <Package size={16} className="text-indigo-600" />
+                            Available Items
+                          </h4>
+                          <div className="space-y-2 max-h-64 overflow-y-auto">
+                            {(segmentModal.requisition.items || []).map((it) => {
+                              const row = {
+                                requisitionItemId: it.id,
+                                itemType: it.itemType,
+                                itemId: it.itemType === "product" ? it.productId : it.materialId,
+                                name: it.itemType === "product" ? it.product?.name : it.material?.name,
+                                quantity: it.requestedQty,
+                              };
+                              const selected = section.items.some((x) => x.requisitionItemId === it.id);
+                              return (
+                                <label
+                                  key={it.id}
+                                  className={`flex items-center justify-between p-3 rounded-lg border transition-all duration-200 cursor-pointer ${
+                                    selected 
+                                      ? 'border-indigo-300 bg-indigo-50' 
+                                      : 'border-white/60 hover:bg-white/50'
+                                  }`}
+                                >
+                                  <div className="flex-1">
+                                    <div className="font-medium text-gray-800">{row.name}</div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                        row.itemType === 'product' 
+                                          ? 'bg-blue-100 text-blue-700' 
+                                          : 'bg-green-100 text-green-700'
+                                      }`}>
+                                        {row.itemType}
+                                      </span>
+                                      <span className="text-xs text-gray-500">Qty: {row.quantity}</span>
+                                    </div>
+                                  </div>
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    onChange={() => toggleItemInSection(sIdx, row)}
+                                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                                  />
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="border border-white/40 rounded-xl p-4 bg-white/30">
+                          <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                            <Package size={16} className="text-purple-600" />
+                            Selected Items
+                          </h4>
+                          <div className="space-y-3 max-h-64 overflow-y-auto">
+                            {section.items.length === 0 ? (
+                              <p className="text-gray-500 text-center py-4">No items selected</p>
+                            ) : (
+                              section.items.map((it) => (
+                                <div key={it.requisitionItemId} className="flex items-center justify-between gap-2 p-3 bg-white/50 rounded-lg border border-white/60">
+                                  <div className="flex-1">
+                                    <div className="font-medium text-gray-800">{it.name}</div>
+                                    <div className="text-xs text-gray-500 mt-1">{it.itemType}</div>
+                                  </div>
+                                  <input
+                                    type="number"
+                                    className="w-24 p-2 rounded-lg border border-gray-300 bg-white focus:ring-2 focus:ring-indigo-500/30"
+                                    value={it.quantity}
+                                    min="0.01"
+                                    step="0.01"
+                                    onChange={(e) => updateSectionItemQty(sIdx, it.requisitionItemId, e.target.value)}
+                                  />
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 p-6 border-t border-white/50 bg-white/80 backdrop-blur-sm">
+              <div className="flex justify-end gap-3">
+                <button
+                  className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
+                  onClick={() => setSegmentModal({ open: false, requisition: null })}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-xl hover:shadow-lg transition-all duration-300"
+                  onClick={submitSegmentation}
+                >
+                  Save Segments
+                </button>
+              </div>
             </div>
           </div>
         </div>
