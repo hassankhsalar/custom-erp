@@ -419,10 +419,13 @@ model Material {
   id                  Int                  @id @default(autoincrement())
   name                String
   description         String?
+  category            String?
   brand               String?
+  alternative_names   Json?
   barcode             String?              @unique
   image               String?
   unit                String
+  alternative_units   Json?
   unit_cost           Float
   sale_price          Float?  
   current_stock       Float                @default(0)
@@ -459,6 +462,23 @@ model Unit {
   @@index([createdAt])
 }
 
+model UnitRelation {
+  id          Int      @id @default(autoincrement())
+  primaryUnit String
+  relatedUnit String
+  multiplier  Float
+  note        String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([primaryUnit, relatedUnit])
+  @@index([primaryUnit])
+  @@index([relatedUnit])
+  @@index([status])
+  @@index([createdAt])
+}
+
 model Brand {
   id          Int      @id @default(autoincrement())
   name        String   @unique
@@ -489,7 +509,11 @@ model Product {
   id                      Int                      @id @default(autoincrement())
   name                    String
   description             String?
+  brand                   String?
   image                   String?
+  unit                    String                   @default("unit")
+  alternative_units       Json?
+  alternative_names       Json?
   sale_price              Float
   wholesale_price         Float
   cost                    Float

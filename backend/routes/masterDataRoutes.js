@@ -50,6 +50,28 @@ const buildWhere = (query) => {
   return where;
 };
 
+const parseRelationWhere = (query) => {
+  const where = {};
+
+  if (query.search) {
+    where.OR = [
+      { primaryUnit: { contains: query.search } },
+      { relatedUnit: { contains: query.search } },
+      { note: { contains: query.search } },
+    ];
+  }
+
+  if (query.status) {
+    where.status = query.status;
+  }
+
+  if (query.primaryUnit) {
+    where.primaryUnit = query.primaryUnit;
+  }
+
+  return where;
+};
+
 const resolveEntity = (req, res) => {
   const config = ENTITY_CONFIG[req.params.entity];
   if (!config) {
@@ -58,6 +80,121 @@ const resolveEntity = (req, res) => {
   }
   return config;
 };
+
+router.get("/unit-relations", async (req, res) => {
+  try {
+    const { page, limit, skip } = parsePagination(req.query);
+    const where = parseRelationWhere(req.query);
+    const orderBy = parseSort(req.query.sortBy ? req.query : { sortBy: "createdAt", sortOrder: "desc" });
+
+    const [items, totalCount] = await Promise.all([
+      prisma.unitRelation.findMany({
+        where,
+        orderBy,
+        skip,
+        take: limit,
+      }),
+      prisma.unitRelation.count({ where }),
+    ]);
+
+    res.json({
+      items,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit) || 1,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get("/unit-relations/suggestions/:primaryUnit", async (req, res) => {
+  try {
+    const { primaryUnit } = req.params;
+    const rows = await prisma.unitRelation.findMany({
+      where: {
+        primaryUnit,
+        status: "active",
+      },
+      orderBy: [{ relatedUnit: "asc" }],
+    });
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post("/unit-relations", async (req, res) => {
+  try {
+    const primaryUnit = String(req.body?.primaryUnit || "").trim();
+    const relatedUnit = String(req.body?.relatedUnit || "").trim();
+    const multiplier = parseFloat(req.body?.multiplier);
+    const note = req.body?.note ? String(req.body.note).trim() : null;
+    const status = req.body?.status === "inactive" ? "inactive" : "active";
+
+    if (!primaryUnit || !relatedUnit) {
+      return res.status(400).json({ error: "Primary unit and related unit are required" });
+    }
+    if (!Number.isFinite(multiplier) || multiplier <= 0) {
+      return res.status(400).json({ error: "Multiplier must be greater than 0" });
+    }
+
+    const created = await prisma.unitRelation.create({
+      data: { primaryUnit, relatedUnit, multiplier, note, status },
+    });
+
+    res.status(201).json(created);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.put("/unit-relations/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ error: "Invalid id" });
+    }
+
+    const primaryUnit = String(req.body?.primaryUnit || "").trim();
+    const relatedUnit = String(req.body?.relatedUnit || "").trim();
+    const multiplier = parseFloat(req.body?.multiplier);
+    const note = req.body?.note ? String(req.body.note).trim() : null;
+    const status = req.body?.status === "inactive" ? "inactive" : "active";
+
+    if (!primaryUnit || !relatedUnit) {
+      return res.status(400).json({ error: "Primary unit and related unit are required" });
+    }
+    if (!Number.isFinite(multiplier) || multiplier <= 0) {
+      return res.status(400).json({ error: "Multiplier must be greater than 0" });
+    }
+
+    const updated = await prisma.unitRelation.update({
+      where: { id },
+      data: { primaryUnit, relatedUnit, multiplier, note, status },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.delete("/unit-relations/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ error: "Invalid id" });
+    }
+    await prisma.unitRelation.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
 
 router.get("/:entity", async (req, res) => {
   try {
