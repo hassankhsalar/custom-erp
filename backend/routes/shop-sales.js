@@ -1206,22 +1206,96 @@ router.get("/returns/:id", async (req, res) => {
   }
 });
 
-// Get return-eligible sales for a shop (FIXED VERSION)
+// Get return-eligible sales for a shop with pagination (UPDATED)
 router.get("/return-eligible", async (req, res) => {
   try {
-    const { shopId } = req.query;
+    const { shopId, page = 1, limit = 10 } = req.query;
+    
+    console.log(`📥 GET /return-eligible called with shopId: ${shopId}, page: ${page}, limit: ${limit}`);
     
     if (!shopId) {
       return res.status(400).json({ error: 'Shop ID is required' });
     }
 
-    const scope = await buildScope(prisma, req.user?.userId || 0);
-    ensureIdScope(scope, "shop", parseInt(shopId));
+    const shopIdInt = parseInt(shopId);
+    if (isNaN(shopIdInt)) {
+      return res.status(400).json({ error: 'Invalid Shop ID' });
+    }
 
-    // Get all sales for the shop, then filter in JavaScript
+    // Check if user has access to this shop
+    try {
+      const scope = await buildScope(prisma, req.user?.userId || 0);
+      ensureIdScope(scope, "shop", shopIdInt);
+    } catch (scopeError) {
+      console.error('Scope error:', scopeError);
+      return res.status(403).json({ error: "You don't have access to this shop" });
+    }
+
+    const pageInt = parseInt(page);
+    const limitInt = parseInt(limit);
+    const skip = (pageInt - 1) * limitInt;
+
+    // Get all sales for this shop first (we need to check returnable quantities)
     const allSales = await prisma.sale.findMany({
       where: {
-        shopId: parseInt(shopId),
+        shopId: shopIdInt,
+        // Don't filter by isReturned here - we need to check if any items are still returnable
+      },
+      include: {
+        saleItems: true,
+        saleReturns: {
+          include: {
+            returnItems: true
+          }
+        }
+      }
+    });
+
+    // Filter sales that have at least one item with remaining quantity to return
+    const eligibleSales = allSales.filter(sale => {
+      // Calculate returned quantities for this sale
+      const returnedQuantities = {};
+      
+      if (sale.saleReturns && sale.saleReturns.length > 0) {
+        for (const saleReturn of sale.saleReturns) {
+          for (const returnItem of saleReturn.returnItems) {
+            const key = returnItem.productId 
+              ? `product-${returnItem.productId}` 
+              : `material-${returnItem.materialId}`;
+            
+            if (!returnedQuantities[key]) {
+              returnedQuantities[key] = 0;
+            }
+            returnedQuantities[key] += returnItem.quantity;
+          }
+        }
+      }
+
+      // Check if any item still has quantity available for return
+      for (const saleItem of sale.saleItems) {
+        const key = saleItem.productId 
+          ? `product-${saleItem.productId}` 
+          : `material-${saleItem.materialId}`;
+        
+        const returnedQty = returnedQuantities[key] || 0;
+        
+        if (returnedQty < saleItem.quantity) {
+          return true; // This sale has at least one returnable item
+        }
+      }
+      
+      return false; // All items are fully returned
+    });
+
+    const totalCount = eligibleSales.length;
+    
+    // Apply pagination to the filtered results
+    const paginatedSales = eligibleSales.slice(skip, skip + limitInt);
+
+    // Now fetch the full details for the paginated sales
+    const salesWithDetails = await prisma.sale.findMany({
+      where: {
+        id: { in: paginatedSales.map(s => s.id) }
       },
       include: {
         shop: {
@@ -1252,36 +1326,49 @@ router.get("/return-eligible", async (req, res) => {
             },
           },
         },
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            mobile: true,
+            email: true,
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc',
       },
     });
 
-    // Filter sales that are not returned
-    // Handle both false boolean and 0 number
-    const eligibleSales = allSales.filter(sale => {
-      return sale.isReturned === false || 
-             sale.isReturned === 0 || 
-             sale.isReturned === null;
-    });
-
-    console.log(`Found ${allSales.length} total sales, ${eligibleSales.length} eligible for return`);
     
-    res.json(eligibleSales);
+    res.json({
+      sales: salesWithDetails,
+      pagination: {
+        currentPage: pageInt,
+        totalPages: Math.ceil(totalCount / limitInt),
+        totalCount,
+        limit: limitInt
+      }
+    });
   } catch (error) {
-    console.error('Error fetching return-eligible sales:', error);
-    if (error.status === 403) {
-      return res.json([]);
+    console.error('❌ Error in /return-eligible:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    
+    if (error.code) {
+      console.error('Prisma error code:', error.code);
     }
+    
     res.status(500).json({ 
       error: 'Failed to fetch sales',
-      details: error.message 
+      message: error.message,
+      code: error.code || 'UNKNOWN_ERROR'
     });
   }
 });
 
-// Process a return (UPDATED VERSION)
+// Process a return (UPDATED VERSION WITH PARTIAL RETURN SUPPORT)
 router.post("/return", async (req, res) => {
   try {
     const { saleId, items } = req.body;
@@ -1319,7 +1406,12 @@ router.post("/return", async (req, res) => {
               material: true
             }
           },
-          shop: true
+          shop: true,
+          saleReturns: {
+            include: {
+              returnItems: true
+            }
+          }
         }
       });
 
@@ -1333,12 +1425,25 @@ router.post("/return", async (req, res) => {
         throw new Error("This sale is not associated with a shop");
       }
 
-      // Check if sale is already returned
-      if (originalSale.isReturned) {
-        throw new Error("Sale has already been returned");
+      // Calculate already returned quantities for each item
+      const returnedQuantities = {};
+      
+      if (originalSale.saleReturns && originalSale.saleReturns.length > 0) {
+        for (const saleReturn of originalSale.saleReturns) {
+          for (const returnItem of saleReturn.returnItems) {
+            const key = returnItem.productId 
+              ? `product-${returnItem.productId}` 
+              : `material-${returnItem.materialId}`;
+            
+            if (!returnedQuantities[key]) {
+              returnedQuantities[key] = 0;
+            }
+            returnedQuantities[key] += returnItem.quantity;
+          }
+        }
       }
 
-      // Validate return items against original sale
+      // Validate return items against original sale and already returned quantities
       for (const returnItem of items) {
         const originalItem = originalSale.saleItems.find(item => {
           if (returnItem.type === "product") {
@@ -1353,9 +1458,20 @@ router.post("/return", async (req, res) => {
           throw new Error(`${itemType} ${returnItem.itemId} was not part of the original sale`);
         }
 
-        if (returnItem.quantity > originalItem.quantity) {
+        const key = returnItem.type === "product" 
+          ? `product-${returnItem.itemId}` 
+          : `material-${returnItem.itemId}`;
+        
+        const alreadyReturned = returnedQuantities[key] || 0;
+        const availableForReturn = originalItem.quantity - alreadyReturned;
+
+        if (returnItem.quantity > availableForReturn) {
           const itemType = returnItem.type === "product" ? "Product" : "Material";
-          throw new Error(`Cannot return more than originally sold for ${itemType} ${returnItem.itemId}. Original: ${originalItem.quantity}, Return: ${returnItem.quantity}`);
+          throw new Error(
+            `Cannot return more than available for ${itemType} ${returnItem.itemId}. ` +
+            `Original: ${originalItem.quantity}, Already returned: ${alreadyReturned}, ` +
+            `Available: ${availableForReturn}, Requested: ${returnItem.quantity}`
+          );
         }
       }
 
@@ -1393,14 +1509,46 @@ router.post("/return", async (req, res) => {
         }
       });
 
-      // Update the sale as returned
-      await tx.sale.update({
-        where: { id: parseInt(saleId) },
-        data: {
-          isReturned: true,
-          returnedAt: new Date(),
-        },
-      });
+      // Update returned quantities tracking
+      for (const returnItem of items) {
+        const key = returnItem.type === "product" 
+          ? `product-${returnItem.itemId}` 
+          : `material-${returnItem.itemId}`;
+        
+        if (!returnedQuantities[key]) {
+          returnedQuantities[key] = 0;
+        }
+        returnedQuantities[key] += returnItem.quantity;
+      }
+
+      // Check if all items in the sale are fully returned
+      let allItemsFullyReturned = true;
+      
+      for (const originalItem of originalSale.saleItems) {
+        const key = originalItem.productId 
+          ? `product-${originalItem.productId}` 
+          : `material-${originalItem.materialId}`;
+        
+        const returnedQty = returnedQuantities[key] || 0;
+        
+        if (returnedQty < originalItem.quantity) {
+          allItemsFullyReturned = false;
+          break;
+        }
+      }
+
+      // Update sale's isReturned status only if all items are fully returned
+      if (allItemsFullyReturned) {
+        await tx.sale.update({
+          where: { id: parseInt(saleId) },
+          data: {
+            isReturned: true,
+            returnedAt: new Date(),
+          },
+        });
+      } else {
+        console.log(`Sale ${saleId} has partial returns, isReturned remains false`);
+      }
 
       // Restore shop stock based on item type
       for (const item of items) {
@@ -1490,12 +1638,15 @@ router.post("/return", async (req, res) => {
         }
       }
 
-      return { saleReturn };
+      return { saleReturn, allItemsFullyReturned };
     });
 
     res.status(201).json({
-      message: "Return processed successfully",
-      return: result.saleReturn
+      message: result.allItemsFullyReturned 
+        ? "Return processed successfully. All items have been returned."
+        : "Return processed successfully. Partial return completed.",
+      return: result.saleReturn,
+      fullyReturned: result.allItemsFullyReturned
     });
 
   } catch (err) {
@@ -1507,9 +1658,8 @@ router.post("/return", async (req, res) => {
     
     if (err.message.includes("Sale not found") || 
         err.message.includes("not associated with a shop") ||
-        err.message.includes("has already been returned") ||
         err.message.includes("was not part of the original sale") ||
-        err.message.includes("Cannot return more than originally sold")) {
+        err.message.includes("Cannot return more than available")) {
       return res.status(400).json({ error: err.message });
     }
     
