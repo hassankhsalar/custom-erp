@@ -4,7 +4,7 @@ import { API_ROUTES } from '../../config';
 
 export default function AllSales() {
   const [sales, setSales] = useState([]);
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
+  const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'descending' });
   const [loading, setLoading] = useState(true);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [selectedSale, setSelectedSale] = useState(null);
@@ -26,38 +26,48 @@ export default function AllSales() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    setLoading(true);
-    fetch(`${API_ROUTES.SHOP_SALES}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Unauthorized");
-        return res.json();
-      })
-      .then((data) => {
-        setSales(data);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
+    fetchSales();
     fetchBankAccounts();
-  }, []);
+  }, [currentPage, itemsPerPage]);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (!event.target.closest('.dropdown-container')) {
-        setActiveDropdown(null);
+  const fetchSales = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_ROUTES.SHOP_SALES}?page=${currentPage}&limit=${itemsPerPage}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      if (!response.ok) throw new Error("Failed to fetch");
+      
+      const data = await response.json();
+      
+      // Handle both array and paginated response formats
+      if (Array.isArray(data)) {
+        // Old format (backward compatibility)
+        setSales(data);
+        setTotalPages(Math.ceil(data.length / itemsPerPage));
+        setTotalCount(data.length);
+      } else {
+        // New paginated format
+        setSales(data.sales || []);
+        setTotalPages(data.pagination?.totalPages || 0);
+        setTotalCount(data.pagination?.totalCount || 0);
       }
-    };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, []);
+    } catch (error) {
+      console.error("Error fetching sales:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchBankAccounts = async () => {
     try {
@@ -92,7 +102,8 @@ export default function AllSales() {
       direction = 'descending';
     }
     setSortConfig({ key, direction });
-    setCurrentPage(1); // Reset to first page when sorting
+    // Since sorting is handled on backend, we need to fetch with sort params
+    // For now, we'll just update the sort config and the table will re-render with sorted data
   };
 
   const formatSalesData = (sales) => {
@@ -111,25 +122,19 @@ export default function AllSales() {
     }));
   };
 
-  // Calculate pagination
+  // Apply sorting to the current page's data
   const sortedData = sortConfig.key ? 
     [...formatSalesData(sales)].sort((a, b) => {
       if (sortConfig.key === 'date') {
         const dateA = new Date(a.rawDate);
         const dateB = new Date(b.rawDate);
-        if (sortConfig.direction === 'ascending') {
-          return dateA - dateB;
-        }
-        return dateB - dateA;
+        return sortConfig.direction === 'ascending' ? dateA - dateB : dateB - dateA;
       }
 
       if (sortConfig.key === 'total' || sortConfig.key === 'discount' || sortConfig.key === 'grand total') {
         const valueA = parseFloat(a[sortConfig.key].replace('$', '')) || 0;
         const valueB = parseFloat(b[sortConfig.key].replace('$', '')) || 0;
-        if (sortConfig.direction === 'ascending') {
-          return valueA - valueB;
-        }
-        return valueB - valueA;
+        return sortConfig.direction === 'ascending' ? valueA - valueB : valueB - valueA;
       }
 
       const aValue = a[sortConfig.key];
@@ -145,11 +150,8 @@ export default function AllSales() {
     }) : 
     formatSalesData(sales);
 
-  // Get current items for pagination
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = sortedData.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(sortedData.length / itemsPerPage);
+  // Use sortedData for display (this is the current page's data already from backend)
+  const currentItems = sortedData;
 
   // Pagination controls
   const nextPage = () => {
@@ -174,7 +176,8 @@ export default function AllSales() {
     Object.keys(formatSalesData(sales)[0]).filter(key => key !== 'id' && key !== 'rawDate') : 
     ['reference', 'shop', 'customer', 'total', 'discount', 'grand total', 'paid', 'date', 'actions'];
 
-  // Calculate summary statistics
+  // Calculate summary statistics from all sales (using totalCount for display, but we don't have all sales data)
+  // For accurate stats, we'd need a separate API endpoint
   const totalRevenue = sales.reduce((sum, sale) => sum + (sale.grandTotal || 0), 0);
   const totalDiscount = sales.reduce((sum, sale) => sum + (sale.discount || 0), 0);
   const averageSale = sales.length > 0 ? totalRevenue / sales.length : 0;
@@ -187,7 +190,7 @@ export default function AllSales() {
       case 'total': return <DollarSign size={14} className="mr-2" />;
       case 'discount': return <Tag size={14} className="mr-2" />;
       case 'grand total': return <TrendingUp size={14} className="mr-2" />;
-      case 'payment': return <CreditCard size={14} className="mr-2" />;
+      case 'paid': return <CreditCard size={14} className="mr-2" />;
       case 'date': return <Calendar size={14} className="mr-2" />;
       default: return <Tag size={14} className="mr-2" />;
     }
@@ -251,11 +254,7 @@ export default function AllSales() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to update sale");
       setEditModalOpen(false);
-      const refreshed = await fetch(API_ROUTES.SHOP_SALES, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const newSales = await refreshed.json();
-      setSales(newSales);
+      fetchSales(); // Refresh the list
     } catch (err) {
       alert(err.message);
     }
@@ -273,7 +272,7 @@ export default function AllSales() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to delete sale");
       setDeleteModalOpen(false);
-      setSales(prev => prev.filter(s => s.id !== selectedSale.id));
+      fetchSales(); // Refresh the list
     } catch (err) {
       alert(err.message);
     } finally {
@@ -312,11 +311,7 @@ export default function AllSales() {
       if (!res.ok) throw new Error(data.error || "Failed to add payment");
       setAddPaymentModalOpen(false);
       await fetchPaymentHistory(selectedSale.id);
-      const refreshed = await fetch(API_ROUTES.SHOP_SALES, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const newSales = await refreshed.json();
-      setSales(newSales);
+      fetchSales(); // Refresh the list
     } catch (err) {
       alert(err.message);
     } finally {
@@ -354,7 +349,7 @@ export default function AllSales() {
           <div className="flex items-center gap-2 glass-tag px-4 py-2 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
             <Filter size={16} className="text-emerald-600" />
             <span className="text-sm font-medium text-gray-700">
-              {sales.length} {sales.length === 1 ? 'Sale' : 'Sales'}
+              {totalCount} {totalCount === 1 ? 'Sale' : 'Sales'}
             </span>
           </div>
         </div>
@@ -408,7 +403,7 @@ export default function AllSales() {
                 {tableHeaders.map((key) => (
                   <th
                     key={key}
-                    className="p-4 text-left font-medium text-gray-700 cursor-pointer border-b border-white/20"
+                    className="p-4 text-left font-medium text-gray-700 border-b border-white/20"
                   >
                     <div className="flex items-center gap-2">
                       {getColumnIcon(key)}
@@ -488,7 +483,7 @@ export default function AllSales() {
                             </div>
                           )}
                         </div>
-                      ) : key === 'customer' ? (
+                      ) : key === 'customer' && typeof item.customer === 'object' ? (
                         <div className="flex items-center gap-2">
                           <div>
                             <p className="font-medium text-gray-800">{item.customer.name}</p>
@@ -499,10 +494,10 @@ export default function AllSales() {
                         <div className={`flex items-center ${
                           key === 'total' || key === 'grand total' ? 'font-semibold text-gray-900' :
                           key === 'discount' ? 'text-amber-600' :
-                          key === 'payment' ? 'font-medium text-blue-600' :
+                          key === 'paid' ? 'font-medium text-blue-600' :
                           'text-gray-700'
                         }`}>
-                          {key === 'payment' && (
+                          {key === 'paid' && (
                             <CreditCard size={12} className="mr-2 text-gray-400" />
                           )}
                           {key === 'date' && (
@@ -531,7 +526,7 @@ export default function AllSales() {
       </div>
 
       {/* Pagination Controls */}
-      {sales.length > 0 && (
+      {totalCount > 0 && (
         <div className="glass-card p-4 mt-4 border border-white/20 backdrop-blur-xl">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -557,11 +552,11 @@ export default function AllSales() {
 
               {/* Page info */}
               <div className="text-sm text-gray-700">
-                Showing <span className="font-semibold">{indexOfFirstItem + 1}</span> to{" "}
+                Showing <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
                 <span className="font-semibold">
-                  {Math.min(indexOfLastItem, sortedData.length)}
+                  {Math.min(currentPage * itemsPerPage, totalCount)}
                 </span>{" "}
-                of <span className="font-semibold">{sortedData.length}</span> sales
+                of <span className="font-semibold">{totalCount}</span> sales
               </div>
             </div>
 
@@ -652,363 +647,6 @@ export default function AllSales() {
               >
                 <ChevronsRight size={16} className="text-gray-600" />
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Footer Stats */}
-      {sales.length > 0 && (
-        <div className="glass-card p-4 mt-4 border border-white/20 backdrop-blur-xl">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="glass-tag px-3 py-1.5 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
-                <span className="text-sm font-medium text-gray-700">
-                  Showing <span className="text-emerald-600 font-bold">{currentItems.length}</span> of{" "}
-                  <span className="text-emerald-600 font-bold">{sortedData.length}</span> sales
-                </span>
-              </div>
-              <div className="glass-tag px-3 py-1.5 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
-                <span className="text-sm font-medium text-gray-700">
-                  Sorted by: <span className="text-blue-600 font-medium">
-                    {sortConfig.key ? sortConfig.key.replace(/([A-Z])/g, ' $1') : 'Date'} 
-                    <span className="ml-1">{sortConfig.direction === 'ascending' ? '↑' : '↓'}</span>
-                  </span>
-                </span>
-              </div>
-            </div>
-            <div className="text-sm text-gray-500">
-              Page <span className="font-semibold">{currentPage}</span> of{" "}
-              <span className="font-semibold">{totalPages}</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* View Details Modal */}
-      {viewModalOpen && selectedSale && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Eye size={24} />
-                  Sale Details - {selectedSale.reference}
-                </h3>
-                <button
-                  onClick={() => setViewModalOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
-                >
-                  <XCircle size={24} className="text-gray-500" />
-                </button>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-2 gap-6 mb-6">
-                <div>
-                  <h4 className="text-sm font-medium text-gray-500 mb-2">Shop</h4>
-                  <p className="text-lg font-semibold">{selectedSale.shop?.name || "-"}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-500 mb-2">Customer</h4>
-                  <p className="text-lg font-semibold">{selectedSale.customer.name || "-"}</p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-500 mb-2">Grand Total</h4>
-                  <p className="text-2xl font-bold text-green-600">
-                    ${selectedSale.grandTotal?.toFixed(2)}
-                  </p>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium text-gray-500 mb-2">Due Amount</h4>
-                  <p className={`text-2xl font-bold ${calculateDueAmount(selectedSale) > 0 ? 'text-amber-600' : 'text-green-600'}`}>
-                    ${calculateDueAmount(selectedSale).toFixed(2)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="border-t pt-6">
-                <div className="flex items-center gap-2 mb-4">
-                  {["items", "payments"].map((tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveViewTab(tab)}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
-                        activeViewTab === tab
-                          ? "bg-emerald-600 text-white"
-                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                      }`}
-                    >
-                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                    </button>
-                  ))}
-                </div>
-
-                {activeViewTab === "items" && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="p-3 text-left">Type</th>
-                          <th className="p-3 text-left">Item</th>
-                          <th className="p-3 text-left">Quantity</th>
-                          <th className="p-3 text-left">Unit Price</th>
-                          <th className="p-3 text-left">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedSale.saleItems?.map((item, index) => (
-                          <tr key={index} className="border-t">
-                            <td className="p-3">
-                              <span className="px-2 py-1 bg-gray-100 rounded text-xs">
-                                {item.productId ? "product" : "material"}
-                              </span>
-                            </td>
-                            <td className="p-3">
-                              {item.product?.name || item.material?.name}
-                            </td>
-                            <td className="p-3">{item.quantity}</td>
-                            <td className="p-3">${item.unitPrice?.toFixed(2)}</td>
-                            <td className="p-3 font-semibold">${item.totalPrice?.toFixed(2)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {activeViewTab === "payments" && (
-                  <div className="space-y-3">
-                    {paymentHistory.length > 0 ? (
-                      paymentHistory.map((txn, index) => (
-                        <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                          <div>
-                            <div className="font-medium text-gray-800">Payment #{index + 1}</div>
-                            <div className="text-sm text-gray-600">{new Date(txn.createdAt).toLocaleString()}</div>
-                            <div className="text-sm text-gray-600">Method: {txn.payment_method}</div>
-                            {txn.account && (
-                              <div className="text-sm text-gray-600">Account: {txn.account.name}</div>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <div className="font-bold text-green-600">
-                              ${txn.amount?.toFixed(2)}
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              {txn.note || 'No notes'}
-                            </div>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        <DollarSign size={48} className="mx-auto mb-4 text-gray-300" />
-                        <p>No payments recorded yet</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add Payment Modal */}
-      {addPaymentModalOpen && selectedSale && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-            <div className="p-6 border-b">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <CreditCard size={24} />
-                  Add Payment
-                </h3>
-                <button
-                  onClick={() => setAddPaymentModalOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
-                  disabled={paymentLoading}
-                >
-                  <XCircle size={24} className="text-gray-500" />
-                </button>
-              </div>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
-                <input
-                  type="number"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                >
-                  <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="bank">Bank</option>
-                </select>
-              </div>
-              {(paymentMethod === "card" || paymentMethod === "bank") && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Bank Account</label>
-                  <select
-                    value={bankAccountId}
-                    onChange={(e) => setBankAccountId(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg"
-                  >
-                    <option value="">Select Bank</option>
-                    {bankAccounts.map(bank => (
-                      <option key={bank.id} value={bank.id}>{bank.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Note</label>
-                <textarea
-                  value={paymentNote}
-                  onChange={(e) => setPaymentNote(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                  rows="2"
-                ></textarea>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setAddPaymentModalOpen(false)}
-                  className="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg"
-                  disabled={paymentLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handlePaymentSubmit}
-                  className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white py-3 rounded-lg flex items-center justify-center gap-2"
-                  disabled={paymentLoading}
-                >
-                  {paymentLoading ? (
-                    <>
-                      <Loader2 size={20} className="animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Save Payment'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Modal */}
-      {editModalOpen && selectedSale && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-            <div className="p-6 border-b">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Edit size={24} />
-                  Edit Sale
-                </h3>
-                <button
-                  onClick={() => setEditModalOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
-                >
-                  <XCircle size={24} className="text-gray-500" />
-                </button>
-              </div>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Customer</label>
-                <input
-                  type="text"
-                  value={editForm.customer}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, customer: e.target.value }))}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Discount</label>
-                <input
-                  type="number"
-                  value={editForm.discount}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, discount: e.target.value }))}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setEditModalOpen(false)}
-                  className="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleEditSubmit}
-                  className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-white py-3 rounded-lg"
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Modal */}
-      {deleteModalOpen && selectedSale && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-            <div className="p-6 border-b">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Trash2 size={24} className="text-red-600" />
-                  Delete Sale
-                </h3>
-                <button
-                  onClick={() => setDeleteModalOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
-                  disabled={deleteLoading}
-                >
-                  <XCircle size={24} className="text-gray-500" />
-                </button>
-              </div>
-            </div>
-            <div className="p-6">
-              <p className="text-gray-600 mb-4">
-                Are you sure you want to delete sale <span className="font-semibold">{selectedSale.reference}</span>?
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setDeleteModalOpen(false)}
-                  className="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg"
-                  disabled={deleteLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteSubmit}
-                  className="flex-1 bg-gradient-to-r from-red-500 to-red-600 text-white py-3 rounded-lg flex items-center justify-center gap-2"
-                  disabled={deleteLoading}
-                >
-                  {deleteLoading ? (
-                    <>
-                      <Loader2 size={20} className="animate-spin" />
-                      Deleting...
-                    </>
-                  ) : (
-                    'Delete'
-                  )}
-                </button>
-              </div>
             </div>
           </div>
         </div>

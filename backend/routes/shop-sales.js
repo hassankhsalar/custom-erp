@@ -776,9 +776,13 @@ router.put("/warranties/:id/status", async (req, res) => {
   }
 });
 
-// Get all shop sales with both product and material details
+// Get all shop sales with both product and material details (with pagination)
 router.get("/", async (req, res) => {
   try {
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const take = parseInt(limit);
+
     const scope = await buildScope(prisma, req.user?.userId || 0);
     if (!scope.isAdmin && scope.shops.size === 0) {
       const err = new Error("Forbidden");
@@ -787,6 +791,10 @@ router.get("/", async (req, res) => {
     }
     const where = scope.isAdmin ? { shopId: { not: null } } : { shopId: { in: Array.from(scope.shops) } };
 
+    // Get total count for pagination
+    const totalCount = await prisma.sale.count({ where });
+
+    // Get paginated sales
     const sales = await prisma.sale.findMany({
       where,
       include: {
@@ -838,9 +846,19 @@ router.get("/", async (req, res) => {
         },
       },
       orderBy: { createdAt: "desc" },
+      skip,
+      take,
     });
 
-    res.json(sales);
+    res.json({
+      sales,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(totalCount / take),
+        totalCount,
+        limit: take
+      }
+    });
   } catch (err) {
     if (err.status === 403) {
       return res.status(403).json({ error: "Forbidden" });
