@@ -711,7 +711,7 @@ export default function AllSales() {
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Customer</h4>
-                  <p className="text-lg font-semibold">{selectedSale.customer.name || "-"}</p>
+                  <p className="text-lg font-semibold">{selectedSale.customer?.name || "-"}</p>
                 </div>
                 <div>
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Grand Total</h4>
@@ -767,7 +767,7 @@ export default function AllSales() {
                             <td className="p-3">
                               {item.product?.name || item.material?.name}
                             </td>
-                            <td className="p-3">{item.quantity}</td>
+                            <td className="p-3">{item.quantity} {item.unit}</td>
                             <td className="p-3">${item.unitPrice?.toFixed(2)}</td>
                             <td className="p-3 font-semibold">${item.totalPrice?.toFixed(2)}</td>
                           </tr>

@@ -80,8 +80,8 @@ const Navbar = () => {
                     
                     {/* Logo and Brand */}
                     <div className="flex items-center gap-4">
-                        <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-white/30 backdrop-blur-md bg-white/90 shadow-[0_4px_12px_rgba(0,0,0,0.05)]">
-                            <img src={logo} alt="Company Logo" className="w-12 h-12 object-contain" />
+                        <div className="p-2 rounded-xl bg-gradient-to-br border border-white/30 backdrop-blur-md bg-white/90 shadow-[0_4px_12px_rgba(0,0,0,0.05)]">
+                            <img src={logo} alt="Company Logo" className="max-w-24 max-h-12 object-contain" />
                         </div>
                     </div>
 
