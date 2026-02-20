@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
 import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X } from "lucide-react";
+import { TbCurrencyTaka } from "react-icons/tb";
 import e from "cors";
 
 export default function ShopPOS( props ) {
@@ -533,20 +534,21 @@ export default function ShopPOS( props ) {
 
       {/* Main Content */}
       <div className="max-w-7xl  xl:max-w-full p-4">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           {/* Left Column: Shop Selection & Search */}
-          <div className="lg:col-span-1 space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 space-y-4">
             {/* Shop Selection Card */}
             <div className="bg-white rounded-xl shadow-md p-5">
               <div className="flex items-center gap-2 mb-4">
                 <div className="p-2 bg-blue-100 rounded-lg">
-                  <span className="text-blue-600"><Store/></span>
+                  <span className="text-blue-600"><Store size={42} /></span>
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-800">Select Shop</h3>
                   <p className="text-sm text-gray-500">Choose shop to sell from</p>
                 </div>
               </div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Select a Shop</label>
               <select
                 className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                 value={shopId}
@@ -565,124 +567,14 @@ export default function ShopPOS( props ) {
               </select>
             </div>
 
-            {/* Search Card */}
-            <div className="bg-white rounded-xl shadow-md p-5 relative">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <span className="text-green-600"><Search /></span>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-800">Search Items</h3>
-                  <p className="text-sm text-gray-500">Type name, barcode or brand</p>
-                </div>
-              </div>
-              <input
-                ref={searchInputRef}
-                type="text"
-                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-1 outline-none focus:ring-green-500 focus:border-green-500 transition"
-                placeholder="Search products & materials..."
-                value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
-                disabled={!shopId}
-              />
-              
-              {showSearchResults && searchResults.length > 0 && (
-                <div className="absolute z-10 bg-white border border-gray-200 w-full max-h-80 overflow-y-auto shadow-xl rounded-lg mt-2">
-                  {searchResults.map((item) => {
-                    const isLowStock = item.shop_stock < 20;
-                    const isOutOfStock = item.shop_stock <= 0;
-                    const imageUrl = getImageUrl(item.image);
-                    
-                    return (
-                      <div
-                        key={`${item.type}-${item.id}`}
-                        onClick={() => !isOutOfStock && handleAddToCart(item)}
-                        className={`p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-400 transition ${isOutOfStock ? 'opacity-50 cursor-not-allowed' : ''}`} 
-                      >
-                        <div className="flex items-start space-x-3">
-                          {/* Image Section */}
-                          <div className="flex-shrink-0">
-                            {imageUrl ? (
-                              <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 bg-white">
-                                <img 
-                                  src={imageUrl} 
-                                  alt={item.name}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    e.target.style.display = 'none';
-                                    const parent = e.target.parentElement;
-                                    parent.innerHTML = `
-                                      <div class="w-full h-full flex items-center justify-center bg-gray-100">
-                                        <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                        </svg>
-                                      </div>
-                                    `;
-                                  }}
-                                />
-                              </div>
-                            ) : (
-                              <div className="w-16 h-16 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center">
-                                <ImageIcon className="w-8 h-8 text-gray-400" />
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* Item Details */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <div className="font-medium text-gray-800 truncate">{item.name}</div>
-                                <div className="text-sm text-gray-600 mt-1">
-                                  {item.barcode && <span>{item.barcode}</span>}
-                                </div>
-                                <div className="flex items-center mt-2">
-                                  <span className={`text-xs font-medium ${isLowStock ? 'text-amber-600' : 'text-gray-700'}`}>
-                                    Stock: {item.shop_stock} {item.unit && `(${item.unit})`}
-                                  </span>
-                                  {isLowStock && !isOutOfStock && (
-                                    <span className="ml-2 px-1.5 py-0.5 text-xs bg-amber-100 text-amber-800 rounded">Low Stock</span>
-                                  )}
-                                  {isOutOfStock && (
-                                    <span className="ml-2 px-1.5 py-0.5 text-xs bg-red-100 text-red-800 rounded">Out of Stock</span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="text-right ml-2">
-                                <div className="font-semibold text-gray-900">${(item.sale_price || 0).toFixed(2)}</div>
-                                {!isOutOfStock && (
-                                  <button className="mt-1 bg-gradient-to-r from-green-500 to-green-600 text-white text-xs px-3 py-1.5 rounded-lg hover:from-green-600 hover:to-green-700 transition whitespace-nowrap">
-                                    Add to Cart
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {showSearchResults && searchResults.length === 0 && searchQuery && (
-                <div className="absolute z-10 bg-white border w-full shadow-lg rounded-lg mt-2 p-4 text-center text-gray-500">
-                  <div className="text-2xl mb-2">😕</div>
-                  <p>No items found</p>
-                  <p className="text-sm">Try a different search term</p>
-                </div>
-              )}
-            </div>
-
-
-            {/* Customer & Payment Card */}
+            {/* Customer Card */}
             <div className="bg-white rounded-xl shadow-md p-5 space-y-4">
               <div className="flex items-center gap-4">
                 <div className="p-2 bg-purple-100 rounded-lg">
                   <span className="text-purple-600"><UserRound size={42} /></span>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-800">Customer & Payment</h3>
+                  <h3 className="font-semibold text-gray-800">Customer</h3>
                   <p className="text-sm text-gray-500">Optional customer details</p>
                 </div>
               </div>
@@ -709,7 +601,7 @@ export default function ShopPOS( props ) {
                       .map((cust) => (
                         <div
                           key={cust.id}
-                          className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                          className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-200 last:border-b-0"
                           onClick={() => {
                             setSelectedCustomer(cust);
                             setCustomerSearchQuery(cust.name);
@@ -740,6 +632,20 @@ export default function ShopPOS( props ) {
                         <X size={16} className="text-gray-500" />
                     </button>
                 )}
+              </div>
+            </div>
+
+
+            {/* Payment Card */}
+            <div className="bg-white rounded-xl shadow-md p-5 space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="p-2 bg-teal-100 rounded-lg">
+                  <span className="text-teal-600"><TbCurrencyTaka size={42} /></span>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-800">Payment</h3>
+                  <p className="text-sm text-gray-500">Payment details</p>
+                </div>
               </div>
               
               <div>
@@ -791,67 +697,14 @@ export default function ShopPOS( props ) {
                 </div>
               )}
             </div>
-            {/* Stock Alerts Card */}
-            {(lowStockItems.length > 0 || outOfStockItems.length > 0) && (
-              <div className="bg-white rounded-xl shadow-md p-3">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="p-2 bg-red-100 rounded-lg">
-                    <span className="text-red-600"><TriangleAlert size={35} /></span>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-800">Stock Alerts</h3>
-                    <p className="text-sm text-gray-500">Items needing attention</p>
-                  </div>
-                </div>
-                
-                {outOfStockItems.length > 0 && (
-                  <div className="mb-3">
-                    <h4 className="text-sm font-medium text-red-700 mb-2">Out of Stock ({outOfStockItems.length})</h4>
-                    <div className="space-y-2 max-h-32 overflow-y-auto">
-                      {outOfStockItems.slice(0, 5).map(item => (
-                        <div key={`${item.type}-${item.id}`} className="flex justify-between items-center text-sm p-2 bg-red-50 rounded">
-                          <span className="text-red-800">{item.name}</span>
-                          <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded">0 {item.unit}</span>
-                        </div>
-                      ))}
-                      {outOfStockItems.length > 5 && (
-                        <div className="text-center text-sm text-red-600">
-                          +{outOfStockItems.length - 5} more
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-                
-                {lowStockItems.length > 0 && (
-                  <div className=" border border-gray-200 p-2 rounded-lg">
-                    <h4 className="text-sm font-medium text-amber-700 mb-2">Low Stock ({lowStockItems.length})</h4>
-                    <div className="space-y-2 max-h-32 overflow-y-auto">
-                      {lowStockItems.slice(0, 5).map(item => (
-                        <div key={`${item.type}-${item.id}`} className="flex justify-between items-center text-sm p-2 bg-amber-50 rounded">
-                          <span className="text-amber-800">{item.name}</span>
-                          <span className="px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded">
-                            {item.shop_stock} {item.unit}
-                          </span>
-                        </div>
-                      ))}
-                      {lowStockItems.length > 5 && (
-                        <div className="text-center text-sm text-amber-600">
-                          +{lowStockItems.length - 5} more
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+
           </div>
 
           {/* Middle Column: Cart Items */}
-          <div className="lg:col-span-2">
+          <div className="">
             <div className="bg-white rounded-xl shadow-md overflow-hidden">
               {/* Cart Header */}
-              <div className="p-6 bg-gradient-to-r from-gray-50 to-white border-b">
+              <div className="p-6 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg">
@@ -862,6 +715,107 @@ export default function ShopPOS( props ) {
                       <p className="text-sm text-gray-500">{cartItems.length} item(s) in cart</p>
                     </div>
                   </div>
+
+                  {/* Search Card */}
+                  <div className="bg-white grow rounded-xl p-5 relative">
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      className="w-full border border-gray-300 rounded-lg p-3 focus:ring-1 outline-none focus:ring-green-500 focus:border-green-500 transition"
+                      placeholder="Search products & materials..."
+                      value={searchQuery}
+                      onChange={(e) => handleSearch(e.target.value)}
+                      disabled={!shopId}
+                    />
+                    
+                    {showSearchResults && searchResults.length > 0 && (
+                      <div className="absolute z-10 bg-white border border-gray-200 w-full max-h-80 overflow-y-auto shadow-xl rounded-lg mt-2">
+                        {searchResults.map((item) => {
+                          const isLowStock = item.shop_stock < item.alert_quantity;
+                          const isOutOfStock = item.shop_stock <= 0;
+                          const imageUrl = getImageUrl(item.image);
+                          
+                          return (
+                            <div
+                              key={`${item.type}-${item.id}`}
+                              onClick={() => !isOutOfStock && handleAddToCart(item)}
+                              className={`p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-400 transition ${isOutOfStock ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                            >
+                              <div className="flex items-start space-x-3">
+                                {/* Image Section */}
+                                <div className="flex-shrink-0">
+                                  {imageUrl ? (
+                                    <div className="w-12 h-12 rounded-lg overflow-hidden border border-gray-200 bg-white">
+                                      <img 
+                                        src={imageUrl} 
+                                        alt={item.name}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                          e.target.style.display = 'none';
+                                          const parent = e.target.parentElement;
+                                          parent.innerHTML = `
+                                            <div class="w-full h-full flex items-center justify-center bg-gray-100">
+                                              <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                              </svg>
+                                            </div>
+                                          `;
+                                        }}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="w-16 h-16 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center">
+                                      <ImageIcon className="w-8 h-8 text-gray-400" />
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                {/* Item Details */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      <div className="font-medium text-gray-800 truncate">{item.name}</div>
+                                      <div className="text-sm text-gray-600 mt-1">
+                                        {item.barcode && <span>{item.barcode}</span>}
+                                      </div>
+                                      <div className="flex items-center mt-2">
+                                        <span className={`text-xs font-medium ${isLowStock ? 'text-amber-600' : 'text-gray-700'}`}>
+                                          Stock: {item.shop_stock} {item.unit && `(${item.unit})`}
+                                        </span>
+                                        {isLowStock && !isOutOfStock && (
+                                          <span className="ml-2 px-1.5 py-0.5 text-xs bg-amber-100 text-amber-800 rounded">Low Stock</span>
+                                        )}
+                                        {isOutOfStock && (
+                                          <span className="ml-2 px-1.5 py-0.5 text-xs bg-red-100 text-red-800 rounded">Out of Stock</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="text-right ml-2">
+                                      <div className="font-semibold text-gray-900">${(item.sale_price || 0).toFixed(2)}</div>
+                                      {!isOutOfStock && (
+                                        <button className="mt-1 bg-gradient-to-r from-green-500 to-green-600 text-white text-xs px-3 py-1.5 rounded-lg hover:from-green-600 hover:to-green-700 transition whitespace-nowrap">
+                                          Add to Cart
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {showSearchResults && searchResults.length === 0 && searchQuery && (
+                      <div className="absolute z-10 bg-white border w-full shadow-lg rounded-lg mt-2 p-4 text-center text-gray-500">
+                        <div className="text-2xl mb-2">😕</div>
+                        <p>No items found</p>
+                        <p className="text-sm">Try a different search term</p>
+                      </div>
+                    )}
+                  </div>
+
                   <button
                     onClick={handleClearCart}
                     className="px-4 py-2 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-800 font-medium rounded-lg hover:from-gray-300 hover:to-gray-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
@@ -897,7 +851,7 @@ export default function ShopPOS( props ) {
                         const imageUrl = getImageUrl(item.image);
                         
                         return (
-                          <tr key={index} className="border-b hover:bg-gray-50 transition">
+                          <tr key={index} className="border-b border-gray-200 hover:bg-gray-50 transition">
                             <td className="p-4">
                               <div className="flex items-start space-x-3">
                                 {/* Cart Item Image */}

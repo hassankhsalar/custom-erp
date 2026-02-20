@@ -69,6 +69,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
             barcode: true,
             category: true,
             stock: true,
+            alert_quantity: true,
             image: true
           }
         }
@@ -101,6 +102,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
             brand: true,
             unit: true,
             current_stock: true,
+            alert_quantity: true,
             image: true
           }
         }
@@ -122,6 +124,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
       stock: sp.stock,
       shop_stock: sp.stock,
       global_stock: sp.product.stock,
+      alert_quantity: sp.product.alert_quantity,
       image: sp.product.image,
       batches: getAvailableBatches(sp.batchDetails),
       minStock: 0
@@ -141,6 +144,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
       stock: sm.stock,
       shop_stock: sm.stock,
       global_stock: sm.material.current_stock,
+      alert_quantity: sm.material.alert_quantity,
       image: sm.material.image,
       batches: getAvailableBatches(sm.batchDetails),
       minStock: 0

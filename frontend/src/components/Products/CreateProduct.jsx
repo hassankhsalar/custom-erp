@@ -314,15 +314,39 @@ const CreateProduct = () => {
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                    <input list="product-category-list" name="category" value={product.category} onChange={handleProductChange} className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0" />
+                    <select 
+                      name="category"
+                      id="product-category-list"
+                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0"
+                      onChange={handleProductChange}>
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.name} > {category.name} </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
-                    <input list="product-brand-list" name="brand" value={product.brand} onChange={handleProductChange} className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0" />
+                    <select 
+                      name="brand"
+                      id="product-brand-list" 
+                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0" 
+                      onChange={handleProductChange}>
+                      {brands.map((brand) => (
+                        <option key={brand.id} value={brand.name} className="capitalize" > {brand.name} </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit *</label>
-                    <input list="product-unit-list" name="unit" value={product.unit} onChange={handleProductChange} className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0" required />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                    <select 
+                      name="unit"
+                      onChange={handleProductChange}
+                      id="product-unit-list" 
+                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0">
+                      {units.map((unit) => (
+                        <option key={unit.id} value={unit.name} className="capitalize"> {unit.name} </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -385,7 +409,7 @@ const CreateProduct = () => {
                     <div className="mt-2 space-y-2">
                       {alternativeUnits.map((unit, idx) => (
                         <div key={`${unit.unitname}-${idx}`} className="flex items-center justify-between px-3 py-2 rounded bg-indigo-50 text-sm">
-                          <span>{unit.unitname} = {unit.multiplier} x {product.unit || "base unit"}</span>
+                          <span>1 {unit.unitname} = {unit.multiplier} {product.unit || "base unit"}</span>
                           <button type="button" onClick={() => handleRemoveAltUnit(idx)}><X size={14} /></button>
                         </div>
                       ))}
@@ -502,22 +526,6 @@ const CreateProduct = () => {
             </button>
           </div>
         </form>
-
-        <datalist id="product-unit-list">
-          {units.map((unit) => (
-            <option key={unit.id} value={unit.name} />
-          ))}
-        </datalist>
-        <datalist id="product-brand-list">
-          {brands.map((brand) => (
-            <option key={brand.id} value={brand.name} />
-          ))}
-        </datalist>
-        <datalist id="product-category-list">
-          {categories.map((category) => (
-            <option key={category.id} value={category.name} />
-          ))}
-        </datalist>
       </div>
     </div>
   );
