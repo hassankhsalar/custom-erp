@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { 
-  ArrowUpDown, Package, Truck, Building2, Calendar, FileText, 
-  Store, ShoppingBag, Factory, Layers, Tag, MoreVertical, 
-  Eye, Edit, CreditCard, DollarSign, Trash2, CheckCircle, XCircle,
-  ExternalLink, User, Check, AlertCircle, Loader2,
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
+  ArrowUpDown, Package, Truck, Building2, Calendar, 
+  Store, ShoppingBag, Factory, MoreVertical, 
+  Eye, CreditCard, DollarSign, Trash2, CheckCircle, XCircle,
+  AlertCircle, Loader2, TrendingDown, FileText, MapPin,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+  Filter, Settings, User, Clock, Shield, Edit
 } from "lucide-react";
 import { API_ROUTES } from "../../config";
 
@@ -51,23 +52,31 @@ export default function AllPurchase() {
   }, []);
 
   const fetchPurchases = async () => {
+    setLoading(true);
     try {
       const res = await fetch(`${API_ROUTES.PURCHASES}?page=${currentPage}&limit=${itemsPerPage}`, {
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!res.ok) throw new Error("Failed to fetch purchases");
       const data = await res.json();
-      if (Array.isArray(data)) {
+      
+      // Handle paginated response
+      if (data && data.data && data.pagination) {
+        setPurchases(data.data);
+        setTotalCount(data.pagination.totalCount);
+        // Adjust current page if it exceeds total pages
+        if (data.pagination.totalPages > 0 && currentPage > data.pagination.totalPages) {
+          setCurrentPage(data.pagination.totalPages);
+        }
+      } else if (Array.isArray(data)) {
+        // Fallback for non-paginated response
         setPurchases(data);
         setTotalCount(data.length);
       } else {
-        setPurchases(data.data || []);
-        setTotalCount(data.pagination?.totalCount || 0);
-        if (data.pagination?.totalPages && currentPage > data.pagination.totalPages) {
-          setCurrentPage(data.pagination.totalPages || 1);
-        }
+        setPurchases([]);
+        setTotalCount(0);
       }
     } catch (err) {
       setError(err.message);
@@ -79,10 +88,10 @@ export default function AllPurchase() {
   const fetchAccounts = async () => {
     try {
       const res = await fetch(`${API_ROUTES.ACCOUNTS}`, {
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!res.ok) throw new Error("Failed to fetch accounts");
       const data = await res.json();
       setAccounts(data);
@@ -94,10 +103,10 @@ export default function AllPurchase() {
   const fetchPaymentHistory = async (purchaseId) => {
     try {
       const res = await fetch(`${API_ROUTES.PURCHASES}/${purchaseId}/payments`, {
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!res.ok) throw new Error("Failed to fetch payment history");
       const data = await res.json();
       setPaymentHistory(data.payments || []);
@@ -149,12 +158,6 @@ export default function AllPurchase() {
     fetchShipments(purchase.id);
     setActiveDropdown(null);
   };
-
-  // const handleEdit = (purchase) => {
-  //   setSelectedPurchase(purchase);
-  //   setEditModalOpen(true);
-  //   setActiveDropdown(null);
-  // };
 
   const handleAddPayment = (purchase) => {
     setSelectedPurchase(purchase);
@@ -221,76 +224,6 @@ export default function AllPurchase() {
     return Math.max(0, grandTotal - paidAmount);
   };
 
-  // Format purchase items data for table display
-  const formatPurchaseItemsData = (purchases) => {
-    return purchases.flatMap((purchase, purchaseIndex) =>
-      purchase.purchaseItems?.map((item, itemIndex) => {
-        const itemInfo = getItemTypeAndName(item);
-        const dueAmount = calculateDueAmount(purchase);
-        
-        return {
-          id: `${purchase.id}-${item.id}`,
-          "#": purchaseIndex * 10 + itemIndex + 1,
-          "purchase ref": purchase.reference,
-          "item type": itemInfo.type,
-          material: itemInfo.type === 'Material' ? itemInfo.name : '-',
-          product: itemInfo.type === 'Product' ? itemInfo.name : '-',
-          supplier: purchase.supplier?.name || "-",
-          quantity: `${item.quantity} ${itemInfo.unit}`,
-          "unit price": `$${item.unitPrice?.toFixed(2) || "0.00"}`,
-          "total price": `$${item.totalPrice?.toFixed(2) || "0.00"}`,
-          "purchase total": `$${purchase.grandTotal?.toFixed(2) || "0.00"}`,
-          due: dueAmount > 0 ? `$${dueAmount.toFixed(2)}` : "Paid",
-          status: dueAmount > 0 ? "pending" : "paid",
-          date: new Date(purchase.createdAt).toLocaleDateString(),
-          destination: getDestinationForTable(purchase),
-          rawDate: purchase.createdAt,
-          rawUnitPrice: item.unitPrice,
-          rawTotalPrice: item.totalPrice,
-          rawItemType: item.itemType,
-          icon: itemInfo.icon,
-          purchaseId: purchase.id,
-          actions: ""
-        };
-      }) || []
-    );
-  };
-
-  // Get destination for the detailed table
-  const getDestinationForTable = (purchase) => {
-    if (purchase.destination) {
-      const dest = purchase.destination;
-      return `${dest.type}: ${dest.name}`;
-    }
-    
-    return "-";
-  };
-
-  // Get item type and name
-  const getItemTypeAndName = (item) => {
-    if (item.itemType === 'material' && item.material) {
-      return {
-        type: 'Material',
-        name: item.material.name,
-        icon: <Package size={14} className="text-blue-500" />,
-        unit: item.material.unit || ""
-      };
-    } else if (item.itemType === 'product' && item.product) {
-      return {
-        type: 'Product',
-        name: item.product.name,
-        icon: <Tag size={14} className="text-green-500" />,
-        unit: "unit"
-      };
-    }
-    return {
-      type: 'Unknown',
-      name: '-',
-      icon: null,
-      unit: ""
-    };
-  };
-
   const handleSort = (key) => {
     let direction = 'ascending';
     if (sortConfig.key === key && sortConfig.direction === 'ascending') {
@@ -300,6 +233,7 @@ export default function AllPurchase() {
     setCurrentPage(1);
   };
 
+  // Sorting logic (applied to current page data only)
   const sortedPurchases = sortConfig.key ? [...purchases].sort((a, b) => {
     const direction = sortConfig.direction === 'ascending' ? 1 : -1;
 
@@ -331,10 +265,11 @@ export default function AllPurchase() {
     return 0;
   }) : purchases;
 
-  const indexOfFirstItem = (currentPage - 1) * itemsPerPage;
-  const indexOfLastItem = Math.min(indexOfFirstItem + itemsPerPage, totalCount);
+  // Pagination calculations
   const currentItems = sortedPurchases;
   const totalPages = Math.ceil(totalCount / itemsPerPage);
+  const indexOfFirstItem = totalCount === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+  const indexOfLastItem = Math.min(currentPage * itemsPerPage, totalCount);
 
   const nextPage = () => {
     if (currentPage < totalPages) {
@@ -387,7 +322,7 @@ export default function AllPurchase() {
           amount: amount,
           payment_method: paymentMethod,
           accountId: selectedAccount,
-          createdById: 1, // Replace with actual user ID from auth context
+          createdById: 1,
           note: paymentNote,
           purpose: 'Purchase Payment'
         }),
@@ -400,10 +335,8 @@ export default function AllPurchase() {
 
       const result = await response.json();
       
-      // Refresh purchases list
       await fetchPurchases();
       
-      // Close modal and reset form
       setAddPaymentModalOpen(false);
       setPaymentAmount("");
       setPaymentNote("");
@@ -486,10 +419,8 @@ export default function AllPurchase() {
 
       const result = await response.json();
       
-      // Refresh purchases list
       await fetchPurchases();
       
-      // Close modal
       setDeleteModalOpen(false);
       
       alert(result.message || "Purchase deleted successfully!");
@@ -502,453 +433,531 @@ export default function AllPurchase() {
     }
   };
 
-  // Format currency
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
-  };
+  // Calculate statistics
+  const totalDueAmount = purchases.reduce((sum, p) => sum + calculateDueAmount(p), 0);
+  const totalPaidAmount = purchases.reduce((sum, p) => sum + (parseFloat(p.paidAmount) || 0), 0);
+  const totalGrandTotal = purchases.reduce((sum, p) => sum + (parseFloat(p.grandTotal) || 0), 0);
+  const pendingShipments = purchases.filter(p => p.shippingStatus !== 'received').length;
 
-  if (loading) return (
-    <div className="max-w-6xl mx-auto p-6">
-      <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-blue-100/50 p-6 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl shadow-lg">
-            <Package className="text-white" size={32} />
-          </div>
-          <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Purchase Orders
-          </h1>
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-600 rounded-full animate-spin"></div>
+          <p className="text-gray-600">Loading purchases...</p>
         </div>
       </div>
-      <div className="text-center py-12 backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl">
-        <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-        <p className="text-gray-600">Loading purchases...</p>
-      </div>
-    </div>
-  );
+    );
+  }
 
-  if (error) return (
-    <div className="max-w-6xl mx-auto p-6">
-      <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-blue-100/50 p-6 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl shadow-lg">
-            <Package className="text-white" size={32} />
+  if (error) {
+    return (
+      <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6 flex items-center justify-center">
+        <div className="bg-white/80 backdrop-blur-lg rounded-2xl p-8 text-center max-w-md">
+          <div className="p-4 bg-red-100 rounded-full inline-block mb-4">
+            <AlertCircle size={48} className="text-red-500" />
           </div>
-          <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Purchase Orders
-          </h1>
+          <p className="text-red-500 text-lg font-medium mb-4">Error: {error}</p>
+          <button
+            onClick={fetchPurchases}
+            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:shadow-lg transition-all duration-300"
+          >
+            Try Again
+          </button>
         </div>
       </div>
-      <div className="backdrop-blur-lg bg-red-50/50 border border-red-200/50 rounded-2xl shadow-xl p-8 text-center">
-        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <span className="text-red-600 text-2xl font-bold">!</span>
-        </div>
-        <p className="text-red-700 font-medium text-lg">❌ {error}</p>
-        <button 
-          onClick={fetchPurchases}
-          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
-        >
-          Retry
-        </button>
-      </div>
-    </div>
-  );
+    );
+  }
 
   return (
-    <div className="max-w-6xl xl:max-w-full p-4 md:p-6">
+    <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
       {/* Background decorative elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-300/20 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-300/20 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-emerald-300/10 rounded-full blur-3xl"></div>
       </div>
 
-      <div className="relative">
+      <div className="relative w-full mx-auto">
         {/* Header Card */}
-        <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-blue-100/50 p-6 mb-6">
+        <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-blue-100/50 mb-6 p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl shadow-lg">
-                <Package className="text-white" size={32} />
+            <div className="flex items-center gap-4">
+              <div className="p-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg">
+                <Package className="text-white" size={36} />
               </div>
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                   Purchase Orders
                 </h1>
-                <p className="text-gray-600 mt-1">Manage all purchase orders and payments</p>
+                <p className="text-gray-600 mt-2">Manage all purchase orders, payments, and shipments</p>
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
-              <div className="px-4 py-2 bg-white/60 backdrop-blur-sm rounded-lg border border-white/80">
-                <p className="text-sm font-medium text-gray-700">Total Purchases</p>
-                <p className="text-xl font-bold text-blue-600">{totalCount}</p>
+            <div className="flex items-center gap-2 px-4 py-2 bg-white/50 backdrop-blur-sm rounded-xl border border-white/60">
+              <Filter size={18} className="text-purple-600" />
+              <span className="text-sm font-medium text-gray-700">
+                {totalCount} {totalCount === 1 ? 'Purchase' : 'Purchases'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+          <div className="backdrop-blur-lg bg-gradient-to-br from-blue-50/60 to-cyan-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Amount</p>
+                <p className="text-2xl font-bold text-blue-600">${totalGrandTotal.toFixed(2)}</p>
               </div>
-              
-              <div className="px-4 py-2 bg-white/60 backdrop-blur-sm rounded-lg border border-white/80">
-                <p className="text-sm font-medium text-gray-700">Total Due</p>
-                <p className="text-xl font-bold text-amber-600">
-                  ${purchases.reduce((sum, p) => sum + calculateDueAmount(p), 0).toFixed(2)}
-                </p>
+              <div className="p-3 bg-blue-100 rounded-xl">
+                <DollarSign size={24} className="text-blue-600" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="backdrop-blur-lg bg-gradient-to-br from-emerald-50/60 to-green-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Paid</p>
+                <p className="text-2xl font-bold text-emerald-600">${totalPaidAmount.toFixed(2)}</p>
+              </div>
+              <div className="p-3 bg-emerald-100 rounded-xl">
+                <CheckCircle size={24} className="text-emerald-600" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="backdrop-blur-lg bg-gradient-to-br from-amber-50/60 to-orange-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Due</p>
+                <p className="text-2xl font-bold text-amber-600">${totalDueAmount.toFixed(2)}</p>
+              </div>
+              <div className="p-3 bg-amber-100 rounded-xl">
+                <TrendingDown size={24} className="text-amber-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="backdrop-blur-lg bg-gradient-to-br from-purple-50/60 to-pink-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Pending Shipments</p>
+                <p className="text-2xl font-bold text-purple-600">{pendingShipments}</p>
+              </div>
+              <div className="p-3 bg-purple-100 rounded-xl">
+                <Truck size={24} className="text-purple-600" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Purchase Table (Detailed View) */}
-        <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-100/80">
-                <tr>
-                  {['reference', 'supplier', 'grand total', 'due amount', 'date', 'destination', 'shipping status', 'actions'].map((key) => (
-                    <th
-                      key={key}
-                      className="p-3 text-left font-medium text-gray-700 cursor-pointer"
-                    >
-                      <div className="flex items-center gap-[5px] capitalize">
-                        {key.replace(/([A-Z])/g, ' $1')}
-                        {key !== 'actions' && (
-                          <ArrowUpDown
-                            onClick={() => handleSort(key)}
-                            className="hover:bg-gray-200 p-[5px] rounded-md text-[1.6rem] cursor-pointer"
-                          />
-                        )}
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {currentItems.map((purchase) => {
-                  const dueAmount = calculateDueAmount(purchase);
-                  const isPaid = dueAmount.toFixed(2) <= 0.00;
-                  
-                  return (
-                    <tr
-                      key={purchase.id}
-                      className="border-t border-white/50 hover:bg-white/30"
-                    >
-                      <td className="p-3">
-                        <div className="font-medium text-blue-600">{purchase.reference}</div>
-                        <div className="text-xs text-gray-500">ID: {purchase.id}</div>
-                      </td>
+        {/* Main Content */}
+        <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
+          {purchases.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="p-4 bg-white/50 rounded-xl inline-block mb-4">
+                <Package size={48} className="text-gray-300" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-700 mb-2">No Purchases Found</h3>
+              <p className="text-gray-600 mb-6">There are no purchase orders in the system yet.</p>
+              <button className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg transition-all duration-300">
+                <Settings size={20} />
+                Create First Purchase
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto rounded-xl border border-white/60">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100/80">
+                    <tr>
+                      {[
+                        { key: 'reference', label: 'Reference', icon: <FileText size={14} /> },
+                        { key: 'supplier', label: 'Supplier', icon: <Building2 size={14} /> },
+                        { key: 'grand total', label: 'Total', icon: <DollarSign size={14} /> },
+                        { key: 'due amount', label: 'Due', icon: <AlertCircle size={14} /> },
+                        { key: 'date', label: 'Date', icon: <Calendar size={14} /> },
+                        { key: 'destination', label: 'Destination', icon: <MapPin size={14} /> },
+                        { key: 'shipping status', label: 'Status', icon: <Truck size={14} /> },
+                        { key: 'actions', label: 'Actions', icon: null }
+                      ].map(({ key, label, icon }) => (
+                        <th
+                          key={key}
+                          className="p-4 text-left font-medium text-gray-700"
+                        >
+                          <div className="flex items-center gap-2">
+                            {icon && <span className="text-gray-500">{icon}</span>}
+                            <span>{label}</span>
+                            {key !== 'actions' && (
+                              <ArrowUpDown
+                                onClick={() => handleSort(key)}
+                                className="ml-1 p-1 hover:bg-gray-200 rounded-md cursor-pointer text-gray-500 hover:text-gray-700 transition-colors"
+                                size={18}
+                              />
+                            )}
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentItems.map((purchase, index) => {
+                      const dueAmount = calculateDueAmount(purchase);
+                      const isPaid = dueAmount.toFixed(2) <= 0.00;
                       
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <Building2 size={14} className="text-gray-500" />
-                          <span className="font-medium">{purchase.supplier?.name || "-"}</span>
-                        </div>
-                      </td>
-                      
-                      <td className="p-3">
-                        <div className="font-bold text-green-600">
-                          ${purchase.grandTotal?.toFixed(2) || "0.00"}
-                        </div>
-                      </td>
-                      
-                      <td className="p-3">
-                        <div className={`font-bold ${isPaid ? 'text-green-600' : 'text-amber-600'}`}>
-                          {isPaid ? (
-                            <span className="flex items-center gap-1">
-                              <CheckCircle size={14} />
-                              Paid
-                            </span>
-                          ) : (
-                            `$${dueAmount.toFixed(2)}`
-                          )}
-                        </div>
-                      </td>
-                      
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <Calendar size={14} className="text-gray-500" />
-                          {new Date(purchase.createdAt).toLocaleDateString()}
-                        </div>
-                      </td>
-                      
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          {purchase.destination?.type === 'store' ? (
-                            <Store size={14} className="text-blue-500" />
-                          ) : purchase.destination?.type === 'shop' ? (
-                            <ShoppingBag size={14} className="text-purple-500" />
-                          ) : purchase.destination?.type === 'factory' ? (
-                            <Factory size={14} className="text-amber-500" />
-                          ) : null}
-                          <span>
-                            {purchase.destination ? 
-                              `${purchase.destination.type}: ${purchase.destination.name}` : 
-                              "-"
-                            }
-                          </span>
-                        </div>
-                      </td>
-                      
-                      <td className="p-3">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
-                          purchase.shippingStatus === 'received'
-                            ? 'bg-green-100 text-green-800'
-                            : purchase.shippingStatus === 'pending'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-violet-100 text-violet-600'
-                        }`}>
-                          { purchase.shippingStatus }
-                        </span>
-                      </td>
-                      
-                      <td className="p-3">
-                        <div className="relative dropdown-container">
-                          <button
-                            onClick={() => handleDropdownToggle(purchase.id)}
-                            className="p-2 hover:bg-gray-100 rounded-lg transition"
-                          >
-                            <MoreVertical size={18} className="text-gray-600" />
-                          </button>
+                      return (
+                        <tr
+                          key={purchase.id}
+                          className={`border-t border-white/50 hover:bg-white/30 transition-colors duration-200 ${
+                            index % 2 === 0 ? 'bg-white/10' : ''
+                          }`}
+                        >
+                          <td className="p-4">
+                            <div>
+                              <span className="font-medium text-blue-600">{purchase.reference}</span>
+                              <div className="text-xs text-gray-500 mt-1">ID: #{purchase.id}</div>
+                            </div>
+                          </td>
                           
-                          {activeDropdown === purchase.id && (
-                            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-10">
-                              <div className="py-1">
-                                <button
-                                  onClick={() => handleView(purchase)}
-                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition"
-                                >
-                                  <Eye size={16} />
-                                  View Details
-                                </button>
-                                
-                                {!isPaid && (
-                                  <button
-                                    onClick={() => handleAddPayment(purchase)}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-600 transition"
-                                  >
-                                    <CreditCard size={16} />
-                                    Add Payment
-                                  </button>
-                                )}
-
-                                {(purchase.shippingStatus || 'pending') !== 'received' && (
-                                  <button
-                                    onClick={() => handleAddShipment(purchase)}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition"
-                                  >
-                                    <Truck size={16} />
-                                    Add Shipment
-                                  </button>
-                                )}
-                                
-                                <div className="border-t my-1"></div>
-                                
-                                <button
-                                  onClick={() => handleDelete(purchase)}
-                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
-                                >
-                                  <Trash2 size={16} />
-                                  Delete Purchase
-                                </button>
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                                {purchase.supplier?.name?.charAt(0) || 'S'}
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-800">{purchase.supplier?.name || '-'}</span>
                               </div>
                             </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {/* Pagination Controls */}
-            {totalCount > 0 && (
-              <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-4 mt-4">
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
+                          </td>
+                          
+                          <td className="p-4">
+                            <span className="font-bold text-green-600">${purchase.grandTotal?.toFixed(2) || "0.00"}</span>
+                          </td>
+                          
+                          <td className="p-4">
+                            {isPaid ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                                <CheckCircle size={12} />
+                                Paid
+                              </span>
+                            ) : (
+                              <span className="font-bold text-amber-600">${dueAmount.toFixed(2)}</span>
+                            )}
+                          </td>
+                          
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <Calendar size={14} className="text-gray-400" />
+                              <span className="text-gray-700">{new Date(purchase.createdAt).toLocaleDateString()}</span>
+                            </div>
+                          </td>
+                          
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              {purchase.destination?.type === 'store' ? (
+                                <Store size={14} className="text-blue-500" />
+                              ) : purchase.destination?.type === 'shop' ? (
+                                <ShoppingBag size={14} className="text-purple-500" />
+                              ) : purchase.destination?.type === 'factory' ? (
+                                <Factory size={14} className="text-amber-500" />
+                              ) : null}
+                              <span className="text-gray-700">
+                                {purchase.destination ? 
+                                  `${purchase.destination.type}: ${purchase.destination.name}` : 
+                                  "-"
+                                }
+                              </span>
+                            </div>
+                          </td>
+                          
+                          <td className="p-4">
+                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+                              purchase.shippingStatus === 'received'
+                                ? 'bg-green-100 text-green-700'
+                                : purchase.shippingStatus === 'pending'
+                                ? 'bg-amber-100 text-amber-700'
+                                : 'bg-purple-100 text-purple-700'
+                            }`}>
+                              {purchase.shippingStatus === 'received' ? (
+                                <CheckCircle size={12} />
+                              ) : purchase.shippingStatus === 'pending' ? (
+                                <Clock size={12} />
+                              ) : (
+                                <Truck size={12} />
+                              )}
+                              {purchase.shippingStatus || 'pending'}
+                            </span>
+                          </td>
+                          
+                          <td className="p-4">
+                            <div className="relative dropdown-container">
+                              <button
+                                onClick={() => handleDropdownToggle(purchase.id)}
+                                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                              >
+                                <MoreVertical size={18} className="text-gray-600" />
+                              </button>
+                              
+                              {activeDropdown === purchase.id && (
+                                <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-200 z-10 overflow-hidden">
+                                  <div className="py-1">
+                                    <button
+                                      onClick={() => handleView(purchase)}
+                                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition"
+                                    >
+                                      <Eye size={16} />
+                                      View Details
+                                    </button>
+                                    
+                                    {!isPaid && (
+                                      <button
+                                        onClick={() => handleAddPayment(purchase)}
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-600 transition"
+                                      >
+                                        <CreditCard size={16} />
+                                        Add Payment
+                                      </button>
+                                    )}
+
+                                    {purchase.shippingStatus !== 'received' && (
+                                      <button
+                                        onClick={() => handleAddShipment(purchase)}
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition"
+                                      >
+                                        <Truck size={16} />
+                                        Add Shipment
+                                      </button>
+                                    )}
+                                    
+                                    <div className="border-t my-1"></div>
+                                    
+                                    <button
+                                      onClick={() => handleDelete(purchase)}
+                                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
+                                    >
+                                      <Trash2 size={16} />
+                                      Delete Purchase
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Controls */}
+              {totalCount > 0 && (
+                <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl p-4 mt-4">
+                  <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      {/* Items per page selector */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">Show:</span>
+                        <select
+                          value={itemsPerPage}
+                          onChange={(e) => {
+                            setItemsPerPage(Number(e.target.value));
+                            setCurrentPage(1);
+                          }}
+                          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                        >
+                          <option value="5">5</option>
+                          <option value="10">10</option>
+                          <option value="20">20</option>
+                          <option value="50">50</option>
+                          <option value="100">100</option>
+                        </select>
+                        <span className="text-sm text-gray-600">per page</span>
+                      </div>
+
+                      {/* Page info */}
+                      <div className="text-sm text-gray-700">
+                        Showing <span className="font-semibold">{indexOfFirstItem}</span> to{" "}
+                        <span className="font-semibold">{indexOfLastItem}</span>{" "}
+                        of <span className="font-semibold">{totalCount}</span> purchases
+                      </div>
+                    </div>
+
+                    {/* Pagination buttons */}
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">Show:</span>
-                      <select
-                        value={itemsPerPage}
-                        onChange={(e) => {
-                          setItemsPerPage(Number(e.target.value));
-                          setCurrentPage(1);
-                        }}
-                        className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      <button
+                        onClick={() => goToPage(1)}
+                        disabled={currentPage === 1}
+                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                        title="First page"
                       >
-                        <option value="5">5</option>
-                        <option value="10">10</option>
-                        <option value="20">20</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                      </select>
-                      <span className="text-sm text-gray-600">per page</span>
+                        <ChevronsLeft size={16} className="text-gray-600" />
+                      </button>
+
+                      <button
+                        onClick={prevPage}
+                        disabled={currentPage === 1}
+                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                        title="Previous page"
+                      >
+                        <ChevronLeft size={16} className="text-gray-600" />
+                      </button>
+
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let pageNum;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => goToPage(pageNum)}
+                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                                currentPage === pageNum
+                                  ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                                  : "hover:bg-white/50 text-gray-700"
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+
+                        {totalPages > 5 && currentPage < totalPages - 2 && (
+                          <>
+                            <span className="mx-1 text-gray-400">...</span>
+                            <button
+                              onClick={() => goToPage(totalPages)}
+                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                                currentPage === totalPages
+                                  ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                                  : "hover:bg-white/50 text-gray-700"
+                              }`}
+                            >
+                              {totalPages}
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={nextPage}
+                        disabled={currentPage === totalPages}
+                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                        title="Next page"
+                      >
+                        <ChevronRight size={16} className="text-gray-600" />
+                      </button>
+
+                      <button
+                        onClick={() => goToPage(totalPages)}
+                        disabled={currentPage === totalPages}
+                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                        title="Last page"
+                      >
+                        <ChevronsRight size={16} className="text-gray-600" />
+                      </button>
                     </div>
-
-                    <div className="text-sm text-gray-700">
-                      Showing <span className="font-semibold">{totalCount === 0 ? 0 : indexOfFirstItem + 1}</span> to{" "}
-                      <span className="font-semibold">
-                        {indexOfLastItem}
-                      </span>{" "}
-                      of <span className="font-semibold">{totalCount}</span> purchases
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => goToPage(1)}
-                      disabled={currentPage === 1}
-                      className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                      title="First page"
-                    >
-                      <ChevronsLeft size={16} className="text-gray-600" />
-                    </button>
-
-                    <button
-                      onClick={prevPage}
-                      disabled={currentPage === 1}
-                      className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                      title="Previous page"
-                    >
-                      <ChevronLeft size={16} className="text-gray-600" />
-                    </button>
-
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum;
-                        if (totalPages <= 5) {
-                          pageNum = i + 1;
-                        } else if (currentPage <= 3) {
-                          pageNum = i + 1;
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNum = totalPages - 4 + i;
-                        } else {
-                          pageNum = currentPage - 2 + i;
-                        }
-
-                        return (
-                          <button
-                            key={pageNum}
-                            onClick={() => goToPage(pageNum)}
-                            className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                              currentPage === pageNum
-                                ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
-                                : "hover:bg-white/50 text-gray-700"
-                            }`}
-                          >
-                            {pageNum}
-                          </button>
-                        );
-                      })}
-
-                      {totalPages > 5 && currentPage < totalPages - 2 && (
-                        <>
-                          <span className="mx-1 text-gray-400">...</span>
-                          <button
-                            onClick={() => goToPage(totalPages)}
-                            className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                              currentPage === totalPages
-                                ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white"
-                                : "hover:bg-white/50 text-gray-700"
-                            }`}
-                          >
-                            {totalPages}
-                          </button>
-                        </>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={nextPage}
-                      disabled={currentPage === totalPages || totalPages === 0}
-                      className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                      title="Next page"
-                    >
-                      <ChevronRight size={16} className="text-gray-600" />
-                    </button>
-
-                    <button
-                      onClick={() => goToPage(totalPages)}
-                      disabled={currentPage === totalPages || totalPages === 0}
-                      className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                      title="Last page"
-                    >
-                      <ChevronsRight size={16} className="text-gray-600" />
-                    </button>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-
-          {purchases.length === 0 && (
-            <div className="p-12 text-center">
-              <div className="p-6 bg-white/50 rounded-full inline-block mb-6">
-                <Package size={48} className="text-gray-400" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-700 mb-2">No Purchases Found</h3>
-              <p className="text-gray-600">There are no purchase orders in the system yet.</p>
-            </div>
+              )}
+            </>
           )}
         </div>
       </div>
 
-      {/* Modals */}
-      
-      {/* View Modal */}
+      {/* Modals - Keeping all existing modals unchanged for functionality */}
       {viewModalOpen && selectedPurchase && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Eye size={24} />
-                  Purchase Details - {selectedPurchase.reference}
-                </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setViewModalOpen(false)}></div>
+          <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="sticky top-0 z-10 p-6 border-b border-white/50 bg-gradient-to-r from-blue-500/10 to-purple-600/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl shadow-lg">
+                    <Package className="text-white" size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800">Purchase Details</h2>
+                    <p className="text-gray-600">{selectedPurchase.reference}</p>
+                  </div>
+                </div>
                 <button
                   onClick={() => setViewModalOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  className="p-2 bg-white/60 rounded-lg hover:bg-white/80 transition-colors duration-300"
                 >
-                  <XCircle size={24} className="text-gray-500" />
+                  <XCircle size={20} className="text-gray-600" />
                 </button>
+              </div>
             </div>
-          </div>
-          <div className="p-6">
+            
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
               <div className="grid grid-cols-2 gap-6 mb-6">
-                <div>
+                <div className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-5">
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Supplier</h4>
-                  <p className="text-lg font-semibold">{selectedPurchase.supplier?.name}</p>
+                  <p className="text-lg font-semibold flex items-center gap-2">
+                    <Building2 size={18} className="text-blue-500" />
+                    {selectedPurchase.supplier?.name}
+                  </p>
                 </div>
-                <div>
+                <div className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-5">
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Destination</h4>
-                  <p className="text-lg font-semibold">
+                  <p className="text-lg font-semibold flex items-center gap-2">
+                    {selectedPurchase.destination?.type === 'store' ? (
+                      <Store size={18} className="text-blue-500" />
+                    ) : selectedPurchase.destination?.type === 'shop' ? (
+                      <ShoppingBag size={18} className="text-purple-500" />
+                    ) : (
+                      <Factory size={18} className="text-amber-500" />
+                    )}
                     {selectedPurchase.destination ? 
                       `${selectedPurchase.destination.type}: ${selectedPurchase.destination.name}` : 
                       "-"
                     }
                   </p>
                 </div>
-                <div>
+                <div className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-5">
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Total Amount</h4>
                   <p className="text-2xl font-bold text-green-600">
                     ${selectedPurchase.grandTotal?.toFixed(2)}
                   </p>
                 </div>
-                <div>
+                <div className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-5">
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Due Amount</h4>
                   <p className={`text-2xl font-bold ${calculateDueAmount(selectedPurchase) > 0 ? 'text-amber-600' : 'text-green-600'}`}>
                     ${calculateDueAmount(selectedPurchase).toFixed(2)}
                   </p>
                 </div>
-                <div>
+                <div className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-5">
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Date</h4>
-                  <p className="text-lg">
+                  <p className="text-lg flex items-center gap-2">
+                    <Calendar size={18} className="text-gray-400" />
                     {new Date(selectedPurchase.createdAt).toLocaleDateString()}
                   </p>
                 </div>
-                <div>
+                <div className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-5">
                   <h4 className="text-sm font-medium text-gray-500 mb-2">Status</h4>
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
                     calculateDueAmount(selectedPurchase) <= 0 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-amber-100 text-amber-800'
+                      ? 'bg-green-100 text-green-700' 
+                      : 'bg-amber-100 text-amber-700'
                   }`}>
+                    {calculateDueAmount(selectedPurchase) <= 0 ? (
+                      <CheckCircle size={16} />
+                    ) : (
+                      <AlertCircle size={16} />
+                    )}
                     {calculateDueAmount(selectedPurchase) <= 0 ? 'Paid' : 'Pending'}
                   </span>
                 </div>
@@ -960,9 +969,9 @@ export default function AllPurchase() {
                     <button
                       key={tab}
                       onClick={() => setActiveViewTab(tab)}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
                         activeViewTab === tab
-                          ? "bg-blue-600 text-white"
+                          ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
                           : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                       }`}
                     >
@@ -972,9 +981,9 @@ export default function AllPurchase() {
                 </div>
 
                 {activeViewTab === "items" && (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto rounded-xl border border-white/60">
                     <table className="w-full text-sm">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-gray-100/80">
                         <tr>
                           <th className="p-3 text-left">Type</th>
                           <th className="p-3 text-left">Item</th>
@@ -985,13 +994,17 @@ export default function AllPurchase() {
                       </thead>
                       <tbody>
                         {selectedPurchase.purchaseItems?.map((item, index) => (
-                          <tr key={index} className="border-t">
+                          <tr key={index} className="border-t border-white/50 hover:bg-white/30">
                             <td className="p-3">
-                              <span className="px-2 py-1 bg-gray-100 rounded text-xs">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                item.itemType === 'material' 
+                                  ? 'bg-blue-100 text-blue-700' 
+                                  : 'bg-green-100 text-green-700'
+                              }`}>
                                 {item.itemType}
                               </span>
                             </td>
-                            <td className="p-3">
+                            <td className="p-3 font-medium">
                               {item.itemType === 'material' ? item.material?.name : item.product?.name}
                             </td>
                             <td className="p-3">{item.quantity}</td>
@@ -1008,29 +1021,35 @@ export default function AllPurchase() {
                   <div className="space-y-3">
                     {paymentHistory.length > 0 ? (
                       paymentHistory.map((txn, index) => (
-                        <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                          <div>
-                            <div className="font-medium text-gray-800">Payment #{index + 1}</div>
-                            <div className="text-sm text-gray-600">{new Date(txn.createdAt).toLocaleString()}</div>
-                            <div className="text-sm text-gray-600">Method: {txn.payment_method}</div>
-                            {txn.account && (
-                              <div className="text-sm text-gray-600">Account: {txn.account.name}</div>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <div className="font-bold text-green-600">
-                              ${txn.amount?.toFixed(2)}
+                        <div key={index} className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-green-100 rounded-lg">
+                                <DollarSign size={18} className="text-green-600" />
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-800">Payment #{index + 1}</div>
+                                <div className="text-sm text-gray-600">{new Date(txn.createdAt).toLocaleString()}</div>
+                                <div className="text-sm text-gray-600 mt-1">Method: {txn.payment_method}</div>
+                              </div>
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              {txn.note || 'No notes'}
+                            <div className="text-right">
+                              <div className="font-bold text-green-600 text-lg">
+                                ${txn.amount?.toFixed(2)}
+                              </div>
+                              {txn.note && (
+                                <div className="text-xs text-gray-500 mt-1">{txn.note}</div>
+                              )}
                             </div>
                           </div>
                         </div>
                       ))
                     ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        <DollarSign size={48} className="mx-auto mb-4 text-gray-300" />
-                        <p>No payments recorded yet</p>
+                      <div className="text-center py-12">
+                        <div className="p-4 bg-white/50 rounded-full inline-block mb-4">
+                          <DollarSign size={48} className="text-gray-300" />
+                        </div>
+                        <p className="text-gray-500">No payments recorded yet</p>
                       </div>
                     )}
                   </div>
@@ -1040,19 +1059,24 @@ export default function AllPurchase() {
                   <div className="space-y-4">
                     {shipments.length > 0 ? (
                       shipments.map((shipment) => (
-                        <div key={shipment.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                        <div key={shipment.id} className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-4">
                           <div className="flex items-center justify-between mb-3">
-                            <div>
-                              <div className="font-semibold text-gray-800">{shipment.reference || `Shipment #${shipment.id}`}</div>
-                              <div className="text-sm text-gray-600">{new Date(shipment.createdAt).toLocaleString()}</div>
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-purple-100 rounded-lg">
+                                <Truck size={18} className="text-purple-600" />
+                              </div>
+                              <div>
+                                <div className="font-semibold text-gray-800">{shipment.reference || `Shipment #${shipment.id}`}</div>
+                                <div className="text-sm text-gray-600">{new Date(shipment.createdAt).toLocaleString()}</div>
+                              </div>
                             </div>
-                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                               {shipment.status || "pending"}
                             </span>
                           </div>
-                          <div className="overflow-x-auto">
+                          <div className="overflow-x-auto mt-3">
                             <table className="w-full text-sm">
-                              <thead className="bg-white">
+                              <thead className="bg-gray-100/50">
                                 <tr>
                                   <th className="p-2 text-left">Item</th>
                                   <th className="p-2 text-left">Received Qty</th>
@@ -1060,11 +1084,11 @@ export default function AllPurchase() {
                               </thead>
                               <tbody>
                                 {shipment.items?.map((si) => (
-                                  <tr key={si.id} className="border-t">
+                                  <tr key={si.id} className="border-t border-white/30">
                                     <td className="p-2">
                                       {si.itemType === 'material' ? si.material?.name : si.product?.name}
                                     </td>
-                                    <td className="p-2">{si.received_quantity}</td>
+                                    <td className="p-2 font-medium">{si.received_quantity}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -1073,45 +1097,23 @@ export default function AllPurchase() {
                         </div>
                       ))
                     ) : (
-                      <div className="text-center py-8 text-gray-500">
-                        <Truck size={48} className="mx-auto mb-4 text-gray-300" />
-                        <p>No shipments recorded yet</p>
+                      <div className="text-center py-12">
+                        <div className="p-4 bg-white/50 rounded-full inline-block mb-4">
+                          <Truck size={48} className="text-gray-300" />
+                        </div>
+                        <p className="text-gray-500">No shipments recorded yet</p>
                       </div>
                     )}
                   </div>
                 )}
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Modal */}
-      {/* {editModalOpen && selectedPurchase && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Edit size={24} />
-                  Edit Purchase
-                </h3>
+            
+            <div className="sticky bottom-0 p-6 border-t border-white/50 bg-white/80 backdrop-blur-sm">
+              <div className="flex justify-end">
                 <button
-                  onClick={() => setEditModalOpen(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
-                >
-                  <XCircle size={24} className="text-gray-500" />
-                </button>
-              </div>
-            </div>
-            <div className="p-6">
-              <div className="text-center py-12 text-gray-500">
-                <AlertCircle size={48} className="mx-auto mb-4 text-amber-500" />
-                <p className="text-lg font-medium mb-2">Edit Feature Coming Soon</p>
-                <p>Purchase editing functionality is under development.</p>
-                <button
-                  onClick={() => setEditModalOpen(false)}
-                  className="mt-6 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                  onClick={() => setViewModalOpen(false)}
+                  className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
                 >
                   Close
                 </button>
@@ -1119,7 +1121,9 @@ export default function AllPurchase() {
             </div>
           </div>
         </div>
-      )} */}
+      )}
+
+      
 
       {/* Add Payment Modal */}
       {addPaymentModalOpen && selectedPurchase && (

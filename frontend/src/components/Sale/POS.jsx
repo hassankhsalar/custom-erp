@@ -538,7 +538,7 @@ export default function ShopPOS( props ) {
           {/* Left Column: Shop Selection & Search */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 space-y-4">
             {/* Shop Selection Card */}
-            <div className="bg-white rounded-xl shadow-md p-5">
+            <div className="col-span-1 bg-white rounded-xl shadow-md p-5">
               <div className="flex items-center gap-2 mb-4">
                 <div className="p-2 bg-blue-100 rounded-lg">
                   <span className="text-blue-600"><Store size={42} /></span>

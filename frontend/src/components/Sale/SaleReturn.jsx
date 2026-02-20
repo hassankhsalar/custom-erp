@@ -1,7 +1,31 @@
-import { Mailbox, ShoppingCart, Store, Undo2, ArrowUpDown, Search, X, DollarSign, Package, RefreshCw, AlertCircle, CheckCircle, TrendingDown, Filter, ArrowLeftRight, User, Calendar, CreditCard, Hash } from "lucide-react";
+import {
+  Mailbox,
+  ShoppingCart,
+  Store,
+  Undo2,
+  ArrowUpDown,
+  Search,
+  X,
+  DollarSign,
+  Package,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle,
+  TrendingDown,
+  Filter,
+  ArrowLeftRight,
+  User,
+  Calendar,
+  CreditCard,
+  Hash,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { API_ROUTES } from '../../config';
+import { API_ROUTES } from "../../config";
 
 export default function SaleReturn() {
   const [shops, setShops] = useState([]);
@@ -13,9 +37,18 @@ export default function SaleReturn() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
+  const [sortConfig, setSortConfig] = useState({
+    key: null,
+    direction: "ascending",
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalSales, setTotalSales] = useState(0);
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -37,6 +70,8 @@ export default function SaleReturn() {
     if (!selectedShop) {
       setSales([]);
       setFilteredSales([]);
+      setTotalPages(0);
+      setTotalSales(0);
       return;
     }
 
@@ -44,9 +79,13 @@ export default function SaleReturn() {
     if (!token) return;
 
     setLoading(true);
-    fetch(`${API_ROUTES.SHOP_SALES}/return-eligible?shopId=${selectedShop}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    // Updated to include pagination params
+    fetch(
+      `${API_ROUTES.SHOP_SALES}/return-eligible?shopId=${selectedShop}&page=${currentPage}&limit=${itemsPerPage}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    )
       .then((res) => {
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
@@ -54,8 +93,18 @@ export default function SaleReturn() {
         return res.json();
       })
       .then((data) => {
-        setSales(data);
-        setFilteredSales(data);
+        // Handle both array response (old) and object response with pagination (new)
+        if (Array.isArray(data)) {
+          setSales(data);
+          setFilteredSales(data);
+          setTotalPages(1);
+          setTotalSales(data.length);
+        } else {
+          setSales(data.sales);
+          setFilteredSales(data.sales);
+          setTotalPages(data.pagination.totalPages);
+          setTotalSales(data.pagination.totalCount);
+        }
         setLoading(false);
       })
       .catch((err) => {
@@ -63,6 +112,12 @@ export default function SaleReturn() {
         setError("Failed to load sales: " + err.message);
         setLoading(false);
       });
+  }, [selectedShop, currentPage, itemsPerPage]);
+
+  console.log(sales);
+  // Reset to first page when shop changes
+  useEffect(() => {
+    setCurrentPage(1);
   }, [selectedShop]);
 
   useEffect(() => {
@@ -72,83 +127,93 @@ export default function SaleReturn() {
     }
 
     const query = searchQuery.toLowerCase().trim();
-    const filtered = sales.filter(sale => 
-      sale.reference?.toLowerCase().includes(query) ||
-      sale.shop?.name?.toLowerCase().includes(query) ||
-      sale.customer?.toLowerCase().includes(query) ||
-      sale.paymentType?.toLowerCase().includes(query) ||
-      sale.grandTotal?.toString().includes(query) ||
-      new Date(sale.createdAt).toLocaleDateString().toLowerCase().includes(query)
+    const filtered = sales.filter(
+      (sale) =>
+        sale.reference?.toLowerCase().includes(query) ||
+        sale.shop?.name?.toLowerCase().includes(query) ||
+        sale.customer?.name?.toLowerCase().includes(query) ||
+        sale.paymentType?.toLowerCase().includes(query) ||
+        sale.grandTotal?.toString().includes(query) ||
+        new Date(sale.createdAt)
+          .toLocaleDateString()
+          .toLowerCase()
+          .includes(query),
     );
     setFilteredSales(filtered);
   }, [searchQuery, sales]);
 
   const handleSort = (key) => {
-    let direction = 'ascending';
-    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending';
+    let direction = "ascending";
+    if (sortConfig.key === key && sortConfig.direction === "ascending") {
+      direction = "descending";
     }
     setSortConfig({ key, direction });
   };
 
   const formatSalesData = (sales) => {
-    return sales.map(sale => ({
+    return sales.map((sale) => ({
       id: sale.id,
       reference: sale.reference,
       shop: sale.shop?.name || "-",
-      customer: sale.customer || "-",
+      customer: sale.customer?.name || "Walk-in Customer",
+      customerObj: sale.customer,
       total: `$${sale.grandTotal?.toFixed(2)}`,
       date: new Date(sale.createdAt).toLocaleDateString(),
       items: sale.saleItems?.length || 0,
       status: "Available for Return",
       rawDate: sale.createdAt,
-      originalSale: sale
+      originalSale: sale,
     }));
   };
 
-  const sortedData = sortConfig.key ? 
-    [...formatSalesData(filteredSales)].sort((a, b) => {
-      if (sortConfig.key === 'date') {
-        const dateA = new Date(a.rawDate);
-        const dateB = new Date(b.rawDate);
-        if (sortConfig.direction === 'ascending') {
-          return dateA - dateB;
+  const sortedData = sortConfig.key
+    ? [...formatSalesData(filteredSales)].sort((a, b) => {
+        if (sortConfig.key === "date") {
+          const dateA = new Date(a.rawDate);
+          const dateB = new Date(b.rawDate);
+          if (sortConfig.direction === "ascending") {
+            return dateA - dateB;
+          }
+          return dateB - dateA;
         }
-        return dateB - dateA;
-      }
 
-      if (sortConfig.key === 'total') {
-        const valueA = parseFloat(a[sortConfig.key].replace('$', ''));
-        const valueB = parseFloat(b[sortConfig.key].replace('$', ''));
-        if (sortConfig.direction === 'ascending') {
-          return valueA - valueB;
+        if (sortConfig.key === "total") {
+          const valueA = parseFloat(a[sortConfig.key].replace("$", ""));
+          const valueB = parseFloat(b[sortConfig.key].replace("$", ""));
+          if (sortConfig.direction === "ascending") {
+            return valueA - valueB;
+          }
+          return valueB - valueA;
         }
-        return valueB - valueA;
-      }
 
-      if (sortConfig.key === 'items') {
-        if (sortConfig.direction === 'ascending') {
-          return a.items - b.items;
+        if (sortConfig.key === "items") {
+          if (sortConfig.direction === "ascending") {
+            return a.items - b.items;
+          }
+          return b.items - a.items;
         }
-        return b.items - a.items;
-      }
 
-      const aValue = a[sortConfig.key];
-      const bValue = b[sortConfig.key];
-      
-      if (aValue < bValue) {
-        return sortConfig.direction === 'ascending' ? -1 : 1;
-      }
-      if (aValue > bValue) {
-        return sortConfig.direction === 'ascending' ? 1 : -1;
-      }
-      return 0;
-    }) : 
-    formatSalesData(filteredSales);
+        const aValue = a[sortConfig.key];
+        const bValue = b[sortConfig.key];
 
-  const tableHeaders = sales.length > 0 ? 
-    ['reference', 'customer', 'total', 'date', 'items', 'status'] : 
-    ['reference', 'customer', 'total', 'date', 'items', 'status'];
+        if (aValue < bValue) {
+          return sortConfig.direction === "ascending" ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === "ascending" ? 1 : -1;
+        }
+        return 0;
+      })
+    : formatSalesData(filteredSales);
+
+  const tableHeaders = [
+    "reference",
+    "customer",
+    "total",
+    "date",
+    "items",
+    "status",
+  ];
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
@@ -158,74 +223,219 @@ export default function SaleReturn() {
     setSearchQuery("");
   };
 
-  const handleSelectSale = (sale) => {
-    setSelectedSale(sale.originalSale);
-    setError("");
+  // Helper function to calculate warranty status
+const getWarrantyStatus = (item, saleDate) => {
+  if (item.type !== "product") return null; // Only products have warranty
+  
+  const productWarranty = item.warrantyDays || 0;
+  if (productWarranty === 0) return null; // No warranty
+  
+  const saleDateTime = new Date(saleDate).getTime();
+  const currentTime = new Date().getTime();
+  const daysSinceSale = Math.floor((currentTime - saleDateTime) / (1000 * 60 * 60 * 24));
+  
+  const remainingDays = productWarranty - daysSinceSale;
+  
+  return {
+    total: productWarranty,
+    elapsed: daysSinceSale,
+    remaining: Math.max(0, remainingDays),
+    isExpired: remainingDays <= 0
+  };
+};
+
+const handleSelectSale = async (sale) => {
+  setSelectedSale(sale.originalSale);
+  setError("");
+  
+  try {
+    // Fetch all returns for this sale to calculate already returned quantities
+    const token = localStorage.getItem("token");
+    const returnsRes = await fetch(`${API_ROUTES.SHOP_SALES}/returns/sale/${sale.originalSale.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     
-    const returnItems = sale.originalSale.saleItems.map(item => ({
-      saleItemId: item.id,
-      productId: item.productId || item.materialId,
-      name: item.product?.name || item.material?.name || `Item ${item.id}`,
-      type: item.productId ? "product" : "material",
-      barcode: item.product?.barcode || item.material?.barcode || "",
-      unit: item.material?.unit || null,
-      originalQuantity: item.quantity,
-      originalUnitPrice: item.unitPrice,
-      returnedQuantity: 0,
-      unitPrice: item.unitPrice,
-      totalPrice: 0,
-      maxReturnable: item.quantity
-    }));
+    if (returnsRes.ok) {
+      const saleReturns = await returnsRes.json();
+      
+      // Calculate already returned quantities
+      const returnedQuantities = {};
+      
+      if (saleReturns && saleReturns.length > 0) {
+        saleReturns.forEach(saleReturn => {
+          saleReturn.returnItems.forEach(returnItem => {
+            const key = returnItem.productId 
+              ? `product-${returnItem.productId}` 
+              : `material-${returnItem.materialId}`;
+            
+            if (!returnedQuantities[key]) {
+              returnedQuantities[key] = 0;
+            }
+            returnedQuantities[key] += returnItem.quantity;
+          });
+        });
+      }
+      
+      // Create return items with maxReturnable calculated based on already returned quantities
+      const returnItems = sale.originalSale.saleItems.map((item) => {
+        const key = item.productId 
+          ? `product-${item.productId}` 
+          : `material-${item.materialId}`;
+        
+        const alreadyReturned = returnedQuantities[key] || 0;
+        const maxReturnable = Math.max(0, item.quantity - alreadyReturned);
+        
+        // Use the getWarrantyStatus helper function here
+        const warrantyStatus = getWarrantyStatus(
+          { 
+            type: item.productId ? "product" : "material", 
+            warrantyDays: item.product?.warranty || 0 
+          }, 
+          sale.originalSale.createdAt
+        );
+        
+        return {
+          saleItemId: item.id,
+          productId: item.productId || item.materialId,
+          name: item.product?.name || item.material?.name || `Item ${item.id}`,
+          type: item.productId ? "product" : "material",
+          barcode: item.product?.barcode || item.material?.barcode || "",
+          unit: item.material?.unit || null,
+          originalQuantity: item.quantity,
+          alreadyReturned: alreadyReturned,
+          originalUnitPrice: item.unitPrice,
+          returnedQuantity: 0,
+          unitPrice: item.unitPrice,
+          totalPrice: 0,
+          maxReturnable: maxReturnable,
+          warrantyDays: item.product?.warranty || 0,
+          warrantyStatus: warrantyStatus, // Store the warranty status
+          saleDate: sale.originalSale.createdAt
+        };
+      });
+      
+      setItems(returnItems);
+    } else {
+      // Fallback to original behavior if returns fetch fails
+      const returnItems = sale.originalSale.saleItems.map((item) => {
+        // Use the getWarrantyStatus helper function here too
+        const warrantyStatus = getWarrantyStatus(
+          { 
+            type: item.productId ? "product" : "material", 
+            warrantyDays: item.product?.warranty || 0 
+          }, 
+          sale.originalSale.createdAt
+        );
+        
+        return {
+          saleItemId: item.id,
+          productId: item.productId || item.materialId,
+          name: item.product?.name || item.material?.name || `Item ${item.id}`,
+          type: item.productId ? "product" : "material",
+          barcode: item.product?.barcode || item.material?.barcode || "",
+          unit: item.material?.unit || null,
+          originalQuantity: item.quantity,
+          alreadyReturned: 0,
+          originalUnitPrice: item.unitPrice,
+          returnedQuantity: 0,
+          unitPrice: item.unitPrice,
+          totalPrice: 0,
+          maxReturnable: item.quantity,
+          warrantyDays: item.product?.warranty || 0,
+          warrantyStatus: warrantyStatus, // Store the warranty status
+          saleDate: sale.originalSale.createdAt
+        };
+      });
+      
+      setItems(returnItems);
+    }
+  } catch (err) {
+    console.error("Error fetching sale returns:", err);
+    // Fallback to original behavior
+    const returnItems = sale.originalSale.saleItems.map((item) => {
+      // Use the getWarrantyStatus helper function here too
+      const warrantyStatus = getWarrantyStatus(
+        { 
+          type: item.productId ? "product" : "material", 
+          warrantyDays: item.product?.warranty || 0 
+        }, 
+        sale.originalSale.createdAt
+      );
+      
+      return {
+        saleItemId: item.id,
+        productId: item.productId || item.materialId,
+        name: item.product?.name || item.material?.name || `Item ${item.id}`,
+        type: item.productId ? "product" : "material",
+        barcode: item.product?.barcode || item.material?.barcode || "",
+        unit: item.material?.unit || null,
+        originalQuantity: item.quantity,
+        alreadyReturned: 0,
+        originalUnitPrice: item.unitPrice,
+        returnedQuantity: 0,
+        unitPrice: item.unitPrice,
+        totalPrice: 0,
+        maxReturnable: item.quantity,
+        warrantyDays: item.product?.warranty || 0,
+        warrantyStatus: warrantyStatus, // Store the warranty status
+        saleDate: sale.originalSale.createdAt
+      };
+    });
     
     setItems(returnItems);
-  };
+  }
+};
 
   const handleChangeQty = (idx, qty) => {
     const updated = [...items];
     const inputQty = parseFloat(qty) || 0;
-    
+
     const maxQty = updated[idx].maxReturnable;
     const validQty = Math.min(Math.max(0, inputQty), maxQty);
-    
+
     updated[idx].returnedQuantity = validQty;
     updated[idx].totalPrice = validQty * updated[idx].unitPrice;
-    
+
     setItems(updated);
   };
 
   const handleChangePrice = (idx, price) => {
     const updated = [...items];
     const newPrice = parseFloat(price) || 0;
-    
+
     updated[idx].unitPrice = Math.max(0, newPrice);
-    updated[idx].totalPrice = updated[idx].returnedQuantity * updated[idx].unitPrice;
-    
+    updated[idx].totalPrice =
+      updated[idx].returnedQuantity * updated[idx].unitPrice;
+
     setItems(updated);
   };
 
   const handleReturnAll = () => {
-    const updated = items.map(item => ({
+    const updated = items.map((item) => ({
       ...item,
       returnedQuantity: item.maxReturnable,
-      totalPrice: item.maxReturnable * item.unitPrice
+      totalPrice: item.maxReturnable * item.unitPrice,
     }));
     setItems(updated);
   };
 
   const handleClearAll = () => {
-    const updated = items.map(item => ({
+    const updated = items.map((item) => ({
       ...item,
       returnedQuantity: 0,
-      totalPrice: 0
+      totalPrice: 0,
     }));
     setItems(updated);
   };
 
   const calculateTotals = () => {
-    const totalItems = items.reduce((sum, item) => sum + item.returnedQuantity, 0);
+    const totalItems = items.reduce(
+      (sum, item) => sum + item.returnedQuantity,
+      0,
+    );
     const totalAmount = items.reduce((sum, item) => sum + item.totalPrice, 0);
-    const itemCount = items.filter(item => item.returnedQuantity > 0).length;
-    
+    const itemCount = items.filter((item) => item.returnedQuantity > 0).length;
+
     return { totalItems, totalAmount, itemCount };
   };
 
@@ -240,8 +450,8 @@ export default function SaleReturn() {
       return;
     }
 
-    const returnItems = items.filter(item => item.returnedQuantity > 0);
-    
+    const returnItems = items.filter((item) => item.returnedQuantity > 0);
+
     if (returnItems.length === 0) {
       setError("Please specify quantities for items to return.");
       return;
@@ -249,12 +459,12 @@ export default function SaleReturn() {
 
     const payload = {
       saleId: selectedSale.id,
-      items: returnItems.map(item => ({
+      items: returnItems.map((item) => ({
         itemId: item.productId,
         type: item.type,
         quantity: item.returnedQuantity,
-        unitPrice: item.unitPrice
-      }))
+        unitPrice: item.unitPrice,
+      })),
     };
 
     setIsSubmitting(true);
@@ -278,16 +488,32 @@ export default function SaleReturn() {
       }
 
       const totalAmount = calculateTotals().totalAmount;
-      alert(`✅ ${data.message || "Return processed successfully!"}\nReference: ${data.return?.reference || "N/A"}\nAmount: $${(data.return?.totalAmount || totalAmount).toFixed(2)}\nShop: ${data.return?.shop?.name || selectedSale.shop?.name}`);
-      
-      const updatedSales = sales.filter(sale => sale.id !== selectedSale.id);
-      setSales(updatedSales);
-      setFilteredSales(updatedSales);
-      
+      alert(
+        `✅ ${data.message || "Return processed successfully!"}\nReference: ${data.return?.reference || "N/A"}\nAmount: $${(data.return?.totalAmount || totalAmount).toFixed(2)}\nShop: ${data.return?.shop?.name || selectedSale.shop?.name}`,
+      );
+
+      // Refresh the current page
+      const refreshRes = await fetch(
+        `${API_ROUTES.SHOP_SALES}/return-eligible?shopId=${selectedShop}&page=${currentPage}&limit=${itemsPerPage}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      const refreshData = await refreshRes.json();
+
+      if (Array.isArray(refreshData)) {
+        setSales(refreshData);
+        setFilteredSales(refreshData);
+      } else {
+        setSales(refreshData.sales);
+        setFilteredSales(refreshData.sales);
+        setTotalPages(refreshData.pagination.totalPages);
+        setTotalSales(refreshData.pagination.totalCount);
+      }
+
       setSelectedSale(null);
       setItems([]);
       setSearchQuery("");
-      
     } catch (err) {
       console.error("Return error:", err);
       setError("❌ " + err.message);
@@ -298,15 +524,46 @@ export default function SaleReturn() {
 
   const { totalItems, totalAmount, itemCount } = calculateTotals();
 
+  // Pagination handlers
+  const nextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const prevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const goToPage = (page) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  const handleItemsPerPageChange = (e) => {
+    setItemsPerPage(Number(e.target.value));
+    setCurrentPage(1);
+  };
+
   const getColumnIcon = (key) => {
-    switch(key) {
-      case 'reference': return <Hash size={14} className="mr-2" />;
-      case 'customer': return <User size={14} className="mr-2" />;
-      case 'total': return <DollarSign size={14} className="mr-2" />;
-      case 'date': return <Calendar size={14} className="mr-2" />;
-      case 'items': return <Package size={14} className="mr-2" />;
-      case 'status': return <CheckCircle size={14} className="mr-2" />;
-      default: return <Hash size={14} className="mr-2" />;
+    switch (key) {
+      case "reference":
+        return <Hash size={14} className="mr-2" />;
+      case "customer":
+        return <User size={14} className="mr-2" />;
+      case "total":
+        return <DollarSign size={14} className="mr-2" />;
+      case "date":
+        return <Calendar size={14} className="mr-2" />;
+      case "items":
+        return <Package size={14} className="mr-2" />;
+      case "status":
+        return <CheckCircle size={14} className="mr-2" />;
+      default:
+        return <Hash size={14} className="mr-2" />;
     }
   };
 
@@ -323,13 +580,16 @@ export default function SaleReturn() {
               <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-red-600 to-orange-600 bg-clip-text text-transparent">
                 Shop Sale Return
               </h1>
-              <p className="text-gray-600 mt-1">Process returns for previous shop sales</p>
+              <p className="text-gray-600 mt-1">
+                Process returns for previous shop sales
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2 glass-tag px-4 py-2 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
             <RefreshCw size={16} className="text-red-600" />
             <span className="text-sm font-medium text-gray-700">
-              {sales.length} {sales.length === 1 ? 'Sale Available' : 'Sales Available'}
+              {totalSales}{" "}
+              {totalSales === 1 ? "Sale Available" : "Sales Available"}
             </span>
           </div>
         </div>
@@ -359,7 +619,7 @@ export default function SaleReturn() {
               </option>
             ))}
           </select>
-          
+
           {selectedShop && (
             <div className="glass-tag px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500/10 to-blue-600/10 border border-blue-200/30">
               <span className="text-sm font-medium text-blue-700">
@@ -372,15 +632,22 @@ export default function SaleReturn() {
 
       {/* Error Display */}
       {error && (
-        <div className={`glass-card mb-6 p-4 border ${
-          error.includes("❌") 
-            ? "border-red-200/50 bg-gradient-to-r from-red-50/50 to-red-100/50" 
-            : "border-yellow-200/50 bg-gradient-to-r from-yellow-50/50 to-yellow-100/50"
-        } backdrop-blur-sm`}>
+        <div
+          className={`glass-card mb-6 p-4 border ${
+            error.includes("❌")
+              ? "border-red-200/50 bg-gradient-to-r from-red-50/50 to-red-100/50"
+              : "border-yellow-200/50 bg-gradient-to-r from-yellow-50/50 to-yellow-100/50"
+          } backdrop-blur-sm`}
+        >
           <div className="flex items-center">
-            <AlertCircle size={20} className={`mr-3 ${error.includes("❌") ? "text-red-600" : "text-yellow-600"}`} />
+            <AlertCircle
+              size={20}
+              className={`mr-3 ${error.includes("❌") ? "text-red-600" : "text-yellow-600"}`}
+            />
             <div>
-              <p className={`font-medium ${error.includes("❌") ? "text-red-700" : "text-yellow-700"}`}>
+              <p
+                className={`font-medium ${error.includes("❌") ? "text-red-700" : "text-yellow-700"}`}
+              >
                 {error.replace("❌ ", "")}
               </p>
             </div>
@@ -399,7 +666,8 @@ export default function SaleReturn() {
               </h3>
               <div className="flex items-center gap-3">
                 <span className="text-sm text-gray-600">
-                  Showing {filteredSales.length} non-returned sale(s)
+                  Showing {filteredSales.length} of {totalSales} non-returned
+                  sale(s)
                 </span>
                 {loading && (
                   <div className="flex items-center">
@@ -409,7 +677,7 @@ export default function SaleReturn() {
                 )}
               </div>
             </div>
-            
+
             <div className="relative w-full md:w-80">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search size={18} className="text-gray-400" />
@@ -462,7 +730,8 @@ export default function SaleReturn() {
                       <div className="flex items-center gap-2">
                         {getColumnIcon(key)}
                         <span className="font-semibold">
-                          {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}
+                          {key.charAt(0).toUpperCase() +
+                            key.slice(1).replace(/([A-Z])/g, " $1")}
                         </span>
                         <ArrowUpDown
                           onClick={() => handleSort(key)}
@@ -485,30 +754,40 @@ export default function SaleReturn() {
                   <tr
                     key={item.id}
                     className={`border-t border-white/10 hover:bg-white/10 transition-all duration-200 ${
-                      index % 2 === 0 ? 'bg-white/5' : ''
-                    } ${selectedSale?.id === item.id ? 'bg-blue-50/50 border-l-4 border-l-blue-500' : ''}`}
+                      index % 2 === 0 ? "bg-white/5" : ""
+                    } ${selectedSale?.id === item.id ? "bg-blue-50/50 border-l-4 border-l-blue-500" : ""}`}
                   >
                     {tableHeaders.map((key) => (
                       <td key={key} className="p-4">
-                        <div className={`flex items-center ${
-                          key === 'total' ? 'font-semibold text-gray-900' :
-                          key === 'status' ? 'text-green-600' :
-                          key === 'items' ? 'text-blue-600' :
-                          'text-gray-700'
-                        }`}>
-                          {key === 'status' ? (
+                        <div
+                          className={`flex items-center ${
+                            key === "total"
+                              ? "font-semibold text-gray-900"
+                              : key === "status"
+                                ? "text-green-600"
+                                : key === "items"
+                                  ? "text-blue-600"
+                                  : "text-gray-700"
+                          }`}
+                        >
+                          {key === "status" ? (
                             <div className="flex items-center">
-                              <CheckCircle size={14} className="mr-2 text-green-500" />
-                              <span className="font-medium">Available for Return</span>
+                              <CheckCircle
+                                size={14}
+                                className="mr-2 text-green-500"
+                              />
+                              <span className="font-medium">
+                                Available for Return
+                              </span>
                             </div>
-                          ) : key === 'items' ? (
+                          ) : key === "items" ? (
                             <div className="glass-tag px-3 py-1 rounded-full bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200/50">
                               {item.items} items
                             </div>
+                          ) : key === "customer" ? (
+                            <span>{item.customer}</span>
                           ) : (
-                            <>
-                              {item[key]}
-                            </>
+                            <span>{item[key]}</span>
                           )}
                         </div>
                       </td>
@@ -516,13 +795,15 @@ export default function SaleReturn() {
                     <td className="p-4">
                       <button
                         onClick={() => handleSelectSale(item)}
-                        className={`glass-button px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
                           selectedSale?.id === item.id
-                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 shadow-lg shadow-blue-500/25 text-blue-700'
-                            : 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 hover:from-gray-100 hover:to-gray-200 hover:shadow-lg'
+                            ? "bg-gradient-to-r from-blue-500 to-blue-600 shadow-lg shadow-blue-500/25 text-white"
+                            : "bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 hover:from-gray-100 hover:to-gray-200 hover:shadow-lg"
                         }`}
                       >
-                        {selectedSale?.id === item.id ? '✓ Selected' : 'Select Sale'}
+                        {selectedSale?.id === item.id
+                          ? "✓ Selected"
+                          : "Select Sale"}
                       </button>
                     </td>
                   </tr>
@@ -536,28 +817,160 @@ export default function SaleReturn() {
                 <div className="glass-icon p-4 rounded-full inline-flex mb-4 bg-gradient-to-r from-gray-100/50 to-gray-200/50">
                   <Mailbox className="text-gray-400" size={32} />
                 </div>
-                <p className="text-gray-500 text-lg font-medium">No sales available for return</p>
+                <p className="text-gray-500 text-lg font-medium">
+                  No sales available for return
+                </p>
                 <p className="text-gray-400 text-sm mt-1">
-                  All sales for this shop have been returned or no sales exist yet
+                  All sales for this shop have been returned or no sales exist
+                  yet
                 </p>
               </div>
             )}
-            
+
             {sales.length > 0 && filteredSales.length === 0 && searchQuery && (
               <div className="text-center py-12">
                 <div className="glass-icon p-4 rounded-full inline-flex mb-4 bg-gradient-to-r from-gray-100/50 to-gray-200/50">
                   <Search className="text-gray-400" size={32} />
                 </div>
-                <p className="text-gray-500 text-lg font-medium">No sales found matching "{searchQuery}"</p>
+                <p className="text-gray-500 text-lg font-medium">
+                  No sales found matching "{searchQuery}"
+                </p>
                 <button
                   onClick={clearSearch}
-                  className="mt-3 glass-button px-4 py-2 text-blue-600 hover:text-blue-800"
+                  className="mt-3 px-4 py-2 text-blue-600 hover:text-blue-800"
                 >
                   Clear search and show all sales
                 </button>
               </div>
             )}
           </div>
+
+          {/* Pagination Controls */}
+          {sales.length > 0 && (
+            <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl p-4 mt-4">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  {/* Items per page selector */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">Show:</span>
+                    <select
+                      value={itemsPerPage}
+                      onChange={handleItemsPerPageChange}
+                      className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                    >
+                      <option value="5">5</option>
+                      <option value="10">10</option>
+                      <option value="20">20</option>
+                      <option value="50">50</option>
+                    </select>
+                    <span className="text-sm text-gray-600">per page</span>
+                  </div>
+
+                  {/* Page info */}
+                  <div className="text-sm text-gray-700">
+                    Showing{" "}
+                    <span className="font-semibold">
+                      {(currentPage - 1) * itemsPerPage + 1}
+                    </span>{" "}
+                    to{" "}
+                    <span className="font-semibold">
+                      {Math.min(currentPage * itemsPerPage, totalSales)}
+                    </span>{" "}
+                    of <span className="font-semibold">{totalSales}</span> sales
+                  </div>
+                </div>
+
+                {/* Pagination buttons */}
+                <div className="flex items-center gap-2">
+                  {/* First page */}
+                  <button
+                    onClick={() => goToPage(1)}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                    title="First page"
+                  >
+                    <ChevronsLeft size={16} className="text-gray-600" />
+                  </button>
+
+                  {/* Previous page */}
+                  <button
+                    onClick={prevPage}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                    title="Previous page"
+                  >
+                    <ChevronLeft size={16} className="text-gray-600" />
+                  </button>
+
+                  {/* Page numbers */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => goToPage(pageNum)}
+                          className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                            currentPage === pageNum
+                              ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+                              : "hover:bg-white/50 text-gray-700"
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+
+                    {totalPages > 5 && currentPage < totalPages - 2 && (
+                      <>
+                        <span className="mx-1 text-gray-400">...</span>
+                        <button
+                          onClick={() => goToPage(totalPages)}
+                          className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                            currentPage === totalPages
+                              ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+                              : "hover:bg-white/50 text-gray-700"
+                          }`}
+                        >
+                          {totalPages}
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Next page */}
+                  <button
+                    onClick={nextPage}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                    title="Next page"
+                  >
+                    <ChevronRight size={16} className="text-gray-600" />
+                  </button>
+
+                  {/* Last page */}
+                  <button
+                    onClick={() => goToPage(totalPages)}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                    title="Last page"
+                  >
+                    <ChevronsRight size={16} className="text-gray-600" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -573,7 +986,9 @@ export default function SaleReturn() {
                 <h3 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                   Selected Sale: {selectedSale.reference}
                 </h3>
-                <p className="text-gray-600 text-sm mt-1">Review sale details and select items to return</p>
+                <p className="text-gray-600 text-sm mt-1">
+                  Review sale details and select items to return
+                </p>
               </div>
             </div>
             <button
@@ -584,7 +999,7 @@ export default function SaleReturn() {
               <X size={24} />
             </button>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div className="glass-section-inner p-4 rounded-lg border border-white/20 bg-white/30">
               <p className="text-sm text-gray-600 mb-1">Shop</p>
@@ -597,14 +1012,21 @@ export default function SaleReturn() {
               <p className="text-sm text-gray-600 mb-1">Customer</p>
               <p className="font-semibold text-gray-800 flex items-center">
                 <User size={16} className="mr-2 text-green-600" />
-                {selectedSale.customer || "Walk-in Customer"}
+                {selectedSale.customer?.name ||
+                  selectedSale.customer ||
+                  "Walk-in Customer"}
+                {selectedSale.customer?.mobile && (
+                  <span className="ml-2 text-sm text-gray-500">
+                    ({selectedSale.customer.mobile})
+                  </span>
+                )}
               </p>
             </div>
             <div className="glass-section-inner p-4 rounded-lg border border-white/20 bg-white/30">
               <p className="text-sm text-gray-600 mb-1">Original Total</p>
               <p className="font-semibold text-gray-800 flex items-center">
-                <DollarSign size={16} className="mr-2 text-emerald-600" />
-                ${selectedSale.grandTotal?.toFixed(2)}
+                <DollarSign size={16} className="mr-2 text-emerald-600" />$
+                {selectedSale.grandTotal?.toFixed(2)}
               </p>
             </div>
             <div className="glass-section-inner p-4 rounded-lg border border-white/20 bg-white/30">
@@ -643,19 +1065,21 @@ export default function SaleReturn() {
                 </div>
                 Return Items
               </h3>
-              <p className="text-gray-600 text-sm">Specify quantities and prices for items to return</p>
+              <p className="text-gray-600 text-sm">
+                Specify quantities and prices for items to return
+              </p>
             </div>
             <div className="flex gap-3 mt-4 md:mt-0">
               <button
                 onClick={handleReturnAll}
-                className="glass-button px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25 flex items-center"
+                className="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25 flex items-center"
               >
                 <CheckCircle size={18} className="mr-2" />
                 Return All
               </button>
               <button
                 onClick={handleClearAll}
-                className="glass-button px-4 py-2.5 border border-gray-300/50 text-gray-700 rounded-lg hover:bg-gray-50/50 transition-all duration-300 flex items-center"
+                className="px-4 py-2.5 border border-gray-300/50 text-gray-700 rounded-lg hover:bg-gray-50/50 transition-all duration-300 flex items-center"
               >
                 <X size={18} className="mr-2" />
                 Clear All
@@ -663,91 +1087,185 @@ export default function SaleReturn() {
             </div>
           </div>
 
-          {/* Items Table */}
+          {/* Items Table with Return Tracking */}
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="bg-gradient-to-r from-gray-50/50 to-gray-100/50 backdrop-blur-sm border-b border-white/20">
-                  <th className="text-left p-4 font-medium text-gray-700">Product</th>
-                  <th className="text-left p-4 font-medium text-gray-700">Type</th>
-                  <th className="text-left p-4 font-medium text-gray-700">Sold Qty</th>
-                  <th className="text-left p-4 font-medium text-gray-700">Return Qty</th>
-                  <th className="text-left p-4 font-medium text-gray-700">Unit Price</th>
-                  <th className="text-left p-4 font-medium text-gray-700">Return Total</th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Product
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Type
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Warranty
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Sold Qty
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Returned
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Available
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Return Qty
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Unit Price
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Return Total
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, idx) => (
-                  <tr key={idx} className="border-b border-white/10 hover:bg-white/5 transition-colors">
-                    <td className="p-4">
-                      <div>
-                        <p className="font-medium text-gray-800">{item.name}</p>
-                        <div className="text-sm text-gray-500 flex items-center gap-2 mt-1">
-                          <span className="glass-tag px-2 py-0.5 rounded bg-gray-100/50">ID: {item.productId}</span>
-                          {item.barcode && (
-                            <span className="glass-tag px-2 py-0.5 rounded bg-gray-100/50">Barcode: {item.barcode}</span>
-                          )}
-                          {item.unit && (
-                            <span className="glass-tag px-2 py-0.5 rounded bg-gray-100/50">Unit: {item.unit}</span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className={`glass-tag inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${
-                        item.type === 'product' 
-                          ? 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border border-blue-200/50' 
-                          : 'bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 border border-purple-200/50'
-                      }`}>
-                        {item.type === 'product' ? '📦 Product' : '🔧 Material'}
+      {items.map((item, idx) => {
+        const warrantyStatus = item.warrantyStatus;
+        
+        return (
+          <tr
+            key={idx}
+            className={`border-b border-white/10 hover:bg-white/5 transition-colors ${
+              item.type === "product" && warrantyStatus?.isExpired ? "bg-red-50/30" : ""
+            }`}
+          >
+            <td className="p-4">
+              <div>
+                <p className="font-medium text-gray-800">{item.name}</p>
+                <div className="text-sm text-gray-500 flex items-center gap-2 mt-1">
+                  <span className="glass-tag px-2 py-0.5 rounded bg-gray-100/50">
+                    ID: {item.productId}
+                  </span>
+                  {item.barcode && (
+                    <span className="glass-tag px-2 py-0.5 rounded bg-gray-100/50">
+                      Barcode: {item.barcode}
+                    </span>
+                  )}
+                  {item.unit && (
+                    <span className="glass-tag px-2 py-0.5 rounded bg-gray-100/50">
+                      Unit: {item.unit}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </td>
+            <td className="p-4">
+              <span
+                className={`glass-tag inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${
+                  item.type === "product"
+                    ? "bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border border-blue-200/50"
+                    : "bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 border border-purple-200/50"
+                }`}
+              >
+                {item.type === "product" ? "📦 Product" : "🔧 Material"}
+              </span>
+            </td>
+            <td className="p-4">
+              {item.type === "product" ? (
+                warrantyStatus ? (
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-medium text-gray-600">
+                        {warrantyStatus.total} days
                       </span>
-                    </td>
-                    <td className="p-4">
-                      <div className="glass-tag px-3 py-1.5 rounded bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200/50">
-                        <span className="font-medium">{item.originalQuantity}</span>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min="0"
-                          max={item.maxReturnable}
-                          step="1"
-                          className="glass-input w-24 border border-white/30 bg-white/50 backdrop-blur-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
-                          value={item.returnedQuantity}
-                          onChange={(e) => handleChangeQty(idx, e.target.value)}
-                        />
-                        <div className="text-xs text-gray-500 mt-1 flex items-center">
-                          <span className="mr-2">Max: {item.maxReturnable}</span>
-                          {item.returnedQuantity === item.maxReturnable && (
-                            <CheckCircle size={12} className="text-green-500" />
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center">
-                        <span className="mr-2 text-gray-500">$</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          className="glass-input w-24 border border-white/30 bg-white/50 backdrop-blur-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
-                          value={item.unitPrice}
-                          onChange={(e) => handleChangePrice(idx, e.target.value)}
-                        />
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="font-semibold text-green-600 flex items-center">
-                        <DollarSign size={16} className="mr-1" />
-                        {item.totalPrice.toFixed(2)}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+                      {warrantyStatus.isExpired ? (
+                        <span className="text-xs text-red-600 font-medium ml-1">(Expired)</span>
+                      ) : (
+                        <span className="text-xs text-green-600 font-medium ml-1">
+                          ({warrantyStatus.remaining} days left)
+                        </span>
+                      )}
+                    </div>
+                    <div className="w-20 h-1.5 bg-gray-200 rounded-full mt-1">
+                      <div 
+                        className={`h-1.5 rounded-full ${
+                          warrantyStatus.isExpired ? 'bg-red-500' : 'bg-green-500'
+                        }`}
+                        style={{ 
+                          width: `${Math.min(100, (warrantyStatus.elapsed / warrantyStatus.total) * 100)}%` 
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-500">No warranty</span>
+                )
+              ) : (
+                <span className="text-xs text-gray-500">-</span>
+              )}
+            </td>
+            <td className="p-4">
+              <div className="glass-tag px-3 py-1.5 rounded bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200/50">
+                <span className="font-medium">{item.originalQuantity}</span>
+              </div>
+            </td>
+            <td className="p-4">
+              <div className="glass-tag px-3 py-1.5 rounded bg-gradient-to-r from-amber-50 to-amber-100 border border-amber-200/50">
+                <span className="font-medium text-amber-700">{item.alreadyReturned || 0}</span>
+              </div>
+            </td>
+            <td className="p-4">
+              <div className="glass-tag px-3 py-1.5 rounded bg-gradient-to-r from-green-50 to-green-100 border border-green-200/50">
+                <span className="font-medium text-green-700">{item.maxReturnable}</span>
+              </div>
+            </td>
+            <td className="p-4">
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  max={item.maxReturnable}
+                  step="1"
+                  className={`glass-input w-24 border border-white/30 bg-white/50 backdrop-blur-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent ${
+                    item.type === "product" && warrantyStatus?.isExpired ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                  value={item.returnedQuantity}
+                  onChange={(e) => handleChangeQty(idx, e.target.value)}
+                  disabled={item.maxReturnable === 0 || (item.type === "product" && warrantyStatus?.isExpired)}
+                />
+                <div className="text-xs text-gray-500 mt-1 flex items-center">
+                  <span className="mr-2">Max: {item.maxReturnable}</span>
+                  {item.returnedQuantity === item.maxReturnable && item.maxReturnable > 0 && (
+                    <CheckCircle size={12} className="text-green-500" />
+                  )}
+                  {item.maxReturnable === 0 && (
+                    <span className="text-amber-500 text-xs">Fully returned</span>
+                  )}
+                  {item.type === "product" && warrantyStatus?.isExpired && (
+                    <span className="text-red-500 text-xs ml-1">Warranty expired</span>
+                  )}
+                </div>
+              </div>
+            </td>
+            <td className="p-4">
+              <div className="flex items-center">
+                <span className="mr-2 text-gray-500">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className={`glass-input w-24 border border-white/30 bg-white/50 backdrop-blur-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent ${
+                    item.type === "product" && warrantyStatus?.isExpired ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                  value={item.unitPrice}
+                  onChange={(e) => handleChangePrice(idx, e.target.value)}
+                  disabled={item.maxReturnable === 0 || (item.type === "product" && warrantyStatus?.isExpired)}
+                />
+              </div>
+            </td>
+            <td className="p-4">
+              <div className="font-semibold text-green-600 flex items-center">
+                <DollarSign size={16} className="mr-1" />
+                {item.totalPrice.toFixed(2)}
+              </div>
+            </td>
+          </tr>
+        );
+      })}
+    </tbody>
             </table>
           </div>
 
@@ -760,23 +1278,27 @@ export default function SaleReturn() {
                 </div>
                 <p className="text-sm text-gray-600">Items to Return</p>
                 <p className="text-3xl font-bold text-blue-700">{itemCount}</p>
-                <p className="text-sm text-gray-600">Total Quantity: {totalItems}</p>
+                <p className="text-sm text-gray-600">
+                  Total Quantity: {totalItems}
+                </p>
               </div>
               <div className="text-center">
                 <div className="glass-icon p-4 rounded-full inline-flex mb-3 bg-gradient-to-r from-green-500/10 to-green-600/10">
                   <TrendingDown className="text-green-600" size={24} />
                 </div>
                 <p className="text-sm text-gray-600">Return Amount</p>
-                <p className="text-3xl font-bold text-green-600">${totalAmount.toFixed(2)}</p>
+                <p className="text-3xl font-bold text-green-600">
+                  ${totalAmount.toFixed(2)}
+                </p>
               </div>
               <div className="flex flex-col justify-center items-center">
                 <button
                   onClick={handleSubmit}
                   disabled={isSubmitting || itemCount === 0}
-                  className={`glass-button w-full px-6 py-4 rounded-xl font-semibold text-lg transition-all duration-300 flex items-center justify-center ${
+                  className={`w-full px-6 py-4 rounded-xl font-semibold text-lg transition-all duration-300 flex items-center justify-center ${
                     isSubmitting || itemCount === 0
                       ? "bg-gradient-to-r from-gray-400 to-gray-500 cursor-not-allowed"
-                      : "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-red-400 hover:shadow-xl hover:shadow-red-500/25"
+                      : "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white hover:shadow-xl hover:shadow-red-500/25"
                   }`}
                 >
                   {isSubmitting ? (
@@ -792,7 +1314,9 @@ export default function SaleReturn() {
                   )}
                 </button>
                 {itemCount === 0 && !isSubmitting && (
-                  <p className="text-sm text-gray-500 mt-2 text-center">Add items to return first</p>
+                  <p className="text-sm text-gray-500 mt-2 text-center">
+                    Add items to return first
+                  </p>
                 )}
               </div>
             </div>
@@ -802,14 +1326,18 @@ export default function SaleReturn() {
           {itemCount > 0 && (
             <div className="glass-card-inner mt-4 p-4 rounded-lg border border-amber-200/50 bg-gradient-to-r from-amber-50/50 to-amber-100/50 backdrop-blur-sm">
               <div className="flex items-center">
-                <AlertCircle size={20} className="text-amber-600 mr-3 flex-shrink-0" />
+                <AlertCircle
+                  size={20}
+                  className="text-amber-600 mr-3 flex-shrink-0"
+                />
                 <div>
                   <p className="font-medium text-amber-800">
                     ⚠️ Return Confirmation Required
                   </p>
                   <p className="text-sm text-amber-700 mt-1">
-                    This action will return {totalItems} item(s) and refund ${totalAmount.toFixed(2)}. 
-                    Stock will be automatically restored to {selectedSale.shop?.name}.
+                    This action will return {totalItems} item(s) and refund $
+                    {totalAmount.toFixed(2)}. Stock will be automatically
+                    restored to {selectedSale.shop?.name}.
                   </p>
                 </div>
               </div>
@@ -824,13 +1352,18 @@ export default function SaleReturn() {
           <div className="glass-icon p-6 rounded-full inline-flex mb-6 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
             <Store className="text-blue-600" size={48} />
           </div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-2">Select a Shop</h3>
+          <h3 className="text-xl font-semibold text-gray-800 mb-2">
+            Select a Shop
+          </h3>
           <p className="text-gray-600 max-w-md mx-auto mb-8">
-            Choose a shop from the dropdown above to view available sales and process returns
+            Choose a shop from the dropdown above to view available sales and
+            process returns
           </p>
           <div className="glass-tag inline-flex items-center px-4 py-2 rounded-lg bg-gradient-to-r from-gray-50 to-gray-100 border border-white/30">
             <AlertCircle size={16} className="mr-2 text-gray-500" />
-            <span className="text-sm text-gray-700">Shop selection required to proceed</span>
+            <span className="text-sm text-gray-700">
+              Shop selection required to proceed
+            </span>
           </div>
         </div>
       )}
@@ -841,13 +1374,17 @@ export default function SaleReturn() {
           <div className="glass-icon p-6 rounded-full inline-flex mb-6 bg-gradient-to-r from-green-500/10 to-emerald-500/10">
             <ShoppingCart className="text-green-600" size={48} />
           </div>
-          <h3 className="text-xl font-semibold text-gray-800 mb-2">Select a Sale</h3>
+          <h3 className="text-xl font-semibold text-gray-800 mb-2">
+            Select a Sale
+          </h3>
           <p className="text-gray-600 max-w-md mx-auto mb-8">
             Choose a sale from the table above to begin processing a return
           </p>
           <div className="glass-tag inline-flex items-center px-4 py-2 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200/30">
             <CheckCircle size={16} className="mr-2 text-green-600" />
-            <span className="text-sm text-green-700">{sales.length} sales available for return</span>
+            <span className="text-sm text-green-700">
+              {totalSales} sales available for return
+            </span>
           </div>
         </div>
       )}

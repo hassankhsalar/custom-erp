@@ -481,7 +481,7 @@ export default function CreateSale() {
             </div>
             <div>
               <h1 className="text-md md:text-xl font-bold bg-gradient-to-r from-blue-500 to-blue-600 bg-clip-text text-transparent">
-                Cretae Sale
+                Create Sale
               </h1>
             </div>
           </div>
@@ -497,12 +497,11 @@ export default function CreateSale() {
 
 
       {/* Main Content */}
-      <div className="max-w-7xl  xl:max-w-full p-4">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column: Shop Selection & Search */}
-          <div className="lg:col-span-1 space-y-4">
+      <div className="w-full p-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          
             {/* Shop Selection Card */}
-            <div className="bg-white rounded-xl shadow-md p-5">
+            <div className="col-span-1 bg-white rounded-xl shadow-md p-5">
               <div className="flex items-center gap-2 mb-4">
                 <div className="p-2 bg-blue-100 rounded-lg">
                   <span className="text-blue-600"><Store/></span>
@@ -531,7 +530,7 @@ export default function CreateSale() {
             </div>
 
             {/* Search Card */}
-            <div className="bg-white rounded-xl shadow-md p-5 relative">
+            <div className="col-span-1 bg-white rounded-xl shadow-md p-5 relative">
               <div className="flex items-center gap-2 mb-4">
                 <div className="p-2 bg-green-100 rounded-lg">
                   <span className="text-green-600"><Search /></span>
@@ -641,7 +640,7 @@ export default function CreateSale() {
 
 
             {/* Customer & Payment Card */}
-            <div className="bg-white rounded-xl shadow-md p-5 space-y-4">
+            <div className="col-span-1 bg-white rounded-xl shadow-md p-5 space-y-4">
               <div className="flex items-center gap-4">
                 <div className="p-2 bg-purple-100 rounded-lg">
                   <span className="text-purple-600"><UserRound size={42} /></span>
@@ -766,10 +765,9 @@ export default function CreateSale() {
                 )}
               </div>
             )}
-          </div>
 
           {/* Middle Column: Cart Items */}
-          <div className="lg:col-span-2">
+          <div className="col-span-1 md:col-span-2 lg:col-span-4">
             <div className="bg-white rounded-xl shadow-md overflow-hidden">
               {/* Cart Header */}
               <div className="p-6 bg-gradient-to-r from-gray-50 to-white border-b">
