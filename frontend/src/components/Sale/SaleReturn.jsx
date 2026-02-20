@@ -114,6 +114,7 @@ export default function SaleReturn() {
       });
   }, [selectedShop, currentPage, itemsPerPage]);
 
+  console.log(sales);
   // Reset to first page when shop changes
   useEffect(() => {
     setCurrentPage(1);
@@ -205,7 +206,14 @@ export default function SaleReturn() {
       })
     : formatSalesData(filteredSales);
 
-  const tableHeaders = ["reference", "customer", "total", "date", "items", "status"];
+  const tableHeaders = [
+    "reference",
+    "customer",
+    "total",
+    "date",
+    "items",
+    "status",
+  ];
 
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
@@ -215,68 +223,111 @@ export default function SaleReturn() {
     setSearchQuery("");
   };
 
-  const handleSelectSale = async (sale) => {
-    setSelectedSale(sale.originalSale);
-    setError("");
+  // Helper function to calculate warranty status
+const getWarrantyStatus = (item, saleDate) => {
+  if (item.type !== "product") return null; // Only products have warranty
+  
+  const productWarranty = item.warrantyDays || 0;
+  if (productWarranty === 0) return null; // No warranty
+  
+  const saleDateTime = new Date(saleDate).getTime();
+  const currentTime = new Date().getTime();
+  const daysSinceSale = Math.floor((currentTime - saleDateTime) / (1000 * 60 * 60 * 24));
+  
+  const remainingDays = productWarranty - daysSinceSale;
+  
+  return {
+    total: productWarranty,
+    elapsed: daysSinceSale,
+    remaining: Math.max(0, remainingDays),
+    isExpired: remainingDays <= 0
+  };
+};
+
+const handleSelectSale = async (sale) => {
+  setSelectedSale(sale.originalSale);
+  setError("");
+  
+  try {
+    // Fetch all returns for this sale to calculate already returned quantities
+    const token = localStorage.getItem("token");
+    const returnsRes = await fetch(`${API_ROUTES.SHOP_SALES}/returns/sale/${sale.originalSale.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     
-    try {
-      // Fetch all returns for this sale to calculate already returned quantities
-      const token = localStorage.getItem("token");
-      const returnsRes = await fetch(`${API_ROUTES.SHOP_SALES}/returns/sale/${sale.originalSale.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
+    if (returnsRes.ok) {
+      const saleReturns = await returnsRes.json();
+      
+      // Calculate already returned quantities
+      const returnedQuantities = {};
+      
+      if (saleReturns && saleReturns.length > 0) {
+        saleReturns.forEach(saleReturn => {
+          saleReturn.returnItems.forEach(returnItem => {
+            const key = returnItem.productId 
+              ? `product-${returnItem.productId}` 
+              : `material-${returnItem.materialId}`;
+            
+            if (!returnedQuantities[key]) {
+              returnedQuantities[key] = 0;
+            }
+            returnedQuantities[key] += returnItem.quantity;
+          });
+        });
+      }
+      
+      // Create return items with maxReturnable calculated based on already returned quantities
+      const returnItems = sale.originalSale.saleItems.map((item) => {
+        const key = item.productId 
+          ? `product-${item.productId}` 
+          : `material-${item.materialId}`;
+        
+        const alreadyReturned = returnedQuantities[key] || 0;
+        const maxReturnable = Math.max(0, item.quantity - alreadyReturned);
+        
+        // Use the getWarrantyStatus helper function here
+        const warrantyStatus = getWarrantyStatus(
+          { 
+            type: item.productId ? "product" : "material", 
+            warrantyDays: item.product?.warranty || 0 
+          }, 
+          sale.originalSale.createdAt
+        );
+        
+        return {
+          saleItemId: item.id,
+          productId: item.productId || item.materialId,
+          name: item.product?.name || item.material?.name || `Item ${item.id}`,
+          type: item.productId ? "product" : "material",
+          barcode: item.product?.barcode || item.material?.barcode || "",
+          unit: item.material?.unit || null,
+          originalQuantity: item.quantity,
+          alreadyReturned: alreadyReturned,
+          originalUnitPrice: item.unitPrice,
+          returnedQuantity: 0,
+          unitPrice: item.unitPrice,
+          totalPrice: 0,
+          maxReturnable: maxReturnable,
+          warrantyDays: item.product?.warranty || 0,
+          warrantyStatus: warrantyStatus, // Store the warranty status
+          saleDate: sale.originalSale.createdAt
+        };
       });
       
-      if (returnsRes.ok) {
-        const saleReturns = await returnsRes.json();
+      setItems(returnItems);
+    } else {
+      // Fallback to original behavior if returns fetch fails
+      const returnItems = sale.originalSale.saleItems.map((item) => {
+        // Use the getWarrantyStatus helper function here too
+        const warrantyStatus = getWarrantyStatus(
+          { 
+            type: item.productId ? "product" : "material", 
+            warrantyDays: item.product?.warranty || 0 
+          }, 
+          sale.originalSale.createdAt
+        );
         
-        // Calculate already returned quantities
-        const returnedQuantities = {};
-        
-        if (saleReturns && saleReturns.length > 0) {
-          saleReturns.forEach(saleReturn => {
-            saleReturn.returnItems.forEach(returnItem => {
-              const key = returnItem.productId 
-                ? `product-${returnItem.productId}` 
-                : `material-${returnItem.materialId}`;
-              
-              if (!returnedQuantities[key]) {
-                returnedQuantities[key] = 0;
-              }
-              returnedQuantities[key] += returnItem.quantity;
-            });
-          });
-        }
-        
-        // Create return items with maxReturnable calculated based on already returned quantities
-        const returnItems = sale.originalSale.saleItems.map((item) => {
-          const key = item.productId 
-            ? `product-${item.productId}` 
-            : `material-${item.materialId}`;
-          
-          const alreadyReturned = returnedQuantities[key] || 0;
-          const maxReturnable = Math.max(0, item.quantity - alreadyReturned);
-          
-          return {
-            saleItemId: item.id,
-            productId: item.productId || item.materialId,
-            name: item.product?.name || item.material?.name || `Item ${item.id}`,
-            type: item.productId ? "product" : "material",
-            barcode: item.product?.barcode || item.material?.barcode || "",
-            unit: item.material?.unit || null,
-            originalQuantity: item.quantity,
-            alreadyReturned: alreadyReturned,
-            originalUnitPrice: item.unitPrice,
-            returnedQuantity: 0,
-            unitPrice: item.unitPrice,
-            totalPrice: 0,
-            maxReturnable: maxReturnable,
-          };
-        });
-        
-        setItems(returnItems);
-      } else {
-        // Fallback to original behavior if returns fetch fails
-        const returnItems = sale.originalSale.saleItems.map((item) => ({
+        return {
           saleItemId: item.id,
           productId: item.productId || item.materialId,
           name: item.product?.name || item.material?.name || `Item ${item.id}`,
@@ -290,14 +341,28 @@ export default function SaleReturn() {
           unitPrice: item.unitPrice,
           totalPrice: 0,
           maxReturnable: item.quantity,
-        }));
-        
-        setItems(returnItems);
-      }
-    } catch (err) {
-      console.error("Error fetching sale returns:", err);
-      // Fallback to original behavior
-      const returnItems = sale.originalSale.saleItems.map((item) => ({
+          warrantyDays: item.product?.warranty || 0,
+          warrantyStatus: warrantyStatus, // Store the warranty status
+          saleDate: sale.originalSale.createdAt
+        };
+      });
+      
+      setItems(returnItems);
+    }
+  } catch (err) {
+    console.error("Error fetching sale returns:", err);
+    // Fallback to original behavior
+    const returnItems = sale.originalSale.saleItems.map((item) => {
+      // Use the getWarrantyStatus helper function here too
+      const warrantyStatus = getWarrantyStatus(
+        { 
+          type: item.productId ? "product" : "material", 
+          warrantyDays: item.product?.warranty || 0 
+        }, 
+        sale.originalSale.createdAt
+      );
+      
+      return {
         saleItemId: item.id,
         productId: item.productId || item.materialId,
         name: item.product?.name || item.material?.name || `Item ${item.id}`,
@@ -311,11 +376,15 @@ export default function SaleReturn() {
         unitPrice: item.unitPrice,
         totalPrice: 0,
         maxReturnable: item.quantity,
-      }));
-      
-      setItems(returnItems);
-    }
-  };
+        warrantyDays: item.product?.warranty || 0,
+        warrantyStatus: warrantyStatus, // Store the warranty status
+        saleDate: sale.originalSale.createdAt
+      };
+    });
+    
+    setItems(returnItems);
+  }
+};
 
   const handleChangeQty = (idx, qty) => {
     const updated = [...items];
@@ -1023,114 +1092,180 @@ export default function SaleReturn() {
             <table className="w-full">
               <thead>
                 <tr className="bg-gradient-to-r from-gray-50/50 to-gray-100/50 backdrop-blur-sm border-b border-white/20">
-                  <th className="text-left p-4 font-medium text-gray-700">Product</th>
-                  <th className="text-left p-4 font-medium text-gray-700">Type</th>
-                  <th className="text-left p-4 font-medium text-gray-700">Sold Qty</th>
-                  <th className="text-left p-4 font-medium text-gray-700">Returned</th>
-                  <th className="text-left p-4 font-medium text-gray-700">Available</th>
-                  <th className="text-left p-4 font-medium text-gray-700">Return Qty</th>
-                  <th className="text-left p-4 font-medium text-gray-700">Unit Price</th>
-                  <th className="text-left p-4 font-medium text-gray-700">Return Total</th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Product
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Type
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Warranty
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Sold Qty
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Returned
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Available
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Return Qty
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Unit Price
+                  </th>
+                  <th className="text-left p-4 font-medium text-gray-700">
+                    Return Total
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, idx) => (
-                  <tr
-                    key={idx}
-                    className="border-b border-white/10 hover:bg-white/5 transition-colors"
-                  >
-                    <td className="p-4">
-                      <div>
-                        <p className="font-medium text-gray-800">{item.name}</p>
-                        <div className="text-sm text-gray-500 flex items-center gap-2 mt-1">
-                          <span className="glass-tag px-2 py-0.5 rounded bg-gray-100/50">
-                            ID: {item.productId}
-                          </span>
-                          {item.barcode && (
-                            <span className="glass-tag px-2 py-0.5 rounded bg-gray-100/50">
-                              Barcode: {item.barcode}
-                            </span>
-                          )}
-                          {item.unit && (
-                            <span className="glass-tag px-2 py-0.5 rounded bg-gray-100/50">
-                              Unit: {item.unit}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span
-                        className={`glass-tag inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${
-                          item.type === "product"
-                            ? "bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border border-blue-200/50"
-                            : "bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 border border-purple-200/50"
-                        }`}
-                      >
-                        {item.type === "product" ? "📦 Product" : "🔧 Material"}
+      {items.map((item, idx) => {
+        const warrantyStatus = item.warrantyStatus;
+        
+        return (
+          <tr
+            key={idx}
+            className={`border-b border-white/10 hover:bg-white/5 transition-colors ${
+              item.type === "product" && warrantyStatus?.isExpired ? "bg-red-50/30" : ""
+            }`}
+          >
+            <td className="p-4">
+              <div>
+                <p className="font-medium text-gray-800">{item.name}</p>
+                <div className="text-sm text-gray-500 flex items-center gap-2 mt-1">
+                  <span className="glass-tag px-2 py-0.5 rounded bg-gray-100/50">
+                    ID: {item.productId}
+                  </span>
+                  {item.barcode && (
+                    <span className="glass-tag px-2 py-0.5 rounded bg-gray-100/50">
+                      Barcode: {item.barcode}
+                    </span>
+                  )}
+                  {item.unit && (
+                    <span className="glass-tag px-2 py-0.5 rounded bg-gray-100/50">
+                      Unit: {item.unit}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </td>
+            <td className="p-4">
+              <span
+                className={`glass-tag inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium ${
+                  item.type === "product"
+                    ? "bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 border border-blue-200/50"
+                    : "bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 border border-purple-200/50"
+                }`}
+              >
+                {item.type === "product" ? "📦 Product" : "🔧 Material"}
+              </span>
+            </td>
+            <td className="p-4">
+              {item.type === "product" ? (
+                warrantyStatus ? (
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-medium text-gray-600">
+                        {warrantyStatus.total} days
                       </span>
-                    </td>
-                    <td className="p-4">
-                      <div className="glass-tag px-3 py-1.5 rounded bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200/50">
-                        <span className="font-medium">{item.originalQuantity}</span>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="glass-tag px-3 py-1.5 rounded bg-gradient-to-r from-amber-50 to-amber-100 border border-amber-200/50">
-                        <span className="font-medium text-amber-700">{item.alreadyReturned || 0}</span>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="glass-tag px-3 py-1.5 rounded bg-gradient-to-r from-green-50 to-green-100 border border-green-200/50">
-                        <span className="font-medium text-green-700">{item.maxReturnable}</span>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min="0"
-                          max={item.maxReturnable}
-                          step="1"
-                          className="glass-input w-24 border border-white/30 bg-white/50 backdrop-blur-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
-                          value={item.returnedQuantity}
-                          onChange={(e) => handleChangeQty(idx, e.target.value)}
-                          disabled={item.maxReturnable === 0}
-                        />
-                        <div className="text-xs text-gray-500 mt-1 flex items-center">
-                          <span className="mr-2">Max: {item.maxReturnable}</span>
-                          {item.returnedQuantity === item.maxReturnable && item.maxReturnable > 0 && (
-                            <CheckCircle size={12} className="text-green-500" />
-                          )}
-                          {item.maxReturnable === 0 && (
-                            <span className="text-amber-500 text-xs">Fully returned</span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center">
-                        <span className="mr-2 text-gray-500">$</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          className="glass-input w-24 border border-white/30 bg-white/50 backdrop-blur-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
-                          value={item.unitPrice}
-                          onChange={(e) => handleChangePrice(idx, e.target.value)}
-                          disabled={item.maxReturnable === 0}
-                        />
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="font-semibold text-green-600 flex items-center">
-                        <DollarSign size={16} className="mr-1" />
-                        {item.totalPrice.toFixed(2)}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+                      {warrantyStatus.isExpired ? (
+                        <span className="text-xs text-red-600 font-medium ml-1">(Expired)</span>
+                      ) : (
+                        <span className="text-xs text-green-600 font-medium ml-1">
+                          ({warrantyStatus.remaining} days left)
+                        </span>
+                      )}
+                    </div>
+                    <div className="w-20 h-1.5 bg-gray-200 rounded-full mt-1">
+                      <div 
+                        className={`h-1.5 rounded-full ${
+                          warrantyStatus.isExpired ? 'bg-red-500' : 'bg-green-500'
+                        }`}
+                        style={{ 
+                          width: `${Math.min(100, (warrantyStatus.elapsed / warrantyStatus.total) * 100)}%` 
+                        }}
+                      ></div>
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-500">No warranty</span>
+                )
+              ) : (
+                <span className="text-xs text-gray-500">-</span>
+              )}
+            </td>
+            <td className="p-4">
+              <div className="glass-tag px-3 py-1.5 rounded bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200/50">
+                <span className="font-medium">{item.originalQuantity}</span>
+              </div>
+            </td>
+            <td className="p-4">
+              <div className="glass-tag px-3 py-1.5 rounded bg-gradient-to-r from-amber-50 to-amber-100 border border-amber-200/50">
+                <span className="font-medium text-amber-700">{item.alreadyReturned || 0}</span>
+              </div>
+            </td>
+            <td className="p-4">
+              <div className="glass-tag px-3 py-1.5 rounded bg-gradient-to-r from-green-50 to-green-100 border border-green-200/50">
+                <span className="font-medium text-green-700">{item.maxReturnable}</span>
+              </div>
+            </td>
+            <td className="p-4">
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  max={item.maxReturnable}
+                  step="1"
+                  className={`glass-input w-24 border border-white/30 bg-white/50 backdrop-blur-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent ${
+                    item.type === "product" && warrantyStatus?.isExpired ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                  value={item.returnedQuantity}
+                  onChange={(e) => handleChangeQty(idx, e.target.value)}
+                  disabled={item.maxReturnable === 0 || (item.type === "product" && warrantyStatus?.isExpired)}
+                />
+                <div className="text-xs text-gray-500 mt-1 flex items-center">
+                  <span className="mr-2">Max: {item.maxReturnable}</span>
+                  {item.returnedQuantity === item.maxReturnable && item.maxReturnable > 0 && (
+                    <CheckCircle size={12} className="text-green-500" />
+                  )}
+                  {item.maxReturnable === 0 && (
+                    <span className="text-amber-500 text-xs">Fully returned</span>
+                  )}
+                  {item.type === "product" && warrantyStatus?.isExpired && (
+                    <span className="text-red-500 text-xs ml-1">Warranty expired</span>
+                  )}
+                </div>
+              </div>
+            </td>
+            <td className="p-4">
+              <div className="flex items-center">
+                <span className="mr-2 text-gray-500">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className={`glass-input w-24 border border-white/30 bg-white/50 backdrop-blur-sm px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent ${
+                    item.type === "product" && warrantyStatus?.isExpired ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                  value={item.unitPrice}
+                  onChange={(e) => handleChangePrice(idx, e.target.value)}
+                  disabled={item.maxReturnable === 0 || (item.type === "product" && warrantyStatus?.isExpired)}
+                />
+              </div>
+            </td>
+            <td className="p-4">
+              <div className="font-semibold text-green-600 flex items-center">
+                <DollarSign size={16} className="mr-1" />
+                {item.totalPrice.toFixed(2)}
+              </div>
+            </td>
+          </tr>
+        );
+      })}
+    </tbody>
             </table>
           </div>
 

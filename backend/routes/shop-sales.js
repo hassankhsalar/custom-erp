@@ -1368,7 +1368,7 @@ router.get("/return-eligible", async (req, res) => {
   }
 });
 
-// Process a return (UPDATED VERSION WITH PARTIAL RETURN SUPPORT)
+// Process a return (UPDATED VERSION WITH WARRANTY CHECK)
 router.post("/return", async (req, res) => {
   try {
     const { saleId, items } = req.body;
@@ -1402,7 +1402,13 @@ router.post("/return", async (req, res) => {
         include: {
           saleItems: {
             include: {
-              product: true,
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  warranty: true, // Get warranty days from product
+                }
+              },
               material: true
             }
           },
@@ -1443,7 +1449,12 @@ router.post("/return", async (req, res) => {
         }
       }
 
-      // Validate return items against original sale and already returned quantities
+      // Calculate days between sale and return for warranty check
+      const saleDate = new Date(originalSale.createdAt);
+      const currentDate = new Date();
+      const daysSinceSale = Math.floor((currentDate - saleDate) / (1000 * 60 * 60 * 24));
+
+      // Validate return items against original sale and warranty for products
       for (const returnItem of items) {
         const originalItem = originalSale.saleItems.find(item => {
           if (returnItem.type === "product") {
@@ -1472,6 +1483,23 @@ router.post("/return", async (req, res) => {
             `Original: ${originalItem.quantity}, Already returned: ${alreadyReturned}, ` +
             `Available: ${availableForReturn}, Requested: ${returnItem.quantity}`
           );
+        }
+
+        // Check warranty for products only
+        if (returnItem.type === "product") {
+          const productWarrantyDays = originalItem.product?.warranty || 0;
+          
+          // If product has warranty (warranty days > 0), check if return is within warranty period
+          if (productWarrantyDays > 0) {
+            if (daysSinceSale > productWarrantyDays) {
+              throw new Error(
+                `Cannot return product "${originalItem.product?.name}" (ID: ${returnItem.itemId}) as it is outside warranty period. ` +
+                `Sale was ${daysSinceSale} days ago, warranty is ${productWarrantyDays} days.`
+              );
+            }
+          }
+          // If product has no warranty (warranty days = 0 or null), allow return regardless of time
+          // No need to throw error for products without warranty
         }
       }
 
@@ -1546,6 +1574,7 @@ router.post("/return", async (req, res) => {
             returnedAt: new Date(),
           },
         });
+        console.log(`Sale ${saleId} marked as fully returned`);
       } else {
         console.log(`Sale ${saleId} has partial returns, isReturned remains false`);
       }
@@ -1638,15 +1667,21 @@ router.post("/return", async (req, res) => {
         }
       }
 
-      return { saleReturn, allItemsFullyReturned };
+      return { saleReturn, allItemsFullyReturned, daysSinceSale };
     });
+
+    let warrantyMessage = "";
+    if (result.daysSinceSale > 0) {
+      warrantyMessage = `\nDays since sale: ${result.daysSinceSale}`;
+    }
 
     res.status(201).json({
       message: result.allItemsFullyReturned 
         ? "Return processed successfully. All items have been returned."
         : "Return processed successfully. Partial return completed.",
       return: result.saleReturn,
-      fullyReturned: result.allItemsFullyReturned
+      fullyReturned: result.allItemsFullyReturned,
+      daysSinceSale: result.daysSinceSale
     });
 
   } catch (err) {
@@ -1659,7 +1694,8 @@ router.post("/return", async (req, res) => {
     if (err.message.includes("Sale not found") || 
         err.message.includes("not associated with a shop") ||
         err.message.includes("was not part of the original sale") ||
-        err.message.includes("Cannot return more than available")) {
+        err.message.includes("Cannot return more than available") ||
+        err.message.includes("outside warranty period")) {
       return res.status(400).json({ error: err.message });
     }
     
