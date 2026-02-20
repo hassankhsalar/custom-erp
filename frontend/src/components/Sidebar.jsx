@@ -297,10 +297,13 @@ const Sidebar = () => {
       color: 'from-gray-500 to-slate-500',
       bgColor: 'bg-gradient-to-r from-gray-50 to-slate-100/50',
       textColor: 'text-gray-700',
-      permissionKey: ['general_settings_edit', 'admin'],
+      permissionKey: ['general_settings_edit', 'unit_read', 'brand_read', 'product_category_read', 'admin'],
       subItems: [
         { name: 'Settings', path: '/settings', icon: <Settings size={16} />, permissionKey: ['general_settings_edit', 'admin'] },
-        { name: 'Activity Log', path: '/settings/activity-log', icon: <FileText size={16} />, permissionKey: ['general_settings_edit', 'admin'] }
+        { name: 'Activity Log', path: '/settings/activity-log', icon: <FileText size={16} />, permissionKey: ['general_settings_edit', 'admin'] },
+        { name: 'Units', path: '/settings/units', icon: <TableProperties size={16} />, permissionKey: ['unit_read', 'admin'] },
+        { name: 'Category', path: '/settings/categories', icon: <TableProperties size={16} />, permissionKey: ['product_category_read', 'admin'] },
+        { name: 'Brand', path: '/settings/brands', icon: <TableProperties size={16} />, permissionKey: ['brand_read', 'admin'] }
       ]
     }
   ];

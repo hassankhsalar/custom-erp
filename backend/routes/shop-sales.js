@@ -715,6 +715,18 @@ router.post("/warranties/:id/claims", async (req, res) => {
       return res.status(404).json({ error: "Warranty not found" });
     }
 
+    const latestClaim = await prisma.warrantyClaim.findFirst({
+      where: { warrantyId: id },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, status: true },
+    });
+    const closedStatuses = new Set(["hand_over", "handover", "completed", "closed", "resolved"]);
+    if (latestClaim && !closedStatuses.has(String(latestClaim.status || "").toLowerCase())) {
+      return res.status(400).json({
+        error: "Previous claim is still open. Please hand over/close it before creating a new claim.",
+      });
+    }
+
     const claim = await prisma.$transaction(async (tx) => {
       const created = await tx.warrantyClaim.create({
         data: {
@@ -744,6 +756,63 @@ router.post("/warranties/:id/claims", async (req, res) => {
   } catch (error) {
     console.error("Warranty claim create error:", error);
     res.status(500).json({ error: error.message || "Failed to create warranty claim" });
+  }
+});
+
+router.put("/warranties/:warrantyId/claims/:claimId", async (req, res) => {
+  try {
+    const warrantyId = parseInt(req.params.warrantyId, 10);
+    const claimId = parseInt(req.params.claimId, 10);
+    const { status, issueDescription, resolution, note, providingDate } = req.body;
+
+    if (!warrantyId || !claimId || !status) {
+      return res.status(400).json({ error: "warrantyId, claimId and status are required" });
+    }
+
+    const existing = await prisma.warrantyClaim.findFirst({
+      where: { id: claimId, warrantyId },
+      select: { id: true, warrantyId: true, status: true, providingDate: true },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Claim not found" });
+    }
+
+    const normalizedStatus = String(status).trim().toLowerCase();
+    const handOverStatuses = new Set(["hand_over", "handover", "completed", "closed", "resolved"]);
+    const shouldSetProvidingDate = handOverStatuses.has(normalizedStatus);
+
+    const updatedClaim = await prisma.$transaction(async (tx) => {
+      const updated = await tx.warrantyClaim.update({
+        where: { id: claimId },
+        data: {
+          status: normalizedStatus,
+          issueDescription: issueDescription !== undefined ? (issueDescription || null) : undefined,
+          resolution: resolution !== undefined ? (resolution || null) : undefined,
+          note: note !== undefined ? (note || null) : undefined,
+          providingDate:
+            providingDate
+              ? new Date(providingDate)
+              : shouldSetProvidingDate
+                ? (existing.providingDate || new Date())
+                : undefined,
+        },
+      });
+
+      await tx.userWarranty.update({
+        where: { id: warrantyId },
+        data: {
+          status: shouldSetProvidingDate ? "active" : "claimed",
+          claimedAt: shouldSetProvidingDate ? undefined : new Date(),
+        },
+      });
+
+      return updated;
+    });
+
+    res.json(updatedClaim);
+  } catch (error) {
+    console.error("Warranty claim update error:", error);
+    res.status(500).json({ error: error.message || "Failed to update warranty claim" });
   }
 });
 

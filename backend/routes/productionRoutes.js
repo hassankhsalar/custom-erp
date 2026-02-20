@@ -33,28 +33,6 @@ const generateReference = async () => {
   return `PROD-${year}${month}${day}-${(count + 1).toString().padStart(4, '0')}`;
 };
 
-const updateRequisitionStatusFromSections = async (requisitionId) => {
-  if (!requisitionId) return;
-  const sections = await prisma.requisitionSection.findMany({
-    where: { requisitionId: parseInt(requisitionId) },
-    select: { status: true },
-  });
-  if (!sections.length) return;
-  const statuses = new Set(sections.map((s) => s.status));
-  let nextStatus = "segmented";
-  if (statuses.size === 1 && statuses.has("rejected")) {
-    nextStatus = "rejected";
-  } else if (statuses.has("in_process") || statuses.has("transfer_ordered") || statuses.has("production_ordered")) {
-    nextStatus = "in_process";
-  } else if (!statuses.has("pending") && !statuses.has("in_process") && !statuses.has("transfer_ordered") && !statuses.has("production_ordered")) {
-    nextStatus = statuses.has("rejected") ? "partially_approved" : "approved";
-  }
-  await prisma.requisition.update({
-    where: { id: parseInt(requisitionId) },
-    data: { status: nextStatus },
-  });
-};
-
 // Create a new production
 router.post('/', authenticateToken, async (req, res) => {
   const { start_date, estimated_end_date, factoryId, status, products, materials, requisitionId, requisitionSectionId } = req.body;
@@ -146,17 +124,9 @@ router.post('/', authenticateToken, async (req, res) => {
         });
       }
 
-      if (requisitionSectionId) {
-        await prisma.requisitionSection.update({
-          where: { id: parseInt(requisitionSectionId) },
-          data: { status: "in_process" },
-        });
-        if (requisitionId) {
-          await updateRequisitionStatusFromSections(requisitionId);
-        }
-      }
-
       return newProduction;
+    }, {
+      timeout: 15000,
     });
 
     res.status(201).json(result);

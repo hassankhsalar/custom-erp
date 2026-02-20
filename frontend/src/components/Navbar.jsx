@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { CiMenuFries } from "react-icons/ci";
-import logo from "/bspLogo.png";
+import logo from "/logo.png";
 import { Bell, CircleUserRound, Home, Zap, Newspaper, Store, Sun, Moon, LogOut } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { API_ROUTES } from "../config";
@@ -81,14 +81,8 @@ const Navbar = () => {
                     {/* Logo and Brand */}
                     <div className="flex items-center gap-4">
                         <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-white/30 backdrop-blur-md bg-white/90 shadow-[0_4px_12px_rgba(0,0,0,0.05)]">
-                            <img src={logo} alt="BSP Logo" className="w-12 h-12 object-contain" />
+                            <img src={logo} alt="Company Logo" className="w-12 h-12 object-contain" />
                         </div>
-                        {/* <div className="hidden md:block">
-                            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                                BSP
-                            </h1>
-                            <p className="text-xs text-gray-500">Inventory Management System</p>
-                        </div> */}
                     </div>
 
                     {/* Desktop Navigation */}

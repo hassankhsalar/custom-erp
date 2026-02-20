@@ -54,6 +54,9 @@ import AllUser from "./components/Users/AllUser";
 import CreateUser from "./components/Users/CreateUser";
 import Settings from "./components/Settings/Settings";
 import ActivityLog from "./components/Settings/ActivityLog";
+import Units from "./components/Settings/Units";
+import Brands from "./components/Settings/Brands";
+import Categories from "./components/Settings/Categories";
 import AddShop from "./components/Shop/AddShop";
 import AllShop from "./components/Shop/AllShop";
 import AllReturns from "./components/Sale/AllReturns";
@@ -367,6 +370,15 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="general_settings_edit" />}>
               <Route path="/settings/activity-log" element={<ActivityLog />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="unit_read" />}>
+              <Route path="/settings/units" element={<Units />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="product_category_read" />}>
+              <Route path="/settings/categories" element={<Categories />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="brand_read" />}>
+              <Route path="/settings/brands" element={<Brands />} />
             </Route>
 
             <Route element={<PermissionRoute requiredPermission="account_create" />}>

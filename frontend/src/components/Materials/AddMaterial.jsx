@@ -1,80 +1,136 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_ROUTES } from '../../config';
-import { Image as ImageIcon, Upload, X } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { API_ROUTES } from "../../config";
+import { Image as ImageIcon, Upload, X, Plus } from "lucide-react";
+
+const emptyAltUnit = { unitname: "", multiplier: "" };
 
 const AddMaterial = () => {
   const navigate = useNavigate();
+  const token = localStorage.getItem("token");
   const [material, setMaterial] = useState({
-    name: '',
-    description: '',
-    brand: '',
-    barcode: '',
-    unit: '',
-    unit_cost: '',
-    sale_price: '',
-    alert_quantity: '',
+    name: "",
+    description: "",
+    category: "",
+    brand: "",
+    barcode: "",
+    unit: "",
+    unit_cost: "",
+    sale_price: "",
+    alert_quantity: "",
     image: null,
   });
+  const [alternativeNames, setAlternativeNames] = useState([]);
+  const [altNameInput, setAltNameInput] = useState("");
+  const [alternativeUnits, setAlternativeUnits] = useState([]);
+  const [altUnitDraft, setAltUnitDraft] = useState(emptyAltUnit);
+  const [unitSuggestions, setUnitSuggestions] = useState([]);
+
+  const [units, setUnits] = useState([]);
+  const [brands, setBrands] = useState([]);
+  const [categories, setCategories] = useState([]);
+
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [selectedImageFile, setSelectedImageFile] = useState(null);
-  const token = localStorage.getItem('token');
 
-  // Function to upload image
+  useEffect(() => {
+    const fetchMasterData = async () => {
+      if (!token) return;
+      try {
+        const [unitsRes, brandsRes, categoriesRes] = await Promise.all([
+          axios.get(`${API_ROUTES.MASTER_DATA_UNITS}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_ROUTES.MASTER_DATA_BRANDS}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_ROUTES.MASTER_DATA_PRODUCT_CATEGORIES}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+        setUnits(unitsRes.data.items || []);
+        setBrands(brandsRes.data.items || []);
+        setCategories(categoriesRes.data.items || []);
+      } catch (error) {
+        console.error("Error loading master data:", error);
+      }
+    };
+    fetchMasterData();
+  }, [token]);
+
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      if (!material.unit || !token) {
+        setUnitSuggestions([]);
+        return;
+      }
+      try {
+        const res = await axios.get(API_ROUTES.MASTER_DATA_UNIT_RELATION_SUGGESTIONS(material.unit), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setUnitSuggestions(Array.isArray(res.data) ? res.data : []);
+      } catch (_) {
+        setUnitSuggestions([]);
+      }
+    };
+    fetchSuggestions();
+  }, [material.unit, token]);
+
   const uploadImage = async (file) => {
     const formData = new FormData();
-    formData.append('image', file);
-    
-    try {
-      // Use the correct endpoint: /api/uploads/product
-      const response = await axios.post(`${API_ROUTES.UPLOADS}/product`, formData, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-      
-      return response.data.imageUrl;
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      throw error;
-    }
+    formData.append("image", file);
+    const response = await axios.post(`${API_ROUTES.UPLOADS}/product`, formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response.data.imageUrl;
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setMaterial((prevMaterial) => ({
-      ...prevMaterial,
-      [name]: value,
-    }));
+    setMaterial((prevMaterial) => ({ ...prevMaterial, [name]: value }));
+  };
+
+  const handleAddAltName = () => {
+    const value = altNameInput.trim();
+    if (!value) return;
+    if (alternativeNames.some((name) => name.toLowerCase() === value.toLowerCase())) return;
+    setAlternativeNames((prev) => [...prev, value]);
+    setAltNameInput("");
+  };
+
+  const handleRemoveAltName = (index) => {
+    setAlternativeNames((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddAltUnit = (incoming = null) => {
+    const payload = incoming || altUnitDraft;
+    const unitname = String(payload.unitname || "").trim();
+    const multiplier = parseFloat(payload.multiplier);
+    if (!unitname || !Number.isFinite(multiplier) || multiplier <= 0) return;
+    if (unitname.toLowerCase() === material.unit.toLowerCase()) return;
+    if (alternativeUnits.some((u) => u.unitname.toLowerCase() === unitname.toLowerCase())) return;
+    setAlternativeUnits((prev) => [...prev, { unitname, multiplier }]);
+    if (!incoming) setAltUnitDraft(emptyAltUnit);
+  };
+
+  const handleRemoveAltUnit = (index) => {
+    setAlternativeUnits((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    // Check file type
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file (jpg, png, gif, etc.)');
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file");
       return;
     }
-
-    // Check file size (5MB limit)
     if (file.size > 5 * 1024 * 1024) {
-      alert('File size too large. Maximum size is 5MB.');
+      alert("File size too large. Maximum size is 5MB.");
       return;
     }
 
-    // Create preview
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result);
-    };
+    reader.onloadend = () => setImagePreview(reader.result);
     reader.readAsDataURL(file);
-
-    // Store the file for later upload
     setSelectedImageFile(file);
   };
 
@@ -87,41 +143,38 @@ const AddMaterial = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setUploadingImage(true);
-    
     try {
       let imageUrl = material.image;
-      
-      // Upload image if a new one was selected
       if (selectedImageFile) {
         try {
           imageUrl = await uploadImage(selectedImageFile);
         } catch (uploadError) {
-          console.error('Image upload failed:', uploadError);
-          alert('Failed to upload image. Material will be created without an image.');
+          console.error("Image upload failed:", uploadError);
+          alert("Failed to upload image. Material will be created without an image.");
         }
       }
-      
-      // Prepare material data
+
       const materialData = {
         ...material,
         unit_cost: material.unit_cost ? parseFloat(material.unit_cost) : 0,
         sale_price: material.sale_price ? parseFloat(material.sale_price) : null,
         alert_quantity: material.alert_quantity ? parseFloat(material.alert_quantity) : 0,
         image: imageUrl,
+        alternative_names: alternativeNames,
+        alternative_units: alternativeUnits,
       };
-      
-       await axios.post(API_ROUTES.MATERIALS, materialData, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-      alert('Material created successfully!');
-      navigate('/materials/all');
-      
+
+      await axios.post(API_ROUTES.MATERIALS, materialData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      alert("Material created successfully!");
+      navigate("/materials/all");
     } catch (error) {
-      console.error('Error creating material:', error);
-      alert('Error creating material. Please try again.');
+      console.error("Error creating material:", error);
+      alert(error.response?.data?.error || "Error creating material. Please try again.");
     } finally {
       setUploadingImage(false);
     }
@@ -132,48 +185,28 @@ const AddMaterial = () => {
       <div className="backdrop-blur-lg bg-white/70 rounded-2xl shadow-2xl p-6 border border-white/30">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Add New Material
-            </h1>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Add New Material</h1>
             <p className="text-gray-600 mt-2">Create a new material for inventory management</p>
           </div>
-          <button 
-            onClick={() => navigate('/materials/all')}
-            className="bg-gray-100/80 hover:bg-gray-200/80 text-gray-700 hover:text-gray-900 px-4 py-2.5 rounded-lg font-medium transition-all duration-200 hover:shadow-md backdrop-blur-sm border border-gray-300/50"
-          >
-            ← Back to Materials
+          <button onClick={() => navigate("/materials/all")} className="bg-gray-100/80 px-4 py-2.5 rounded-lg border">
+            Back to Materials
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="backdrop-blur-sm bg-white/50 rounded-xl p-6 border border-white/40 shadow-lg">
-            <h2 className="text-xl font-semibold mb-6 text-gray-800 flex items-center">
-              <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-              </svg>
-              Material Information
-            </h2>
+            <h2 className="text-xl font-semibold mb-6 text-gray-800">Material Information</h2>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Image Upload Section */}
               <div className="lg:col-span-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Material Image</label>
                 <div className="space-y-4">
-                  {/* Image Preview */}
                   <div className="relative group">
                     <div className="w-full aspect-square rounded-xl overflow-hidden border-2 border-dashed border-gray-300/50 bg-gray-50/50 flex items-center justify-center">
                       {imagePreview ? (
                         <>
-                          <img 
-                            src={imagePreview} 
-                            alt="Material preview" 
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                          />
-                          <button
-                            type="button"
-                            onClick={removeImage}
-                            className="absolute top-2 right-2 bg-red-500/90 hover:bg-red-600 text-white p-2 rounded-full transition-all duration-200 hover:shadow-lg backdrop-blur-sm"
-                          >
+                          <img src={imagePreview} alt="Material preview" className="w-full h-full object-cover" />
+                          <button type="button" onClick={removeImage} className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full">
                             <X className="w-4 h-4" />
                           </button>
                         </>
@@ -184,275 +217,169 @@ const AddMaterial = () => {
                         </div>
                       )}
                     </div>
-                    
-                    {/* Upload Progress */}
-                    {uploadingImage && (
-                      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center rounded-xl">
-                        <div className="text-center">
-                          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white mx-auto mb-2"></div>
-                          <p className="text-white text-sm">Uploading...</p>
-                        </div>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Upload Button */}
                   <div>
-                    <input
-                      type="file"
-                      id="image-upload"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="hidden"
-                      disabled={uploadingImage}
-                    />
-                    <label
-                      htmlFor="image-upload"
-                      className={`flex items-center justify-center w-full p-4 rounded-lg border-2 border-dashed border-blue-300/50 bg-blue-50/30 cursor-pointer transition-all duration-200 hover:bg-blue-50/50 hover:border-blue-400/50 hover:shadow-md ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
+                    <input type="file" id="image-upload" accept="image/*" onChange={handleImageChange} className="hidden" disabled={uploadingImage} />
+                    <label htmlFor="image-upload" className="flex items-center justify-center w-full p-4 rounded-lg border-2 border-dashed border-blue-300/50 bg-blue-50/30 cursor-pointer">
                       <div className="text-center">
                         <Upload className="w-6 h-6 text-blue-500 mx-auto mb-2" />
-                        <p className="text-sm font-medium text-blue-600">
-                          {uploadingImage ? 'Uploading...' : 'Upload Image'}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">JPG, PNG, GIF up to 5MB</p>
+                        <p className="text-sm font-medium text-blue-600">{uploadingImage ? "Uploading..." : "Upload Image"}</p>
                       </div>
                     </label>
-                    {selectedImageFile && !uploadingImage && (
-                      <p className="text-xs text-green-600 mt-2 text-center">
-                        ✓ Image selected. It will be uploaded when you save.
-                      </p>
-                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Material Details Form */}
               <div className="lg:col-span-2 space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Left Column */}
                   <div className="space-y-5">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        name="name"
-                        value={material.name}
-                        onChange={handleChange}
-                        placeholder="Enter material name"
-                        required
-                        className="w-full p-3 border border-gray-500/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                      />
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
+                      <input type="text" name="name" value={material.name} onChange={handleChange} required className="w-full p-3 border rounded-lg bg-white/80" />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Description
-                      </label>
-                      <textarea
-                        name="description"
-                        value={material.description}
-                        onChange={handleChange}
-                        placeholder="Material description..."
-                        rows="3"
-                        className="w-full p-3 border border-gray-500/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 resize-none"
-                      />
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Alternative Names</label>
+                      <div className="flex gap-2">
+                        <input type="text" value={altNameInput} onChange={(e) => setAltNameInput(e.target.value)} placeholder="Add another name" className="w-full p-3 border rounded-lg bg-white/80" />
+                        <button type="button" onClick={handleAddAltName} className="px-3 rounded-lg bg-indigo-600 text-white">
+                          <Plus size={16} />
+                        </button>
+                      </div>
+                      {alternativeNames.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {alternativeNames.map((name, idx) => (
+                            <span key={`${name}-${idx}`} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-indigo-50 text-indigo-700 text-xs">
+                              {name}
+                              <button type="button" onClick={() => handleRemoveAltName(idx)}><X size={12} /></button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Unit Type <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          name="unit"
-                          value={material.unit}
-                          onChange={handleChange}
-                          placeholder="kg/piece/litre"
-                          required
-                          className="w-full p-3 border border-gray-500/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200"
-                        />
-                        <div className="mt-1 text-xs text-gray-500">Examples: kg, piece, litre, box</div>
-                      </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                      <textarea name="description" value={material.description} onChange={handleChange} rows="3" className="w-full p-3 border rounded-lg bg-white/80 resize-none" />
+                    </div>
 
+                    <div className="grid grid-cols-3 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Unit Cost <span className="text-red-500">*</span>
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-3.5 text-gray-500">$</span>
-                          <input
-                            type="number"
-                            name="unit_cost"
-                            value={material.unit_cost}
-                            onChange={handleChange}
-                            placeholder="0.00"
-                            required
-                            min="0"
-                            step="0.01"
-                            className="w-full p-3 pl-8 border border-gray-500/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200"
-                          />
-                        </div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Unit *</label>
+                        <input list="material-unit-list" name="unit" value={material.unit} onChange={handleChange} required className="w-full p-3 border rounded-lg bg-white/80" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Brand</label>
+                        <input list="material-brand-list" name="brand" value={material.brand} onChange={handleChange} className="w-full p-3 border rounded-lg bg-white/80" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                        <input list="material-category-list" name="category" value={material.category} onChange={handleChange} className="w-full p-3 border rounded-lg bg-white/80" />
                       </div>
                     </div>
                   </div>
 
-                  {/* Right Column */}
                   <div className="space-y-5">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Brand
-                      </label>
-                      <input
-                        type="text"
-                        name="brand"
-                        value={material.brand}
-                        onChange={handleChange}
-                        placeholder="Brand name"
-                        className="w-full p-3 border border-gray-500/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Barcode / SKU
-                      </label>
-                      <input
-                        type="text"
-                        name="barcode"
-                        value={material.barcode}
-                        onChange={handleChange}
-                        placeholder="Barcode or SKU"
-                        className="w-full p-3 border border-gray-500/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Sale Price
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-3.5 text-gray-500">$</span>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Alternative Units</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          list="material-unit-list"
+                          placeholder="Unit name"
+                          value={altUnitDraft.unitname}
+                          onChange={(e) => setAltUnitDraft((prev) => ({ ...prev, unitname: e.target.value }))}
+                          className="w-full p-3 border rounded-lg bg-white/80"
+                        />
                         <input
                           type="number"
-                          step="0.01"
-                          min="0"
-                          name="sale_price"
-                          value={material.sale_price}
-                          onChange={handleChange}
-                          placeholder="Optional sale price"
-                          className="w-full p-3 pl-8 border border-gray-500/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                          min="0.000001"
+                          step="0.000001"
+                          placeholder="Multiplier"
+                          value={altUnitDraft.multiplier}
+                          onChange={(e) => setAltUnitDraft((prev) => ({ ...prev, multiplier: e.target.value }))}
+                          className="w-full p-3 border rounded-lg bg-white/80"
                         />
                       </div>
-                      <div className="mt-1 text-xs text-gray-500 bg-blue-50/50 p-2 rounded backdrop-blur-sm border border-blue-100/50">
-                        Optional. Leave empty if material is not for direct sale.
-                      </div>
+                      <button type="button" onClick={() => handleAddAltUnit()} className="mt-2 px-3 py-2 rounded-lg bg-indigo-600 text-white">
+                        Add Alternative Unit
+                      </button>
+                      {unitSuggestions.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {unitSuggestions.map((suggestion) => (
+                            <button
+                              key={suggestion.id}
+                              type="button"
+                              onClick={() => handleAddAltUnit({ unitname: suggestion.relatedUnit, multiplier: suggestion.multiplier })}
+                              className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700 hover:bg-slate-200"
+                            >
+                              {suggestion.relatedUnit} ({suggestion.multiplier})
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {alternativeUnits.length > 0 && (
+                        <div className="mt-2 space-y-2">
+                          {alternativeUnits.map((unit, idx) => (
+                            <div key={`${unit.unitname}-${idx}`} className="flex items-center justify-between px-3 py-2 rounded bg-indigo-50 text-sm">
+                              <span>{unit.unitname} = {unit.multiplier} x {material.unit || "base unit"}</span>
+                              <button type="button" onClick={() => handleRemoveAltUnit(idx)}><X size={14} /></button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Alert Quantity
-                      </label>
-                      <input
-                        type="number"
-                        name="alert_quantity"
-                        value={material.alert_quantity}
-                        onChange={handleChange}
-                        placeholder="Low stock threshold"
-                        min="0"
-                        step="0.01"
-                        className="w-full p-3 border border-gray-500/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all duration-200"
-                      />
-                      <div className="mt-1 text-xs text-gray-500 bg-amber-50/50 p-2 rounded backdrop-blur-sm border border-amber-100/50">
-                        Low stock alert threshold. Leave empty to disable alerts.
-                      </div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Barcode / SKU</label>
+                      <input type="text" name="barcode" value={material.barcode} onChange={handleChange} className="w-full p-3 border rounded-lg bg-white/80" />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Unit Cost *</label>
+                      <input type="number" name="unit_cost" value={material.unit_cost} onChange={handleChange} required min="0" step="0.01" className="w-full p-3 border rounded-lg bg-white/80" />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Sale Price</label>
+                      <input type="number" step="0.01" min="0" name="sale_price" value={material.sale_price} onChange={handleChange} className="w-full p-3 border rounded-lg bg-white/80" />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Alert Quantity</label>
+                      <input type="number" name="alert_quantity" value={material.alert_quantity} onChange={handleChange} min="0" step="0.01" className="w-full p-3 border rounded-lg bg-white/80" />
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-
-            {/* Pricing Summary */}
-            {(material.unit_cost || material.sale_price) && (
-              <div className="mt-6 pt-6 border-t border-gray-200/50">
-                <h3 className="text-lg font-medium text-gray-800 mb-3">Pricing Summary</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {material.unit_cost && (
-                    <div className="backdrop-blur-sm bg-white/60 rounded-lg p-4 border border-green-200/50">
-                      <div className="text-sm text-gray-600">Unit Cost</div>
-                      <div className="text-xl font-bold text-green-700">
-                        ${parseFloat(material.unit_cost).toFixed(2)}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">Per {material.unit || 'unit'}</div>
-                    </div>
-                  )}
-                  
-                  {material.sale_price && (
-                    <div className="backdrop-blur-sm bg-white/60 rounded-lg p-4 border border-blue-200/50">
-                      <div className="text-sm text-gray-600">Sale Price</div>
-                      <div className="text-xl font-bold text-blue-700">
-                        ${parseFloat(material.sale_price).toFixed(2)}
-                      </div>
-                      {material.unit_cost && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          Margin: ${(material.sale_price - material.unit_cost).toFixed(2)}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  {material.sale_price && material.unit_cost && material.unit_cost > 0 && (
-                    <div className="backdrop-blur-sm bg-white/60 rounded-lg p-4 border border-purple-200/50">
-                      <div className="text-sm text-gray-600">Margin %</div>
-                      <div className={`text-xl font-bold ${
-                        ((material.sale_price - material.unit_cost) / material.unit_cost * 100) >= 0 
-                          ? 'text-purple-700' 
-                          : 'text-red-700'
-                      }`}>
-                        {((material.sale_price - material.unit_cost) / material.unit_cost * 100).toFixed(1)}%
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">Profit percentage</div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Action Buttons */}
           <div className="flex justify-between pt-4">
-            <button 
-              type="button" 
-              onClick={() => navigate('/materials/all')}
-              className="bg-gray-100/80 hover:bg-gray-200/80 text-gray-700 hover:text-gray-900 p-3 px-8 rounded-xl font-medium transition-all duration-200 hover:shadow-md backdrop-blur-sm border border-gray-300/50"
-              disabled={uploadingImage}
-            >
+            <button type="button" onClick={() => navigate("/materials/all")} className="bg-gray-100/80 p-3 px-8 rounded-xl border" disabled={uploadingImage}>
               Cancel
             </button>
-            <button 
-              type="submit" 
-              disabled={uploadingImage}
-              className={`bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white p-3 px-12 rounded-xl font-medium text-lg transition-all duration-200 hover:shadow-xl backdrop-blur-sm transform hover:-translate-y-0.5 flex items-center ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {uploadingImage ? (
-                <span className="flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
-                  Creating...
-                </span>
-              ) : (
-                <>
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                  Add Material
-                </>
-              )}
+            <button type="submit" disabled={uploadingImage} className={`bg-gradient-to-r from-blue-600 to-blue-700 text-white p-3 px-12 rounded-xl font-medium text-lg ${uploadingImage ? "opacity-50 cursor-not-allowed" : ""}`}>
+              {uploadingImage ? "Creating..." : "Add Material"}
             </button>
           </div>
         </form>
+
+        <datalist id="material-unit-list">
+          {units.map((unit) => (
+            <option key={unit.id} value={unit.name} />
+          ))}
+        </datalist>
+        <datalist id="material-brand-list">
+          {brands.map((brand) => (
+            <option key={brand.id} value={brand.name} />
+          ))}
+        </datalist>
+        <datalist id="material-category-list">
+          {categories.map((category) => (
+            <option key={category.id} value={category.name} />
+          ))}
+        </datalist>
       </div>
     </div>
   );
