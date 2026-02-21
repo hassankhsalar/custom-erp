@@ -113,6 +113,12 @@ export const API_ROUTES = {
   SHOP_SALES_RETURNS_BACKUP: `${API_BASE_URL}/shop-sales/returns-list`,
   //transfer routes
   TRANSFERS: `${API_BASE_URL}/transfers`,
+  TRANSFER_BY_ID: (id) => `${API_BASE_URL}/transfers/${id}`,
+  TRANSFER_STATUS: (id) => `${API_BASE_URL}/transfers/${id}/status`,
+  TRANSFER_RECEIVE: (id) => `${API_BASE_URL}/transfers/${id}/receive`,
+  TRANSFER_CANCEL: (id) => `${API_BASE_URL}/transfers/${id}/cancel`,
+  TRANSFER_RECEIPTS: (id) => `${API_BASE_URL}/transfers/${id}/receipts`,
+  TRANSFER_RETURN_UNRECEIVED: (id) => `${API_BASE_URL}/transfers/${id}/return-unreceived`,
   REQUISITIONS: `${API_BASE_URL}/requisitions`,
   REQUISITION_PLACES: `${API_BASE_URL}/requisitions/places`,
   REQUISITION_ITEM_LOOKUP: `${API_BASE_URL}/requisitions/lookup/items`,

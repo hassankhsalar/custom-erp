@@ -126,7 +126,7 @@ export default function PermissionsManagement() {
     'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read',
 
     // Add transfer permissions
-    'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive',
+    'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive', 'transfer_return',
 
     // Add Wastage/Damage permissions
     'damage_create', 'damage_edit', 'damage_delete', 'damage_read',
@@ -306,7 +306,7 @@ export default function PermissionsManagement() {
       key: 'transfer',
       name: 'Transfer',
       icon: <Truck size={18} className="text-gray-600" />,
-      permissions: ['transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive']
+      permissions: ['transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive', 'transfer_return']
     },
     // Damage/Wastage Management
     {

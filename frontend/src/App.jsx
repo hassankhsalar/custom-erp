@@ -68,6 +68,8 @@ import StoreDetails from "./components/Stores/StoreDetails";
 import StoreToShopTransfer from "./components/Stores/StoreToShopTransfer";
 import TransferList from "./components/Transfer/TransferList";
 import AddTransfer from "./components/Transfer/AddTransfer";
+import TransferReceive from "./components/Transfer/TransferReceive";
+import TransferReceiveHistory from "./components/Transfer/TransferReceiveHistory";
 import Navbar from "./components/Navbar";
 import Notifications from "./components/Notifications";
 import UserProfile from "./components/UserProfile";
@@ -488,6 +490,15 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="transfers_create" />}>
               <Route path="/transfer/add" element={<AddTransfer />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="transfers_edit" />}>
+              <Route path="/transfer/edit/:id" element={<AddTransfer />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="transfers_receive" />}>
+              <Route path="/transfers/:id/receive" element={<TransferReceive />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="transfers_read" />}>
+              <Route path="/transfers/:id/receipts" element={<TransferReceiveHistory />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="requisition_create" />}>
               <Route path="/requisition/create" element={<NewRequisition />} />

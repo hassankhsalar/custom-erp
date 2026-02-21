@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { usePermission } from '../../hooks/usePermission';
 import { API_ROUTES } from '../../config';
@@ -7,9 +7,7 @@ import {
   Filter, 
   ChevronLeft, 
   ChevronRight, 
-  MoreVertical, 
   Eye, 
-  Edit2, 
   CheckCircle, 
   AlertCircle,
   Truck,
@@ -26,7 +24,9 @@ import {
   Calendar,
   Factory,
   Store,
-  Layers
+  Layers,
+  Edit2,
+  Trash2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -45,11 +45,6 @@ const TransferList = ({ fromType, toType, title }) => {
   const [fromFilter, setFromFilter] = useState(fromType || 'all');
   const [toFilter, setToFilter] = useState(toType || 'all');
   const [selectedTransfers, setSelectedTransfers] = useState([]);
-
-  // Status Change Modal State
-  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
-  const [selectedTransfer, setSelectedTransfer] = useState(null);
-  const [newStatus, setNewStatus] = useState('');
 
   // Details Modal State
   const [detailsModal, setDetailsModal] = useState({ isOpen: false, data: null });
@@ -90,19 +85,6 @@ const TransferList = ({ fromType, toType, title }) => {
     setCurrentPage(newPage);
   };
 
-  const openStatusModal = (transfer) => {
-    setSelectedTransfer(transfer);
-    const allowed = getAllowedStatuses(transfer);
-    setNewStatus(allowed.includes(transfer.status) ? transfer.status : (allowed[0] || ''));
-    setIsStatusModalOpen(true);
-  };
-
-  const closeStatusModal = () => {
-    setIsStatusModalOpen(false);
-    setSelectedTransfer(null);
-    setNewStatus('');
-  };
-
   const openDetailsModal = (transfer) => {
     setDetailsModal({ isOpen: true, data: transfer });
   };
@@ -111,36 +93,23 @@ const TransferList = ({ fromType, toType, title }) => {
     setDetailsModal({ isOpen: false, data: null });
   };
 
-  const handleStatusUpdate = async () => {
-    try {
-      if (!selectedTransfer) return;
-      if (!newStatus) {
-        alert('No allowed status available.');
-        return;
-      }
-      const canChange = hasPermission('transfers_change_status');
-      const canReceive = hasPermission('transfers_receive');
-      const canReceiveHere = canReceiveTransfer(selectedTransfer);
-      const isReceivingStatus = newStatus === 'transferred' || newStatus === 'transfer_done';
-      if (!canChange && !(canReceive && canReceiveHere && isReceivingStatus)) {
-        alert('You do not have permission to change this status.');
-        return;
-      }
-      const token = localStorage.getItem('token');
-      await axios.put(`${API_ROUTES.TRANSFERS}/${selectedTransfer.id}/status`, 
-        { status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      closeStatusModal();
-      fetchTransfers();
-    } catch (error) {
-      alert('Failed to update transfer status');
-      console.error('Error updating transfer status:', error);
-    }
-  };
-
   const handleRefresh = () => {
     fetchTransfers();
+  };
+
+  const handleDeleteTransfer = async (transferId) => {
+    if (!hasPermission('transfers_delete')) return;
+    const confirmed = window.confirm('Delete this transfer? Stock will be reconciled automatically.');
+    if (!confirmed) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(API_ROUTES.TRANSFER_BY_ID(transferId), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      fetchTransfers();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to delete transfer');
+    }
   };
 
   const handleTransferSelect = (transferId) => {
@@ -167,17 +136,24 @@ const TransferList = ({ fromType, toType, title }) => {
           iconBg: 'bg-amber-100',
           text: 'text-amber-600'
         };
-      case 'being_shipped':
+      case 'on_the_way':
         return { 
           bg: 'bg-gradient-to-r from-blue-500 to-cyan-500', 
           iconBg: 'bg-blue-100',
           text: 'text-blue-600'
         };
-      case 'transferred':
+      case 'complete':
         return { 
           bg: 'bg-gradient-to-r from-emerald-500 to-green-500', 
           iconBg: 'bg-emerald-100',
           text: 'text-emerald-600'
+        };
+      case 'partial':
+      case 'receive_with_missing':
+        return {
+          bg: 'bg-gradient-to-r from-yellow-500 to-amber-500',
+          iconBg: 'bg-yellow-100',
+          text: 'text-yellow-700'
         };
       case 'not_received':
         return { 
@@ -202,19 +178,6 @@ const TransferList = ({ fromType, toType, title }) => {
     return false;
   };
 
-  const canOpenStatusModal = (transfer) => {
-    if (!transfer) return false;
-    if (hasPermission('transfers_change_status')) return true;
-    return hasPermission('transfers_receive') && canReceiveTransfer(transfer);
-  };
-
-  const getAllowedStatuses = (transfer) => {
-    const allStatuses = ['processing', 'pending', 'being_shipped', 'transferred', 'not_received'];
-    if (hasPermission('transfers_change_status')) return allStatuses;
-    if (hasPermission('transfers_receive') && canReceiveTransfer(transfer)) return ['transferred'];
-    return [];
-  };
-
   const formatStatus = (status) => {
     if (!status) return '';
     switch (status) {
@@ -222,12 +185,16 @@ const TransferList = ({ fromType, toType, title }) => {
         return 'Processing';
       case 'pending':
         return 'Pending';
-      case 'being_shipped':
+      case 'on_the_way':
         return 'On The Way';
-      case 'transferred':
-        return 'Transferred';
+      case 'complete':
+        return 'Complete';
+      case 'partial':
+        return 'Partial';
+      case 'receive_with_missing':
+        return 'Receive With Missing';
       case 'not_received':
-        return 'Not Received';
+        return 'Cancel';
       default:
         return status.replace(/_/g, ' ').replace(/\w\S*/g, function(txt){
           return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
@@ -241,10 +208,13 @@ const TransferList = ({ fromType, toType, title }) => {
         return <AlertCircle className="w-4 h-4" />;
       case 'pending':
         return <AlertCircle className="w-4 h-4" />;
-      case 'being_shipped':
+      case 'on_the_way':
         return <Truck className="w-4 h-4" />;
-      case 'transferred':
+      case 'complete':
         return <CheckCircle className="w-4 h-4" />;
+      case 'partial':
+      case 'receive_with_missing':
+        return <AlertCircle className="w-4 h-4" />;
       case 'not_received':
         return <AlertCircle className="w-4 h-4" />;
       default:
@@ -273,8 +243,8 @@ const TransferList = ({ fromType, toType, title }) => {
 
   // Calculate statistics
   const processingTransfers = transfers.filter(t => t.status === 'processing').length;
-  const onTheWayTransfers = transfers.filter(t => t.status === 'being_shipped').length;
-  const completedTransfers = transfers.filter(t => t.status === 'transfer_done').length;
+  const onTheWayTransfers = transfers.filter(t => t.status === 'being_shipped' || t.status === 'on_the_way').length;
+  const completedTransfers = transfers.filter(t => t.status === 'transfer_done' || t.status === 'transferred' || t.status === 'complete').length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
@@ -375,8 +345,9 @@ const TransferList = ({ fromType, toType, title }) => {
                   <option value="all">All Status</option>
                   <option value="processing">Processing</option>
                   <option value="pending">Pending</option>
-                  <option value="being_shipped">Being Shipped</option>
-                  <option value="transferred">Transferred</option>
+                  <option value="on_the_way">On The Way</option>
+                  <option value="partial">Partial</option>
+                  <option value="complete">Complete</option>
                   <option value="not_received">Not Received</option>
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
@@ -612,30 +583,40 @@ const TransferList = ({ fromType, toType, title }) => {
                                 >
                                   <Eye className="w-4 h-4" />
                                 </button>
-                                {transfer.status != 'transferred' && canOpenStatusModal(transfer) && (
-                                  <button
-                                    onClick={() => openStatusModal(transfer)}
-                                    disabled={transfer.status === 'transfer_done'}
-                                    className={`p-2 rounded-lg ${transfer.status === 'transfer_done' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
-                                    title="Change Status"
+                                {hasPermission('transfers_receive') && (
+                                  <Link
+                                    to={`/transfers/${transfer.id}/receive`}
+                                    className="p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100"
+                                    title="Transfer Page"
                                   >
                                     <CheckCircle className="w-4 h-4" />
+                                  </Link>
+                                )}
+                                <Link
+                                  to={`/transfers/${transfer.id}/receipts`}
+                                  className="p-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                                  title="Receive History"
+                                >
+                                  <Layers className="w-4 h-4" />
+                                </Link>
+                                {hasPermission('transfers_edit') && (
+                                  <Link
+                                    to={`/transfer/edit/${transfer.id}`}
+                                    className="p-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                                    title="Edit Transfer"
+                                  >
+                                    <Edit2 className="w-4 h-4" />
+                                  </Link>
+                                )}
+                                {hasPermission('transfers_delete') && (
+                                  <button
+                                    onClick={() => handleDeleteTransfer(transfer.id)}
+                                    className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
+                                    title="Delete Transfer"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
                                 )}
-
-                                <button
-                                  disabled={transfer.status === 'transferred'}
-                                  className={`p-2 rounded-lg ${transfer.status === 'transferred' ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-amber-50 text-amber-600 hover:bg-amber-100'}`}
-                                  title="Edit Transfer"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
-                                <button
-                                  className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                  title="More Options"
-                                >
-                                  <MoreVertical className="w-4 h-4" />
-                                </button>
                               </div>
                             </td>
                           </tr>
@@ -776,95 +757,6 @@ const TransferList = ({ fromType, toType, title }) => {
           )}
         </div>
       </div>
-
-      {/* Status Change Modal */}
-      {isStatusModalOpen && selectedTransfer && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl w-full max-w-md transform transition-all duration-300 scale-100">
-            <div className="sticky top-0 z-10 p-6 border-b border-white/50 bg-gradient-to-r from-emerald-500/10 to-green-500/10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-gradient-to-br from-emerald-500 to-green-500 rounded-xl shadow-lg">
-                    <CheckCircle className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-800">Update Transfer Status</h2>
-                    <p className="text-gray-600 text-sm mt-1">{selectedTransfer.reference}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={closeStatusModal}
-                  className="p-2 bg-white/60 rounded-lg hover:bg-white/80 transition-colors duration-300"
-                >
-                  <X size={20} className="text-gray-600" />
-                </button>
-              </div>
-            </div>
-            
-            <div className="p-6">
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Current Status</label>
-                  <div className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl ${getStatusColor(selectedTransfer.status).bg} text-white`}>
-                    {getStatusIcon(selectedTransfer.status)}
-                    <span className="font-semibold">{formatStatus(selectedTransfer.status)}</span>
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">Update to</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {getAllowedStatuses(selectedTransfer).map((status) => {
-                      const colors = getStatusColor(status);
-                      return (
-                        <button
-                          key={status}
-                          type="button"
-                          onClick={() => setNewStatus(status)}
-                          className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all duration-200 ${
-                            newStatus === status
-                              ? `${colors.bg} text-white border-transparent scale-105`
-                              : 'bg-white/80 border border-white/60 hover:bg-white'
-                          }`}
-                        >
-                          {getStatusIcon(status)}
-                          <span className="text-xs font-medium mt-2">{formatStatus(status)}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {getAllowedStatuses(selectedTransfer).length === 0 && (
-                    <p className="text-sm text-gray-500 mt-3">You do not have permission to update this transfer.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-            
-            <div className="sticky bottom-0 p-6 border-t border-white/50">
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={closeStatusModal}
-                  className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleStatusUpdate}
-                  disabled={newStatus === selectedTransfer.status}
-                  className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 ${
-                    newStatus === selectedTransfer.status
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-emerald-500 to-green-500 text-white hover:from-emerald-600 hover:to-green-600 shadow-lg hover:shadow-xl'
-                  }`}
-                >
-                  <CheckCircle size={18} />
-                  Update Status
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Details Modal */}
       {detailsModal.isOpen && detailsModal.data && (

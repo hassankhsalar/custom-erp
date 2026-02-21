@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { 
   Truck, 
   Package, 
@@ -20,6 +20,9 @@ import {
 
 const AddTransfer = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { id: transferId } = useParams();
+  const isEditMode = Boolean(transferId);
   const requisitionOrder = location.state?.requisitionOrder || null;
   const [fromType, setFromType] = useState('store');
   const [toType, setToType] = useState('store');
@@ -77,6 +80,7 @@ const AddTransfer = () => {
 
   useEffect(() => {
     if (!requisitionOrder) return;
+    if (isEditMode) return;
     const requesterType = requisitionOrder?.requisition?.requesterType;
     const requesterId = requisitionOrder?.requisition?.requesterId;
     const sourceType = requisitionOrder?.destinationType;
@@ -114,7 +118,56 @@ const AddTransfer = () => {
       requisitionId: requisitionOrder.requisitionId,
       requisitionSectionId: requisitionOrder.id,
     });
-  }, [requisitionOrder]);
+  }, [requisitionOrder, isEditMode]);
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    const fetchTransfer = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get(API_ROUTES.TRANSFER_BY_ID(transferId), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const transfer = res.data;
+        setFromType(transfer.from || 'store');
+        setToType(transfer.to || 'store');
+        setFromId(String(transfer.fromId || ''));
+        setToId(String(transfer.toId || ''));
+        setShippingCost(transfer.shipping_cost || 0);
+        setNote(transfer.note || '');
+        setStatus(transfer.status || 'processing');
+        setItems(
+          (transfer.transferItems || []).map((item) => ({
+            id: item.itemId,
+            name: item.selectedName || `Item ${item.itemId}`,
+            itemType: item.item,
+            quantity: item.quantity || 1,
+            selectedQuantity: item.selectedQuantity || item.quantity || 1,
+            selectedName: item.selectedName || `Item ${item.itemId}`,
+            defaultUnit: item.selectedUnit || 'unit',
+            selectedUnit: item.selectedUnit || 'unit',
+            conversionMultiplier: 1,
+            alternativeNames: [],
+            alternativeUnits: [],
+            stock: item.quantity || 0,
+            batches: item.batchNumber
+              ? [{ batchNumber: item.batchNumber, expiryDate: item.expiryDate, quantity: item.quantity }]
+              : [],
+            batchNumber: item.batchNumber || null,
+            expiryDate: item.expiryDate || null,
+            batchAvailable: item.quantity || 1,
+            receivedQuantity: item.receivedQuantity || 0,
+          }))
+        );
+      } catch (error) {
+        console.error('Error fetching transfer:', error);
+        alert(error.response?.data?.error || 'Failed to load transfer');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTransfer();
+  }, [isEditMode, transferId, token]);
 
   useEffect(() => {
     const dataMap = {
@@ -298,13 +351,22 @@ const AddTransfer = () => {
     formData.append('items', JSON.stringify(items));
     
     try {
-      await axios.post(API_ROUTES.TRANSFERS, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (requisitionLink.requisitionSectionId) {
+      if (isEditMode) {
+        await axios.put(API_ROUTES.TRANSFER_BY_ID(transferId), formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      } else {
+        await axios.post(API_ROUTES.TRANSFERS, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      }
+      if (!isEditMode && requisitionLink.requisitionSectionId) {
         try {
           await axios.post(
             API_ROUTES.REQUISITION_SECTION_COMPLETE(requisitionLink.requisitionSectionId),
@@ -315,10 +377,10 @@ const AddTransfer = () => {
           // Non-blocking: transfer already created
         }
       }
-      alert('Transfer created successfully');
-      window.location.reload();
+      alert(isEditMode ? 'Transfer updated successfully' : 'Transfer created successfully');
+      navigate('/transfers');
     } catch (error) {
-      alert('Failed to create transfer');
+      alert(error.response?.data?.error || (isEditMode ? 'Failed to update transfer' : 'Failed to create transfer'));
       console.error('Submission error:', error);
     }
   };
@@ -379,7 +441,7 @@ const AddTransfer = () => {
             </div>
             <div>
               <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">
-                Create Transfer
+                {isEditMode ? 'Edit Transfer' : 'Create Transfer'}
               </h1>
               <p className="text-gray-600 mt-1">Transfer items between locations</p>
             </div>
@@ -502,7 +564,10 @@ const AddTransfer = () => {
                 >
                   <option value="processing">Processing</option>
                   <option value="pending">Pending</option>
-                  <option value="being_shipped">Being Shipped</option>
+                  <option value="on_the_way">On The Way</option>
+                  <option value="partial">Partial</option>
+                  <option value="not_received">Cancel</option>
+                  <option value="complete">Complete</option>
                 </select>
               </div>
             </div>
@@ -709,10 +774,12 @@ const AddTransfer = () => {
                   : 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:opacity-90'
               }`}
             >
-              Create Transfer
+              {isEditMode ? 'Update Transfer' : 'Create Transfer'}
             </button>
             <p className="text-center text-sm text-gray-500 mt-3">
-              {items.length === 0 ? 'Add at least one item to create transfer' : `Ready to transfer ${items.length} items`}
+              {items.length === 0
+                ? 'Add at least one item to continue'
+                : (isEditMode ? `Ready to update ${items.length} items` : `Ready to transfer ${items.length} items`)}
             </p>
           </div>
         </div>
