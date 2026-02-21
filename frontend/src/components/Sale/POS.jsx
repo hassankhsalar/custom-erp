@@ -611,30 +611,6 @@ export default function ShopPOS( props ) {
 
   return (
     <div className="min-h-screen rounded-t-2xl w-full bg-gray-50 p-2">
-      {/* Header */}
-
-      <div className="glass-card m-3 md:m-4 border border-white/20 backdrop-blur-xl">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="flex items-center">
-            <div className="glass-icon p-3 rounded-xl mr-4 bg-gradient-to-r from-emerald-500/10 to-blue-500/10">
-              <ClipboardList className="text-blue-600" size={38} />
-            </div>
-            <div>
-              <h1 className="text-md md:text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-500 bg-clip-text text-transparent">
-                { props.title || "Point of Sale" }
-              </h1>
-            </div>
-          </div>
-          <div className="mt-2 md:mt-0">
-            {shopId && (
-              <div className="text-md font-semibold bg-gray-300/30 px-3 py-1 mr-4 rounded-full text-emerald-600">
-                {shops.find(s => s.id === parseInt(shopId))?.name || "Shop"}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
 
       {/* Main Content */}
       <div className="max-w-7xl  xl:max-w-full p-4">

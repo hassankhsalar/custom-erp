@@ -393,14 +393,14 @@ const AddTransfer = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="space-y-6">
         {/* Left Column - Transfer Details */}
-        <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Locations Card */}
           <div className="glass-card p-6 border border-white/20 backdrop-blur-xl">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
               <ArrowLeftRight className="mr-2 text-indigo-600" size={20} />
-              Transfer Locations
+              Transfer Details
             </h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -456,6 +456,17 @@ const AddTransfer = () => {
                 </div>
               </div>
             </div>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Document</label>
+              <div className="glass-input rounded-lg border border-white/30 bg-white/30 backdrop-blur-sm">
+                <input
+                  type="file"
+                  onChange={(e) => setDocument(e.target.files[0])}
+                  className="w-full p-2 rounded-lg border border-gray-300 outline-0"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Additional Details Card */}
@@ -494,29 +505,13 @@ const AddTransfer = () => {
                   <option value="being_shipped">Being Shipped</option>
                 </select>
               </div>
+            </div>
 
-              <div>
+              <div className="mt-4 w-full">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Note</label>
-                <input
-                  type="text"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  className="w-full glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
-                  placeholder="Add a note (optional)"
-                />
+                <textarea value={note} onChange={(e) => setNote(e.target.value)}
+                  className="w-full glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"></textarea>
               </div>
-            </div>
-
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Document</label>
-              <div className="glass-input rounded-lg border border-white/30 bg-white/30 backdrop-blur-sm">
-                <input
-                  type="file"
-                  onChange={(e) => setDocument(e.target.files[0])}
-                  className="w-full p-2 rounded-lg border border-gray-300 outline-0"
-                />
-              </div>
-            </div>
           </div>
         </div>
 

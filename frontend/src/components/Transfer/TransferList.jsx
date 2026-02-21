@@ -28,6 +28,7 @@ import {
   Store,
   Layers
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const TransferList = ({ fromType, toType, title }) => {
   const { hasPermission } = usePermission();
@@ -301,15 +302,10 @@ const TransferList = ({ fromType, toType, title }) => {
             </div>
             
             <div className="flex items-center gap-4">
-              <div className="hidden md:block px-6 py-3 bg-white/60 backdrop-blur-sm rounded-xl border border-white/80">
-                <p className="text-sm font-medium text-gray-700">Total Transfers</p>
-                <p className="text-2xl font-bold text-blue-600">{transfers.length}</p>
-              </div>
-              
-              <button className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300">
+              <Link to="/transfer/add" className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300">
                 <Settings size={20} />
                 New Transfer
-              </button>
+              </Link>
             </div>
           </div>
         </div>

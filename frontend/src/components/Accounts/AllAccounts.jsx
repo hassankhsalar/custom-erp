@@ -296,7 +296,7 @@ export default function AllAccounts() {
             placeholder="Search by name, account number, or status..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="glass-input w-full pl-12 pr-10 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-transparent"
+            className="glass-input w-full p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500/50 focus:border-transparent"
           />
           {searchQuery && (
             <button
@@ -367,20 +367,13 @@ export default function AllAccounts() {
                   </td>
                   <td className="p-4">
                     <div className="flex items-center">
-                      <div className="glass-icon-sm p-2 rounded-lg mr-3 bg-gradient-to-r from-green-500/10 to-green-600/10">
-                        <UserCircle size={16} className="text-green-600" />
-                      </div>
                       <div>
                         <p className="font-medium text-gray-800">{item.name}</p>
-                        
                       </div>
                     </div>
                   </td>
                   <td className="p-4">
                     <div className="flex items-center">
-                      <div className="glass-icon-sm p-2 rounded-lg mr-3 bg-gradient-to-r from-blue-500/10 to-blue-600/10">
-                        <CreditCard size={16} className="text-blue-600" />
-                      </div>
                       <div>
                         <p className="font-medium text-gray-800 font-mono">{item.account_number}</p>
                         <p className="text-xs text-gray-500">Account Number</p>
@@ -389,9 +382,6 @@ export default function AllAccounts() {
                   </td>
                   <td className="p-4">
                     <div className="flex items-center">
-                      <div className="glass-icon-sm p-2 rounded-lg mr-3 bg-gradient-to-r from-amber-500/10 to-amber-600/10">
-                        <DollarSign size={16} className="text-amber-600" />
-                      </div>
                       <div>
                         <p className="font-medium text-gray-800 font-mono">{item.balance}</p>
                         <p className="text-xs text-gray-500">Balance</p>
@@ -400,16 +390,6 @@ export default function AllAccounts() {
                   </td>
                   <td className="p-4">
                     <div className="flex items-center">
-                      <div className={`glass-icon-sm p-2 rounded-lg mr-3 ${
-                        item.status === 'active' 
-                          ? 'bg-gradient-to-r from-emerald-500/10 to-emerald-600/10' 
-                          : 'bg-gradient-to-r from-red-500/10 to-red-600/10'
-                      }`}>
-                        {item.status === 'active' 
-                          ? <CheckCircle size={16} className="text-emerald-600" />
-                          : <XCircle size={16} className="text-red-600" />
-                        }
-                      </div>
                       <div className="flex flex-col">
                         <div className="flex items-center gap-3">
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -435,9 +415,6 @@ export default function AllAccounts() {
                   </td>
                   <td className="p-4">
                     <div className="flex items-center">
-                      <div className="glass-icon-sm p-2 rounded-lg mr-3 bg-gradient-to-r from-purple-500/10 to-purple-600/10">
-                        <Clock size={16} className="text-purple-600" />
-                      </div>
                       <div>
                         <p className="font-medium text-gray-800">{item.createdAt}</p>
                         <div className="glass-tag inline-flex items-center px-2 py-0.5 rounded mt-1 bg-gray-100/50 border border-gray-200/50">
