@@ -908,6 +908,7 @@ router.get("/", async (req, res) => {
                 id: true,
                 name: true,
                 barcode: true,
+                unit: true,
                 sale_price: true,
               },
             },

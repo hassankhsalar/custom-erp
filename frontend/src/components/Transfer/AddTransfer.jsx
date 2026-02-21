@@ -594,7 +594,6 @@ const AddTransfer = () => {
                   <thead>
                     <tr className="bg-gradient-to-r from-gray-50/50 to-gray-100/50 backdrop-blur-sm">
                       <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">Item Name</th>
-                      <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">Type</th>
                       <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">Batch</th>
                       <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">Quantity</th>
                       <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">Action</th>
@@ -607,37 +606,36 @@ const AddTransfer = () => {
                         className="border-t border-white/10 hover:bg-white/10 transition-all duration-200"
                       >
                         <td className="p-4">
-                          <div className="flex items-center">
-                            <div>
-                              {
-                                item.image ? item.image.startsWith('/uploads') ? (
-                                  <img src={ MEDIA_BASE_URL + item.image } alt={item.name} className="w-8 h-8 rounded-lg object-cover mr-3" />
-                                ) : (
-                                  <img src={ item.image } alt={item.name} className="w-8 h-8 rounded-lg object-cover mr-3" />
-                                ) : (
-                                  <Package size={16} className="mr-3 text-gray-400" />
-                                )
-                              }
+                          <div className="flex flex-col gap-3">
+                            <div className="flex">
+                              <div>
+                                {
+                                  item.image ? item.image.startsWith('/uploads') ? (
+                                    <img src={ MEDIA_BASE_URL + item.image } alt={item.name} className="w-8 h-8 rounded-lg object-cover mr-3" />
+                                  ) : (
+                                    <img src={ item.image } alt={item.name} className="w-8 h-8 rounded-lg object-cover mr-3" />
+                                  ) : (
+                                    <Package size={16} className="mr-3 text-gray-400" />
+                                  )
+                                }
+                              </div>
+                              <span className="text-gray-800 block">{item.name}</span>
                             </div>
-                            <span className="text-gray-800">{item.name}</span>
-                            {item.alternativeNames?.length > 0 && (
-                              <select
-                                value={item.selectedName || item.name}
-                                onChange={(e) => handleSelectedNameChange(index, e.target.value)}
-                                className="ml-2 text-xs border border-gray-300 rounded px-2 py-1"
-                              >
-                                <option value={item.name}>{item.name}</option>
-                                {item.alternativeNames.map((n, ni) => (
-                                  <option key={`${item.id}-name-${ni}`} value={n}>{n}</option>
-                                ))}
-                              </select>
-                            )}
+                            <div>
+                              {item.alternativeNames?.length > 0 && (
+                                <select
+                                  value={item.selectedName || item.name}
+                                  onChange={(e) => handleSelectedNameChange(index, e.target.value)}
+                                  className="text-xs border border-gray-300 rounded px-2 py-1"
+                                >
+                                  <option value={item.name}>{item.name}</option>
+                                  {item.alternativeNames.map((n, ni) => (
+                                    <option key={`${item.id}-name-${ni}`} value={n}>{n}</option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
                           </div>
-                        </td>
-                        <td className="p-4">
-                          <span className="text-sm px-2 py-1 rounded-full bg-indigo-100 text-indigo-600">
-                            {item.itemType}
-                          </span>
                         </td>
                         <td className="p-4">
                           <select

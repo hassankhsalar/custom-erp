@@ -109,6 +109,7 @@ export default function NewPurchase() {
         selectedQuantity: String(qty),
         actualQuantity: qty,
         unitPrice: String(defaultPrice),
+        baseUnitPrice: defaultPrice,
         total: qty * defaultPrice,
         receivedQuantity: String(qty),
         batchNumber: "",
@@ -381,17 +382,24 @@ const fetchBankAccounts = async () => {
     setPurchaseItems(prevItems =>
       prevItems.map(item =>
         item.uniqueId === uniqueId
-          ? {
-              ...item,
-              [field]: value,
-              selectedQuantity: field === 'quantity' ? String(value) : item.selectedQuantity,
-              actualQuantity: field === 'quantity'
-                ? (parseFloat(value || 0) * (item.conversionMultiplier || 1))
-                : item.actualQuantity,
-              total: field === 'quantity' || field === 'unitPrice'
-                ? parseFloat(field === 'quantity' ? value || 0 : (item.selectedQuantity || item.quantity || 0)) * parseFloat(field === 'unitPrice' ? value || 0 : item.unitPrice || 0)
-                : item.total
-            }
+          ? (() => {
+              const next = { ...item, [field]: value };
+              const multiplier = item.conversionMultiplier || 1;
+              const selectedQty = parseFloat(field === 'quantity' ? value || 0 : (item.selectedQuantity || item.quantity || 0)) || 0;
+              const displayUnitPrice = parseFloat(field === 'unitPrice' ? value || 0 : item.unitPrice || 0) || 0;
+
+              if (field === 'quantity') {
+                next.selectedQuantity = String(value);
+                next.actualQuantity = selectedQty * multiplier;
+              }
+
+              if (field === 'unitPrice') {
+                next.baseUnitPrice = displayUnitPrice / multiplier;
+              }
+
+              next.total = selectedQty * displayUnitPrice;
+              return next;
+            })()
           : item
       )
     );
@@ -409,16 +417,27 @@ const fetchBankAccounts = async () => {
         if (item.uniqueId !== uniqueId) return item;
         const base = item.defaultUnit || item.unit || "unit";
         const selectedQty = parseFloat(item.selectedQuantity || item.quantity || 0) || 0;
+        const baseUnitPrice = parseFloat(item.baseUnitPrice ?? item.originalStandardPrice ?? item.unitPrice ?? 0) || 0;
         if (!unitValue || unitValue === base) {
-          return { ...item, selectedUnit: base, conversionMultiplier: 1, actualQuantity: selectedQty };
+          return {
+            ...item,
+            selectedUnit: base,
+            conversionMultiplier: 1,
+            actualQuantity: selectedQty,
+            unitPrice: String(baseUnitPrice),
+            total: selectedQty * baseUnitPrice,
+          };
         }
         const found = (item.alternativeUnits || []).find((u) => u.unitname === unitValue);
         const multiplier = found?.multiplier || 1;
+        const displayUnitPrice = baseUnitPrice * multiplier;
         return {
           ...item,
           selectedUnit: unitValue,
           conversionMultiplier: multiplier,
           actualQuantity: selectedQty * multiplier,
+          unitPrice: String(displayUnitPrice),
+          total: selectedQty * displayUnitPrice,
         };
       })
     );
@@ -450,6 +469,7 @@ const fetchBankAccounts = async () => {
       selectedQuantity: "1",
       actualQuantity: 1,
       unitPrice: standardPrice.toString(), // Default unit price
+      baseUnitPrice: standardPrice,
       total: standardPrice, // Default total
       receivedQuantity: "1",
       batchNumber: "",
@@ -550,7 +570,7 @@ const fetchBankAccounts = async () => {
           manufactureDate: item.manufactureDate || null,
           batchNotes: item.batchNotes || null,
           quantity: parseFloat(item.actualQuantity ?? item.quantity),
-          unitPrice: parseFloat(item.unitPrice),
+          unitPrice: parseFloat(item.baseUnitPrice ?? (parseFloat(item.unitPrice) / (item.conversionMultiplier || 1))),
           receivedQuantity: item.receivedQuantity !== undefined && item.receivedQuantity !== null
             ? (parseFloat(item.receivedQuantity) * (item.conversionMultiplier || 1))
             : parseFloat(item.actualQuantity ?? item.quantity)
@@ -906,7 +926,7 @@ const fetchBankAccounts = async () => {
                 ) : (
                   purchaseItems.map((item) => {
                     const itemImage = getImageUrl(item.image);
-                    const standardPrice = item.originalStandardPrice || 0; 
+                    const standardPrice = (item.originalStandardPrice || 0) * (item.conversionMultiplier || 1);
                     const currentPrice = parseFloat(item.unitPrice) || 0;
 
                     return (
@@ -1018,7 +1038,7 @@ const fetchBankAccounts = async () => {
                                 <input
                                   type="number"
                                   step="0.01"
-                                  min={ item.avg_cost ? item.avg_cost : 0.001 }
+                                  min={ item.avg_cost ? (item.avg_cost * (item.conversionMultiplier || 1)) : 0.001 }
                                   value={item.unitPrice}
                                   onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'unitPrice', e.target.value)}
                                   required

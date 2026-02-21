@@ -624,9 +624,6 @@ export default function AllPurchase() {
                           
                           <td className="p-4">
                             <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
-                                {purchase.supplier?.name?.charAt(0) || 'S'}
-                              </div>
                               <div>
                                 <span className="font-medium text-gray-800">{purchase.supplier?.name || '-'}</span>
                               </div>
@@ -664,7 +661,7 @@ export default function AllPurchase() {
                               ) : purchase.destination?.type === 'factory' ? (
                                 <Factory size={14} className="text-amber-500" />
                               ) : null}
-                              <span className="text-gray-700">
+                              <span className="text-gray-700 capitalize">
                                 {purchase.destination ? 
                                   `${purchase.destination.type}: ${purchase.destination.name}` : 
                                   "-"
@@ -674,7 +671,7 @@ export default function AllPurchase() {
                           </td>
                           
                           <td className="p-4">
-                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium capitalize ${
                               purchase.shippingStatus === 'received'
                                 ? 'bg-green-100 text-green-700'
                                 : purchase.shippingStatus === 'pending'
@@ -1011,7 +1008,7 @@ export default function AllPurchase() {
                               )}
                             </td>
                             <td className="p-3">
-                              {item.quantity}
+                              {item.quantity} {item.itemType === 'material' ? item.material?.unit : item.product?.unit}
                               {item.selectedQuantity && item.selectedUnit && (
                                 <div className="text-xs text-gray-500 mt-1">
                                   {item.selectedQuantity} {item.selectedUnit}
@@ -1119,16 +1116,6 @@ export default function AllPurchase() {
               </div>
             </div>
             
-            <div className="sticky bottom-0 p-6 border-t border-white/50 bg-white/80 backdrop-blur-sm">
-              <div className="flex justify-end">
-                <button
-                  onClick={() => setViewModalOpen(false)}
-                  className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}

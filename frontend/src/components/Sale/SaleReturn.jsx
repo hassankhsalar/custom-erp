@@ -114,8 +114,6 @@ export default function SaleReturn() {
       });
   }, [selectedShop, currentPage, itemsPerPage]);
 
-  console.log(sales);
-  // Reset to first page when shop changes
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedShop]);

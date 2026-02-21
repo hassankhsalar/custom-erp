@@ -47,6 +47,7 @@ export const API_ROUTES = {
   SHOP_SALES_BY_ID: (id) => `${API_BASE_URL}/shop-sales/${id}`,
   
   CUSTOMERS: `${API_BASE_URL}/customers`,
+  CUSTOMERS_ALL: `${API_BASE_URL}/customers/all-customers`,
   CASHREGISTER: `${API_BASE_URL}/cash-registers`,
   BANK_ACCOUNTS: `${API_BASE_URL}/bank-accounts`,
   GENERAL_LEDGER: `${API_BASE_URL}/general-ledger`,

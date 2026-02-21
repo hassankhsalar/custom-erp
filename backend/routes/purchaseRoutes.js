@@ -158,23 +158,29 @@ router.post("/", async (req, res) => {
       }
     }
 
+    // Normalize numeric values once and reuse for calculations + persistence
+    const shippingCostValue = parseFloat(shippingCost) || 0;
+    const discountValue = parseFloat(discount) || 0;
+    const taxValue = parseFloat(tax) || 0;
+    const paidAmountValue = parseFloat(paidAmount) || 0;
+
     // Calculate subtotal from items
     const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
     
     // Calculate discount amount
-    const discountAmount = (discount / 100) * subtotal;
+    const discountAmount = (discountValue / 100) * subtotal;
     
     // Calculate amount after discount
     const amountAfterDiscount = subtotal - discountAmount;
     
     // Calculate tax amount
-    const taxAmount = (tax / 100) * amountAfterDiscount;
+    const taxAmount = (taxValue / 100) * amountAfterDiscount;
     
     // Calculate final grand total
-    const calculatedGrandTotal = amountAfterDiscount + taxAmount + parseFloat(shippingCost);
+    const calculatedGrandTotal = amountAfterDiscount + taxAmount + shippingCostValue;
     
     // Validate that paid amount is not greater than grand total
-    if ((parseFloat(paidAmount).toFixed(2) - calculatedGrandTotal.toFixed(2)) > 0 ) {
+    if (paidAmountValue > calculatedGrandTotal + Number.EPSILON) {
       return res.status(400).json({ 
         error: "Paid amount cannot exceed grand total from" 
       });
@@ -220,11 +226,11 @@ router.post("/", async (req, res) => {
           supplierId: parseInt(supplierId),
           destinationType: actualDestinationType,
           destinationId: actualDestinationId,
-          grandTotal: calculatedGrandTotal.toFixed(2),
-          shippingCost: parseFloat(shippingCost).toFixed(2),
-          discount: parseFloat(discount).toFixed(2),
-          tax: parseFloat(tax).toFixed(2),
-          paidAmount: parseFloat(paidAmount).toFixed(2),
+          grandTotal: calculatedGrandTotal,
+          shippingCost: shippingCostValue,
+          discount: discountValue,
+          tax: taxValue,
+          paidAmount: paidAmountValue,
           shippingStatus: computedShippingStatus,
         },
       });
@@ -249,7 +255,7 @@ router.post("/", async (req, res) => {
             batchNotes: item.batchNotes || null,
             quantity: parseFloat(item.quantity),
             unitPrice: parseFloat(item.unitPrice),
-            totalPrice: totalPrice.toFixed(2),
+            totalPrice,
           };
 
           // Set productId or materialId based on item type

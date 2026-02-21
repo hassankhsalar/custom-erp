@@ -102,9 +102,9 @@ const Sidebar = () => {
     {
       name: 'Requisition',
       icon: <ClipboardList color='white' size={18} />,
-      color: 'from-blue-500 to-indigo-500',
-      bgColor: 'bg-gradient-to-r from-blue-50 to-indigo-100/50',
-      textColor: 'text-blue-700',
+      color: 'from-teal-500 to-emerald-500',
+      bgColor: 'bg-gradient-to-r from-teal-50 to-emerald-100/50',
+      textColor: 'text-teal-700',
       permissionKey: ['requisition_read', 'requisition_create'],
       subItems: [
         { name: 'Create Requisition', path: '/requisition/create', icon: <NotebookPen size={16} />, permissionKey: 'requisition_create' },

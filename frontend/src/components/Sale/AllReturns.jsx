@@ -104,7 +104,6 @@ export default function AllReturns() {
       }
       
       const data = await res.json();
-      console.log("Returns data received:", data);
       
       if (Array.isArray(data)) {
         setReturns(data);

@@ -86,14 +86,16 @@ export default function ShopPOS( props ) {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    fetch(API_ROUTES.CUSTOMERS, {
+    fetch(API_ROUTES.CUSTOMERS_ALL, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch customers");
         return res.json();
       })
-      .then((data) => setCustomers(Array.isArray(data) ? data : []))
+      .then((data) => {
+        setCustomers(Array.isArray(data.customers) ? data.customers : []);
+      })
       .catch((err) => {
         console.error("Error fetching customers:", err);
         setCustomers([]);
@@ -255,6 +257,7 @@ export default function ShopPOS( props ) {
         selectedUnit: item.unit || "unit",
         conversionMultiplier: 1,
         unitPrice: salePrice,
+        baseUnitPrice: salePrice,
         totalPrice: salePrice,
         warrantyEnabled: false,
         warrantyExpiryDate: "",
@@ -313,17 +316,20 @@ export default function ShopPOS( props ) {
       item.selectedUnit = baseUnit;
       item.conversionMultiplier = 1;
       item.quantity = item.selectedQuantity || 1;
+      item.unitPrice = item.baseUnitPrice || item.unitPrice || 0;
     } else {
       const found = (item.alternativeUnits || []).find((u) => u.unitname === unitValue);
       const multiplier = found?.multiplier || 1;
       item.selectedUnit = unitValue;
       item.conversionMultiplier = multiplier;
       item.quantity = (item.selectedQuantity || 1) * multiplier;
+      item.unitPrice = (item.baseUnitPrice || item.unitPrice || 0) * multiplier;
     }
     if (item.quantity > item.batchAvailable) {
       item.selectedQuantity = Math.max(1, Math.floor((item.batchAvailable || 1) / (item.conversionMultiplier || 1)));
       item.quantity = item.selectedQuantity * (item.conversionMultiplier || 1);
     }
+    item.totalPrice = (item.selectedQuantity || 1) * (item.unitPrice || 0);
     setCartItems(updated);
   };
 
@@ -357,12 +363,13 @@ export default function ShopPOS( props ) {
   };
 
   const handlePriceChange = (index, price) => {
-    const newPrice = price || 0;
+    const newPrice = parseFloat(price || 0) || 0;
     const updatedCart = [...cartItems];
     const itemIndex = index;
     
     updatedCart[itemIndex].unitPrice = newPrice;
-    updatedCart[itemIndex].totalPrice = newPrice * updatedCart[itemIndex].quantity;
+    updatedCart[itemIndex].baseUnitPrice = newPrice / (updatedCart[itemIndex].conversionMultiplier || 1);
+    updatedCart[itemIndex].totalPrice = newPrice * (updatedCart[itemIndex].selectedQuantity || 1);
 
     setCartItems(updatedCart);
   };
@@ -388,8 +395,10 @@ export default function ShopPOS( props ) {
       updated[index].batchNumber = null;
       updated[index].expiryDate = null;
       updated[index].batchAvailable = updated[index].shop_stock;
-      updated[index].quantity = Math.min(updated[index].quantity, updated[index].batchAvailable || 1);
-      updated[index].totalPrice = updated[index].quantity * updated[index].unitPrice;
+      const maxSelectedQty = Math.max(1, Math.floor((updated[index].batchAvailable || 1) / (updated[index].conversionMultiplier || 1)));
+      updated[index].selectedQuantity = Math.min(updated[index].selectedQuantity || 1, maxSelectedQty);
+      updated[index].quantity = (updated[index].selectedQuantity || 1) * (updated[index].conversionMultiplier || 1);
+      updated[index].totalPrice = (updated[index].selectedQuantity || 1) * (updated[index].unitPrice || 0);
       setCartItems(updated);
       return;
     }
@@ -401,9 +410,10 @@ export default function ShopPOS( props ) {
     updated[index].batchNumber = selected.batchNumber;
     updated[index].expiryDate = selected.expiryDate || null;
     updated[index].batchAvailable = selected.quantity;
-    updated[index].quantity = Math.min(updated[index].quantity, selected.quantity || 1);
-    updated[index].quantity = Math.max(updated[index].quantity, 1);
-    updated[index].totalPrice = updated[index].quantity * updated[index].unitPrice;
+    const maxSelectedQty = Math.max(1, Math.floor((selected.quantity || 1) / (updated[index].conversionMultiplier || 1)));
+    updated[index].selectedQuantity = Math.min(updated[index].selectedQuantity || 1, maxSelectedQty);
+    updated[index].quantity = Math.max((updated[index].selectedQuantity || 1) * (updated[index].conversionMultiplier || 1), 1);
+    updated[index].totalPrice = (updated[index].selectedQuantity || 1) * (updated[index].unitPrice || 0);
     setCartItems(updated);
   };
 
@@ -523,7 +533,7 @@ export default function ShopPOS( props ) {
         selectedName: item.selectedName || item.name,
         selectedUnit: item.selectedUnit || item.unit || "unit",
         selectedQuantity: item.selectedQuantity || item.quantity,
-        unitPrice: item.unitPrice,
+        unitPrice: item.baseUnitPrice || (item.unitPrice / (item.conversionMultiplier || 1)),
         batchNumber: item.batchNumber,
         expiryDate: item.expiryDate,
         warrantyEnabled: (item.type === "product" || item.type === "material") ? !!item.warrantyEnabled : false,
@@ -721,7 +731,7 @@ export default function ShopPOS( props ) {
                             setSelectedCustomer(null);
                             setCustomerSearchQuery("");
                         }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 bg-gray-100 rounded-full"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 mt-3 bg-gray-100 rounded-full"
                     >
                         <X size={16} className="text-gray-500" />
                     </button>
