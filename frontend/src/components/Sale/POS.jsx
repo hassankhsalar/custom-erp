@@ -48,6 +48,17 @@ export default function ShopPOS( props ) {
     }
   };
 
+  const toArray = (v) => (Array.isArray(v) ? v : []);
+  const parseAltUnits = (v) => {
+    const arr = toArray(v);
+    return arr
+      .map((u) => ({
+        unitname: String(u?.unitname || "").trim(),
+        multiplier: Number(u?.multiplier),
+      }))
+      .filter((u) => u.unitname && Number.isFinite(u.multiplier) && u.multiplier > 0);
+  };
+
   // Fetch all shops
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -180,6 +191,7 @@ export default function ShopPOS( props ) {
 
     const filtered = shopItems.filter(item =>
       item.name.toLowerCase().includes(query.toLowerCase()) ||
+      toArray(item.alternative_names).some((n) => String(n || "").toLowerCase().includes(query.toLowerCase())) ||
       (item.barcode && item.barcode.toLowerCase().includes(query.toLowerCase())) ||
       (item.brand && item.brand.toLowerCase().includes(query.toLowerCase())) ||
       (item.category && item.category.toLowerCase().includes(query.toLowerCase()))
@@ -236,8 +248,12 @@ export default function ShopPOS( props ) {
       const newItem = {
         itemId: item.id,
         name: item.name,
+        selectedName: item.name,
         type: item.type,
-        quantity: 1,
+        quantity: 1, // always actual/base quantity for stock math
+        selectedQuantity: 1, // quantity in selected unit
+        selectedUnit: item.unit || "unit",
+        conversionMultiplier: 1,
         unitPrice: salePrice,
         totalPrice: salePrice,
         warrantyEnabled: false,
@@ -245,6 +261,8 @@ export default function ShopPOS( props ) {
         warrantyNotes: "",
         barcode: item.barcode,
         unit: item.unit,
+        alternativeNames: toArray(item.alternative_names),
+        alternativeUnits: parseAltUnits(item.alternative_units),
         shop_stock: item.shop_stock,
         batches: item.batches || [],
         batchNumber: selectedBatch?.batchNumber || null,
@@ -268,15 +286,45 @@ export default function ShopPOS( props ) {
     
     const updatedCart = [...cartItems];
     const item = updatedCart[index];
-    if (newQuantity > item.batchAvailable) {
+    const selectedQty = Number(newQuantity) || 1;
+    const actualQty = selectedQty * (item.conversionMultiplier || 1);
+    if (actualQty > item.batchAvailable) {
       alert(`Insufficient stock for ${item.name}. Available: ${item.batchAvailable}`);
       return;
     }
     
-    // Update cart
-    updatedCart[index].quantity = newQuantity;
-    updatedCart[index].totalPrice = newQuantity * updatedCart[index].unitPrice;
+    updatedCart[index].selectedQuantity = selectedQty;
+    updatedCart[index].quantity = actualQty;
+    updatedCart[index].totalPrice = selectedQty * updatedCart[index].unitPrice;
     setCartItems(updatedCart);
+  };
+
+  const handleSelectedNameChange = (index, nameValue) => {
+    const updated = [...cartItems];
+    updated[index].selectedName = nameValue || updated[index].name;
+    setCartItems(updated);
+  };
+
+  const handleSelectedUnitChange = (index, unitValue) => {
+    const updated = [...cartItems];
+    const item = updated[index];
+    const baseUnit = item.unit || "unit";
+    if (!unitValue || unitValue === baseUnit) {
+      item.selectedUnit = baseUnit;
+      item.conversionMultiplier = 1;
+      item.quantity = item.selectedQuantity || 1;
+    } else {
+      const found = (item.alternativeUnits || []).find((u) => u.unitname === unitValue);
+      const multiplier = found?.multiplier || 1;
+      item.selectedUnit = unitValue;
+      item.conversionMultiplier = multiplier;
+      item.quantity = (item.selectedQuantity || 1) * multiplier;
+    }
+    if (item.quantity > item.batchAvailable) {
+      item.selectedQuantity = Math.max(1, Math.floor((item.batchAvailable || 1) / (item.conversionMultiplier || 1)));
+      item.quantity = item.selectedQuantity * (item.conversionMultiplier || 1);
+    }
+    setCartItems(updated);
   };
 
   // Remove item from cart and restore local stock
@@ -410,6 +458,48 @@ export default function ShopPOS( props ) {
     return true;
   };
 
+  const printInvoice = async (saleResponse) => {
+    try {
+      const token = localStorage.getItem("token");
+      const companyRes = await fetch(API_ROUTES.BUSINESS_SETTINGS_BY_KEY("company_profile"), {
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => null);
+      const company = companyRes && companyRes.ok ? (await companyRes.json())?.value || {} : {};
+
+      const invoiceItems = cartItems.map((item) => `
+        <tr>
+          <td style="padding:4px 0;">${item.selectedName || item.name}</td>
+          <td style="text-align:right;">${item.selectedQuantity || item.quantity} ${item.selectedUnit || item.unit || ""}</td>
+          <td style="text-align:right;">${Number(item.unitPrice || 0).toFixed(2)}</td>
+          <td style="text-align:right;">${Number(item.totalPrice || 0).toFixed(2)}</td>
+        </tr>
+      `).join("");
+
+      const printWindow = window.open("", "_blank", "width=900,height=700");
+      if (!printWindow) return;
+      printWindow.document.write(`
+        <html>
+          <head><title>Invoice</title></head>
+          <body style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2 style="margin:0;">${company.companyName || "Company"}</h2>
+            <p style="margin:4px 0 12px;">${company.address || ""}</p>
+            <h3>Invoice #${saleResponse?.sale?.reference || ""}</h3>
+            <table style="width:100%; border-collapse: collapse;" border="1" cellspacing="0" cellpadding="6">
+              <thead><tr><th align="left">Item</th><th align="right">Qty</th><th align="right">Rate</th><th align="right">Amount</th></tr></thead>
+              <tbody>${invoiceItems}</tbody>
+            </table>
+            <h3 style="text-align:right; margin-top:12px;">Total: ${Number(grandTotal || 0).toFixed(2)}</h3>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+    } catch (e) {
+      console.error("Failed to print invoice", e);
+    }
+  };
+
   // Submit sale
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -429,7 +519,10 @@ export default function ShopPOS( props ) {
       items: cartItems.map(item => ({
         itemId: item.itemId,
         type: item.type,
-        quantity: item.quantity,
+        quantity: item.quantity, // actual/base qty
+        selectedName: item.selectedName || item.name,
+        selectedUnit: item.selectedUnit || item.unit || "unit",
+        selectedQuantity: item.selectedQuantity || item.quantity,
         unitPrice: item.unitPrice,
         batchNumber: item.batchNumber,
         expiryDate: item.expiryDate,
@@ -462,6 +555,7 @@ export default function ShopPOS( props ) {
 
       if (res.ok) {
         alert("✅ Sale completed successfully!");
+        await printInvoice(data);
         // Clear cart but don't restore stock since it's already sold
         setCartItems([]);
         setDiscount(0);
@@ -885,9 +979,24 @@ export default function ShopPOS( props ) {
                                 {/* Cart Item Details */}
                                 <div className="flex-1 min-w-0">
                                   <div className="font-medium text-gray-900">{item.name}</div>
+                                  {item.alternativeNames && item.alternativeNames.length > 0 && (
+                                    <div className="mt-1">
+                                      <select
+                                        value={item.selectedName || item.name}
+                                        onChange={(e) => handleSelectedNameChange(index, e.target.value)}
+                                        className="text-xs border border-gray-300 rounded px-2 py-1"
+                                        title="Selected name"
+                                      >
+                                        <option value={item.name}>{item.name}</option>
+                                        {item.alternativeNames.map((n, ni) => (
+                                          <option key={`${item.itemId}-altname-${ni}`} value={n}>{n}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                  )}
                                   <div className="text-sm text-gray-600 mt-1">
                                     {item.barcode && <span>{item.barcode}</span>}
-                                    {item.unit && <span className="ml-2">| Unit: {item.unit}</span>}
+                                    {item.unit && <span className="ml-2">| Base Unit: {item.unit}</span>}
                                   </div>
                                   {(item.type === "product" || item.type === "material") && (
                                     <div className="mt-2 flex flex-wrap gap-2 items-center">
@@ -946,22 +1055,21 @@ export default function ShopPOS( props ) {
                             <td className="p-4">
                               <div className="flex items-center space-x-2">
                                 <button
-                                  onClick={() => handleUpdateQuantity(index, item.quantity - 1)}
+                                  onClick={() => handleUpdateQuantity(index, (item.selectedQuantity || 1) - 1)}
                                   className="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-lg hover:bg-gray-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                  disabled={item.quantity <= 1}
+                                  disabled={(item.selectedQuantity || 1) <= 1}
                                 >
                                   <span className="text-gray-700">-</span>
                                 </button>
                                 <input
                                   type="number"
                                   min="1"
-                                  max={item.batchAvailable || 1}
-                                  value={item.quantity}
+                                  value={item.selectedQuantity || 1}
                                   onChange={(e) => handleUpdateQuantity(index, parseInt(e.target.value) || 1)}
                                   className="w-16 border border-gray-300 p-2 text-center rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 />
                                 <button
-                                  onClick={() => handleUpdateQuantity(index, item.quantity + 1)}
+                                  onClick={() => handleUpdateQuantity(index, (item.selectedQuantity || 1) + 1)}
                                   className="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-lg hover:bg-gray-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                   disabled={item.quantity >= (item.batchAvailable || 1)}
                                 >
@@ -969,7 +1077,27 @@ export default function ShopPOS( props ) {
                                 </button>
                               </div>
                               <div className="text-xs text-gray-500 mt-2">
-                                Available in batch: {item.batchAvailable || 0}
+                                Available in batch (base): {item.batchAvailable || 0}
+                              </div>
+                              <div className="mt-1">
+                                <select
+                                  value={item.selectedUnit || item.unit || "unit"}
+                                  onChange={(e) => handleSelectedUnitChange(index, e.target.value)}
+                                  className="text-xs border border-gray-300 rounded px-2 py-1"
+                                  title="Selected unit"
+                                >
+                                  <option value={item.unit || "unit"}>{item.unit || "unit"}</option>
+                                  {(item.alternativeUnits || []).map((u, ui) => (
+                                    <option key={`${item.itemId}-altunit-${ui}`} value={u.unitname}>
+                                      {u.unitname}
+                                    </option>
+                                  ))}
+                                </select>
+                                {item.selectedUnit !== item.unit && (
+                                  <div className="text-[11px] text-gray-500 mt-1">
+                                    Actual qty: {Number(item.quantity || 0).toFixed(4)} {item.unit}
+                                  </div>
+                                )}
                               </div>
                             </td>
                             <td className="p-4">

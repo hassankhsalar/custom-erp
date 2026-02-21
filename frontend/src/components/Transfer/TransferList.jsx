@@ -1005,9 +1005,21 @@ const TransferList = ({ fromType, toType, title }) => {
                       <tbody>
                         {detailsModal.data.transferItems.map((item, idx) => (
                           <tr key={`${item.item}-${item.itemId}-${idx}`} className="border-t border-white/50 hover:bg-white/40">
-                            <td className="p-3 font-medium text-gray-800">{item.name}</td>
+                            <td className="p-3 font-medium text-gray-800">
+                              {item.name}
+                              {item.selectedName && item.selectedName !== item.name && (
+                                <div className="text-xs text-gray-500 mt-1">{item.selectedName}</div>
+                              )}
+                            </td>
                             <td className="p-3 text-gray-600 capitalize">{item.item}</td>
-                            <td className="p-3 text-gray-700">{item.quantity}</td>
+                            <td className="p-3 text-gray-700">
+                              {item.quantity}
+                              {item.selectedQuantity && item.selectedUnit && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {item.selectedQuantity} {item.selectedUnit}
+                                </div>
+                              )}
+                            </td>
                             <td className="p-3 text-gray-700">
                               {item.avg_cost !== null && item.avg_cost !== undefined
                                 ? `$${parseFloat(item.avg_cost).toFixed(2)}`

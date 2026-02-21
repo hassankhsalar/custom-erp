@@ -105,6 +105,8 @@ export const API_ROUTES = {
   MASTER_DATA_PRODUCT_CATEGORIES: `${API_BASE_URL}/master-data/product-categories`,
   MASTER_DATA_UNIT_RELATIONS: `${API_BASE_URL}/master-data/unit-relations`,
   MASTER_DATA_UNIT_RELATION_SUGGESTIONS: (primaryUnit) => `${API_BASE_URL}/master-data/unit-relations/suggestions/${encodeURIComponent(primaryUnit)}`,
+  BUSINESS_SETTINGS: `${API_BASE_URL}/business-settings`,
+  BUSINESS_SETTINGS_BY_KEY: (key) => `${API_BASE_URL}/business-settings/${encodeURIComponent(key)}`,
   
   //SHOP_SALES_RETURNS: `${API_BASE_URL}/shop-sales/returns/all`,
   SHOP_SALES_RETURNS_BACKUP: `${API_BASE_URL}/shop-sales/returns-list`,

@@ -57,6 +57,8 @@ import ActivityLog from "./components/Settings/ActivityLog";
 import Units from "./components/Settings/Units";
 import Brands from "./components/Settings/Brands";
 import Categories from "./components/Settings/Categories";
+import PrinterSettings from "./components/Settings/PrinterSettings";
+import PrintLabel from "./components/Settings/PrintLabel";
 import AddShop from "./components/Shop/AddShop";
 import AllShop from "./components/Shop/AllShop";
 import AllReturns from "./components/Sale/AllReturns";
@@ -379,6 +381,12 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="brand_read" />}>
               <Route path="/settings/brands" element={<Brands />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="general_settings_edit" />}>
+              <Route path="/settings/printer" element={<PrinterSettings />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="general_settings_edit" />}>
+              <Route path="/settings/print-label" element={<PrintLabel />} />
             </Route>
 
             <Route element={<PermissionRoute requiredPermission="account_create" />}>

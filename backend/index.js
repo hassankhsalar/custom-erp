@@ -200,6 +200,7 @@ const { startDailyStockCron } = require('./services/dailyStockCron');
 const dailyStockReportRoutes = require('./routes/dailyStockReportRoutes');
 const requisitionRoutes = require('./routes/requisitionRoutes');
 const masterDataRoutes = require('./routes/masterDataRoutes');
+const businessSettingsRoutes = require('./routes/businessSettingsRoutes');
 
 const uploadRoutes = require('./routes/uploadRoutes');
 
@@ -247,6 +248,7 @@ app.use('/api/notifications', authenticateToken, notificationRoutes);
 app.use('/api/activity-logs', authenticateToken, activityLogRoutes);
 app.use('/api/requisitions', authenticateToken, requisitionRoutes);
 app.use('/api/master-data', authenticateToken, masterDataRoutes);
+app.use('/api/business-settings', authenticateToken, businessSettingsRoutes);
 
 // serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));

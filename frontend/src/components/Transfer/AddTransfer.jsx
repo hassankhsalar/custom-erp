@@ -40,6 +40,9 @@ const AddTransfer = () => {
     requisitionId: null,
     requisitionSectionId: null,
   });
+  const toAltUnits = (arr) => (Array.isArray(arr) ? arr : [])
+    .map((u) => ({ unitname: String(u?.unitname || "").trim(), multiplier: Number(u?.multiplier) }))
+    .filter((u) => u.unitname && Number.isFinite(u.multiplier) && u.multiplier > 0);
   const token = localStorage.getItem('token');
 
   useEffect(() => {
@@ -93,6 +96,13 @@ const AddTransfer = () => {
       name: it.itemType === "product" ? it.product?.name : it.material?.name,
       itemType: it.itemType,
       quantity: it.quantity || 1,
+      selectedQuantity: it.quantity || 1,
+      selectedName: it.itemType === "product" ? it.product?.name : it.material?.name,
+      defaultUnit: it.itemType === "product" ? (it.product?.unit || "unit") : (it.material?.unit || "unit"),
+      selectedUnit: it.itemType === "product" ? (it.product?.unit || "unit") : (it.material?.unit || "unit"),
+      conversionMultiplier: 1,
+      alternativeNames: it.itemType === "product" ? (it.product?.alternative_names || []) : (it.material?.alternative_names || []),
+      alternativeUnits: toAltUnits(it.itemType === "product" ? it.product?.alternative_units : it.material?.alternative_units),
       stock: it.quantity || 0,
       batches: [],
       batchNumber: null,
@@ -171,6 +181,13 @@ const AddTransfer = () => {
       {
         ...item,
         quantity: 1,
+        selectedQuantity: 1,
+        selectedName: item.name,
+        defaultUnit: item.defaultUnit || "unit",
+        selectedUnit: item.defaultUnit || "unit",
+        conversionMultiplier: 1,
+        alternativeNames: Array.isArray(item.alternativeNames) ? item.alternativeNames : [],
+        alternativeUnits: toAltUnits(item.alternativeUnits),
         batchNumber: firstBatch?.batchNumber || null,
         expiryDate: firstBatch?.expiryDate || null,
         batchAvailable: firstBatch?.quantity || item.stock || 0,
@@ -184,8 +201,41 @@ const AddTransfer = () => {
     setItems((prev) =>
       prev.map((item, i) => {
         if (i !== index) return item;
-        const nextQty = parseFloat(quantity) || 1;
-        return { ...item, quantity: Math.max(1, Math.min(nextQty, item.batchAvailable || nextQty)) };
+        const nextSelected = parseFloat(quantity) || 1;
+        const nextActual = nextSelected * (item.conversionMultiplier || 1);
+        const clampedActual = Math.max(1, Math.min(nextActual, item.batchAvailable || nextActual));
+        return {
+          ...item,
+          selectedQuantity: nextSelected,
+          quantity: clampedActual,
+        };
+      })
+    );
+  };
+
+  const handleSelectedNameChange = (index, value) => {
+    setItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, selectedName: value || item.name } : item))
+    );
+  };
+
+  const handleSelectedUnitChange = (index, value) => {
+    setItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        const base = item.defaultUnit || "unit";
+        if (!value || value === base) {
+          const qty = item.selectedQuantity || 1;
+          return { ...item, selectedUnit: base, conversionMultiplier: 1, quantity: qty };
+        }
+        const found = (item.alternativeUnits || []).find((u) => u.unitname === value);
+        const multiplier = found?.multiplier || 1;
+        return {
+          ...item,
+          selectedUnit: value,
+          conversionMultiplier: multiplier,
+          quantity: (item.selectedQuantity || 1) * multiplier,
+        };
       })
     );
   };
@@ -570,6 +620,18 @@ const AddTransfer = () => {
                               }
                             </div>
                             <span className="text-gray-800">{item.name}</span>
+                            {item.alternativeNames?.length > 0 && (
+                              <select
+                                value={item.selectedName || item.name}
+                                onChange={(e) => handleSelectedNameChange(index, e.target.value)}
+                                className="ml-2 text-xs border border-gray-300 rounded px-2 py-1"
+                              >
+                                <option value={item.name}>{item.name}</option>
+                                {item.alternativeNames.map((n, ni) => (
+                                  <option key={`${item.id}-name-${ni}`} value={n}>{n}</option>
+                                ))}
+                              </select>
+                            )}
                           </div>
                         </td>
                         <td className="p-4">
@@ -594,12 +656,29 @@ const AddTransfer = () => {
                         <td className="p-4">
                           <input
                             type="number"
-                            value={item.quantity}
+                            value={item.selectedQuantity || item.quantity}
                             onChange={(e) => handleQuantityChange(index, e.target.value)}
                             className="w-32 glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
                             min="1"
                             max={item.batchAvailable || 1}
                           />
+                          <div className="mt-1">
+                            <select
+                              value={item.selectedUnit || item.defaultUnit || "unit"}
+                              onChange={(e) => handleSelectedUnitChange(index, e.target.value)}
+                              className="text-xs border border-gray-300 rounded px-2 py-1"
+                            >
+                              <option value={item.defaultUnit || "unit"}>{item.defaultUnit || "unit"}</option>
+                              {(item.alternativeUnits || []).map((u, ui) => (
+                                <option key={`${item.id}-unit-${ui}`} value={u.unitname}>{u.unitname}</option>
+                              ))}
+                            </select>
+                            {item.selectedUnit !== item.defaultUnit && (
+                              <div className="text-[11px] text-gray-500 mt-1">
+                                Actual qty: {Number(item.quantity || 0).toFixed(4)} {item.defaultUnit}
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="p-4">
                           <button

@@ -371,13 +371,14 @@ const CreateProduct = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Alternative Units</label>
                   <div className="grid grid-cols-2 gap-2">
-                    <input
+                    <select name="alternative_unit"
                       list="product-unit-list"
-                      placeholder="Unit name"
-                      value={altUnitDraft.unitname}
                       onChange={(e) => setAltUnitDraft((prev) => ({ ...prev, unitname: e.target.value }))}
-                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0"
-                    />
+                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0" >
+                      {units.map((unit) => (
+                        <option key={unit.id} value={unit.name} className="capitalize"> {unit.name} </option>
+                      ))}
+                    </select>
                     <input
                       type="number"
                       min="0.000001"

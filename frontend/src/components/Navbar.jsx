@@ -197,6 +197,22 @@ const Navbar = () => {
                                             <Zap size={16} />
                                             <span>Settings</span>
                                         </Link>
+                                        <Link
+                                            to="/settings/printer"
+                                            className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-white/50"
+                                            onClick={() => setProfileOpen(false)}
+                                        >
+                                            <Zap size={16} />
+                                            <span>Printer Settings</span>
+                                        </Link>
+                                        <Link
+                                            to="/settings/print-label"
+                                            className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-white/50"
+                                            onClick={() => setProfileOpen(false)}
+                                        >
+                                            <Zap size={16} />
+                                            <span>Print Label</span>
+                                        </Link>
                                         <button
                                             onClick={() => {
                                                 logout(); // Call the logout function from useAuth

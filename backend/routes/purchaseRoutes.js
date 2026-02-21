@@ -240,6 +240,9 @@ router.post("/", async (req, res) => {
           const purchaseItemData = {
             purchaseId: purchase.id,
             itemType: item.itemType,
+            selectedName: item.selectedName ? String(item.selectedName).trim() : null,
+            selectedUnit: item.selectedUnit ? String(item.selectedUnit).trim() : null,
+            selectedQuantity: item.selectedQuantity !== undefined && item.selectedQuantity !== null ? parseFloat(item.selectedQuantity) : null,
             batchNumber: item.batchNumber ? String(item.batchNumber).trim() : null,
             expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
             manufactureDate: item.manufactureDate ? new Date(item.manufactureDate) : null,

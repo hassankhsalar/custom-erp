@@ -1006,8 +1006,18 @@ export default function AllPurchase() {
                             </td>
                             <td className="p-3 font-medium">
                               {item.itemType === 'material' ? item.material?.name : item.product?.name}
+                              {item.selectedName && item.selectedName !== (item.itemType === 'material' ? item.material?.name : item.product?.name) && (
+                                <div className="text-xs text-gray-500 mt-1">{item.selectedName}</div>
+                              )}
                             </td>
-                            <td className="p-3">{item.quantity}</td>
+                            <td className="p-3">
+                              {item.quantity}
+                              {item.selectedQuantity && item.selectedUnit && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {item.selectedQuantity} {item.selectedUnit}
+                                </div>
+                              )}
+                            </td>
                             <td className="p-3">${item.unitPrice?.toFixed(2)}</td>
                             <td className="p-3 font-semibold">${item.totalPrice?.toFixed(2)}</td>
                           </tr>

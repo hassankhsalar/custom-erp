@@ -705,6 +705,9 @@ model PurchaseItem {
   productId  Int?
   product    Product?  @relation(fields: [productId], references: [id])
   itemType   String   @default("material") // "material" or "product"
+  selectedName String?
+  selectedUnit String?
+  selectedQuantity Float?
   batchNumber    String?
   expiryDate     DateTime?
   manufactureDate DateTime?
@@ -793,6 +796,9 @@ model SaleItem {
   product    Product? @relation(fields: [productId], references: [id])
   materialId Int?
   material   Material? @relation(fields: [materialId], references: [id])
+  selectedName String?
+  selectedUnit String?
+  selectedQuantity Float?
   batchNumber String?
   expiryDate DateTime?
   warrantyDays Int?      @default(0)
@@ -1024,6 +1030,9 @@ model TransferItem {
   transfer   Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
   item       String
   itemId     Int
+  selectedName String?
+  selectedUnit String?
+  selectedQuantity Float?
   batchNumber String?
   expiryDate DateTime?
   quantity   Float
@@ -1302,6 +1311,16 @@ model DailyStockSnapshotItem {
   @@index([snapshotId])
   @@index([placeType, placeId])
   @@index([itemType, itemId])
+}
+
+model BusinessSettings {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
 }
 
 

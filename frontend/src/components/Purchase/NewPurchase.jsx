@@ -38,6 +38,9 @@ export default function NewPurchase() {
   const [bankAccounts, setBankAccounts] = useState([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const toAltUnits = (arr) => (Array.isArray(arr) ? arr : [])
+    .map((u) => ({ unitname: String(u?.unitname || "").trim(), multiplier: Number(u?.multiplier) }))
+    .filter((u) => u.unitname && Number.isFinite(u.multiplier) && u.multiplier > 0);
   
   // Financial breakdown state
   const [financialBreakdown, setFinancialBreakdown] = useState({
@@ -94,9 +97,17 @@ export default function NewPurchase() {
         materialId: isProduct ? "" : String(it.materialId || ""),
         productId: isProduct ? String(it.productId || "") : "",
         name: itemEntity?.name || "",
+        selectedName: itemEntity?.name || "",
         image: itemEntity?.image || null,
-        unit: isProduct ? "unit" : (itemEntity?.unit || ""),
+        unit: isProduct ? (itemEntity?.unit || "unit") : (itemEntity?.unit || "unit"),
+        defaultUnit: isProduct ? (itemEntity?.unit || "unit") : (itemEntity?.unit || "unit"),
+        selectedUnit: isProduct ? (itemEntity?.unit || "unit") : (itemEntity?.unit || "unit"),
+        conversionMultiplier: 1,
+        alternativeNames: itemEntity?.alternative_names || [],
+        alternativeUnits: toAltUnits(itemEntity?.alternative_units),
         quantity: String(qty),
+        selectedQuantity: String(qty),
+        actualQuantity: qty,
         unitPrice: String(defaultPrice),
         total: qty * defaultPrice,
         receivedQuantity: String(qty),
@@ -142,7 +153,7 @@ const fetchProducts = async () => {
       headers.Authorization = `Bearer ${token}`;
     }
     
-    const res = await fetch("http://localhost:3001/api/products", { headers });
+    const res = await fetch(API_ROUTES.PRODUCTS_ALL, { headers });
     const data = await res.json();
     setProducts(data.products || data || []);
   } catch (error) {
@@ -299,13 +310,18 @@ const fetchBankAccounts = async () => {
         const filteredMaterials = materials
           .filter(m =>
             m.name.toLowerCase().includes(lowerCaseValue) ||
+            (Array.isArray(m.alternative_names) && m.alternative_names.some((n) => String(n || "").toLowerCase().includes(lowerCaseValue))) ||
             (m.barcode && m.barcode.toLowerCase().includes(lowerCaseValue))
           )
           .map(m => ({
             type: "material",
             id: m.id,
             name: m.name,
+            selectedName: m.name,
             unit: m.unit,
+            defaultUnit: m.unit || "unit",
+            alternativeNames: m.alternative_names || [],
+            alternativeUnits: toAltUnits(m.alternative_units),
             standardPrice: m.unit_cost,
             image: m.image || m.photo,
           }));
@@ -314,13 +330,18 @@ const fetchBankAccounts = async () => {
         const filteredProducts = products
           .filter(p =>
             p.name.toLowerCase().includes(lowerCaseValue) ||
+            (Array.isArray(p.alternative_names) && p.alternative_names.some((n) => String(n || "").toLowerCase().includes(lowerCaseValue))) ||
             (p.barcode && p.barcode.toLowerCase().includes(lowerCaseValue))
           )
           .map(p => ({
             type: "product",
             id: p.id,
             name: p.name,
-            unit: "unit",
+            selectedName: p.name,
+            unit: p.unit || "unit",
+            defaultUnit: p.unit || "unit",
+            alternativeNames: p.alternative_names || [],
+            alternativeUnits: toAltUnits(p.alternative_units),
             standardPrice: p.cost,
             image: p.image || p.photo || p.thumbnail,
           }));
@@ -363,12 +384,43 @@ const fetchBankAccounts = async () => {
           ? {
               ...item,
               [field]: value,
+              selectedQuantity: field === 'quantity' ? String(value) : item.selectedQuantity,
+              actualQuantity: field === 'quantity'
+                ? (parseFloat(value || 0) * (item.conversionMultiplier || 1))
+                : item.actualQuantity,
               total: field === 'quantity' || field === 'unitPrice'
-                ? parseFloat(field === 'quantity' ? value || 0 : item.quantity || 0) * parseFloat(field === 'unitPrice' ? value || 0 : item.unitPrice || 0)
+                ? parseFloat(field === 'quantity' ? value || 0 : (item.selectedQuantity || item.quantity || 0)) * parseFloat(field === 'unitPrice' ? value || 0 : item.unitPrice || 0)
                 : item.total
             }
           : item
       )
+    );
+  };
+
+  const handleItemSelectedNameChange = (uniqueId, selectedName) => {
+    setPurchaseItems((prev) =>
+      prev.map((item) => (item.uniqueId === uniqueId ? { ...item, selectedName: selectedName || item.name } : item))
+    );
+  };
+
+  const handleItemSelectedUnitChange = (uniqueId, unitValue) => {
+    setPurchaseItems((prev) =>
+      prev.map((item) => {
+        if (item.uniqueId !== uniqueId) return item;
+        const base = item.defaultUnit || item.unit || "unit";
+        const selectedQty = parseFloat(item.selectedQuantity || item.quantity || 0) || 0;
+        if (!unitValue || unitValue === base) {
+          return { ...item, selectedUnit: base, conversionMultiplier: 1, actualQuantity: selectedQty };
+        }
+        const found = (item.alternativeUnits || []).find((u) => u.unitname === unitValue);
+        const multiplier = found?.multiplier || 1;
+        return {
+          ...item,
+          selectedUnit: unitValue,
+          conversionMultiplier: multiplier,
+          actualQuantity: selectedQty * multiplier,
+        };
+      })
     );
   };
 
@@ -377,7 +429,7 @@ const fetchBankAccounts = async () => {
   };
 
   const handleItemSelect = (selectedItem) => {
-    const { type, id, name, unit, standardPrice, image } = selectedItem;
+    const { type, id, name, selectedName, unit, defaultUnit, alternativeNames, alternativeUnits, standardPrice, image } = selectedItem;
 
     // Create a new purchase item
     const newItem = {
@@ -386,9 +438,17 @@ const fetchBankAccounts = async () => {
       materialId: type === "material" ? id.toString() : "",
       productId: type === "product" ? id.toString() : "",
       name: name,
+      selectedName: selectedName || name,
       image: image,
       unit: unit,
-      quantity: "1", // Default quantity
+      defaultUnit: defaultUnit || unit || "unit",
+      selectedUnit: defaultUnit || unit || "unit",
+      conversionMultiplier: 1,
+      alternativeNames: alternativeNames || [],
+      alternativeUnits: alternativeUnits || [],
+      quantity: "1", // Default quantity (selected)
+      selectedQuantity: "1",
+      actualQuantity: 1,
       unitPrice: standardPrice.toString(), // Default unit price
       total: standardPrice, // Default total
       receivedQuantity: "1",
@@ -482,15 +542,18 @@ const fetchBankAccounts = async () => {
           itemType: item.itemType,
           materialId: item.itemType === "material" ? parseInt(item.materialId) : undefined,
           productId: item.itemType === "product" ? parseInt(item.productId) : undefined,
+          selectedName: item.selectedName || item.name,
+          selectedUnit: item.selectedUnit || item.defaultUnit || item.unit || "unit",
+          selectedQuantity: parseFloat(item.selectedQuantity || item.quantity),
           batchNumber: item.batchNumber || null,
           expiryDate: item.expiryDate || null,
           manufactureDate: item.manufactureDate || null,
           batchNotes: item.batchNotes || null,
-          quantity: parseFloat(item.quantity),
+          quantity: parseFloat(item.actualQuantity ?? item.quantity),
           unitPrice: parseFloat(item.unitPrice),
           receivedQuantity: item.receivedQuantity !== undefined && item.receivedQuantity !== null
-            ? parseFloat(item.receivedQuantity)
-            : parseFloat(item.quantity)
+            ? (parseFloat(item.receivedQuantity) * (item.conversionMultiplier || 1))
+            : parseFloat(item.actualQuantity ?? item.quantity)
         }))
       };
 
@@ -870,7 +933,31 @@ const fetchBankAccounts = async () => {
                             </div>
                             <div>
                               <p className="font-medium text-gray-800">{item.name}</p>
-                              <p className="text-sm text-gray-500">Unit: {item.unit}</p>
+                              <p className="text-sm text-gray-500">Base Unit: {item.defaultUnit || item.unit}</p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {item.alternativeNames?.length > 0 && (
+                                  <select
+                                    value={item.selectedName || item.name}
+                                    onChange={(e) => handleItemSelectedNameChange(item.uniqueId, e.target.value)}
+                                    className="text-xs border border-gray-300 rounded px-2 py-1"
+                                  >
+                                    <option value={item.name}>{item.name}</option>
+                                    {item.alternativeNames.map((n, ni) => (
+                                      <option key={`${item.uniqueId}-an-${ni}`} value={n}>{n}</option>
+                                    ))}
+                                  </select>
+                                )}
+                                <select
+                                  value={item.selectedUnit || item.defaultUnit || item.unit}
+                                  onChange={(e) => handleItemSelectedUnitChange(item.uniqueId, e.target.value)}
+                                  className="text-xs border border-gray-300 rounded px-2 py-1"
+                                >
+                                  <option value={item.defaultUnit || item.unit}>{item.defaultUnit || item.unit}</option>
+                                  {(item.alternativeUnits || []).map((u, ui) => (
+                                    <option key={`${item.uniqueId}-au-${ui}`} value={u.unitname}>{u.unitname}</option>
+                                  ))}
+                                </select>
+                              </div>
                             </div>
                           </div>
 
@@ -895,11 +982,16 @@ const fetchBankAccounts = async () => {
                                   type="number"
                                   step="0.01"
                                   min="0.01"
-                                  value={item.quantity}
+                                  value={item.selectedQuantity || item.quantity}
                                   onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'quantity', e.target.value)}
                                   required
                                   className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400"
                                 />
+                                {item.selectedUnit !== item.defaultUnit && (
+                                  <p className="mt-1 text-xs text-gray-500">
+                                    Actual: {Number(item.actualQuantity || 0).toFixed(4)} {item.defaultUnit}
+                                  </p>
+                                )}
                               </div>
 
                               {/* Recieved Quantity */}
