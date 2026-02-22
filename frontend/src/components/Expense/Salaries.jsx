@@ -24,6 +24,13 @@ import {
 export default function Salaries() {
   const [salaries, setSalaries] = useState([]);
   const [accounts, setAccounts] = useState([]);
+  const [companyProfile, setCompanyProfile] = useState({
+    companyName: "Company",
+    address: "",
+    phone: "",
+    email: "",
+    footerNote: ""
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
@@ -70,9 +77,28 @@ export default function Salaries() {
     }
   };
 
+  const fetchCompanyProfile = async () => {
+    try {
+      const res = await fetch(API_ROUTES.BUSINESS_SETTINGS_BY_KEY("company_profile"), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const row = await res.json();
+      if (row?.value) {
+        setCompanyProfile((prev) => ({
+          ...prev,
+          ...row.value
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching company profile:", error);
+    }
+  };
+
   useEffect(() => {
     fetchSalaries();
     fetchAccounts();
+    fetchCompanyProfile();
   }, []);
 
   // Get paginated salaries
@@ -240,6 +266,135 @@ export default function Salaries() {
     }
   };
 
+  const canDownloadPayslip = (status) => {
+    const s = (status || "").toLowerCase();
+    return s === "approve" || s === "approved" || s === "paid";
+  };
+
+  const formatMonthName = (monthNumber) => {
+    const month = parseInt(monthNumber) || 1;
+    const date = new Date(2000, Math.max(0, month - 1), 1);
+    return date.toLocaleString("en-US", { month: "long" });
+  };
+
+  const handleDownloadPayslip = (salary) => {
+    if (!canDownloadPayslip(salary.status)) {
+      alert("Pay slip can be downloaded only after salary is approved.");
+      return;
+    }
+
+    const employeeName = salary.user?.name || salary.user?.username || "Employee";
+    const baseSalary = parseFloat(salary.baseSalary || 0);
+    const allowances = parseFloat(salary.allowances || 0);
+    const deductions = parseFloat(salary.deductions || 0);
+    const gross = parseFloat(salary.gross || (baseSalary + allowances));
+    const net = parseFloat(salary.net || (gross - deductions));
+    const period = `${formatMonthName(salary.month)} ${salary.year}`;
+    const generatedOn = new Date().toLocaleString();
+
+    const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Pay Slip - ${employeeName}</title>
+    <style>
+      body { font-family: Arial, sans-serif; color: #111827; padding: 24px; }
+      .card { max-width: 820px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+      .header { background: #f3f4f6; padding: 18px 22px; border-bottom: 1px solid #e5e7eb; }
+      .title { margin: 0; font-size: 24px; }
+      .sub { margin: 4px 0 0; color: #4b5563; font-size: 13px; }
+      .content { padding: 22px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+      .box { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+      .label { color: #6b7280; font-size: 12px; }
+      .value { margin-top: 4px; font-weight: 700; }
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+      th, td { border: 1px solid #e5e7eb; padding: 10px; font-size: 14px; text-align: left; }
+      th { background: #f9fafb; }
+      .right { text-align: right; }
+      .total { font-size: 18px; font-weight: 700; }
+      .footer { margin-top: 18px; color: #6b7280; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="header">
+        <h1 class="title">${companyProfile.companyName || "Company"}</h1>
+        <p class="sub">${companyProfile.address || ""}</p>
+        <p class="sub">${companyProfile.phone || ""} ${companyProfile.email ? " | " + companyProfile.email : ""}</p>
+      </div>
+      <div class="content">
+        <h2 style="margin: 0 0 12px;">Pay Slip</h2>
+        <div class="grid">
+          <div class="box">
+            <div class="label">Employee</div>
+            <div class="value">${employeeName}</div>
+          </div>
+          <div class="box">
+            <div class="label">Salary Period</div>
+            <div class="value">${period}</div>
+          </div>
+          <div class="box">
+            <div class="label">Current Status</div>
+            <div class="value">${salary.status || "N/A"}</div>
+          </div>
+          <div class="box">
+            <div class="label">Generated On</div>
+            <div class="value">${generatedOn}</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th class="right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Base Salary</td>
+              <td class="right">${formatCurrency(baseSalary)}</td>
+            </tr>
+            <tr>
+              <td>Allowances</td>
+              <td class="right">${formatCurrency(allowances)}</td>
+            </tr>
+            <tr>
+              <td>Deductions</td>
+              <td class="right">${formatCurrency(deductions)}</td>
+            </tr>
+            <tr>
+              <td><strong>Gross</strong></td>
+              <td class="right"><strong>${formatCurrency(gross)}</strong></td>
+            </tr>
+            <tr>
+              <td class="total">Net Pay</td>
+              <td class="right total">${formatCurrency(net)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="footer">
+          ${companyProfile.footerNote || "This is a system-generated pay slip."}
+        </div>
+      </div>
+    </div>
+  </body>
+</html>`;
+
+    const file = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    const safeEmployee = employeeName.replace(/[^a-z0-9]/gi, "_");
+    link.href = url;
+    link.download = `PaySlip_${safeEmployee}_${salary.month}_${salary.year}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
       {/* Background decorative elements */}
@@ -351,8 +506,8 @@ export default function Salaries() {
                       <th className="p-4 text-left font-medium text-gray-700">Employee</th>
                       <th className="p-4 text-left font-medium text-gray-700">Period</th>
                       <th className="p-4 text-left font-medium text-gray-700">Net Salary</th>
-                      <th className="p-4 text-left font-medium text-gray-700">Status</th>
-                      <th className="p-4 text-left font-medium text-gray-700">Details</th>
+                          <th className="p-4 text-left font-medium text-gray-700">Status</th>
+                          <th className="p-4 text-left font-medium text-gray-700">Details</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -432,6 +587,18 @@ export default function Salaries() {
                                 title="Change Status"
                               >
                                 <Settings size={16} />
+                              </button>
+                              <button
+                                onClick={() => handleDownloadPayslip(salary)}
+                                disabled={!canDownloadPayslip(salary.status)}
+                                className={`p-2 rounded-lg transition-colors duration-300 ${
+                                  canDownloadPayslip(salary.status)
+                                    ? "bg-purple-50 text-purple-600 hover:bg-purple-100"
+                                    : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                }`}
+                                title={canDownloadPayslip(salary.status) ? "Download Pay Slip" : "Available after approval"}
+                              >
+                                <Download size={16} />
                               </button>
                             </div>
                           </td>
