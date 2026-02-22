@@ -29,6 +29,7 @@ export default function Payroll() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
+  const [calculating, setCalculating] = useState(false);
   const token = localStorage.getItem("token");
 
   const fetchSalaries = async () => {
@@ -58,7 +59,7 @@ export default function Payroll() {
   // Calculate statistics
   const totalPayroll = salaries.reduce((sum, s) => sum + (parseFloat(s.net) || 0), 0);
   const paidSalaries = salaries.filter(s => s.status?.toLowerCase() === 'paid').length;
-  const pendingSalaries = salaries.filter(s => s.status?.toLowerCase() === 'pending').length;
+  const pendingSalaries = salaries.filter(s => ['generated', 'created', 'approve'].includes((s.status || '').toLowerCase())).length;
   const averageSalary = salaries.length > 0 ? totalPayroll / salaries.length : 0;
 
   // Get current month/year for suggestions
@@ -93,11 +94,25 @@ export default function Payroll() {
           <span className="text-emerald-700 font-medium">Paid</span>
         </div>
       );
-    } else if (statusLower === 'pending') {
+    } else if (statusLower === 'generated') {
+      return (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-indigo-500/10 to-blue-500/10 rounded-full">
+          <Clock size={14} className="text-indigo-600" />
+          <span className="text-indigo-700 font-medium">Generated</span>
+        </div>
+      );
+    } else if (statusLower === 'created') {
+      return (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-cyan-500/10 to-sky-500/10 rounded-full">
+          <CheckCircle size={14} className="text-cyan-600" />
+          <span className="text-cyan-700 font-medium">Created</span>
+        </div>
+      );
+    } else if (statusLower === 'approve' || statusLower === 'approved') {
       return (
         <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-amber-500/10 to-orange-500/10 rounded-full">
           <Clock size={14} className="text-amber-600" />
-          <span className="text-amber-700 font-medium">Pending</span>
+          <span className="text-amber-700 font-medium">Approve</span>
         </div>
       );
     } else if (statusLower === 'cancelled') {
@@ -131,6 +146,30 @@ export default function Payroll() {
     alert("Export functionality would be implemented here");
   };
 
+  const handleCalculateSalary = async () => {
+    try {
+      setCalculating(true);
+      const targetMonth = month ? parseInt(month) : currentMonth;
+      const targetYear = year ? parseInt(year) : currentYear;
+      const res = await fetch(`${API_ROUTES.HRM}/payroll/calculate`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ month: targetMonth, year: targetYear })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to calculate salary");
+      await fetchSalaries();
+      alert(data.message || "Salary calculation completed");
+    } catch (error) {
+      alert(error.message || "Failed to calculate salary");
+    } finally {
+      setCalculating(false);
+    }
+  };
+
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
       {/* Background decorative elements */}
@@ -157,6 +196,18 @@ export default function Payroll() {
             </div>
             
             <div className="flex items-center gap-3">
+              <button
+                onClick={handleCalculateSalary}
+                disabled={calculating}
+                className={`flex items-center gap-2 px-4 py-3 font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 ${
+                  calculating
+                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                    : "bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white"
+                }`}
+              >
+                <Settings size={20} />
+                {calculating ? "Calculating..." : "Calculate Salary"}
+              </button>
               <button
                 onClick={handleExport}
                 className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"

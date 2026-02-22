@@ -2,6 +2,9 @@ const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const router = express.Router();
+const { generateMonthlySalaries } = require("../services/salaryCron");
+const { createTransaction } = require("../utils/transactionHelper");
+const SALARY_STATUSES = ["generated", "created", "approve", "approved", "paid"];
 
 const userHasPermission = async (userId, permission) => {
   const user = await prisma.user.findUnique({
@@ -571,24 +574,113 @@ router.get("/payroll", async (req, res) => {
 router.put("/payroll/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { allowances, deductions, status } = req.body;
-    const salary = await prisma.salary.update({
+    const { allowances, deductions, status, accountId } = req.body;
+    const normalizedStatus = status !== undefined && status !== null
+      ? String(status).trim().toLowerCase()
+      : undefined;
+    if (normalizedStatus && !SALARY_STATUSES.includes(normalizedStatus)) {
+      return res.status(400).json({ error: "Invalid salary status" });
+    }
+    const finalStatus = normalizedStatus === "approved" ? "approve" : normalizedStatus;
+
+    const existingSalary = await prisma.salary.findUnique({
       where: { id },
-      data: {
-        allowances: allowances !== undefined ? parseFloat(allowances) || 0 : undefined,
-        deductions: deductions !== undefined ? parseFloat(deductions) || 0 : undefined,
-        status: status || undefined,
-        net: undefined
-      }
+      include: { user: true }
     });
-    const updated = await prisma.salary.update({
-      where: { id },
-      data: {
-        gross: salary.baseSalary + (salary.allowances || 0),
-        net: salary.baseSalary + (salary.allowances || 0) - (salary.deductions || 0)
+    if (!existingSalary) {
+      return res.status(404).json({ error: "Salary not found" });
+    }
+
+    const existingStatus = (existingSalary.status || "").toLowerCase();
+    if (existingStatus === "paid") {
+      return res.status(400).json({ error: "Paid salary cannot be edited" });
+    }
+
+    if (finalStatus === "paid" && !["approve", "approved"].includes(existingStatus)) {
+      return res.status(400).json({ error: "Salary must be approved before marking as paid" });
+    }
+
+    const parsedAccountId = accountId !== undefined && accountId !== null && String(accountId).trim() !== ""
+      ? parseInt(accountId)
+      : null;
+
+    if (finalStatus === "paid" && !parsedAccountId) {
+      return res.status(400).json({ error: "accountId is required when status is paid" });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const nextAllowances = allowances !== undefined ? parseFloat(allowances) || 0 : (existingSalary.allowances || 0);
+      const nextDeductions = deductions !== undefined ? parseFloat(deductions) || 0 : (existingSalary.deductions || 0);
+      const nextGross = (existingSalary.baseSalary || 0) + nextAllowances;
+      const nextNet = nextGross - nextDeductions;
+
+      const updatedSalary = await tx.salary.update({
+        where: { id },
+        data: {
+          allowances: allowances !== undefined ? nextAllowances : undefined,
+          deductions: deductions !== undefined ? nextDeductions : undefined,
+          status: finalStatus || undefined,
+          gross: nextGross,
+          net: nextNet
+        },
+        include: { user: true }
+      });
+
+      if (finalStatus === "paid") {
+        const account = await tx.accounts.findUnique({ where: { id: parsedAccountId } });
+        if (!account) {
+          throw new Error("Account not found");
+        }
+
+        const updatedAccount = await tx.accounts.update({
+          where: { id: parsedAccountId },
+          data: { balance: { decrement: nextNet } }
+        });
+
+        const employeeName = updatedSalary.user?.name || updatedSalary.user?.username || `User#${updatedSalary.userId}`;
+
+        await createTransaction(tx, {
+          reference: `TRX-SAL-${Date.now()}-${updatedSalary.id}`,
+          createdById: req.user?.userId || existingSalary.userId || 1,
+          accountId: parsedAccountId,
+          purpose: "Salary Payment",
+          added_to_account: false,
+          amount: nextNet,
+          payment_method: "salary",
+          current_account_balance: updatedAccount.balance,
+          note: `Salary payment ${updatedSalary.month}/${updatedSalary.year} - ${employeeName}`
+        });
       }
+
+      return updatedSalary;
     });
-    res.json(updated);
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manual salary calculation fallback (if cron fails)
+router.post("/payroll/calculate", async (req, res) => {
+  try {
+    const now = new Date();
+    const month = req.body?.month ? parseInt(req.body.month) : (now.getMonth() + 1);
+    const year = req.body?.year ? parseInt(req.body.year) : now.getFullYear();
+    if (!month || month < 1 || month > 12 || !year || year < 2000 || year > 2100) {
+      return res.status(400).json({ error: "Invalid month/year" });
+    }
+
+    await generateMonthlySalaries(year, month);
+    const createdCount = await prisma.salary.count({ where: { month, year } });
+
+    res.json({
+      success: true,
+      message: `Salary calculation completed for ${month}/${year}`,
+      month,
+      year,
+      totalRecords: createdCount
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

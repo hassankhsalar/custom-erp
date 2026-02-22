@@ -16,17 +16,27 @@ import {
   FileText,
   AlertCircle,
   Plus,
-  Download
+  Download,
+  Pencil,
+  Settings
 } from "lucide-react";
 
 export default function Salaries() {
   const [salaries, setSalaries] = useState([]);
+  const [accounts, setAccounts] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(false);
   const [totalSalaries, setTotalSalaries] = useState(0);
+  const [editingSalary, setEditingSalary] = useState(null);
+  const [editForm, setEditForm] = useState({ baseSalary: "", allowances: "", deductions: "" });
+  const [statusSalary, setStatusSalary] = useState(null);
+  const [statusDraft, setStatusDraft] = useState("generated");
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [saving, setSaving] = useState(false);
   const token = localStorage.getItem("token");
+  const STATUS_OPTIONS = ["generated", "created", "approve", "paid"];
 
   const fetchSalaries = async () => {
     try {
@@ -47,8 +57,22 @@ export default function Salaries() {
     }
   };
 
+  const fetchAccounts = async () => {
+    try {
+      const res = await fetch(`${API_ROUTES.ACCOUNTS}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setAccounts(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching accounts:", error);
+      setAccounts([]);
+    }
+  };
+
   useEffect(() => {
     fetchSalaries();
+    fetchAccounts();
   }, []);
 
   // Get paginated salaries
@@ -89,6 +113,19 @@ export default function Salaries() {
   // Get status styling
   const getStatusStyle = (status) => {
     switch(status?.toLowerCase()) {
+      case 'generated':
+        return {
+          bg: 'bg-gradient-to-r from-indigo-500 to-blue-500',
+          icon: <Clock size={14} />,
+          text: 'text-white'
+        };
+      case 'created':
+        return {
+          bg: 'bg-gradient-to-r from-cyan-500 to-sky-500',
+          icon: <CheckCircle size={14} />,
+          text: 'text-white'
+        };
+      case 'approve':
       case 'paid':
         return {
           bg: 'bg-gradient-to-r from-emerald-500 to-green-500',
@@ -119,8 +156,89 @@ export default function Salaries() {
 
   // Calculate statistics
   const paidSalaries = salaries.filter(s => s.status?.toLowerCase() === 'paid').length;
-  const pendingSalaries = salaries.filter(s => s.status?.toLowerCase() === 'pending').length;
+  const pendingSalaries = salaries.filter(s => ['generated', 'created', 'approve'].includes((s.status || '').toLowerCase())).length;
   const totalNetAmount = salaries.reduce((sum, s) => sum + (parseFloat(s.net) || 0), 0);
+
+  const openEditModal = (salary) => {
+    setEditingSalary(salary);
+    setEditForm({
+      baseSalary: String(parseFloat(salary.baseSalary || 0)),
+      allowances: String(parseFloat(salary.allowances || 0)),
+      deductions: String(parseFloat(salary.deductions || 0)),
+    });
+  };
+
+  const openStatusModal = (salary) => {
+    setStatusSalary(salary);
+    const normalized = (salary.status || "generated").toLowerCase();
+    setStatusDraft(normalized === "approved" ? "approve" : normalized);
+    setSelectedAccountId("");
+  };
+
+  const closeModals = () => {
+    setEditingSalary(null);
+    setStatusSalary(null);
+    setSelectedAccountId("");
+    setSaving(false);
+  };
+
+  const saveEdit = async () => {
+    if (!editingSalary) return;
+    try {
+      setSaving(true);
+      const res = await fetch(`${API_ROUTES.HRM}/payroll/${editingSalary.id}`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          allowances: parseFloat(editForm.allowances) || 0,
+          deductions: parseFloat(editForm.deductions) || 0
+        })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update salary");
+      }
+      await fetchSalaries();
+      closeModals();
+    } catch (error) {
+      alert(error.message || "Failed to update salary");
+      setSaving(false);
+    }
+  };
+
+  const saveStatus = async () => {
+    if (!statusSalary) return;
+    if (statusDraft === "paid" && !selectedAccountId) {
+      alert("Please select an account for salary payment.");
+      return;
+    }
+    try {
+      setSaving(true);
+      const res = await fetch(`${API_ROUTES.HRM}/payroll/${statusSalary.id}`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          status: statusDraft,
+          accountId: statusDraft === "paid" ? parseInt(selectedAccountId) : undefined
+        })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update status");
+      }
+      await fetchSalaries();
+      closeModals();
+    } catch (error) {
+      alert(error.message || "Failed to update status");
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
@@ -242,6 +360,7 @@ export default function Salaries() {
                       const statusStyle = getStatusStyle(salary.status);
                       const monthYear = `${salary.month}/${salary.year}`;
                       const employeeName = salary.user?.name || salary.user?.username || 'Unknown Employee';
+                      const isPaid = (salary.status || "").toLowerCase() === "paid";
                       
                       return (
                         <tr 
@@ -286,7 +405,7 @@ export default function Salaries() {
                             </div>
                           </td>
                           <td className="p-4">
-                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-semibold">
+                            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-semibold ${statusStyle.bg}`}>
                               {statusStyle.icon}
                               <span className={statusStyle.text}>
                                 {salary.status || 'Unknown'}
@@ -296,18 +415,23 @@ export default function Salaries() {
                           <td className="p-4">
                             <div className="flex items-center gap-2">
                               <button
-                                onClick={() => alert(`Salary details for ${employeeName} (${monthYear})`)}
-                                className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-300"
-                                title="View Details"
+                                onClick={() => openEditModal(salary)}
+                                disabled={isPaid}
+                                className={`p-2 rounded-lg transition-colors duration-300 ${
+                                  isPaid
+                                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                    : "bg-blue-50 text-blue-600 hover:bg-blue-100"
+                                }`}
+                                title="Edit Salary"
                               >
-                                <FileText size={16} />
+                                <Pencil size={16} />
                               </button>
                               <button
-                                onClick={() => alert(`Download payslip for ${employeeName}`)}
+                                onClick={() => openStatusModal(salary)}
                                 className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors duration-300"
-                                title="Download Payslip"
+                                title="Change Status"
                               >
-                                <Download size={16} />
+                                <Settings size={16} />
                               </button>
                             </div>
                           </td>
@@ -464,6 +588,87 @@ export default function Salaries() {
           )}
         </div>
       </div>
+
+      {editingSalary && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl w-full max-w-lg p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Edit Salary</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Base Salary (Read only)</label>
+                <input value={editForm.baseSalary} readOnly className="w-full border border-gray-300 rounded-xl p-3 bg-gray-100/70" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Allowances</label>
+                <input type="number" step="0.01" value={editForm.allowances} onChange={(e) => setEditForm((p) => ({ ...p, allowances: e.target.value }))} className="w-full border border-gray-300 rounded-xl p-3 bg-white/80" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Deductions</label>
+                <input type="number" step="0.01" value={editForm.deductions} onChange={(e) => setEditForm((p) => ({ ...p, deductions: e.target.value }))} className="w-full border border-gray-300 rounded-xl p-3 bg-white/80" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={closeModals} className="px-5 py-2.5 rounded-xl bg-gray-200/70 text-gray-700 hover:bg-gray-300/80">Cancel</button>
+              <button onClick={saveEdit} disabled={saving} className={`px-5 py-2.5 rounded-xl text-white ${saving ? 'bg-gray-400' : 'bg-gradient-to-r from-blue-500 to-cyan-500'}`}>{saving ? 'Saving...' : 'Save'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {statusSalary && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl w-full max-w-xl p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Change Salary Status</h3>
+            {(() => {
+              const currentStatus = (statusSalary.status || "").toLowerCase();
+              const canPay = ["approve", "approved", "paid"].includes(currentStatus);
+              const optionsToShow = STATUS_OPTIONS.filter((s) => s !== "paid" || canPay);
+              return (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {optionsToShow.map((s) => {
+                    const selected = statusDraft === s;
+                    const style = getStatusStyle(s);
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setStatusDraft(s)}
+                        className={`px-3 py-3 rounded-xl text-sm font-medium transition-all ${
+                          selected ? `${style.bg} text-white` : "bg-white/80 border border-white/60 hover:bg-white text-gray-700"
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {statusDraft === "paid" && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Account</label>
+                <select
+                  value={selectedAccountId}
+                  onChange={(e) => setSelectedAccountId(e.target.value)}
+                  className="w-full border border-gray-300 rounded-xl p-3 bg-white/80"
+                >
+                  <option value="">Select account</option>
+                  {accounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} ({acc.account_number})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={closeModals} className="px-5 py-2.5 rounded-xl bg-gray-200/70 text-gray-700 hover:bg-gray-300/80">Cancel</button>
+              <button onClick={saveStatus} disabled={saving} className={`px-5 py-2.5 rounded-xl text-white ${saving ? 'bg-gray-400' : 'bg-gradient-to-r from-emerald-500 to-green-500'}`}>{saving ? 'Saving...' : 'Update Status'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
