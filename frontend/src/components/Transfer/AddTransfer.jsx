@@ -66,7 +66,7 @@ const AddTransfer = () => {
             headers: { Authorization: `Bearer ${token}` }
           }),
         ]);
-        setStores(storesRes.data.stores);
+        setStores(storesRes.data.stores || storesRes.data || []);
         setShops(shopsRes.data);
         setFactories(factoriesRes.data);
       } catch (error) {

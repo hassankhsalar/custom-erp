@@ -28,6 +28,31 @@ const parseDateRange = (startDate, endDate) => {
   return { start, end };
 };
 
+const toNum = (v, fallback = 0) => {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const sortRowsByLowStockWise = (rows, sortOrder) => {
+  const dir = String(sortOrder || "asc").toLowerCase() === "desc" ? -1 : 1;
+  return [...rows].sort((a, b) => {
+    const aScore = toNum(a.stock) - toNum(a.alert_quantity);
+    const bScore = toNum(b.stock) - toNum(b.alert_quantity);
+    if (aScore === bScore) return 0;
+    return aScore > bScore ? dir : -dir;
+  });
+};
+
+const paginateRows = (rows, page, limit) => {
+  const totalCount = rows.length;
+  const totalPages = Math.ceil(totalCount / limit) || 1;
+  const start = (page - 1) * limit;
+  return {
+    rows: rows.slice(start, start + limit),
+    pagination: { page, limit, totalCount, totalPages },
+  };
+};
+
 const buildSaleScopeSql = (scope) => {
   if (scope.isAdmin) return Prisma.sql`1=1`;
   const clauses = [];
@@ -715,10 +740,14 @@ router.get("/wastage/products", async (req, res) => {
 router.get("/stock/products", async (req, res) => {
   try {
     const { placeType, placeId } = req.query;
+    const sortBy = String(req.query.sortBy || "").toLowerCase();
+    const sortOrder = String(req.query.sortOrder || "desc").toLowerCase() === "asc" ? "asc" : "desc";
+    const useLowStockWiseSort = sortBy === "low_stock_wise";
     const page = parseInt(req.query.page || "1", 10);
     const limit = parseInt(req.query.limit || "10", 10);
     const offset = (page - 1) * limit;
     const scope = await getScope(req);
+    const orderByStock = sortBy === "stock" ? { stock: sortOrder } : undefined;
 
     if (!placeType) {
       if (!scope.isAdmin) {
@@ -727,14 +756,19 @@ router.get("/stock/products", async (req, res) => {
           pagination: { page, limit, totalCount: 0, totalPages: 0 }
         });
       }
-      const total = await prisma.product.count();
       const rows = await prisma.product.findMany({
-        skip: offset,
-        take: limit,
-        select: { id: true, name: true, category: true, image: true, stock: true }
+        ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
+        select: { id: true, name: true, category: true, image: true, stock: true, alert_quantity: true },
+        ...(sortBy === "stock" ? { orderBy: { stock: sortOrder } } : {})
       });
+      const mappedRows = rows.map(r => ({ ...r, scrap: 0, brand: null, unit: null }));
+      if (useLowStockWiseSort) {
+        const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
+        return res.json(paginateRows(sorted, page, limit));
+      }
+      const total = await prisma.product.count();
       return res.json({
-        rows: rows.map(r => ({ ...r, scrap: 0, brand: null, unit: null })),
+        rows: mappedRows,
         pagination: { page, limit, totalCount: total, totalPages: Math.ceil(total / limit) }
       });
     }
@@ -753,24 +787,30 @@ router.get("/stock/products", async (req, res) => {
       const where = storeId
         ? { store_id: storeId }
         : scope.isAdmin ? {} : { store_id: { in: Array.from(scope.stores) } };
-      const total = await prisma.storeProduct.count({ where });
       const rows = await prisma.storeProduct.findMany({
         where,
-        skip: offset,
-        take: limit,
-        include: { product: true }
+        ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
+        include: { product: true },
+        ...(orderByStock ? { orderBy: orderByStock } : {})
       });
+      const mappedRows = rows.map(r => ({
+        id: r.product_id,
+        name: r.product?.name,
+        category: r.product?.category,
+        image: r.product?.image,
+        stock: r.stock,
+        scrap: r.scrap || 0,
+        alert_quantity: toNum(r.alert_quantity, toNum(r.product?.alert_quantity, 0)),
+        brand: null,
+        unit: null
+      }));
+      if (useLowStockWiseSort) {
+        const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
+        return res.json(paginateRows(sorted, page, limit));
+      }
+      const total = await prisma.storeProduct.count({ where });
       return res.json({
-        rows: rows.map(r => ({
-          id: r.product_id,
-          name: r.product?.name,
-          category: r.product?.category,
-          image: r.product?.image,
-          stock: r.stock,
-          scrap: r.scrap || 0,
-          brand: null,
-          unit: null
-        })),
+        rows: mappedRows,
         pagination: { page, limit, totalCount: total, totalPages: Math.ceil(total / limit) }
       });
     }
@@ -789,24 +829,30 @@ router.get("/stock/products", async (req, res) => {
       const where = shopId
         ? { shop_id: shopId }
         : scope.isAdmin ? {} : { shop_id: { in: Array.from(scope.shops) } };
-      const total = await prisma.shopProduct.count({ where });
       const rows = await prisma.shopProduct.findMany({
         where,
-        skip: offset,
-        take: limit,
-        include: { product: true }
+        ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
+        include: { product: true },
+        ...(orderByStock ? { orderBy: orderByStock } : {})
       });
+      const mappedRows = rows.map(r => ({
+        id: r.product_id,
+        name: r.product?.name,
+        category: r.product?.category,
+        image: r.product?.image,
+        stock: r.stock,
+        alert_quantity: toNum(r.alert_quantity, toNum(r.product?.alert_quantity, 0)),
+        scrap: r.scrap || 0,
+        brand: null,
+        unit: null
+      }));
+      if (useLowStockWiseSort) {
+        const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
+        return res.json(paginateRows(sorted, page, limit));
+      }
+      const total = await prisma.shopProduct.count({ where });
       return res.json({
-        rows: rows.map(r => ({
-          id: r.product_id,
-          name: r.product?.name,
-          category: r.product?.category,
-          image: r.product?.image,
-          stock: r.stock,
-          scrap: r.scrap || 0,
-          brand: null,
-          unit: null
-        })),
+        rows: mappedRows,
         pagination: { page, limit, totalCount: total, totalPages: Math.ceil(total / limit) }
       });
     }
@@ -825,24 +871,30 @@ router.get("/stock/products", async (req, res) => {
       const where = factoryId
         ? { factoryId }
         : scope.isAdmin ? {} : { factoryId: { in: Array.from(scope.factories) } };
-      const total = await prisma.factoryProduct.count({ where });
       const rows = await prisma.factoryProduct.findMany({
         where,
-        skip: offset,
-        take: limit,
-        include: { product: true }
+        ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
+        include: { product: true },
+        ...(orderByStock ? { orderBy: orderByStock } : {})
       });
+      const mappedRows = rows.map(r => ({
+        id: r.productId,
+        name: r.product?.name,
+        category: r.product?.category,
+        image: r.product?.image,
+        stock: r.stock,
+        alert_quantity: toNum(r.alert_quantity, toNum(r.product?.alert_quantity, 0)),
+        scrap: r.scrap || 0,
+        brand: null,
+        unit: null
+      }));
+      if (useLowStockWiseSort) {
+        const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
+        return res.json(paginateRows(sorted, page, limit));
+      }
+      const total = await prisma.factoryProduct.count({ where });
       return res.json({
-        rows: rows.map(r => ({
-          id: r.productId,
-          name: r.product?.name,
-          category: r.product?.category,
-          image: r.product?.image,
-          stock: r.stock,
-          scrap: r.scrap || 0,
-          brand: null,
-          unit: null
-        })),
+        rows: mappedRows,
         pagination: { page, limit, totalCount: total, totalPages: Math.ceil(total / limit) }
       });
     }
@@ -859,10 +911,14 @@ router.get("/stock/products", async (req, res) => {
 router.get("/stock/materials", async (req, res) => {
   try {
     const { placeType, placeId } = req.query;
+    const sortBy = String(req.query.sortBy || "").toLowerCase();
+    const sortOrder = String(req.query.sortOrder || "desc").toLowerCase() === "asc" ? "asc" : "desc";
+    const useLowStockWiseSort = sortBy === "low_stock_wise";
     const page = parseInt(req.query.page || "1", 10);
     const limit = parseInt(req.query.limit || "10", 10);
     const offset = (page - 1) * limit;
     const scope = await getScope(req);
+    const orderByStock = sortBy === "stock" ? { stock: sortOrder } : undefined;
 
     if (!placeType) {
       if (!scope.isAdmin) {
@@ -871,14 +927,19 @@ router.get("/stock/materials", async (req, res) => {
           pagination: { page, limit, totalCount: 0, totalPages: 0 }
         });
       }
-      const total = await prisma.material.count();
       const rows = await prisma.material.findMany({
-        skip: offset,
-        take: limit,
-        select: { id: true, name: true, brand: true, image: true, current_stock: true, unit: true }
+        ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
+        select: { id: true, name: true, brand: true, category: true, image: true, current_stock: true, unit: true, alert_quantity: true },
+        ...(sortBy === "stock" ? { orderBy: { current_stock: sortOrder } } : {})
       });
+      const mappedRows = rows.map(r => ({ ...r, stock: r.current_stock, scrap: 0 }));
+      if (useLowStockWiseSort) {
+        const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
+        return res.json(paginateRows(sorted, page, limit));
+      }
+      const total = await prisma.material.count();
       return res.json({
-        rows: rows.map(r => ({ ...r, stock: r.current_stock, scrap: 0, category: null })),
+        rows: mappedRows,
         pagination: { page, limit, totalCount: total, totalPages: Math.ceil(total / limit) }
       });
     }
@@ -897,24 +958,30 @@ router.get("/stock/materials", async (req, res) => {
       const where = storeId
         ? { store_id: storeId }
         : scope.isAdmin ? {} : { store_id: { in: Array.from(scope.stores) } };
-      const total = await prisma.storeMaterial.count({ where });
       const rows = await prisma.storeMaterial.findMany({
         where,
-        skip: offset,
-        take: limit,
-        include: { material: true }
+        ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
+        include: { material: true },
+        ...(orderByStock ? { orderBy: orderByStock } : {})
       });
+      const mappedRows = rows.map(r => ({
+        id: r.material_id,
+        name: r.material?.name,
+        brand: r.material?.brand,
+        image: r.material?.image,
+        stock: r.stock,
+        alert_quantity: toNum(r.alert_quantity, toNum(r.material?.alert_quantity, 0)),
+        unit: r.material?.unit,
+        scrap: r.scrap || 0,
+        category: null
+      }));
+      if (useLowStockWiseSort) {
+        const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
+        return res.json(paginateRows(sorted, page, limit));
+      }
+      const total = await prisma.storeMaterial.count({ where });
       return res.json({
-        rows: rows.map(r => ({
-          id: r.material_id,
-          name: r.material?.name,
-          brand: r.material?.brand,
-          image: r.material?.image,
-          stock: r.stock,
-          unit: r.material?.unit,
-          scrap: r.scrap || 0,
-          category: null
-        })),
+        rows: mappedRows,
         pagination: { page, limit, totalCount: total, totalPages: Math.ceil(total / limit) }
       });
     }
@@ -933,24 +1000,30 @@ router.get("/stock/materials", async (req, res) => {
       const where = shopId
         ? { shop_id: shopId }
         : scope.isAdmin ? {} : { shop_id: { in: Array.from(scope.shops) } };
-      const total = await prisma.shopMaterial.count({ where });
       const rows = await prisma.shopMaterial.findMany({
         where,
-        skip: offset,
-        take: limit,
-        include: { material: true }
+        ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
+        include: { material: true },
+        ...(orderByStock ? { orderBy: orderByStock } : {})
       });
+      const mappedRows = rows.map(r => ({
+        id: r.material_id,
+        name: r.material?.name,
+        brand: r.material?.brand,
+        image: r.material?.image,
+        stock: r.stock,
+        alert_quantity: toNum(r.alert_quantity, toNum(r.material?.alert_quantity, 0)),
+        unit: r.material?.unit,
+        scrap: r.scrap || 0,
+        category: null
+      }));
+      if (useLowStockWiseSort) {
+        const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
+        return res.json(paginateRows(sorted, page, limit));
+      }
+      const total = await prisma.shopMaterial.count({ where });
       return res.json({
-        rows: rows.map(r => ({
-          id: r.material_id,
-          name: r.material?.name,
-          brand: r.material?.brand,
-          image: r.material?.image,
-          stock: r.stock,
-          unit: r.material?.unit,
-          scrap: r.scrap || 0,
-          category: null
-        })),
+        rows: mappedRows,
         pagination: { page, limit, totalCount: total, totalPages: Math.ceil(total / limit) }
       });
     }
@@ -969,24 +1042,30 @@ router.get("/stock/materials", async (req, res) => {
       const where = factoryId
         ? { factoryId }
         : scope.isAdmin ? {} : { factoryId: { in: Array.from(scope.factories) } };
-      const total = await prisma.factoryMaterial.count({ where });
       const rows = await prisma.factoryMaterial.findMany({
         where,
-        skip: offset,
-        take: limit,
-        include: { material: true }
+        ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
+        include: { material: true },
+        ...(orderByStock ? { orderBy: orderByStock } : {})
       });
+      const mappedRows = rows.map(r => ({
+        id: r.materialId,
+        name: r.material?.name,
+        brand: r.material?.brand,
+        image: r.material?.image,
+        stock: r.stock,
+        alert_quantity: toNum(r.alert_quantity, toNum(r.material?.alert_quantity, 0)),
+        unit: r.material?.unit,
+        scrap: r.scrap || 0,
+        category: null
+      }));
+      if (useLowStockWiseSort) {
+        const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
+        return res.json(paginateRows(sorted, page, limit));
+      }
+      const total = await prisma.factoryMaterial.count({ where });
       return res.json({
-        rows: rows.map(r => ({
-          id: r.materialId,
-          name: r.material?.name,
-          brand: r.material?.brand,
-          image: r.material?.image,
-          stock: r.stock,
-          unit: r.material?.unit,
-          scrap: r.scrap || 0,
-          category: null
-        })),
+        rows: mappedRows,
         pagination: { page, limit, totalCount: total, totalPages: Math.ceil(total / limit) }
       });
     }

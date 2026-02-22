@@ -18,12 +18,14 @@ export const API_ROUTES = {
   FACTORY_INVENTORY_FACTORIES: `${API_BASE_URL}/factories/allfactories`,
   FACTORY_INVENTORY: (factoryId) => `${API_BASE_URL}/factories/inventory/${factoryId}`,
   FACTORY_INVENTORY_SUMMARY: (factoryId) => `${API_BASE_URL}/factories/inventory/${factoryId}/summary`,
+  FACTORY_INVENTORY_ITEM_UPDATE: (factoryId) => `${API_BASE_URL}/factories/inventory/${factoryId}/item`,
 
 
 
 
   PRODUCTIONS: `${API_BASE_URL}/productions`,
   STORES: `${API_BASE_URL}/stores`,
+  STORE_INVENTORY_ITEM_UPDATE: (storeId) => `${API_BASE_URL}/stores/inventory/${storeId}/item`,
   SALES: `${API_BASE_URL}/sales`,
   PURCHASES: `${API_BASE_URL}/purchases`,
   SUPPLIERS: `${API_BASE_URL}/suppliers`,
@@ -34,6 +36,7 @@ export const API_ROUTES = {
   SHOPS_ALL: `${API_BASE_URL}/shops`,
   SHOP_BY_ID: (id) => `${API_BASE_URL}/shops/${id}`,
   SHOP_STOCK: (id) => `${API_BASE_URL}/shops/${id}/stock`,
+  SHOP_INVENTORY_ITEM_UPDATE: (shopId) => `${API_BASE_URL}/shops/inventory/${shopId}/item`,
 
   // Shop POS routes
   SHOP_SALES: `${API_BASE_URL}/shop-sales`,

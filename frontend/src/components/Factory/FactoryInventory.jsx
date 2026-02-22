@@ -20,6 +20,7 @@ import {
   Tag,
   Archive,
   Trash2,
+  Pencil,
   X
 } from 'lucide-react';
 import { API_ROUTES } from '../../config';
@@ -32,6 +33,9 @@ const FactoryInventory = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [modal, setModal] = useState({ isOpen: false, data: null });
+  const [editModal, setEditModal] = useState({ isOpen: false, data: null });
+  const [editForm, setEditForm] = useState({ stock: '', sale_price: '', alert_quantity: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
   const token = localStorage.getItem('token');
   
   // Table states
@@ -129,6 +133,54 @@ const FactoryInventory = () => {
     setModal({ isOpen: false, data: null });
   };
 
+  const openEditModal = (item) => {
+    setEditModal({ isOpen: true, data: item });
+    setEditForm({
+      stock: String(item.stock ?? ''),
+      sale_price: item.sale_price === null || item.sale_price === undefined ? '' : String(item.sale_price),
+      alert_quantity: item.alert_quantity === null || item.alert_quantity === undefined ? '' : String(item.alert_quantity),
+    });
+  };
+
+  const closeEditModal = () => {
+    setEditModal({ isOpen: false, data: null });
+    setEditForm({ stock: '', sale_price: '', alert_quantity: '' });
+    setSavingEdit(false);
+  };
+
+  const saveEditModal = async () => {
+    if (!editModal.data || !selectedFactory) return;
+    try {
+      setSavingEdit(true);
+      setError(null);
+      const response = await fetch(API_ROUTES.FACTORY_INVENTORY_ITEM_UPDATE(selectedFactory), {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          itemType: editModal.data.type,
+          itemId: editModal.data.id,
+          stock: editForm.stock,
+          sale_price: editForm.sale_price,
+          alert_quantity: editForm.alert_quantity,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update inventory item');
+      }
+      await fetchInventory(selectedFactory);
+      await fetchSummary(selectedFactory);
+      closeEditModal();
+    } catch (err) {
+      setError(err.message || 'Failed to update inventory item');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   // Filter inventory based on search and type
   const filteredInventory = inventory.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -164,13 +216,13 @@ const FactoryInventory = () => {
     }
   };
 
-  const getStockStatus = (stock) => {
+  const getStockStatus = (stock, alertQty = 10) => {
     if (stock <= 0) return { 
       text: 'Out of Stock', 
       color: 'bg-gradient-to-r from-red-500 to-rose-500',
       icon: <AlertCircle size={14} />
     };
-    if (stock <= 10) return { 
+    if (stock <= alertQty) return { 
       text: 'Low Stock', 
       color: 'bg-gradient-to-r from-amber-500 to-orange-500',
       icon: <AlertCircle size={14} />
@@ -192,7 +244,7 @@ const FactoryInventory = () => {
       item.avg_cost || 'N/A',
       item.sale_price || 'N/A',
       item.type === 'material' ? item.brand || 'N/A' : item.category || 'N/A',
-      getStockStatus(item.stock).text
+      getStockStatus(item.stock, Number(item.alert_quantity) || 10).text
     ]);
 
     const csvContent = [headers, ...csvData]
@@ -432,7 +484,8 @@ const FactoryInventory = () => {
                       <th className="p-4 text-left font-medium text-gray-700">Unit</th>
                       <th className="p-4 text-left font-medium text-gray-700">Avg Cost</th>
                       <th className="p-4 text-left font-medium text-gray-700">Sale Price</th>
-                      <th className="p-4 text-left font-medium text-gray-700">Category/Brand</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Category</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Brand</th>
                       <th className="p-4 text-left font-medium text-gray-700">Status</th>
                       <th className="p-4 text-left font-medium text-gray-700">Scrap</th>
                       <th className="p-4 text-left font-medium text-gray-700">Actions</th>
@@ -440,7 +493,7 @@ const FactoryInventory = () => {
                   </thead>
                   <tbody>
                     {paginatedInventory.map((item, index) => {
-                      const stockStatus = getStockStatus(item.stock);
+                      const stockStatus = getStockStatus(item.stock, Number(item.alert_quantity) || 10);
                       
                       return (
                         <tr key={`${item.type}-${item.id}`} className={`border-t border-white/50 hover:bg-white/30 transition-colors duration-200 ${
@@ -488,7 +541,12 @@ const FactoryInventory = () => {
                           </td>
                           <td className="p-4">
                             <span className="text-gray-700">
-                              {item.type === 'material' ? item.brand || '-' : item.category || '-'}
+                              { item.category || '-'}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span className="text-gray-700">
+                              { item.brand || '-' }
                             </span>
                           </td>
                           <td className="p-4">
@@ -505,13 +563,22 @@ const FactoryInventory = () => {
                             ) : '0'}
                           </td>
                           <td className="p-4">
-                            <button
-                              onClick={() => openDetailsModal(item)}
-                              className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-300"
-                              title="View Details"
-                            >
-                              <Eye size={16} />
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => openDetailsModal(item)}
+                                className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-300"
+                                title="View Details"
+                              >
+                                <Eye size={16} />
+                              </button>
+                              <button
+                                onClick={() => openEditModal(item)}
+                                className="p-2 bg-cyan-50 text-cyan-600 rounded-lg hover:bg-cyan-100 transition-colors duration-300"
+                                title="Edit Inventory"
+                              >
+                                <Pencil size={16} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -741,7 +808,7 @@ const FactoryInventory = () => {
                       <p className="text-sm text-gray-600">Stock Status</p>
                       <div className="mt-1">
                         {(() => {
-                          const status = getStockStatus(modal.data.stock);
+                          const status = getStockStatus(modal.data.stock, Number(modal.data.alert_quantity) || 10);
                           return (
                             <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-sm font-semibold ${status.color}`}>
                               {status.icon}
@@ -806,6 +873,42 @@ const FactoryInventory = () => {
                   Close Details
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {editModal.isOpen && editModal.data && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeEditModal}></div>
+          <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden">
+            <div className="p-6 border-b border-white/50 bg-gradient-to-r from-blue-500/10 to-cyan-500/10">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-800">Edit Inventory Item</h2>
+                <button onClick={closeEditModal} className="p-2 bg-white/60 rounded-lg hover:bg-white/80 transition-colors duration-300">
+                  <X size={20} className="text-gray-600" />
+                </button>
+              </div>
+              <p className="text-gray-600 mt-1">{editModal.data.name}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Stock</label>
+                <input type="number" min="0" step="0.0001" value={editForm.stock} onChange={(e) => setEditForm((prev) => ({ ...prev, stock: e.target.value }))} className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Sale Price</label>
+                <input type="number" min="0" step="0.0001" value={editForm.sale_price} onChange={(e) => setEditForm((prev) => ({ ...prev, sale_price: e.target.value }))} className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Alert Quantity</label>
+                <input type="number" min="0" step="0.0001" value={editForm.alert_quantity} onChange={(e) => setEditForm((prev) => ({ ...prev, alert_quantity: e.target.value }))} className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+              </div>
+            </div>
+            <div className="p-6 border-t border-white/50 bg-white/80 backdrop-blur-sm flex justify-end gap-3">
+              <button onClick={closeEditModal} className="px-5 py-2.5 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60">Cancel</button>
+              <button onClick={saveEditModal} disabled={savingEdit} className={`px-5 py-2.5 rounded-xl font-semibold transition-all duration-300 ${savingEdit ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg hover:shadow-xl'}`}>
+                {savingEdit ? 'Saving...' : 'Save'}
+              </button>
             </div>
           </div>
         </div>

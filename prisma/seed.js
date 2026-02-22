@@ -85,9 +85,11 @@ async function main() {
         'unit_read', 'unit_create', 'unit_edit', 'unit_delete',
         'brand_read', 'brand_create', 'brand_edit', 'brand_delete',
         'product_category_read', 'product_category_create', 'product_category_edit', 'product_category_delete',
-        'factory_create', 'factory_edit', 'factory_delete', 'factory_read',
-        'store_create', 'store_edit', 'store_delete', 'store_read',
-        'shop_create', 'shop_edit', 'shop_delete', 'shop_read',
+        
+        'factory_create', 'factory_edit', 'factory_delete', 'factory_read', 'factory_item_edit',
+        'store_create', 'store_edit', 'store_delete', 'store_read', 'store_item_edit',
+        'shop_create', 'shop_edit', 'shop_delete', 'shop_read', 'shop_item_edit',
+        
         'inventory_adjustment_create', 'inventory_adjustment_read',
         'cash_register_read', 'cash_register_create', 'cash_register_edit', 'cash_register_delete',
         'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit',

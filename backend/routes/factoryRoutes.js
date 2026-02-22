@@ -4,6 +4,12 @@ const { PrismaClient } = require('@prisma/client');
 const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associateScope');
 
 const prisma = new PrismaClient();
+const STOCK_EPSILON = 1e-9;
+const toNullableNumber = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const n = parseFloat(value);
+  return Number.isFinite(n) ? n : null;
+};
 
 // Get all factories for dropdown
 router.get('/allfactories', async (req, res) => {
@@ -47,6 +53,7 @@ router.get('/inventory/:factoryId', async (req, res) => {
             unit: true,
             unit_cost: true,
             sale_price: true,
+            alert_quantity: true,
             description: true,
             brand: true,
             barcode: true
@@ -66,6 +73,7 @@ router.get('/inventory/:factoryId', async (req, res) => {
             sale_price: true,
             wholesale_price: true,
             cost: true,
+            alert_quantity: true,
             description: true,
             category: true,
             barcode: true
@@ -81,10 +89,11 @@ router.get('/inventory/:factoryId', async (req, res) => {
       type: 'material',
       stock: fm.stock,
       avg_cost: fm.avg_cost,
+      alert_quantity: fm.alert_quantity ?? fm.material.alert_quantity,
       scrap: fm.scrap,
       unit: fm.material.unit,
       unit_cost: fm.material.unit_cost,
-      sale_price: fm.material.sale_price,
+      sale_price: fm.sale_price ?? fm.material.sale_price,
       description: fm.material.description,
       brand: fm.material.brand,
       barcode: fm.material.barcode,
@@ -98,10 +107,11 @@ router.get('/inventory/:factoryId', async (req, res) => {
       type: 'product',
       stock: fp.stock,
       avg_cost: fp.avg_cost,
+      alert_quantity: fp.alert_quantity ?? fp.product.alert_quantity,
       scrap: fp.scrap,
       unit: 'pcs', // Products typically counted in pieces
       unit_cost: fp.product.cost,
-      sale_price: fp.product.sale_price,
+      sale_price: fp.sale_price ?? fp.product.sale_price,
       wholesale_price: fp.product.wholesale_price,
       description: fp.product.description,
       category: fp.product.category,
@@ -134,6 +144,97 @@ router.get('/inventory/:factoryId', async (req, res) => {
   }
 });
 
+// Update factory inventory row (stock, sale_price, alert_quantity)
+router.put('/inventory/:factoryId/item', async (req, res) => {
+  const factoryId = parseInt(req.params.factoryId);
+  const { itemType, itemId, stock, sale_price, alert_quantity } = req.body || {};
+  const parsedItemId = parseInt(itemId);
+  const nextStock = toNullableNumber(stock);
+  const nextSalePrice = toNullableNumber(sale_price);
+  const nextAlertQuantity = toNullableNumber(alert_quantity);
+
+  if (isNaN(factoryId) || !['product', 'material'].includes(String(itemType || '').toLowerCase()) || isNaN(parsedItemId)) {
+    return res.status(400).json({ error: 'Invalid inventory update payload' });
+  }
+  if (nextStock === null || nextStock < 0) {
+    return res.status(400).json({ error: 'Stock must be a non-negative number' });
+  }
+
+  try {
+    const scope = await buildScope(prisma, req.user.userId);
+    ensureIdScope(scope, 'factory', factoryId);
+    const normalizedItemType = String(itemType).toLowerCase();
+
+    const result = await prisma.$transaction(async (tx) => {
+      if (normalizedItemType === 'product') {
+        const existing = await tx.factoryProduct.findUnique({
+          where: { factoryId_productId: { factoryId, productId: parsedItemId } },
+        });
+        if (!existing) throw new Error('Inventory row not found');
+
+        const prevStock = parseFloat(existing.stock) || 0;
+        const updated = await tx.factoryProduct.update({
+          where: { factoryId_productId: { factoryId, productId: parsedItemId } },
+          data: {
+            stock: nextStock,
+            sale_price: nextSalePrice,
+            alert_quantity: nextAlertQuantity,
+          },
+        });
+
+        if (Math.abs(prevStock - nextStock) > STOCK_EPSILON) {
+          await tx.stockAdjustment.create({
+            data: {
+              place: 'factory',
+              factoryId,
+              item: 'product',
+              productId: parsedItemId,
+              previous_stock: prevStock,
+              after_edit: nextStock,
+            },
+          });
+        }
+        return updated;
+      }
+
+      const existing = await tx.factoryMaterial.findUnique({
+        where: { factoryId_materialId: { factoryId, materialId: parsedItemId } },
+      });
+      if (!existing) throw new Error('Inventory row not found');
+
+      const prevStock = parseFloat(existing.stock) || 0;
+      const updated = await tx.factoryMaterial.update({
+        where: { factoryId_materialId: { factoryId, materialId: parsedItemId } },
+        data: {
+          stock: nextStock,
+          sale_price: nextSalePrice,
+          alert_quantity: nextAlertQuantity,
+        },
+      });
+
+      if (Math.abs(prevStock - nextStock) > STOCK_EPSILON) {
+        await tx.stockAdjustment.create({
+          data: {
+            place: 'factory',
+            factoryId,
+            item: 'material',
+            materialId: parsedItemId,
+            previous_stock: prevStock,
+            after_edit: nextStock,
+          },
+        });
+      }
+      return updated;
+    });
+
+    res.json({ success: true, row: result });
+  } catch (error) {
+    if (error.status === 403) return res.status(403).json({ error: 'Forbidden' });
+    if (error.message === 'Inventory row not found') return res.status(404).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to update factory inventory item' });
+  }
+});
+
 // Get inventory summary by category
 router.get('/inventory/:factoryId/summary', async (req, res) => {
   const { factoryId } = req.params;
@@ -161,28 +262,28 @@ router.get('/inventory/:factoryId/summary', async (req, res) => {
       }
     });
 
-    // Get low stock items (stock <= 10)
-    const lowStockMaterials = await prisma.factoryMaterial.findMany({
-      where: { 
-        factoryId: parseInt(factoryId),
-        stock: { lte: 10 }
-      },
+    // Low stock based on place-level alert first, then global alert fallback
+    const lowStockMaterialRows = await prisma.factoryMaterial.findMany({
+      where: { factoryId: parseInt(factoryId) },
       include: {
-        material: { select: { name: true, unit: true } }
+        material: { select: { name: true, unit: true, alert_quantity: true } }
       },
-      take: 5
     });
 
-    const lowStockProducts = await prisma.factoryProduct.findMany({
-      where: { 
-        factoryId: parseInt(factoryId),
-        stock: { lte: 10 }
-      },
+    const lowStockProductRows = await prisma.factoryProduct.findMany({
+      where: { factoryId: parseInt(factoryId) },
       include: {
-        product: { select: { name: true } }
+        product: { select: { name: true, alert_quantity: true } }
       },
-      take: 5
     });
+
+    const lowStockMaterials = lowStockMaterialRows
+      .filter((m) => (parseFloat(m.stock) || 0) <= (parseFloat(m.alert_quantity ?? m.material?.alert_quantity ?? 10) || 10))
+      .slice(0, 5);
+
+    const lowStockProducts = lowStockProductRows
+      .filter((p) => (parseFloat(p.stock) || 0) <= (parseFloat(p.alert_quantity ?? p.product?.alert_quantity ?? 10) || 10))
+      .slice(0, 5);
 
     res.json({
       materials: {

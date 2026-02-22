@@ -54,7 +54,7 @@ const EditProduction = () => {
         const storeResponse = await axios.get(API_ROUTES.STORES, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setStores(storeResponse.data.stores);
+        setStores(storeResponse.data.stores || storeResponse.data || []);
 
         const productionResponse = await axios.get(`${API_ROUTES.PRODUCTIONS}/${id}`, {
           headers: { Authorization: `Bearer ${token}` },

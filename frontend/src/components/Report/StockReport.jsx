@@ -38,6 +38,7 @@ const StockReport = () => {
   const [placeId, setPlaceId] = useState("");
   const [places, setPlaces] = useState([]);
   const [rows, setRows] = useState([]);
+  const [stockSort, setStockSort] = useState("none");
   const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1 });
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({
@@ -86,6 +87,14 @@ const StockReport = () => {
       const params = new URLSearchParams();
       if (placeType) params.append("placeType", placeType);
       if (placeId) params.append("placeId", placeId);
+      if (stockSort === "asc" || stockSort === "desc") {
+        params.append("sortBy", "stock");
+        params.append("sortOrder", stockSort);
+      }
+      if (stockSort === "low_stock_wise_asc" || stockSort === "low_stock_wise_desc") {
+        params.append("sortBy", "low_stock_wise");
+        params.append("sortOrder", stockSort.endsWith("_asc") ? "asc" : "desc");
+      }
       params.append("page", page);
       params.append("limit", limit);
       const endpoint = tab === "products" ? API_ROUTES.REPORT_STOCK_PRODUCTS : API_ROUTES.REPORT_STOCK_MATERIALS;
@@ -116,7 +125,7 @@ const StockReport = () => {
 
   useEffect(() => {
     fetchRows(1, pagination.limit);
-  }, [tab]);
+  }, [tab, stockSort]);
 
   useEffect(() => {
     setPlaceId("");
@@ -127,7 +136,7 @@ const StockReport = () => {
     fetchRows(1, pagination.limit);
   };
 
-  const getStockStatus = (stock) => {
+  const getStockStatus = (stock, alertQty = 1) => {
     if (stock <= 0) return { 
       text: 'Out of Stock', 
       color: 'bg-gradient-to-r from-rose-500 to-red-500',
@@ -135,7 +144,7 @@ const StockReport = () => {
       bg: 'bg-rose-50',
       textColor: 'text-rose-700'
     };
-    if (stock <= 10) return { 
+    if (stock < alertQty) return { 
       text: 'Low Stock', 
       color: 'bg-gradient-to-r from-amber-500 to-orange-500',
       icon: <AlertTriangle size={12} />,
@@ -358,6 +367,26 @@ const StockReport = () => {
                   </select>
                 </div>
               )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <div className="flex items-center gap-2">
+                    <Gauge size={14} />
+                    Stock Sort
+                  </div>
+                </label>
+                <select
+                  value={stockSort}
+                  onChange={(e) => setStockSort(e.target.value)}
+                  className="w-full backdrop-blur-sm bg-white/80 border border-white/60 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-300 transition-all duration-300"
+                >
+                  <option value="none">Default</option>
+                  <option value="desc">Stock: High to Low</option>
+                  <option value="asc">Stock: Low to High</option>
+                  <option value="low_stock_wise_asc">Low Stock Wise: Asc</option>
+                  <option value="low_stock_wise_desc">Low Stock Wise: Desc</option>
+                </select>
+              </div>
               
               <div className="flex items-end">
                 <button
@@ -402,7 +431,7 @@ const StockReport = () => {
                       const stock = Number(r.stock || 0);
                       const scrap = Number(r.scrap || 0);
                       const stockText = r.unit ? `${stock} ${r.unit}` : stock.toLocaleString();
-                      const stockStatus = getStockStatus(stock);
+                      const stockStatus = getStockStatus(stock, Number(r.alert_quantity) || 1);
                       
                       return (
                         <tr key={idx} className={`border-t border-white/50 hover:bg-white/30 transition-colors duration-200 ${
@@ -458,23 +487,17 @@ const StockReport = () => {
                           </td>
                           <td className="p-4">
                             <div className="space-y-3">
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2">
+                                  <Box size={14} className="text-gray-800" />
+                                  <span className="text-sm text-gray-600">Current Stock:</span>
+                                </div>
+                                <span className="font-bold text-lg text-gray-800">{stockText}</span>
+                              </div>
                               <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-semibold ${stockStatus.color}`}>
                                 {stockStatus.icon}
                                 {stockStatus.text}
                               </div>
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <Box size={14} className="text-blue-500" />
-                                  <span className="text-sm text-gray-600">Current Stock:</span>
-                                </div>
-                                <span className="font-bold text-lg text-blue-600">{stockText}</span>
-                              </div>
-                              {stock <= 10 && stock > 0 && (
-                                <div className="text-xs text-amber-600 flex items-center gap-1">
-                                  <AlertTriangle size={12} />
-                                  Low stock warning
-                                </div>
-                              )}
                               {stock <= 0 && (
                                 <div className="text-xs text-rose-600 flex items-center gap-1">
                                   <AlertCircle size={12} />

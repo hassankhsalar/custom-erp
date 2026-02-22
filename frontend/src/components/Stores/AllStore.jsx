@@ -46,14 +46,14 @@ const AllStore = () => {
 
       try {
         setLoading(true);
-        const response = await axios.get(`${API_ROUTES.STORES}?pagination=false`, {
+        const response = await axios.get(`${API_ROUTES.STORES}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
         });
         // Handle both array response and paginated response
-        const storesData = response.data.stores || response.data;
+        const storesData = response.data.stores || response.data || [];
         setStores(storesData);
         setTotalPages(Math.ceil(storesData.length / itemsPerPage));
         setTotalStores(storesData.length);
@@ -93,13 +93,13 @@ const AllStore = () => {
         });
         
         // Refetch stores after deletion
-        const response = await axios.get(`${API_ROUTES.STORES}?pagination=false`, {
+        const response = await axios.get(`${API_ROUTES.STORES}`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
         });
-        const storesData = response.data.stores || response.data;
+        const storesData = response.data.stores || response.data || [];
         setStores(storesData);
         setTotalPages(Math.ceil(storesData.length / itemsPerPage));
         setTotalStores(storesData.length);

@@ -448,6 +448,7 @@ model Material {
   warranties            UserWarranty[]
   requisitionItems      RequisitionItem[]
   requisitionSectionItems RequisitionSectionItem[]
+  stockAdjustments      StockAdjustment[]
 }
 
 model Unit {
@@ -541,6 +542,7 @@ model Product {
   transferReceiptItems    TransferReceiptItem[]
   requisitionItems        RequisitionItem[]
   requisitionSectionItems RequisitionSectionItem[]
+  stockAdjustments        StockAdjustment[]
 }
 
 model ProductMaterial {
@@ -565,6 +567,7 @@ model Factory {
   productions Production[] // Added for relation
   factoryProducts FactoryProduct[]
   factoryMaterials FactoryMaterial[]
+  stockAdjustments StockAdjustment[]
 }
 model Production {
   id                      Int                      @id @default(autoincrement()) // Changed to Int
@@ -597,6 +600,7 @@ model Store {
   mobile                  String?
   storeMaterials          StoreMaterial[]
   storeProducts           StoreProduct[]
+  stockAdjustments        StockAdjustment[]
   
   //sales                   Sale[]
   //saleReturns             SaleReturn[]
@@ -607,6 +611,8 @@ model StoreMaterial {
   material_id Int
   stock       Float @default(0)
   avg_cost   Float?
+  sale_price Float?
+  alert_quantity Float?
   scrap      Float? @default(0)
   batchDetails Json?
   store    Store    @relation(fields: [store_id], references: [id])
@@ -620,6 +626,8 @@ model StoreProduct {
   product_id Int
   stock      Float @default(0)
   avg_cost  Float?
+  sale_price Float?
+  alert_quantity Float?
   scrap      Float? @default(0)
   batchDetails Json?
   store   Store   @relation(fields: [store_id], references: [id])
@@ -858,6 +866,7 @@ model Shop {
   // Relations
   shopProducts  ShopProduct[]
   shopMaterials ShopMaterial[]
+  stockAdjustments StockAdjustment[]
   sales         Sale[]
   saleReturns   SaleReturn[]
   
@@ -869,6 +878,8 @@ model ShopProduct {
   product_id Int
   stock      Float @default(0)
   avg_cost  Float?
+  sale_price Float?
+  alert_quantity Float?
   scrap      Float? @default(0)
   batchDetails Json?
   shop    Shop    @relation(fields: [shop_id], references: [id])
@@ -882,6 +893,8 @@ model ShopMaterial {
   material_id Int
   stock       Float @default(0)
   avg_cost   Float?
+  sale_price Float?
+  alert_quantity Float?
   scrap      Float? @default(0)
   batchDetails Json?
   shop     Shop     @relation(fields: [shop_id], references: [id])
@@ -1084,6 +1097,8 @@ model FactoryProduct {
   productId Int
   stock     Float @default(0)
   avg_cost Float?  
+  sale_price Float?
+  alert_quantity Float?
   scrap      Float? @default(0)
   batchDetails Json?
   factory   Factory @relation(fields: [factoryId], references: [id])
@@ -1097,12 +1112,43 @@ model FactoryMaterial {
   materialId Int
   stock      Float @default(0)
   avg_cost  Float? 
+  sale_price Float?
+  alert_quantity Float?
   scrap      Float? @default(0)
   batchDetails Json?
   factory  Factory  @relation(fields: [factoryId], references: [id])
   material Material @relation(fields: [materialId], references: [id])
 
   @@id([factoryId, materialId])
+}
+
+model StockAdjustment {
+  id             Int       @id @default(autoincrement())
+  place          String
+  storeId        Int?
+  store          Store?    @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  shopId         Int?
+  shop           Shop?     @relation(fields: [shopId], references: [id], onDelete: SetNull)
+  factoryId      Int?
+  factory        Factory?  @relation(fields: [factoryId], references: [id], onDelete: SetNull)
+  item           String
+  productId      Int?
+  product        Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  materialId     Int?
+  material       Material? @relation(fields: [materialId], references: [id], onDelete: SetNull)
+  previous_stock Float
+  after_edit     Float
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([place])
+  @@index([storeId])
+  @@index([shopId])
+  @@index([factoryId])
+  @@index([item])
+  @@index([productId])
+  @@index([materialId])
+  @@index([createdAt])
 }
 
 model Notification {

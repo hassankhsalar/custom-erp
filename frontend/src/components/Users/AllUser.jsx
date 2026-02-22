@@ -51,7 +51,7 @@ const AllUser = () => {
       ]);
 
       setFactories(factoriesRes.data || []);
-      setStores(storesRes.data.stores || []);
+      setStores(storesRes.data.stores || storesRes.data || []);
       setShops(shopsRes.data || []);
     } catch (error) {
       console.error('Error fetching locations:', error);
