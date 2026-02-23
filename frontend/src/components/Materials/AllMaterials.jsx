@@ -716,16 +716,6 @@ const AllMaterials = () => {
               </div>
             </div>
             
-            <div className="sticky bottom-0 p-6 border-t border-white/50">
-              <div className="flex justify-end">
-                <button
-                  onClick={closeModal}
-                  className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
-                >
-                  Close Details
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}

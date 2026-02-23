@@ -124,7 +124,7 @@ const DailyStockReport = () => {
   const fileUrl = selectedSnapshot?.filePath ? `${MEDIA_BASE_URL}${selectedSnapshot.filePath}` : "";
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 p-4 md:p-6">
       <div className="w-full mx-auto">
         <div className="backdrop-blur-xl bg-white/50 border border-white/60 rounded-2xl shadow-xl mb-6 p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

@@ -209,7 +209,7 @@ const AddShop = () => {
   const totalMaterialStock = selectedMaterials.reduce((sum, m) => sum + (parseFloat(m.stock) || 0), 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
       {/* Header */}
       <div className="glass-card rounded-2xl p-6 mb-8 border border-white/30 shadow-xl backdrop-blur-sm">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -298,9 +298,9 @@ const AddShop = () => {
       </div>
 
       {/* Main Form */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
         {/* Shop Details Card */}
-        <div className="lg:col-span-1">
+        <div className="col-span-1">
           <div className="glass-card rounded-2xl border border-white/30 shadow-xl backdrop-blur-sm p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl">
@@ -419,7 +419,7 @@ const AddShop = () => {
         </div>
 
         {/* Products and Materials Section */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="col-span-1 xl:col-span-2 space-y-8">
           {/* Products Card */}
           <div className="glass-card rounded-2xl border border-white/30 shadow-xl backdrop-blur-sm overflow-hidden">
             <div className="p-6 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-b border-white/30">

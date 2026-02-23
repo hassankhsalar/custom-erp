@@ -10,30 +10,17 @@ import {
   Search,
   Filter,
   Download,
-  Printer,
-  Eye,
-  EyeOff,
   ChevronDown,
   ChevronUp,
-  MoreVertical,
   UserMinus,
   UserCheck,
   Calendar,
-  Mail,
-  Phone,
-  MapPin,
-  DollarSign,
-  Shield,
   Briefcase,
   Home,
-  Wallet,
-  Banknote,
-  BarChart3,
   RefreshCw,
   X,
   AlertCircle,
   CheckCircle,
-  ExternalLink,
   List,
   Grid,
   UserX,
@@ -374,7 +361,7 @@ console.log(users);
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-gray-50 via-white to-blue-50 p-4 md:p-6">
       {/* Header */}
       <div className="glass-card p-6 mb-6 border border-white/20 backdrop-blur-xl shadow-lg">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

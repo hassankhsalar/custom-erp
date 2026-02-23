@@ -556,7 +556,7 @@ export default function AllReturns() {
           </div>
 
           {/* Modal Footer */}
-          <div className="sticky bottom-0 bg-white/80 backdrop-blur-sm border-t border-white/50 p-6">
+          {/* <div className="sticky bottom-0 bg-white/80 backdrop-blur-sm border-t border-white/50 p-6">
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => window.print()}
@@ -572,7 +572,7 @@ export default function AllReturns() {
                 Close
               </button>
             </div>
-          </div>
+          </div> */}
         </div>
       </div>
     );
@@ -598,7 +598,7 @@ export default function AllReturns() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-red-50 via-orange-50 to-amber-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-red-50 via-orange-50 to-amber-50 p-4 md:p-6">
       {/* Background decorative elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-red-300/20 rounded-full blur-3xl"></div>

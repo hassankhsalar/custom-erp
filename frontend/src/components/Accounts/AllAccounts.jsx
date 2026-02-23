@@ -197,7 +197,7 @@ export default function AllAccounts() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-green-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-gray-50 via-white to-green-50 p-4 md:p-6">
       {/* Header Section */}
       <div className="glass-card p-6 mb-6 border border-white/20 backdrop-blur-xl">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
