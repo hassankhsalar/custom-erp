@@ -1,12 +1,16 @@
 const express = require('express');
+const http = require('http');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const { Server } = require('socket.io');
 const { activityLoggerMiddleware, logActivity } = require('./utils/activityLogger');
+const { createSessionTracker, isWithinAllowedLoginWindow, LOGIN_WINDOW_ERROR } = require('./services/realtimeTracker');
 
 const prisma = new PrismaClient();
 const app = express();
+const server = http.createServer(app);
 app.use(cors());
 app.use(express.json());
 app.use(activityLoggerMiddleware);
@@ -14,17 +18,43 @@ app.use(activityLoggerMiddleware);
 const JWT_SECRET = 'your-secret-key';
 
 // Middleware to protect routes
-const authenticateToken = (req, res, next) => {
+const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  if (token == null) return res.sendStatus(401);
+  if (token == null) return res.status(401).json({ error: 'Token is required' });
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;
+  try {
+    const user = jwt.verify(token, JWT_SECRET);
+    const tokenSessionVersion = typeof user.sessionVersion === 'number' ? user.sessionVersion : 0;
+
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: {
+        id: true,
+        sessionVersion: true,
+        loginStartTime: true,
+        loginEndTime: true,
+      },
+    });
+
+    if (!dbUser) return res.status(401).json({ error: 'Invalid user session' });
+    if ((dbUser.sessionVersion || 0) !== tokenSessionVersion) {
+      return res.status(401).json({ error: 'Session expired. Please login again.' });
+    }
+    if (!isWithinAllowedLoginWindow(dbUser)) {
+      return res.status(403).json({ error: LOGIN_WINDOW_ERROR });
+    }
+
+    req.user = {
+      ...user,
+      userId: dbUser.id,
+      sessionVersion: dbUser.sessionVersion || 0,
+    };
     next();
-  });
+  } catch (_) {
+    return res.status(403).json({ error: 'Invalid token' });
+  }
 };
 
 const hasPermission = (permission) => {
@@ -103,8 +133,12 @@ app.post('/api/login', async (req, res) => {
     return res.status(400).json({ error: 'Cannot find user' });
   }
 
+  if (!isWithinAllowedLoginWindow(user)) {
+    return res.status(403).json({ error: LOGIN_WINDOW_ERROR });
+  }
+
   if (await bcrypt.compare(password, user.password)) {
-    const accessToken = jwt.sign({ userId: user.id }, JWT_SECRET);
+    const accessToken = jwt.sign({ userId: user.id, sessionVersion: user.sessionVersion || 0 }, JWT_SECRET);
     await logActivity({
       userId: user.id,
       module: 'auth',
@@ -254,8 +288,24 @@ app.use('/api/business-settings', authenticateToken, businessSettingsRoutes);
 app.use('/uploads', express.static('uploads'));
 
 
+const io = new Server(server, {
+  cors: {
+    origin: true,
+    credentials: true,
+  },
+});
+
+const sessionTracker = createSessionTracker({
+  io,
+  prisma,
+  jwtSecret: JWT_SECRET,
+});
+
+app.set('io', io);
+app.set('sessionTracker', sessionTracker);
+
 const port = 3001;
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });
 

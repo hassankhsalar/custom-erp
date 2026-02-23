@@ -33,7 +33,7 @@ const Login = () => {
       navigate('/dashboard');
     } catch (error) {
       console.error('Login failed', error);
-      setError('Invalid username or password. Please try again.');
+      setError(error.response?.data?.error || 'Invalid username or password. Please try again.');
     } finally {
       setLoading(false);
     }

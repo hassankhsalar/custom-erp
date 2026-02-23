@@ -1,5 +1,6 @@
 export const API_BASE_URL = 'http://localhost:3001/api';
 export const MEDIA_BASE_URL = 'http://localhost:3001';
+export const SOCKET_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
 export const API_ROUTES = {
   LOGIN: `${API_BASE_URL}/login`,
@@ -165,6 +166,8 @@ export const API_ROUTES = {
 
   //user routes
   USERS: `${API_BASE_URL}/users`,
+  USER_ACTIVE_SESSIONS: `${API_BASE_URL}/users/active-sessions`,
+  USER_FORCE_LOGOUT: (id) => `${API_BASE_URL}/users/${id}/force-logout`,
   ASSIGNUSER: `${API_BASE_URL}/assign-user`,
   PERMISSIONS: `${API_BASE_URL}/permissions`,
   USERMANAGEMENT: `${API_BASE_URL}/user-management`,

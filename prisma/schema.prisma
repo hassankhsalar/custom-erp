@@ -16,6 +16,9 @@ model User {
   username    String   @unique
   name        String?
   password    String
+  sessionVersion Int   @default(0)
+  loginStartTime String? @db.VarChar(5)
+  loginEndTime   String? @db.VarChar(5)
   permissionId  Int?
   permission    Permission?  @relation(fields: [permissionId], references: [id])
   profile     Profile? @relation(fields: [profileId], references: [id])

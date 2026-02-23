@@ -1,4 +1,4 @@
-import React, { useState, createContext, useContext, useEffect } from "react";
+import React, { useState, createContext, useContext, useEffect, useRef, useCallback } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -105,6 +105,8 @@ import NewRequisition from "./components/Requisition/NewRequisition";
 import RequisitionList from "./components/Requisition/RequisitionList";
 import RequisitionView from "./components/Requisition/RequisitionView";
 import { API_ROUTES } from "./config";
+import { SOCKET_BASE_URL } from "./config";
+import { io } from "socket.io-client";
 
 import { useCurrentUser } from "./hooks/useCurrentUser";
 import { usePermission } from "./hooks/usePermission";
@@ -117,17 +119,19 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("token"));
+  const [socketInstance, setSocketInstance] = useState(null);
   const { currentUser, loading, error, refetch } = useCurrentUser();
+  const socketRef = useRef(null);
 
-  const login = (newToken) => {
+  const login = useCallback((newToken) => {
     setToken(newToken);
     localStorage.setItem("token", newToken);
     refetch(); // Refetch user data after login
-  };
+  }, [refetch]);
 
-  const logout = async () => {
+  const logout = useCallback(async ({ skipActivityLog = false } = {}) => {
     const existingToken = localStorage.getItem("token");
-    if (existingToken) {
+    if (existingToken && !skipActivityLog) {
       try {
         await fetch(API_ROUTES.ACTIVITY_LOGS_LOGOUT, {
           method: "POST",
@@ -139,14 +143,61 @@ export const AuthProvider = ({ children }) => {
         // Keep logout flow non-blocking
       }
     }
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+      setSocketInstance(null);
+    }
     setToken(null);
     localStorage.removeItem("token");
     localStorage.removeItem("userEmail"); // Clear user email on logout
+    localStorage.removeItem("username");
+    localStorage.removeItem("name");
+    localStorage.removeItem("email");
     // Optionally, clear currentUser state here if needed
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!token) {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setSocketInstance(null);
+      }
+      return;
+    }
+
+    const socket = io(SOCKET_BASE_URL, {
+      auth: { token },
+      transports: ["websocket", "polling"],
+    });
+    socketRef.current = socket;
+    setSocketInstance(socket);
+
+    const forceLogoutHandler = () => {
+      logout({ skipActivityLog: true });
+      window.location.href = "/login";
+    };
+
+    socket.on("session:force-logout", forceLogoutHandler);
+    socket.on("connect_error", (socketError) => {
+      if (socketError?.message === "Session expired") {
+        forceLogoutHandler();
+      }
+    });
+
+    return () => {
+      socket.off("session:force-logout", forceLogoutHandler);
+      socket.disconnect();
+      if (socketRef.current === socket) {
+        socketRef.current = null;
+      }
+      setSocketInstance((prev) => (prev === socket ? null : prev));
+    };
+  }, [token, logout]);
 
   return (
-    <AuthContext.Provider value={{ token, login, logout, currentUser, loading, error, refetch }}>
+    <AuthContext.Provider value={{ token, login, logout, currentUser, loading, error, refetch, socket: socketInstance }}>
       {children}
     </AuthContext.Provider>
   );

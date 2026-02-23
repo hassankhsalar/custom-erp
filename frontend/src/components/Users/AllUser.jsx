@@ -2,30 +2,67 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
-import { Users, UserPlus, Edit, Trash2, Save, X, Building, Store, ShoppingCart, Plus, Minus, Key, Shield, Mail, User as UserIcon } from 'lucide-react';
+import { Users, UserPlus, Edit, Trash2, Save, X, Building, Store, ShoppingCart, Plus, Minus, Key, Shield, Mail, User as UserIcon, LogOut, Clock } from 'lucide-react';
+import { useAuth } from '../../App';
 
 const AllUser = () => {
+  const { socket, currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [factories, setFactories] = useState([]);
   const [stores, setStores] = useState([]);
   const [shops, setShops] = useState([]);
+  const [activeSessions, setActiveSessions] = useState([]);
+  const [loadingActiveSessions, setLoadingActiveSessions] = useState(false);
+  const [forceLogoutUserId, setForceLogoutUserId] = useState(null);
+  const [userListMode, setUserListMode] = useState('all');
   const [loading, setLoading] = useState(true);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [editForm, setEditForm] = useState({
     name: '',
     email: '',
+    loginStartTime: '',
+    loginEndTime: '',
     role: 'USER',
     permissions: {
       locations: []
     }
   });
   const [updateLoading, setUpdateLoading] = useState(false);
+  const canManageSessions = currentUser?.permission?.name === 'admin'
+    || currentUser?.permission?.name === 'superadmin'
+    || (Array.isArray(currentUser?.permission?.permissions)
+      && currentUser.permission.permissions.includes('user_logout'));
+  const activeSessionByUserId = activeSessions.reduce((acc, session) => {
+    acc[session.userId] = session;
+    return acc;
+  }, {});
+  const displayedUsers = userListMode === 'active'
+    ? users.filter((user) => !!activeSessionByUserId[user.id])
+    : users;
 
   useEffect(() => {
     fetchUsers();
     fetchLocations();
   }, []);
+
+  useEffect(() => {
+    if (!canManageSessions) return;
+    fetchActiveSessions();
+  }, [canManageSessions]);
+
+  useEffect(() => {
+    if (!socket || !canManageSessions) return undefined;
+
+    const handleActiveUsersUpdate = (sessions) => {
+      setActiveSessions(Array.isArray(sessions) ? sessions : []);
+    };
+
+    socket.on('active-users:update', handleActiveUsersUpdate);
+    return () => {
+      socket.off('active-users:update', handleActiveUsersUpdate);
+    };
+  }, [socket, canManageSessions]);
 
   const fetchUsers = async () => {
     try {
@@ -58,11 +95,49 @@ const AllUser = () => {
     }
   };
 
+  const fetchActiveSessions = async () => {
+    try {
+      setLoadingActiveSessions(true);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(API_ROUTES.USER_ACTIVE_SESSIONS, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setActiveSessions(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching active sessions:', error);
+    } finally {
+      setLoadingActiveSessions(false);
+    }
+  };
+
+  const handleForceLogout = async (userId) => {
+    if (!window.confirm('Are you sure you want to force logout this user now?')) {
+      return;
+    }
+
+    try {
+      setForceLogoutUserId(userId);
+      const token = localStorage.getItem('token');
+      await axios.post(
+        API_ROUTES.USER_FORCE_LOGOUT(userId),
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } catch (error) {
+      console.error('Error forcing user logout:', error);
+      alert(error.response?.data?.error || 'Failed to force logout user');
+    } finally {
+      setForceLogoutUserId(null);
+    }
+  };
+
   const openEditModal = (user) => {
     setSelectedUser(user);
     setEditForm({
       name: user.name || '',
       email: user.email || '',
+      loginStartTime: user.loginStartTime || '',
+      loginEndTime: user.loginEndTime || '',
       role: user.role || 'USER',
       permissions: user.permissions || { locations: [] }
     });
@@ -75,6 +150,8 @@ const AllUser = () => {
     setEditForm({
       name: '',
       email: '',
+      loginStartTime: '',
+      loginEndTime: '',
       role: 'USER',
       permissions: { locations: [] }
     });
@@ -294,6 +371,35 @@ const AllUser = () => {
           </Link>
         </div>
       </div>
+      {canManageSessions && (
+        <div className="glass-card p-6 mb-6 border border-white/20 backdrop-blur-xl">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-800 flex items-center">
+              <Clock size={18} className="mr-2 text-blue-600" />
+              Live Active Users
+            </h2>
+            <span className="text-sm text-gray-600">
+              {loadingActiveSessions ? 'Loading...' : `${activeSessions.length} online`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              type="button"
+              onClick={() => setUserListMode('all')}
+              className={`px-3 py-2 rounded-lg text-sm ${userListMode === 'all' ? 'bg-blue-600 text-white' : 'bg-white/60 text-gray-700'}`}
+            >
+              All Users
+            </button>
+            <button
+              type="button"
+              onClick={() => setUserListMode('active')}
+              className={`px-3 py-2 rounded-lg text-sm ${userListMode === 'active' ? 'bg-blue-600 text-white' : 'bg-white/60 text-gray-700'}`}
+            >
+              Active Users Only
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Users Table */}
       <div className="glass-card overflow-hidden border border-white/20 backdrop-blur-xl">
@@ -331,7 +437,7 @@ const AllUser = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
-              {users.map((user) => {
+              {displayedUsers.map((user) => {
                 const locationPermissions = getLocationPermissions(user.permissions);
                 
                 return (
@@ -400,11 +506,29 @@ const AllUser = () => {
                         >
                           <Trash2 size={18} />
                         </button>
+                        {canManageSessions && activeSessionByUserId[user.id] && (
+                          <button
+                            type="button"
+                            onClick={() => handleForceLogout(user.id)}
+                            disabled={forceLogoutUserId === user.id}
+                            className="glass-icon-button p-2 rounded-lg bg-gradient-to-r from-orange-500/10 to-red-500/10 hover:from-orange-500/20 hover:to-red-500/20 text-orange-700 hover:text-red-700 transition-all duration-200 disabled:opacity-50"
+                            title="Force Logout Active User"
+                          >
+                            <LogOut size={18} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
                 );
               })}
+              {displayedUsers.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-sm text-gray-500">
+                    {userListMode === 'active' ? 'No active users found.' : 'No users found.'}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -444,7 +568,7 @@ const AllUser = () => {
                     <UserIcon size={20} className="mr-2 text-blue-600" />
                     Basic Information
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium mb-2 text-gray-700">Name</label>
                       <input
@@ -478,6 +602,26 @@ const AllUser = () => {
                         <option value="USER">User</option>
                         <option value="ADMIN">Admin</option>
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-gray-700">Login Start Time</label>
+                      <input
+                        type="time"
+                        name="loginStartTime"
+                        value={editForm.loginStartTime}
+                        onChange={handleEditInputChange}
+                        className="glass-input w-full p-3 rounded-lg border border-white/30 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-gray-700">Login End Time</label>
+                      <input
+                        type="time"
+                        name="loginEndTime"
+                        value={editForm.loginEndTime}
+                        onChange={handleEditInputChange}
+                        className="glass-input w-full p-3 rounded-lg border border-white/30 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                      />
                     </div>
                   </div>
                 </div>
