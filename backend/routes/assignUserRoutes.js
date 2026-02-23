@@ -5,25 +5,34 @@ const prisma = new PrismaClient();
 
 
 
-// Get all assignments with complete details
+// Get all assignments with complete details (with pagination)
 router.get('/all-assignments', async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Get total count for pagination
+    const totalCount = await prisma.userAssociate.count();
+
     const assignments = await prisma.userAssociate.findMany({
+      skip,
+      take: limit,
       include: {
         user: {
           select: {
-  id: true,
-  name: true,
-  email: true,
-  username: true,
-  createdAt: true,
-  permission: {
-    select: {
-      name: true,
-      permissions: true
-    }
-  }
-}
+            id: true,
+            name: true,
+            email: true,
+            username: true,
+            createdAt: true,
+            permission: {
+              select: {
+                name: true,
+                permissions: true
+              }
+            }
+          }
         }
       },
       orderBy: { id: 'desc' }
@@ -74,22 +83,45 @@ router.get('/all-assignments', async (req, res) => {
       };
     });
 
-    res.json(enhancedAssignments);
+    // Return paginated response
+    res.json({
+      data: enhancedAssignments,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalItems: totalCount,
+        itemsPerPage: limit,
+        hasNext: page < Math.ceil(totalCount / limit),
+        hasPrev: page > 1
+      }
+    });
   } catch (error) {
     console.error('Error fetching all assignments:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get assignments by user
+// Get assignments by user (with pagination)
 router.get('/user/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    // Get total count for pagination
+    const totalCount = await prisma.userAssociate.count({
+      where: {
+        userId: parseInt(userId)
+      }
+    });
 
     const assignments = await prisma.userAssociate.findMany({
       where: {
         userId: parseInt(userId)
       },
+      skip,
+      take: limit,
       include: {
         user: {
           select: {
@@ -144,16 +176,30 @@ router.get('/user/:userId', async (req, res) => {
       })
     );
 
-    res.json(enhancedAssignments);
+    res.json({
+      data: enhancedAssignments,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalItems: totalCount,
+        itemsPerPage: limit,
+        hasNext: page < Math.ceil(totalCount / limit),
+        hasPrev: page > 1
+      }
+    });
   } catch (error) {
     console.error('Error fetching user assignments:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get all entities (stores, shops, factories, cash registers, accounts)
+// Get all entities (with pagination)
 router.get('/entities', async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
     const [stores, shops, factories, cashRegisters, accounts] = await Promise.all([
       prisma.store.findMany(),
       prisma.shop.findMany(),
@@ -184,7 +230,7 @@ router.get('/entities', async (req, res) => {
     });
 
     // Combine all entities
-    const entities = [
+    const allEntities = [
       ...stores.map(store => ({
         id: store.id,
         name: store.name,
@@ -199,7 +245,6 @@ router.get('/entities', async (req, res) => {
           name: a.user.name,
           email: a.user.email,
           username: a.user.username,
-          // Use permission name as role
           role: a.user.permission?.name || 'default'
         }))
       })),
@@ -273,12 +318,27 @@ router.get('/entities', async (req, res) => {
       }))
     ];
 
-    res.json(entities);
+    // Apply pagination
+    const totalCount = allEntities.length;
+    const paginatedEntities = allEntities.slice(skip, skip + limit);
+
+    res.json({
+      data: paginatedEntities,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalItems: totalCount,
+        itemsPerPage: limit,
+        hasNext: page < Math.ceil(totalCount / limit),
+        hasPrev: page > 1
+      }
+    });
   } catch (error) {
     console.error('Error fetching entities:', error);
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // Get available users for assignment
 router.get('/available-users', async (req, res) => {
@@ -445,20 +505,33 @@ res.status(201).json(formattedAssignment);
   }
 });
 
-// Get user assignments for an entity
+// Get user assignments for an entity (with pagination)
 router.get('/entity/:type/:id', async (req, res) => {
   try {
     const { type, id } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
 
     if (!['store', 'shop', 'factory', 'cashRegister', 'account'].includes(type)) {
       return res.status(400).json({ error: 'Invalid entity type' });
     }
+
+    // Get total count for pagination
+    const totalCount = await prisma.userAssociate.count({
+      where: {
+        associateName: type,
+        associateId: parseInt(id)
+      }
+    });
 
     const assignments = await prisma.userAssociate.findMany({
       where: {
         associateName: type,
         associateId: parseInt(id)
       },
+      skip,
+      take: limit,
       include: {
         user: {
           select: {
@@ -487,7 +560,17 @@ router.get('/entity/:type/:id', async (req, res) => {
       }
     }));
 
-    res.json(formattedAssignments);
+    res.json({
+      data: formattedAssignments,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalItems: totalCount,
+        itemsPerPage: limit,
+        hasNext: page < Math.ceil(totalCount / limit),
+        hasPrev: page > 1
+      }
+    });
   } catch (error) {
     console.error('Error fetching entity assignments:', error);
     res.status(500).json({ error: error.message });
