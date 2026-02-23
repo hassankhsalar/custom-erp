@@ -355,11 +355,6 @@ export default function CreateSale() {
       return false;
     }
 
-    if (paidAmount > grandTotal) {
-      alert("⚠️ Paid amount cannot exceed grand total.");
-      return false;
-    }
-
     // Check stock availability for all items
     for (const cartItem of cartItems) {
       if (cartItem.quantity <= 0) {
@@ -1005,7 +1000,7 @@ export default function CreateSale() {
                     </div>
 
                     <div className="flex justify-between text-sm ">
-                      <span>Change:</span>
+                      <span>Over/Under:</span>
                       <span className="font-medium">${ ((parseFloat(paidAmount) || 0) - grandTotal ).toFixed(2)}</span>
                     </div>
 

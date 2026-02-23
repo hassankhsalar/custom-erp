@@ -16,7 +16,7 @@ const Navbar = () => {
     const profileRef = useRef(null);
     const notificationRef = useRef(null);
     const location = useLocation();
-    const { currentUser, loading, error, logout } = useAuth();
+    const { currentUser, loading, error, logout, socket } = useAuth();
 
     const localUserName = localStorage.getItem('name');
     const localUserEmail = localStorage.getItem('email');
@@ -60,6 +60,19 @@ const Navbar = () => {
     useEffect(() => {
         fetchNotifications();
     }, []);
+
+    useEffect(() => {
+        if (!socket) return;
+        const handleNewNotification = (notification) => {
+            setNotifications((prev) => [notification, ...prev].slice(0, 5));
+            setUnreadCount((prev) => prev + 1);
+        };
+
+        socket.on("notification:new", handleNewNotification);
+        return () => {
+            socket.off("notification:new", handleNewNotification);
+        };
+    }, [socket]);
 
 
     const navItems = [

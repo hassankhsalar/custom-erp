@@ -7,6 +7,7 @@ const cors = require('cors');
 const { Server } = require('socket.io');
 const { activityLoggerMiddleware, logActivity } = require('./utils/activityLogger');
 const { createSessionTracker, isWithinAllowedLoginWindow, LOGIN_WINDOW_ERROR } = require('./services/realtimeTracker');
+const { setRealtimeIo } = require('./services/realtimeEmitter');
 
 const prisma = new PrismaClient();
 const app = express();
@@ -300,6 +301,7 @@ const sessionTracker = createSessionTracker({
   prisma,
   jwtSecret: JWT_SECRET,
 });
+setRealtimeIo(io);
 
 app.set('io', io);
 app.set('sessionTracker', sessionTracker);

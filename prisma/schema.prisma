@@ -790,6 +790,15 @@ model Sale {
   grandTotal  Float
   paidAmount  Float        @default(0)
   paymentType String       @default("cash") // e.g. cash, card, mobile
+  createdById Int?
+  transactionStatus String @default("open") // open | closed
+  transactionClosedById Int?
+  transactionClosedAt DateTime?
+  editStatus String @default("closed") // open | closed
+  editGrantedToUserId Int?
+  editGrantedByUserId Int?
+  editOpenedAt DateTime?
+  editClosedAt DateTime?
   createdAt   DateTime     @default(now())
   saleItems   SaleItem[]
   warranties  UserWarranty[]
@@ -797,6 +806,7 @@ model Sale {
   isReturned  Boolean      @default(false)
   returnedAt  DateTime?
   transactions Transactions[]
+  editAccessRequests SaleEditAccessRequest[]
   
   @@index([shopId])
 }
@@ -1409,6 +1419,23 @@ model BusinessSettings {
   updatedAt DateTime @updatedAt
 
   @@index([key])
+}
+
+model SaleEditAccessRequest {
+  id               Int      @id @default(autoincrement())
+  saleId           Int
+  sale             Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  requesterUserId  Int
+  status           String   @default("pending") // pending | approved | rejected
+  message          String?
+  resolvedByUserId Int?
+  resolvedAt       DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([saleId, status])
+  @@index([requesterUserId, status])
+  @@index([createdAt])
 }
 
 

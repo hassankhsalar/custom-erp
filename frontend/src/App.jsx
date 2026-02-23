@@ -17,6 +17,8 @@ import EditProduct from "./components/Products/EditProduct";
 import POS from "./components/Sale/POS";
 import AllSales from "./components/Sale/AllSales";
 import CreateSale from "./components/Sale/CreateSale";
+import EditSale from "./components/Sale/EditSale";
+import SaleEditRequests from "./components/Sale/SaleEditRequests";
 import SaleReturn from "./components/Sale/SaleReturn";
 import WarrantyList from "./components/Sale/WarrantyList";
 import AllMaterials from "./components/Materials/AllMaterials";
@@ -271,6 +273,12 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="sales_read" />}>
               <Route path="/sale/all" element={<AllSales />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="sales_read" />}>
+              <Route path="/sale/edit/:id" element={<EditSale />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="sales_open_close" />}>
+              <Route path="/sale/edit-requests" element={<SaleEditRequests />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="sales_create" />}>
               <Route path="/sale/create" element={<CreateSale />} />

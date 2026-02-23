@@ -7,6 +7,80 @@ const { createNotification } = require('../utils/notificationHelper');
 const { buildScope, ensureTypeScope, ensureIdScope } = require("../utils/associateScope");
 const { getAvailableBatches, decrementBatch } = require("../utils/batchDetails");
 
+const isAdminPermission = (permissionName) => permissionName === "admin" || permissionName === "superadmin";
+const isSameCalendarDay = (a, b) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+const getRequesterAccessContext = async (userId) => {
+  const user = await prisma.user.findUnique({
+    where: { id: Number(userId) },
+    include: {
+      permission: {
+        select: {
+          name: true,
+          permissions: true,
+        },
+      },
+    },
+  });
+
+  const permissionName = user?.permission?.name || null;
+  const permissionList = Array.isArray(user?.permission?.permissions) ? user.permission.permissions : [];
+  const isAdmin = isAdminPermission(permissionName);
+  const canSalesOpenClose = isAdmin || permissionList.includes("sales_open_close");
+  const canEditAnyDay = isAdmin || permissionList.includes("sales_edit_any_day");
+  const canEditToday = isAdmin || permissionList.includes("sales_edit_today") || permissionList.includes("sales_edit");
+  const canGrantSaleEdit = canSalesOpenClose || isAdmin;
+
+  return {
+    user,
+    permissionName,
+    permissionList,
+    isAdmin,
+    canSalesOpenClose,
+    canEditAnyDay,
+    canEditToday,
+    canGrantSaleEdit,
+  };
+};
+
+const canEditSaleForUser = (sale, requesterId, access) => {
+  if (!sale || !access) return false;
+
+  const transactionClosed = (sale.transactionStatus || "open") === "closed";
+  if (transactionClosed && !access.isAdmin && !access.canSalesOpenClose) {
+    return false;
+  }
+
+  const isTodaySale = isSameCalendarDay(new Date(sale.createdAt), new Date());
+  const isCreator = Number(sale.createdById || 0) === Number(requesterId || 0);
+  const hasSaleGrant = (sale.editStatus || "closed") === "open" && Number(sale.editGrantedToUserId || 0) === Number(requesterId || 0);
+
+  if (access.isAdmin || access.canSalesOpenClose || access.canEditAnyDay) return true;
+  if (hasSaleGrant) return true;
+  if (isTodaySale && (access.canEditToday || isCreator)) return true;
+
+  return false;
+};
+
+const mapSaleWithPermissions = (sale, requesterId, access) => {
+  const canEdit = canEditSaleForUser(sale, requesterId, access);
+  const canDelete = canEdit;
+  const canCloseTransaction = access?.isAdmin || access?.canSalesOpenClose;
+
+  return {
+    ...sale,
+    canEdit,
+    canDelete,
+    canGrantSaleEdit: !!(access?.canGrantSaleEdit),
+    canCloseTransaction: !!canCloseTransaction,
+    isTransactionClosed: (sale.transactionStatus || "open") === "closed",
+    isSaleEditOpen: (sale.editStatus || "closed") === "open",
+  };
+};
+
 // Get all shops for POS
 router.get("/shops", async (req, res) => {
   try {
@@ -231,10 +305,6 @@ router.post("/", async (req, res) => {
       const grandTotal = Math.max(0, totalAmount - (parseFloat(discount) || 0));
       const finalPaidAmount = paid !== null ? paid : grandTotal;
 
-      if (finalPaidAmount.toFixed(2) > (grandTotal.toFixed(2) + 0.001)) {
-        throw new Error("Paid amount cannot exceed grand total");
-      }
-
       // Generate reference
       const reference = `SALE-${Date.now()}`;
 
@@ -296,6 +366,12 @@ router.post("/", async (req, res) => {
           grandTotal,
           paidAmount: finalPaidAmount,
           paymentType: paymentType || "cash",
+          createdById: req.user?.userId || null,
+          transactionStatus: "open",
+          editStatus: "open",
+          editGrantedToUserId: req.user?.userId || null,
+          editGrantedByUserId: req.user?.userId || null,
+          editOpenedAt: new Date(),
           bankAccountId: bankRecord ? bankRecord.id : null,
           bankName: bankRecord ? bankRecord.name : null,
         },
@@ -308,6 +384,10 @@ router.post("/", async (req, res) => {
       let stockAfterSale = 0;
       
       for (const item of items) {
+        let itemNameForNotification = item.selectedName
+          ? String(item.selectedName).trim()
+          : `Item ${item.itemId}`;
+
         // Check stock based on item type
         if (item.type === "product") {
           // Check and update shop product stock
@@ -361,6 +441,7 @@ router.post("/", async (req, res) => {
 
           item.avg_cost = shopProduct.avg_cost;
           item.alert_quantity = shopProduct.product.alert_quantity;
+          itemNameForNotification = shopProduct.product?.name || itemNameForNotification;
           totalCost += parseFloat(item.avg_cost) * parseFloat(item.quantity);
           stockAfterSale = shopProduct.stock - parseFloat(item.quantity);
 
@@ -418,6 +499,7 @@ router.post("/", async (req, res) => {
 
           item.avg_cost = shopMaterial.avg_cost;
           item.alert_quantity = shopMaterial.material.alert_quantity;
+          itemNameForNotification = shopMaterial.material?.name || itemNameForNotification;
           totalCost += parseFloat(item.avg_cost) * parseFloat(item.quantity);
           stockAfterSale = shopMaterial.stock - parseFloat(item.quantity);
 
@@ -427,10 +509,10 @@ router.post("/", async (req, res) => {
           let shopName = await tx.shop.findUnique({
             where: { id: parseInt(shopId) },
             select: { name: true }
-          })
-          notificationData = {
-            title: "Item " + (item.type === "product" ? item.product.name : item.material.name) + " is low stock at " + shopName.name,
-          }
+          });
+          const notificationData = {
+            title: `Item ${itemNameForNotification} is low stock at ${shopName?.name || "shop"}`,
+          };
           await createNotification(prisma, notificationData);
         }
 
@@ -526,6 +608,15 @@ router.post("/", async (req, res) => {
           payment_method: paymentType || "cash",
           current_account_balance: updatedAccount.balance,
           note: `Payment for sale ${sale.reference}`
+        });
+      }
+
+      if (finalPaidAmount > grandTotal) {
+        await createNotification(tx, {
+          title: `Overpayment detected on sale ${sale.reference}`,
+          description: `Paid amount (${finalPaidAmount.toFixed(2)}) is greater than grand total (${grandTotal.toFixed(2)}). Admin should add a negative payment adjustment.`,
+          forRole: "admin",
+          link: `/sale/all`
         });
       }
 
@@ -937,8 +1028,13 @@ router.get("/", async (req, res) => {
       take,
     });
 
+    const access = await getRequesterAccessContext(req.user?.userId || 0);
+    const salesWithAccess = sales.map((sale) =>
+      mapSaleWithPermissions(sale, req.user?.userId || 0, access)
+    );
+
     res.json({
-      sales,
+      sales: salesWithAccess,
       pagination: {
         currentPage: parseInt(page),
         totalPages: Math.ceil(totalCount / take),
@@ -954,6 +1050,339 @@ router.get("/", async (req, res) => {
   }
 });
 
+// Open sale for edit to a specific user (one user at a time)
+router.post("/:id/edit-access/open", async (req, res) => {
+  try {
+    const saleId = parseInt(req.params.id, 10);
+    const targetUserId = parseInt(req.body?.userId, 10);
+    if (!saleId || !targetUserId) {
+      return res.status(400).json({ error: "sale id and userId are required" });
+    }
+
+    const sale = await prisma.sale.findUnique({ where: { id: saleId } });
+    if (!sale) return res.status(404).json({ error: "Sale not found" });
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", sale.shopId);
+
+    const access = await getRequesterAccessContext(req.user?.userId || 0);
+    if (!access.canGrantSaleEdit) {
+      return res.status(403).json({ error: "You do not have permission to open sale edit access" });
+    }
+
+    if ((sale.editStatus || "closed") === "open" && Number(sale.editGrantedToUserId || 0) !== targetUserId) {
+      return res.status(409).json({
+        error: `Sale is already open for another user (userId: ${sale.editGrantedToUserId}). Close it first.`,
+      });
+    }
+
+    const updated = await prisma.sale.update({
+      where: { id: saleId },
+      data: {
+        editStatus: "open",
+        editGrantedToUserId: targetUserId,
+        editGrantedByUserId: req.user?.userId || null,
+        editOpenedAt: new Date(),
+      },
+    });
+
+    return res.json({ success: true, sale: updated });
+  } catch (err) {
+    if (err.status === 403) return res.status(403).json({ error: "Forbidden" });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Request sale edit access (for users without direct grant rights)
+router.post("/:id/edit-access/request", async (req, res) => {
+  try {
+    const saleId = parseInt(req.params.id, 10);
+    if (!saleId) {
+      return res.status(400).json({ error: "Invalid sale ID" });
+    }
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        shop: { select: { id: true, name: true } },
+      },
+    });
+    if (!sale) return res.status(404).json({ error: "Sale not found" });
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", sale.shopId);
+
+    const requester = await prisma.user.findUnique({
+      where: { id: req.user?.userId || 0 },
+      select: { id: true, name: true, username: true, email: true },
+    });
+
+    const existingPending = await prisma.saleEditAccessRequest.findFirst({
+      where: {
+        saleId,
+        requesterUserId: req.user?.userId || 0,
+        status: "pending",
+      },
+      select: { id: true },
+    });
+    if (existingPending) {
+      return res.status(409).json({ error: "You already have a pending request for this sale." });
+    }
+
+    const requestRow = await prisma.saleEditAccessRequest.create({
+      data: {
+        saleId,
+        requesterUserId: req.user?.userId || 0,
+        status: "pending",
+      },
+    });
+
+    await createNotification(prisma, {
+      title: `Edit access request for sale ${sale.reference}`,
+      description: `User ${requester?.name || requester?.username || requester?.email || req.user?.userId} requested edit access for sale ${sale.reference} at ${sale.shop?.name || "shop"}. Request ID: ${requestRow.id}`,
+      forRole: "admin",
+      link: "/sale/edit-requests",
+    });
+
+    return res.json({ success: true, message: "Edit access request sent to admin." });
+  } catch (err) {
+    if (err.status === 403) return res.status(403).json({ error: "Forbidden" });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// List sale edit access requests
+router.get("/edit-access/requests", async (req, res) => {
+  try {
+    const status = String(req.query.status || "pending").toLowerCase();
+    const allowedStatuses = new Set(["pending", "approved", "rejected", "all"]);
+    if (!allowedStatuses.has(status)) {
+      return res.status(400).json({ error: "Invalid status filter" });
+    }
+
+    const access = await getRequesterAccessContext(req.user?.userId || 0);
+    if (!access.canGrantSaleEdit) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    const saleWhere = scope.isAdmin ? {} : { shopId: { in: Array.from(scope.shops) } };
+    const allowedSales = await prisma.sale.findMany({
+      where: saleWhere,
+      select: { id: true },
+    });
+    const allowedSaleIds = allowedSales.map((s) => s.id);
+
+    if (allowedSaleIds.length === 0) {
+      return res.json({ rows: [] });
+    }
+
+    const where = {
+      saleId: { in: allowedSaleIds },
+      ...(status === "all" ? {} : { status }),
+    };
+
+    const rows = await prisma.saleEditAccessRequest.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: {
+        sale: {
+          select: {
+            id: true,
+            reference: true,
+            shopId: true,
+            editStatus: true,
+            editGrantedToUserId: true,
+            transactionStatus: true,
+            createdAt: true,
+            shop: { select: { id: true, name: true } },
+          },
+        },
+      },
+    });
+
+    const requesterIds = Array.from(new Set(rows.map((r) => r.requesterUserId).filter(Boolean)));
+    const resolverIds = Array.from(new Set(rows.map((r) => r.resolvedByUserId).filter(Boolean)));
+    const users = await prisma.user.findMany({
+      where: { id: { in: Array.from(new Set([...requesterIds, ...resolverIds])) } },
+      select: { id: true, name: true, username: true, email: true },
+    });
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    const enriched = rows.map((row) => ({
+      ...row,
+      requester: userMap.get(row.requesterUserId) || null,
+      resolvedBy: row.resolvedByUserId ? (userMap.get(row.resolvedByUserId) || null) : null,
+    }));
+
+    return res.json({ rows: enriched });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Approve sale edit request and open access for requested user
+router.post("/edit-access/requests/:requestId/approve", async (req, res) => {
+  try {
+    const requestId = parseInt(req.params.requestId, 10);
+    if (!requestId) return res.status(400).json({ error: "Invalid request ID" });
+
+    const access = await getRequesterAccessContext(req.user?.userId || 0);
+    if (!access.canGrantSaleEdit) return res.status(403).json({ error: "Forbidden" });
+
+    const requestRow = await prisma.saleEditAccessRequest.findUnique({ where: { id: requestId } });
+    if (!requestRow) return res.status(404).json({ error: "Request not found" });
+    if (requestRow.status !== "pending") return res.status(400).json({ error: "Request is not pending" });
+
+    const sale = await prisma.sale.findUnique({ where: { id: requestRow.saleId } });
+    if (!sale) return res.status(404).json({ error: "Sale not found" });
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", sale.shopId);
+
+    if ((sale.editStatus || "closed") === "open" && Number(sale.editGrantedToUserId || 0) !== Number(requestRow.requesterUserId)) {
+      return res.status(409).json({ error: "Sale is already open for another user. Close it first." });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.sale.update({
+        where: { id: sale.id },
+        data: {
+          editStatus: "open",
+          editGrantedToUserId: requestRow.requesterUserId,
+          editGrantedByUserId: req.user?.userId || null,
+          editOpenedAt: new Date(),
+        },
+      });
+
+      await tx.saleEditAccessRequest.update({
+        where: { id: requestId },
+        data: {
+          status: "approved",
+          resolvedByUserId: req.user?.userId || null,
+          resolvedAt: new Date(),
+        },
+      });
+    });
+
+    await createNotification(prisma, {
+      title: `Edit access approved for sale ${sale.reference}`,
+      description: `Your request to edit sale ${sale.reference} was approved.`,
+      forRole: "admin",
+      link: "/sale/all",
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    if (err.status === 403) return res.status(403).json({ error: "Forbidden" });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Reject sale edit request
+router.post("/edit-access/requests/:requestId/reject", async (req, res) => {
+  try {
+    const requestId = parseInt(req.params.requestId, 10);
+    if (!requestId) return res.status(400).json({ error: "Invalid request ID" });
+
+    const access = await getRequesterAccessContext(req.user?.userId || 0);
+    if (!access.canGrantSaleEdit) return res.status(403).json({ error: "Forbidden" });
+
+    const requestRow = await prisma.saleEditAccessRequest.findUnique({ where: { id: requestId } });
+    if (!requestRow) return res.status(404).json({ error: "Request not found" });
+    if (requestRow.status !== "pending") return res.status(400).json({ error: "Request is not pending" });
+
+    const sale = await prisma.sale.findUnique({ where: { id: requestRow.saleId } });
+    if (!sale) return res.status(404).json({ error: "Sale not found" });
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", sale.shopId);
+
+    await prisma.saleEditAccessRequest.update({
+      where: { id: requestId },
+      data: {
+        status: "rejected",
+        resolvedByUserId: req.user?.userId || null,
+        resolvedAt: new Date(),
+      },
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    if (err.status === 403) return res.status(403).json({ error: "Forbidden" });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Close sale edit access
+router.post("/:id/edit-access/close", async (req, res) => {
+  try {
+    const saleId = parseInt(req.params.id, 10);
+    if (!saleId) return res.status(400).json({ error: "Invalid sale ID" });
+
+    const sale = await prisma.sale.findUnique({ where: { id: saleId } });
+    if (!sale) return res.status(404).json({ error: "Sale not found" });
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", sale.shopId);
+
+    const access = await getRequesterAccessContext(req.user?.userId || 0);
+    const isGrantedUser = Number(sale.editGrantedToUserId || 0) === Number(req.user?.userId || 0);
+    if (!access.canGrantSaleEdit && !isGrantedUser) {
+      return res.status(403).json({ error: "You do not have permission to close sale edit access" });
+    }
+
+    const updated = await prisma.sale.update({
+      where: { id: saleId },
+      data: {
+        editStatus: "closed",
+        editClosedAt: new Date(),
+      },
+    });
+
+    return res.json({ success: true, sale: updated });
+  } catch (err) {
+    if (err.status === 403) return res.status(403).json({ error: "Forbidden" });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Set transaction status (open/closed)
+router.post("/:id/transaction-status", async (req, res) => {
+  try {
+    const saleId = parseInt(req.params.id, 10);
+    const status = String(req.body?.status || "").toLowerCase();
+    if (!saleId || !["open", "closed"].includes(status)) {
+      return res.status(400).json({ error: "sale id and valid status (open|closed) are required" });
+    }
+
+    const sale = await prisma.sale.findUnique({ where: { id: saleId } });
+    if (!sale) return res.status(404).json({ error: "Sale not found" });
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", sale.shopId);
+
+    const access = await getRequesterAccessContext(req.user?.userId || 0);
+    if (!access.canSalesOpenClose) {
+      return res.status(403).json({ error: "You do not have permission to change transaction status" });
+    }
+
+    const updated = await prisma.sale.update({
+      where: { id: saleId },
+      data: {
+        transactionStatus: status,
+        transactionClosedById: status === "closed" ? (req.user?.userId || null) : null,
+        transactionClosedAt: status === "closed" ? new Date() : null,
+      },
+    });
+
+    return res.json({ success: true, sale: updated });
+  } catch (err) {
+    if (err.status === 403) return res.status(403).json({ error: "Forbidden" });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // Add payment to sale
 router.post("/:id/payments", async (req, res) => {
   try {
@@ -964,8 +1393,8 @@ router.post("/:id/payments", async (req, res) => {
 
     const { amount, payment_method, bankAccountId, cashRegisterId, note } = req.body;
     const paymentAmount = parseFloat(amount);
-    if (!paymentAmount || paymentAmount <= 0) {
-      return res.status(400).json({ error: "Payment amount must be greater than 0" });
+    if (!Number.isFinite(paymentAmount) || paymentAmount === 0) {
+      return res.status(400).json({ error: "Payment amount cannot be zero" });
     }
 
     const sale = await prisma.sale.findUnique({
@@ -978,10 +1407,28 @@ router.post("/:id/payments", async (req, res) => {
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, "shop", sale.shopId);
+    const access = await getRequesterAccessContext(req.user?.userId || 0);
+    const canModifySale = canEditSaleForUser(sale, req.user?.userId || 0, access);
+    if (!canModifySale) {
+      return res.status(403).json({ error: "You do not have permission to modify this sale" });
+    }
 
-    const dueAmount = Math.max(0, (parseFloat(sale.grandTotal) || 0) - (parseFloat(sale.paidAmount) || 0));
-    if (dueAmount.toFixed(2) < paymentAmount.toFixed(2)) {
-      return res.status(400).json({ error: `Payment amount ($${paymentAmount.toFixed(2)}) exceeds due amount ($${dueAmount.toFixed(2)})` });
+    if ((sale.transactionStatus || "open") === "closed" && !access.isAdmin && !access.canSalesOpenClose) {
+      return res.status(403).json({ error: "This sale transaction is closed and cannot be modified" });
+    }
+
+    if (paymentAmount < 0 && !access.isAdmin && !access.canSalesOpenClose) {
+      return res.status(403).json({ error: "Only admin or authorized users can add negative payments" });
+    }
+
+    const normalizedMethod = (payment_method || "cash").toLowerCase();
+    if (["bank", "card"].includes(normalizedMethod) && !bankAccountId) {
+      return res.status(400).json({ error: "Bank account is required for card/bank payments" });
+    }
+
+    const dueAmount = (parseFloat(sale.grandTotal) || 0) - (parseFloat(sale.paidAmount) || 0);
+    if ((parseFloat(sale.paidAmount) || 0) + paymentAmount < 0) {
+      return res.status(400).json({ error: "Payment adjustment cannot reduce paid amount below zero" });
     }
 
     const entityAccount = await prisma.entityAccount.findFirst({
@@ -1057,6 +1504,15 @@ router.post("/:id/payments", async (req, res) => {
         note: note || `Payment for sale ${updatedSale.reference}`
       });
 
+      if (paymentAmount > dueAmount) {
+        await createNotification(tx, {
+          title: `Overpayment detected on sale ${sale.reference}`,
+          description: `Payment (${paymentAmount.toFixed(2)}) exceeded due (${Math.max(0, dueAmount).toFixed(2)}). Admin may add negative payment to adjust.`,
+          forRole: "admin",
+          link: `/sale/all`
+        });
+      }
+
       return { updatedSale, txn };
     });
 
@@ -1111,7 +1567,56 @@ router.get("/:id/payments", async (req, res) => {
   }
 });
 
-// Update sale (limited fields)
+// Get sale details by id
+router.get("/details/:id", async (req, res) => {
+  try {
+    const saleId = parseInt(req.params.id, 10);
+    if (!saleId) return res.status(400).json({ error: "Invalid sale ID" });
+
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        shop: {
+          select: { id: true, name: true, shop_keeper: true },
+        },
+        transactions: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            account: true,
+            createdBy: { select: { id: true, name: true, email: true } },
+            bankAccount: true,
+          },
+        },
+        saleItems: {
+          include: {
+            product: {
+              select: { id: true, name: true, barcode: true, unit: true, sale_price: true },
+            },
+            material: {
+              select: { id: true, name: true, barcode: true, unit: true, sale_price: true },
+            },
+          },
+        },
+        customer: {
+          select: { id: true, name: true, mobile: true, email: true },
+        },
+      },
+    });
+
+    if (!sale) return res.status(404).json({ error: "Sale not found" });
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, "shop", sale.shopId);
+    const access = await getRequesterAccessContext(req.user?.userId || 0);
+
+    return res.json(mapSaleWithPermissions(sale, req.user?.userId || 0, access));
+  } catch (err) {
+    if (err.status === 403) return res.status(403).json({ error: "Forbidden" });
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Update sale (full edit)
 router.put("/:id", async (req, res) => {
   try {
     const saleId = parseInt(req.params.id);
@@ -1119,32 +1624,340 @@ router.put("/:id", async (req, res) => {
       return res.status(400).json({ error: "Invalid sale ID" });
     }
 
-    const { customerId, discount } = req.body;
-    const sale = await prisma.sale.findUnique({ where: { id: saleId } });
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        saleItems: true,
+      },
+    });
     if (!sale) {
       return res.status(404).json({ error: "Sale not found" });
     }
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, "shop", sale.shopId);
-
-    if ((parseFloat(sale.paidAmount) || 0) > 0) {
-      return res.status(400).json({ error: "Cannot edit sale with payments" });
+    const access = await getRequesterAccessContext(req.user?.userId || 0);
+    const canEdit = canEditSaleForUser(sale, req.user?.userId || 0, access);
+    if (!canEdit) {
+      return res.status(403).json({ error: "You do not have permission to edit this sale" });
     }
 
-    const newDiscount = discount !== undefined ? parseFloat(discount) || 0 : sale.discount;
-    const newGrandTotal = Math.max(0, (parseFloat(sale.totalAmount) || 0) - newDiscount);
+    if ((sale.transactionStatus || "open") === "closed" && !access.isAdmin && !access.canSalesOpenClose) {
+      return res.status(403).json({ error: "This sale transaction is closed and cannot be edited" });
+    }
 
-    const updatedSale = await prisma.sale.update({
-      where: { id: saleId },
-      data: {
-        customerId: customerId ? parseInt(customerId) : null,
-        discount: newDiscount,
-        grandTotal: newGrandTotal
+    const {
+      customerId,
+      discount,
+      paymentType,
+      bankAccountId,
+      cashRegisterId,
+      paidAmount,
+      items,
+    } = req.body || {};
+
+    const normalizedItems = Array.isArray(items) && items.length > 0
+      ? items
+      : sale.saleItems.map((si) => ({
+          type: si.productId ? "product" : "material",
+          itemId: si.productId || si.materialId,
+          quantity: Number(si.quantity || 0),
+          unitPrice: Number(si.unitPrice || 0),
+          selectedName: si.selectedName || null,
+          selectedUnit: si.selectedUnit || null,
+          selectedQuantity: si.selectedQuantity || null,
+          batchNumber: si.batchNumber || null,
+          expiryDate: si.expiryDate || null,
+          warrantyEnabled: false,
+          warrantyExpiryDate: null,
+          warrantyNotes: si.warrantyNotes || null,
+          warrantySerial: si.warrantySerial || null,
+        }));
+
+    if (!Array.isArray(normalizedItems) || normalizedItems.length === 0) {
+      return res.status(400).json({ error: "At least one sale item is required" });
+    }
+    for (const item of normalizedItems) {
+      if (!item.type || !["product", "material"].includes(item.type)) {
+        return res.status(400).json({ error: "Each item must have a valid type" });
       }
+      if (!item.itemId || Number(item.itemId) <= 0) {
+        return res.status(400).json({ error: "Each item must have a valid itemId" });
+      }
+      if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) {
+        return res.status(400).json({ error: "Each item must have quantity > 0" });
+      }
+      if (!Number.isFinite(Number(item.unitPrice)) || Number(item.unitPrice) <= 0) {
+        return res.status(400).json({ error: "Each item must have unitPrice > 0" });
+      }
+    }
+
+    const normalizedPaymentType = String(paymentType || sale.paymentType || "cash").toLowerCase();
+    const oldPaid = Number(sale.paidAmount || 0);
+    const requestedPaid = paidAmount !== undefined && paidAmount !== null ? Number(paidAmount) : oldPaid;
+    if (!Number.isFinite(requestedPaid) || requestedPaid < 0) {
+      return res.status(400).json({ error: "paidAmount must be a non-negative number" });
+    }
+
+    const totalAmount = normalizedItems.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unitPrice)), 0);
+    const newDiscount = discount !== undefined ? Math.max(0, Number(discount) || 0) : Number(sale.discount || 0);
+    const newGrandTotal = Math.max(0, totalAmount - newDiscount);
+    const deltaPaid = requestedPaid - oldPaid;
+
+    if (deltaPaid !== 0 && ["bank", "card"].includes(normalizedPaymentType) && !bankAccountId) {
+      return res.status(400).json({ error: "Bank account is required for bank/card payment adjustment" });
+    }
+    if (deltaPaid > 0 && normalizedPaymentType === "cash" && !cashRegisterId) {
+      return res.status(400).json({ error: "Cash register is required for positive cash adjustment" });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const entityAccount = await tx.entityAccount.findFirst({
+        where: {
+          entityType: "shop",
+          entityId: sale.shopId,
+          isPrimary: true,
+        },
+        include: { account: true },
+      });
+      if (!entityAccount) {
+        throw new Error("No primary account found for this shop");
+      }
+
+      // 1) Revert old stock
+      for (const oldItem of sale.saleItems) {
+        if (oldItem.productId) {
+          await tx.shopProduct.update({
+            where: {
+              shop_id_product_id: {
+                shop_id: sale.shopId,
+                product_id: oldItem.productId,
+              },
+            },
+            data: { stock: { increment: Number(oldItem.quantity || 0) } },
+          });
+          await tx.product.update({
+            where: { id: oldItem.productId },
+            data: { stock: { increment: Number(oldItem.quantity || 0) } },
+          });
+        } else if (oldItem.materialId) {
+          await tx.shopMaterial.update({
+            where: {
+              shop_id_material_id: {
+                shop_id: sale.shopId,
+                material_id: oldItem.materialId,
+              },
+            },
+            data: { stock: { increment: Number(oldItem.quantity || 0) } },
+          });
+          await tx.material.update({
+            where: { id: oldItem.materialId },
+            data: { current_stock: { increment: Number(oldItem.quantity || 0) } },
+          });
+        }
+      }
+
+      // 2) Apply new stock and compute avg cost
+      const preparedItems = [];
+      for (const item of normalizedItems) {
+        const qty = Number(item.quantity);
+        if (item.type === "product") {
+          const shopProduct = await tx.shopProduct.findUnique({
+            where: {
+              shop_id_product_id: {
+                shop_id: sale.shopId,
+                product_id: Number(item.itemId),
+              },
+            },
+            include: { product: true },
+          });
+          if (!shopProduct) throw new Error(`Product ${item.itemId} not found in shop`);
+          if (Number(shopProduct.stock || 0) < qty) {
+            throw new Error(`Insufficient stock for product ${item.itemId}. Available: ${shopProduct.stock}, Requested: ${qty}`);
+          }
+
+          await tx.shopProduct.update({
+            where: {
+              shop_id_product_id: {
+                shop_id: sale.shopId,
+                product_id: Number(item.itemId),
+              },
+            },
+            data: { stock: { decrement: qty } },
+          });
+          await tx.product.update({
+            where: { id: Number(item.itemId) },
+            data: { stock: { decrement: qty } },
+          });
+
+          preparedItems.push({
+            ...item,
+            quantity: qty,
+            unitPrice: Number(item.unitPrice),
+            avg_cost: Number(shopProduct.avg_cost || 0),
+            productId: Number(item.itemId),
+            materialId: null,
+          });
+        } else {
+          const shopMaterial = await tx.shopMaterial.findUnique({
+            where: {
+              shop_id_material_id: {
+                shop_id: sale.shopId,
+                material_id: Number(item.itemId),
+              },
+            },
+            include: { material: true },
+          });
+          if (!shopMaterial) throw new Error(`Material ${item.itemId} not found in shop`);
+          if (Number(shopMaterial.stock || 0) < qty) {
+            throw new Error(`Insufficient stock for material ${item.itemId}. Available: ${shopMaterial.stock}, Requested: ${qty}`);
+          }
+
+          await tx.shopMaterial.update({
+            where: {
+              shop_id_material_id: {
+                shop_id: sale.shopId,
+                material_id: Number(item.itemId),
+              },
+            },
+            data: { stock: { decrement: qty } },
+          });
+          await tx.material.update({
+            where: { id: Number(item.itemId) },
+            data: { current_stock: { decrement: qty } },
+          });
+
+          preparedItems.push({
+            ...item,
+            quantity: qty,
+            unitPrice: Number(item.unitPrice),
+            avg_cost: Number(shopMaterial.avg_cost || 0),
+            productId: null,
+            materialId: Number(item.itemId),
+          });
+        }
+      }
+
+      // 3) Replace sale items
+      await tx.saleItem.deleteMany({ where: { saleId } });
+      for (const item of preparedItems) {
+        await tx.saleItem.create({
+          data: {
+            saleId,
+            productId: item.productId,
+            materialId: item.materialId,
+            selectedName: item.selectedName ? String(item.selectedName).trim() : null,
+            selectedUnit: item.selectedUnit ? String(item.selectedUnit).trim() : null,
+            selectedQuantity: item.selectedQuantity !== undefined && item.selectedQuantity !== null ? Number(item.selectedQuantity) : null,
+            batchNumber: item.batchNumber ? String(item.batchNumber).trim() : null,
+            expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
+            quantity: Number(item.quantity),
+            unitPrice: Number(item.unitPrice),
+            avg_cost: Number(item.avg_cost || 0),
+            totalPrice: Number(item.quantity) * Number(item.unitPrice),
+            warrantySerial: item.warrantySerial ? String(item.warrantySerial).trim() : null,
+            warrantyNotes: item.warrantyNotes ? String(item.warrantyNotes).trim() : null,
+          },
+        });
+      }
+
+      // 4) Update sale financials
+      const updatedSale = await tx.sale.update({
+        where: { id: saleId },
+        data: {
+          customerId: customerId ? Number(customerId) : null,
+          totalAmount,
+          discount: newDiscount,
+          grandTotal: newGrandTotal,
+          paidAmount: requestedPaid,
+          paymentType: normalizedPaymentType,
+          bankAccountId: ["bank", "card"].includes(normalizedPaymentType) && bankAccountId ? Number(bankAccountId) : null,
+        },
+      });
+
+      // 5) Customer contribution rebalance
+      const oldDue = Math.max(0, Number(sale.grandTotal || 0) - oldPaid);
+      const newDue = Math.max(0, newGrandTotal - requestedPaid);
+      if (sale.customerId) {
+        await tx.customer.update({
+          where: { id: Number(sale.customerId) },
+          data: {
+            total_purchase: { decrement: oldPaid },
+            total_due: { decrement: oldDue },
+          },
+        });
+      }
+      if (customerId) {
+        await tx.customer.update({
+          where: { id: Number(customerId) },
+          data: {
+            total_purchase: { increment: requestedPaid },
+            total_due: { increment: newDue },
+          },
+        });
+      }
+
+      // 6) Apply payment delta (account + channel + transaction log)
+      if (deltaPaid !== 0) {
+        const updatedAccount = await tx.accounts.update({
+          where: { id: entityAccount.accountId },
+          data: { balance: { increment: deltaPaid } },
+        });
+
+        let bankRecord = null;
+        let cashRegisterRecord = null;
+        if (["bank", "card"].includes(normalizedPaymentType) && bankAccountId) {
+          bankRecord = await tx.bankAccount.update({
+            where: { id: Number(bankAccountId) },
+            data: { current_balance: { increment: deltaPaid } },
+          });
+        }
+        if (normalizedPaymentType === "cash" && cashRegisterId) {
+          const registerId = Number(cashRegisterId);
+          const assignment = await tx.cashRegisterAssignment.findFirst({
+            where: {
+              entityType: "shop",
+              entityId: sale.shopId,
+              cashRegisterId: registerId,
+              isActive: true,
+            },
+          });
+          if (!assignment) throw new Error("Selected cash register is not assigned to this shop");
+          cashRegisterRecord = await tx.cashRegister.update({
+            where: { id: registerId },
+            data: { cash_in_hand: { increment: deltaPaid } },
+          });
+        }
+
+        await createTransaction(tx, {
+          reference: `SALE-EDIT-${Date.now()}`,
+          createdById: req.user?.userId || 1,
+          cashRegisterId: cashRegisterRecord ? cashRegisterRecord.id : null,
+          accountId: entityAccount.accountId,
+          bankAccountId: bankRecord ? bankRecord.id : null,
+          saleId: updatedSale.id,
+          purpose: "Sale Edit Adjustment",
+          added_to_account: true,
+          amount: deltaPaid,
+          payment_method: normalizedPaymentType,
+          current_account_balance: updatedAccount.balance,
+          note: `Adjustment from sale edit (${sale.reference})`,
+        });
+      }
+
+      if (requestedPaid > newGrandTotal) {
+        await createNotification(tx, {
+          title: `Overpayment detected on sale ${sale.reference}`,
+          description: `Edited paid amount (${requestedPaid.toFixed(2)}) is greater than grand total (${newGrandTotal.toFixed(2)}). Admin may add negative payment adjustment.`,
+          forRole: "admin",
+          link: "/sale/all",
+        });
+      }
+
+      return updatedSale;
     });
 
-    res.json(updatedSale);
+    res.json(result);
   } catch (err) {
     if (err.status === 403) {
       return res.status(403).json({ error: "Forbidden" });
@@ -1171,6 +1984,11 @@ router.delete("/:id", async (req, res) => {
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, "shop", sale.shopId);
+    const access = await getRequesterAccessContext(req.user?.userId || 0);
+    const canDelete = canEditSaleForUser(sale, req.user?.userId || 0, access);
+    if (!canDelete) {
+      return res.status(403).json({ error: "You do not have permission to delete this sale" });
+    }
     if ((parseFloat(sale.paidAmount) || 0) > 0) {
       return res.status(400).json({ error: "Cannot delete sale with payments" });
     }

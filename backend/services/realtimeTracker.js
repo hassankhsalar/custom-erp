@@ -147,6 +147,9 @@ const createSessionTracker = ({ io, prisma, jwtSecret }) => {
       tokenSessionVersion: typeof socket.tokenSessionVersion === "number" ? socket.tokenSessionVersion : 0,
     });
     socket.join(`user:${user.id}`);
+    if (user.permissionName) {
+      socket.join(`role:${String(user.permissionName).toLowerCase()}`);
+    }
     if (isAdmin) {
       socket.join("admin-presence");
     }

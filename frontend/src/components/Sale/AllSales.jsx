@@ -1,15 +1,19 @@
-import { ArrowUpDown, ClipboardList, TrendingUp, DollarSign, Calendar, Store, User, Tag, CreditCard, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreVertical, Eye, Edit, Trash2, XCircle, Loader2 } from "lucide-react";
+import { ArrowUpDown, ClipboardList, TrendingUp, DollarSign, Calendar, Store, User, Tag, CreditCard, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreVertical, Eye, Edit, Trash2, XCircle, Loader2, Search } from "lucide-react";
 import { useState, useEffect } from "react";
 import { API_ROUTES } from '../../config';
+import { Link, useNavigate } from "react-router-dom";
+import { usePermission } from "../../hooks/usePermission";
 
 export default function AllSales() {
+  const navigate = useNavigate();
+  const { hasPermission } = usePermission();
+  const canViewEditRequests = hasPermission("sales_open_close");
   const [sales, setSales] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'descending' });
   const [loading, setLoading] = useState(true);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [selectedSale, setSelectedSale] = useState(null);
   const [viewModalOpen, setViewModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [addPaymentModalOpen, setAddPaymentModalOpen] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
@@ -19,9 +23,14 @@ export default function AllSales() {
   const [bankAccounts, setBankAccounts] = useState([]);
   const [paymentNote, setPaymentNote] = useState("");
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [lockActionLoading, setLockActionLoading] = useState(false);
+  const [grantLoading, setGrantLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [editForm, setEditForm] = useState({ customer: "", discount: "" });
   const [activeViewTab, setActiveViewTab] = useState("items");
+  const [allUsers, setAllUsers] = useState([]);
+  const [userSearchTerm, setUserSearchTerm] = useState("");
+  const [editAccessModalOpen, setEditAccessModalOpen] = useState(false);
+  const [selectedSaleForEditAccess, setSelectedSaleForEditAccess] = useState(null);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -32,6 +41,7 @@ export default function AllSales() {
   useEffect(() => {
     fetchSales();
     fetchBankAccounts();
+    fetchUsers();
   }, [currentPage, itemsPerPage]);
 
   const fetchSales = async () => {
@@ -211,12 +221,7 @@ export default function AllSales() {
   };
 
   const handleEdit = (sale) => {
-    setSelectedSale(sale);
-    setEditForm({
-      customer: sale.customer || "",
-      discount: sale.discount || 0
-    });
-    setEditModalOpen(true);
+    navigate(`/sale/edit/${sale.id}`);
     setActiveDropdown(null);
   };
 
@@ -236,29 +241,118 @@ export default function AllSales() {
     setActiveDropdown(null);
   };
 
-  const handleEditSubmit = async () => {
-    if (!selectedSale) return;
+  const fetchUsers = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_ROUTES.SHOP_SALES}/${selectedSale.id}`, {
-        method: "PUT",
+      const res = await fetch(API_ROUTES.USERS, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Failed to fetch users");
+      const data = await res.json();
+      setAllUsers(Array.isArray(data) ? data : []);
+    } catch (_) {
+      setAllUsers([]);
+    }
+  };
+
+  const handleOpenEditAccess = async (sale, userId) => {
+    if (!sale?.canGrantSaleEdit || !userId) return;
+    setGrantLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(API_ROUTES.SHOP_SALES_EDIT_ACCESS_OPEN(sale.id), {
+        method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          customer: editForm.customer,
-          discount: parseFloat(editForm.discount) || 0
-        })
+        body: JSON.stringify({ userId })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to update sale");
-      setEditModalOpen(false);
-      fetchSales(); // Refresh the list
+      if (!res.ok) throw new Error(data.error || "Failed to open sale edit access");
+      await fetchSales();
+      setEditAccessModalOpen(false);
+      setSelectedSaleForEditAccess(null);
+      setUserSearchTerm("");
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setGrantLoading(false);
+      setActiveDropdown(null);
+    }
+  };
+
+  const openEditAccessModal = (sale) => {
+    setSelectedSaleForEditAccess(sale);
+    setUserSearchTerm("");
+    setEditAccessModalOpen(true);
+    setActiveDropdown(null);
+  };
+
+  const handleCloseEditAccess = async (sale) => {
+    setLockActionLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(API_ROUTES.SHOP_SALES_EDIT_ACCESS_CLOSE(sale.id), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to close sale edit access");
+      await fetchSales();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setLockActionLoading(false);
+      setActiveDropdown(null);
+    }
+  };
+
+  const handleSetTransactionStatus = async (sale, status) => {
+    setLockActionLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(API_ROUTES.SHOP_SALES_TRANSACTION_STATUS(sale.id), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ status })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update transaction status");
+      await fetchSales();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setLockActionLoading(false);
+      setActiveDropdown(null);
+    }
+  };
+
+  const handleRequestEditAccess = async (sale) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(API_ROUTES.SHOP_SALES_EDIT_ACCESS_REQUEST(sale.id), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to request edit access");
+      alert(data.message || "Edit access request sent.");
+      setActiveDropdown(null);
     } catch (err) {
       alert(err.message);
     }
   };
+
 
   const handleDeleteSubmit = async () => {
     if (!selectedSale) return;
@@ -283,8 +377,8 @@ export default function AllSales() {
   const handlePaymentSubmit = async () => {
     if (!selectedSale) return;
     const amount = parseFloat(paymentAmount);
-    if (!amount || amount <= 0) {
-      alert("Payment amount must be greater than 0");
+    if (!amount || amount === 0) {
+      alert("Payment amount cannot be zero");
       return;
     }
     if (["bank", "card"].includes(paymentMethod) && !bankAccountId) {
@@ -311,11 +405,7 @@ export default function AllSales() {
       if (!res.ok) throw new Error(data.error || "Failed to add payment");
       setAddPaymentModalOpen(false);
       await fetchPaymentHistory(selectedSale.id);
-      const refreshed = await fetch(API_ROUTES.SHOP_SALES, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const newSales = await refreshed.json();
-      setSales(newSales);
+      await fetchSales();
     } catch (err) {
       alert(err.message);
     } finally {
@@ -351,6 +441,11 @@ export default function AllSales() {
             </div>
           </div>
           <div className="flex items-center gap-2 glass-tag px-4 py-2 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
+            {canViewEditRequests && (
+              <Link to="/sale/edit-requests" className="px-3 py-1 rounded border bg-white hover:bg-gray-50 text-xs">
+                Edit Requests
+              </Link>
+            )}
             <Filter size={16} className="text-emerald-600" />
             <span className="text-sm font-medium text-gray-700">
               {sales.length} {sales.length === 1 ? 'Sale' : 'Sales'}
@@ -456,15 +551,17 @@ export default function AllSales() {
                                   View Details
                                 </button>
 
-                                <button
-                                  onClick={() => handleEdit(sales.find(s => s.id === item.id))}
-                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-600 transition"
-                                >
-                                  <Edit size={16} />
-                                  Edit Sale
-                                </button>
+                                {sales.find(s => s.id === item.id)?.canEdit && (
+                                  <button
+                                    onClick={() => handleEdit(sales.find(s => s.id === item.id))}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-600 transition"
+                                  >
+                                    <Edit size={16} />
+                                    Edit Sale
+                                  </button>
+                                )}
 
-                                {calculateDueAmount(sales.find(s => s.id === item.id)) > 0 && (
+                                {calculateDueAmount(sales.find(s => s.id === item.id)) > 0 && !sales.find(s => s.id === item.id)?.isTransactionClosed && (
                                   <button
                                     onClick={() => handleAddPayment(sales.find(s => s.id === item.id))}
                                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-600 transition"
@@ -474,15 +571,71 @@ export default function AllSales() {
                                   </button>
                                 )}
 
+                                {sales.find(s => s.id === item.id)?.canGrantSaleEdit && (
+                                  <button
+                                    onClick={() => openEditAccessModal(sales.find(s => s.id === item.id))}
+                                    disabled={lockActionLoading}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition disabled:opacity-50"
+                                  >
+                                    <User size={16} />
+                                    Open Edit For User
+                                  </button>
+                                )}
+
+                                {!sales.find(s => s.id === item.id)?.canEdit && (
+                                  <button
+                                    onClick={() => handleRequestEditAccess(sales.find(s => s.id === item.id))}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-violet-50 hover:text-violet-700 transition"
+                                  >
+                                    <Edit size={16} />
+                                    Request Edit Access
+                                  </button>
+                                )}
+
+                                {sales.find(s => s.id === item.id)?.isSaleEditOpen && (
+                                  <button
+                                    onClick={() => handleCloseEditAccess(sales.find(s => s.id === item.id))}
+                                    disabled={lockActionLoading}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-slate-50 hover:text-slate-700 transition disabled:opacity-50"
+                                  >
+                                    <XCircle size={16} />
+                                    Close Edit Access
+                                  </button>
+                                )}
+
+                                {sales.find(s => s.id === item.id)?.canCloseTransaction && !sales.find(s => s.id === item.id)?.isTransactionClosed && (
+                                  <button
+                                    onClick={() => handleSetTransactionStatus(sales.find(s => s.id === item.id), "closed")}
+                                    disabled={lockActionLoading}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition disabled:opacity-50"
+                                  >
+                                    <XCircle size={16} />
+                                    Close Transaction
+                                  </button>
+                                )}
+
+                                {sales.find(s => s.id === item.id)?.canCloseTransaction && sales.find(s => s.id === item.id)?.isTransactionClosed && (
+                                  <button
+                                    onClick={() => handleSetTransactionStatus(sales.find(s => s.id === item.id), "open")}
+                                    disabled={lockActionLoading}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition disabled:opacity-50"
+                                  >
+                                    <Edit size={16} />
+                                    Reopen Transaction
+                                  </button>
+                                )}
+
                                 <div className="border-t my-1"></div>
 
-                                <button
-                                  onClick={() => handleDelete(sales.find(s => s.id === item.id))}
-                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
-                                >
-                                  <Trash2 size={16} />
-                                  Delete Sale
-                                </button>
+                                {sales.find(s => s.id === item.id)?.canDelete && (
+                                  <button
+                                    onClick={() => handleDelete(sales.find(s => s.id === item.id))}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
+                                  >
+                                    <Trash2 size={16} />
+                                    Delete Sale
+                                  </button>
+                                )}
                               </div>
                             </div>
                           )}
@@ -911,56 +1064,74 @@ export default function AllSales() {
         </div>
       )}
 
-      {/* Edit Modal */}
-      {editModalOpen && selectedSale && (
+      {/* Open Edit Access Modal */}
+      {editAccessModalOpen && selectedSaleForEditAccess && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden">
             <div className="p-6 border-b">
               <div className="flex justify-between items-center">
                 <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Edit size={24} />
-                  Edit Sale
+                  <User size={22} />
+                  Grant Sale Edit Access
                 </h3>
                 <button
-                  onClick={() => setEditModalOpen(false)}
+                  onClick={() => {
+                    setEditAccessModalOpen(false);
+                    setSelectedSaleForEditAccess(null);
+                    setUserSearchTerm("");
+                  }}
                   className="p-2 hover:bg-gray-100 rounded-lg"
+                  disabled={grantLoading}
                 >
-                  <XCircle size={24} className="text-gray-500" />
+                  <XCircle size={22} className="text-gray-500" />
                 </button>
               </div>
+              <p className="text-sm text-gray-600 mt-2">
+                Sale: <span className="font-semibold">{selectedSaleForEditAccess.reference}</span>
+              </p>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Customer</label>
+            <div className="p-6">
+              <div className="relative mb-4">
+                <Search size={16} className="absolute left-3 top-3 text-gray-400" />
                 <input
                   type="text"
-                  value={editForm.customer}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, customer: e.target.value }))}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
+                  value={userSearchTerm}
+                  onChange={(e) => setUserSearchTerm(e.target.value)}
+                  placeholder="Search by name, email, username, or ID"
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Discount</label>
-                <input
-                  type="number"
-                  value={editForm.discount}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, discount: e.target.value }))}
-                  className="w-full p-2 border border-gray-300 rounded-lg"
-                />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setEditModalOpen(false)}
-                  className="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleEditSubmit}
-                  className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-white py-3 rounded-lg"
-                >
-                  Save
-                </button>
+              <div className="border rounded-lg max-h-[50vh] overflow-y-auto">
+                {allUsers
+                  .filter((u) => {
+                    const q = userSearchTerm.trim().toLowerCase();
+                    if (!q) return true;
+                    return (
+                      String(u.id).includes(q) ||
+                      String(u.name || "").toLowerCase().includes(q) ||
+                      String(u.username || "").toLowerCase().includes(q) ||
+                      String(u.email || "").toLowerCase().includes(q)
+                    );
+                  })
+                  .map((user) => (
+                    <div key={user.id} className="flex items-center justify-between px-4 py-3 border-b last:border-b-0">
+                      <div>
+                        <p className="font-medium text-gray-800">{user.name || user.username || `User ${user.id}`}</p>
+                        <p className="text-xs text-gray-500">{user.email} | @{user.username} | ID: {user.id}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditAccess(selectedSaleForEditAccess, user.id)}
+                        disabled={grantLoading}
+                        className="px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {grantLoading ? "Granting..." : "Grant"}
+                      </button>
+                    </div>
+                  ))}
+                {allUsers.length === 0 && (
+                  <div className="p-6 text-center text-sm text-gray-500">No users found.</div>
+                )}
               </div>
             </div>
           </div>
