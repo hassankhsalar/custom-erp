@@ -421,12 +421,16 @@ const Sidebar = () => {
         <div className="mt-6 p-3 rounded-xl bg-gradient-to-r from-blue-50/50 to-blue-100/30 border border-blue-200/50">
           <p className="text-xs font-medium text-blue-700 mb-2">Quick Actions</p>
           <div className="flex gap-2">
+            <Link to="/report/best-selling">
             <button className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium hover:from-blue-600 hover:to-blue-700 transition-all hover:shadow-md">
+              sales Report
+            </button>
+            </Link>
+            <Link to="/purchase/new">
+            <button className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-medium hover:from-emerald-600 hover:to-green-700 transition-all hover:shadow-md">
               Add Stock
             </button>
-            <button className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-medium hover:from-emerald-600 hover:to-green-700 transition-all hover:shadow-md">
-              New Order
-            </button>
+            </Link>
           </div>
         </div>
       )}

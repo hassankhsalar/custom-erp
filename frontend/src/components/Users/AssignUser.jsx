@@ -24,7 +24,11 @@ import {
   UserMinus,
   UserPlus,
   Users,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { API_ROUTES } from '../../config';
@@ -41,7 +45,7 @@ export default function AssignUser() {
   const [selectedUser, setSelectedUser] = useState("");
   const [expandedEntities, setExpandedEntities] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState("all"); // all, store, shop, factory, cashRegister, account
+  const [filterType, setFilterType] = useState("all");
   const [showOnlyWithUsers, setShowOnlyWithUsers] = useState(false);
   const token = localStorage.getItem('token');
   const [stats, setStats] = useState({
@@ -52,121 +56,146 @@ export default function AssignUser() {
     assignmentPercentage: 0
   });
 
-  // Fetch data on component mount
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 10,
+    hasNext: false,
+    hasPrev: false
+  });
+  const [pageSize, setPageSize] = useState(10);
+
+  // Fetch data on component mount and when page/pageSize changes
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [pagination.currentPage, pageSize]);
 
   const fetchData = async () => {
-  setLoading(true);
-  setError("");
-  setSuccess("");
-  
-  try {
-    // Get token from localStorage
-    const token = localStorage.getItem('token');
+    setLoading(true);
+    setError("");
+    setSuccess("");
     
-    if (!token) {
-      setError("Authentication required. Please log in.");
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        setError("Authentication required. Please log in.");
+        setLoading(false);
+        return;
+      }
+      
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+
+      const [entitiesRes, usersRes, statsRes] = await Promise.all([
+        fetch(`${API_ROUTES.ASSIGNUSER}/entities?page=${pagination.currentPage}&limit=${pageSize}`, { headers }),
+        fetch(`${API_ROUTES.ASSIGNUSER}/available-users`, { headers }),
+        fetch(`${API_ROUTES.ASSIGNUSER}/stats`, { headers })
+      ]);
+
+      if (entitiesRes.status === 401 || usersRes.status === 401 || statsRes.status === 401) {
+        localStorage.removeItem('token');
+        setError("Session expired. Please log in again.");
+        setLoading(false);
+        return;
+      }
+
+      if (!entitiesRes.ok || !usersRes.ok || !statsRes.ok) {
+        throw new Error("Failed to fetch data");
+      }
+
+      const entitiesData = await entitiesRes.json();
+      const usersData = await usersRes.json();
+      const statsData = await statsRes.json();
+
+      // Handle paginated response
+      setEntities(entitiesData.data || []);
+      setPagination(entitiesData.pagination || {
+        currentPage: 1,
+        totalPages: 1,
+        totalItems: 0,
+        itemsPerPage: pageSize,
+        hasNext: false,
+        hasPrev: false
+      });
+      setUsers(usersData);
+      setStats(statsData);
+      
+    } catch (err) {
+      console.error("Error fetching data:", err);
+      setError(err.message || "An error occurred while fetching data");
+    } finally {
       setLoading(false);
-      // Optional: Redirect to login
-      // window.location.href = '/login';
-      return;
     }
-    
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-
-    const [entitiesRes, usersRes, statsRes] = await Promise.all([
-      fetch(`${API_ROUTES.ASSIGNUSER}/entities`, { headers }),
-      fetch(`${API_ROUTES.ASSIGNUSER}/available-users`, { headers }),
-      fetch(`${API_ROUTES.ASSIGNUSER}/stats`, { headers })
-    ]);
-
-    // Check for authentication errors
-    if (entitiesRes.status === 401 || usersRes.status === 401 || statsRes.status === 401) {
-      localStorage.removeItem('token');
-      setError("Session expired. Please log in again.");
-      setLoading(false);
-      return;
-    }
-
-    if (!entitiesRes.ok || !usersRes.ok || !statsRes.ok) {
-      throw new Error("Failed to fetch data");
-    }
-
-    const entitiesData = await entitiesRes.json();
-    const usersData = await usersRes.json();
-    const statsData = await statsRes.json();
-
-    setEntities(entitiesData);
-    setUsers(usersData);
-    setStats(statsData);
-    
-  } catch (err) {
-    console.error("Error fetching data:", err);
-    setError(err.message || "An error occurred while fetching data");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   // Fetch assignments for selected entity
   const fetchEntityAssignments = async (entity) => {
-  try {
-    // Get token from localStorage
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-      setError("Authentication required. Please log in.");
-      return;
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        setError("Authentication required. Please log in.");
+        return;
+      }
+      
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+      
+      const res = await fetch(
+        `${API_ROUTES.ASSIGNUSER}/entity/${entity.type}/${entity.id}`,
+        { headers }
+      );
+      
+      if (res.status === 401 || res.status === 403) {
+        localStorage.removeItem('token');
+        setError("Session expired. Please log in again.");
+        return;
+      }
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to fetch assignments: ${res.statusText}`);
+      }
+      
+      const data = await res.json();
+      setEntityAssignments(data.data || []);
+      setSelectedEntity(entity);
+      setError("");
+      
+    } catch (err) {
+      console.error("Error fetching entity assignments:", err);
+      setError(err.message || "An error occurred while fetching assignments");
     }
-    
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-    
-    const res = await fetch(
-      `${API_ROUTES.ASSIGNUSER}/entity/${entity.type}/${entity.id}`,
-      { headers }
-    );
-    
-    // Check for authentication errors
-    if (res.status === 401 || res.status === 403) {
-      localStorage.removeItem('token');
-      setError("Session expired. Please log in again.");
-      return;
+  };
+
+  // Pagination handlers
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= pagination.totalPages) {
+      setPagination(prev => ({ ...prev, currentPage: newPage }));
     }
-    
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || `Failed to fetch assignments: ${res.statusText}`);
-    }
-    
-    const data = await res.json();
-    setEntityAssignments(data);
-    setSelectedEntity(entity);
-    setError(""); // Clear any previous errors on success
-    
-  } catch (err) {
-    console.error("Error fetching entity assignments:", err);
-    setError(err.message || "An error occurred while fetching assignments");
-  }
-};
+  };
+
+  const handlePageSizeChange = (e) => {
+    const newSize = parseInt(e.target.value);
+    setPageSize(newSize);
+    setPagination(prev => ({ ...prev, currentPage: 1 }));
+  };
 
   // Handle entity selection
   const handleEntityClick = (entity) => {
     if (selectedEntity?.id === entity.id && selectedEntity?.type === entity.type) {
-      // Toggle expansion
       setExpandedEntities(prev => ({
         ...prev,
         [`${entity.type}-${entity.id}`]: !prev[`${entity.type}-${entity.id}`]
       }));
     } else {
-      // Fetch assignments for new entity
       fetchEntityAssignments(entity);
       setExpandedEntities(prev => ({
         ...prev,
@@ -203,21 +232,17 @@ export default function AssignUser() {
         throw new Error(errorData.error || "Failed to assign user");
       }
 
-      // Refresh data
-      fetchData();
+      await fetchData();
       
-      // Refresh assignments for current entity
       if (selectedEntity) {
-        fetchEntityAssignments(selectedEntity);
+        await fetchEntityAssignments(selectedEntity);
       }
       
-      // Reset form
       setSelectedUser("");
       setShowAssignForm(false);
       setError("");
       setSuccess("User assigned successfully!");
       
-      // Clear success message after 3 seconds
       setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
       setError(err.message);
@@ -226,71 +251,64 @@ export default function AssignUser() {
 
   // Handle removing assignment
   const handleRemoveAssignment = async (assignmentId) => {
-  if (!confirm("Are you sure you want to remove this user assignment?")) {
-    return;
-  }
-
-  try {
-    // Get token from localStorage
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-      setError("Authentication required. Please log in.");
+    if (!confirm("Are you sure you want to remove this user assignment?")) {
       return;
     }
-    
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-    
-    const res = await fetch(
-      `${API_ROUTES.ASSIGNUSER}/assignment/${assignmentId}`,
-      { 
-        method: "DELETE",
-        headers 
+
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        setError("Authentication required. Please log in.");
+        return;
       }
-    );
+      
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+      
+      const res = await fetch(
+        `${API_ROUTES.ASSIGNUSER}/assignment/${assignmentId}`,
+        { 
+          method: "DELETE",
+          headers 
+        }
+      );
 
-    // Check for authentication errors
-    if (res.status === 401 || res.status === 403) {
-      localStorage.removeItem('token');
-      setError("Session expired. Please log in again.");
-      return;
-    }
-    
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || "Failed to remove assignment");
-    }
+      if (res.status === 401 || res.status === 403) {
+        localStorage.removeItem('token');
+        setError("Session expired. Please log in again.");
+        return;
+      }
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to remove assignment");
+      }
 
-    // Refresh data
-    fetchData();
-    
-    // Refresh assignments for current entity
-    if (selectedEntity) {
-      fetchEntityAssignments(selectedEntity);
+      await fetchData();
+      
+      if (selectedEntity) {
+        await fetchEntityAssignments(selectedEntity);
+      }
+      
+      setSuccess("User assignment removed successfully!");
+      
+      setTimeout(() => setSuccess(""), 3000);
+      
+    } catch (err) {
+      console.error("Error removing assignment:", err);
+      setError(err.message || "An error occurred while removing assignment");
     }
-    
-    setSuccess("User assignment removed successfully!");
-    
-    // Clear success message after 3 seconds
-    setTimeout(() => setSuccess(""), 3000);
-    
-  } catch (err) {
-    console.error("Error removing assignment:", err);
-    setError(err.message || "An error occurred while removing assignment");
-  }
-};
+  };
 
   // Filter entities based on search and filters
   const filteredEntities = entities.filter(entity => {
-    // Filter by type
     if (filterType !== "all" && entity.type !== filterType) {
       return false;
     }
 
-    // Filter by search term
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       return (
@@ -303,7 +321,6 @@ export default function AssignUser() {
       );
     }
 
-    // Filter by user assignment status
     if (showOnlyWithUsers) {
       return entity.assignedUsers && entity.assignedUsers.length > 0;
     }
@@ -393,7 +410,7 @@ export default function AssignUser() {
           <div className="flex items-center gap-3">
             <button
               onClick={fetchData}
-              className=" px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-300 flex items-center gap-2"
+              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-300 flex items-center gap-2"
             >
               <RefreshCw size={18} />
               Refresh
@@ -466,7 +483,7 @@ export default function AssignUser() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600 mb-1">Total Entities</p>
-              <h3 className="text-xl font-bold text-gray-900">{stats.totalEntities}</h3>
+              <h3 className="text-xl font-bold text-gray-900">{pagination.totalItems}</h3>
             </div>
             <div className="glass-icon p-2 rounded-xl bg-gradient-to-r from-green-500/10 to-green-600/10">
               <Building2 className="text-green-600" size={20} />
@@ -530,7 +547,7 @@ export default function AssignUser() {
               <div className="flex items-center gap-2">
                 <div className="glass-tag px-3 py-1.5 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
                   <span className="text-sm font-medium text-gray-700">
-                    {filteredEntities.length} of {entities.length}
+                    {filteredEntities.length} of {pagination.totalItems}
                   </span>
                 </div>
               </div>
@@ -603,7 +620,7 @@ export default function AssignUser() {
                 {searchTerm && (
                   <button
                     onClick={() => setSearchTerm("")}
-                    className=" px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-300"
+                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-300"
                   >
                     Clear Search
                   </button>
@@ -720,7 +737,7 @@ export default function AssignUser() {
                           handleEntityClick(entity);
                           setShowAssignForm(true);
                         }}
-                        className="mt-3  px-3 py-1.5 text-sm bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-300"
+                        className="mt-3 px-3 py-1.5 text-sm bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-300"
                       >
                         <Plus size={14} className="inline mr-1" />
                         Assign User
@@ -731,9 +748,90 @@ export default function AssignUser() {
               ))
             )}
           </div>
+
+          {/* Pagination Controls for Entities */}
+          <div className="p-4 border-t border-white/20">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Rows per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={handlePageSizeChange}
+                  className="glass-input px-2 py-1 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">
+                  Page {pagination.currentPage} of {pagination.totalPages}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handlePageChange(1)}
+                    disabled={!pagination.hasPrev}
+                    className={`p-2 rounded-lg transition-all duration-200 ${
+                      pagination.hasPrev
+                        ? 'hover:bg-white/50 text-gray-700'
+                        : 'text-gray-400 cursor-not-allowed'
+                    }`}
+                    title="First Page"
+                  >
+                    <ChevronsLeft size={18} />
+                  </button>
+                  <button
+                    onClick={() => handlePageChange(pagination.currentPage - 1)}
+                    disabled={!pagination.hasPrev}
+                    className={`p-2 rounded-lg transition-all duration-200 ${
+                      pagination.hasPrev
+                        ? 'hover:bg-white/50 text-gray-700'
+                        : 'text-gray-400 cursor-not-allowed'
+                    }`}
+                    title="Previous Page"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  
+                  <span className="text-sm text-gray-600 mx-2">
+                    {pagination.currentPage} / {pagination.totalPages}
+                  </span>
+
+                  <button
+                    onClick={() => handlePageChange(pagination.currentPage + 1)}
+                    disabled={!pagination.hasNext}
+                    className={`p-2 rounded-lg transition-all duration-200 ${
+                      pagination.hasNext
+                        ? 'hover:bg-white/50 text-gray-700'
+                        : 'text-gray-400 cursor-not-allowed'
+                    }`}
+                    title="Next Page"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                  <button
+                    onClick={() => handlePageChange(pagination.totalPages)}
+                    disabled={!pagination.hasNext}
+                    className={`p-2 rounded-lg transition-all duration-200 ${
+                      pagination.hasNext
+                        ? 'hover:bg-white/50 text-gray-700'
+                        : 'text-gray-400 cursor-not-allowed'
+                    }`}
+                    title="Last Page"
+                  >
+                    <ChevronsRight size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Right Column - Assignment Details */}
+        {/* Right Column - Assignment Details (unchanged) */}
         <div className="glass-card border border-white/20 backdrop-blur-xl shadow-lg">
           <div className="p-6 border-b border-white/20">
             <div className="flex items-center justify-between">
@@ -751,7 +849,7 @@ export default function AssignUser() {
               {selectedEntity && (
                 <button
                   onClick={() => setShowAssignForm(!showAssignForm)}
-                  className=" px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all duration-300 flex items-center gap-2"
+                  className="px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all duration-300 flex items-center gap-2"
                 >
                   <Plus size={18} />
                   Assign User
@@ -888,7 +986,7 @@ export default function AssignUser() {
                       <div className="flex gap-3">
                         <button
                           type="submit"
-                          className="flex-1  px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-300 font-medium"
+                          className="flex-1 px-4 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-300 font-medium"
                         >
                           <UserPlus size={18} className="inline mr-2" />
                           Assign User
@@ -989,7 +1087,7 @@ export default function AssignUser() {
                     </p>
                     <button
                       onClick={() => setShowAssignForm(true)}
-                      className=" px-6 py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all duration-300 font-medium"
+                      className="px-6 py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all duration-300 font-medium"
                     >
                       <Plus size={20} className="inline mr-2" />
                       Assign First User
@@ -1060,6 +1158,9 @@ export default function AssignUser() {
                   <span className="text-xs text-gray-600">{type}: {count}</span>
                 </div>
               ))}
+            </div>
+            <div className="text-sm text-gray-600">
+              Page {pagination.currentPage} of {pagination.totalPages}
             </div>
           </div>
         </div>
