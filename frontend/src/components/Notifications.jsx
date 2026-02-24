@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { API_ROUTES } from "../config";
 import { useAuth } from "../App";
 
@@ -61,9 +62,12 @@ const Notifications = () => {
           </thead>
           <tbody>
             {rows.map((n) => (
+              console.log(n),
               <tr key={n.id} className="border-t">
                 <td className="p-2">{n.title}</td>
-                <td className="p-2">{n.description || "-"}</td>
+                <td className="p-2">
+                  <Link to={n.link}>{n.description || "-"}</Link>
+                </td>
                 <td className="p-2">{n.isRead ? "Read" : "Unread"}</td>
                 <td className="p-2">{new Date(n.createdAt).toLocaleString()}</td>
               </tr>

@@ -62,18 +62,18 @@ const Sidebar = () => {
         { name: 'Customers', path: '/customers/all', icon: <Users size={16} />, permissionKey: ['customer_read', 'customer_create'] }
       ]
     },
-    // {
-    //   name: 'Production',
-    //   icon: <Factory color='white' size={18} />,
-    //   color: 'from-amber-500 to-orange-500',
-    //   bgColor: 'bg-gradient-to-r from-amber-50 to-orange-100/50',
-    //   textColor: 'text-amber-700',
-    //   permissionKey: ['production_read', 'production_create'],
-    //   subItems: [
-    //     { name: 'All Production', path: '/productions/all', icon: <Factory size={16} />, permissionKey: 'production_read' },
-    //     { name: 'New Production', path: '/productions/new', icon: <Package size={16} />, permissionKey: 'production_create' }
-    //   ]
-    // },
+    {
+      name: 'Production',
+      icon: <Factory color='white' size={18} />,
+      color: 'from-amber-500 to-orange-500',
+      bgColor: 'bg-gradient-to-r from-amber-50 to-orange-100/50',
+      textColor: 'text-amber-700',
+      permissionKey: ['production_read', 'production_create'],
+      subItems: [
+        { name: 'All Production', path: '/productions/all', icon: <Factory size={16} />, permissionKey: 'production_read' },
+        { name: 'New Production', path: '/productions/new', icon: <Package size={16} />, permissionKey: 'production_create' }
+      ]
+    },
     {
       name: 'Purchase',
       icon: <Package color='white' size={18} />,
@@ -167,19 +167,19 @@ const Sidebar = () => {
         { name: 'Add Material', path: '/materials/add', icon: <Package size={16} />, permissionKey: 'material_create' }
       ]
     },
-    // {
-    //   name: 'Factory',
-    //   icon: <Factory color='white' size={18} />,
-    //   color: 'from-orange-500 to-red-500',
-    //   bgColor: 'bg-gradient-to-r from-orange-50 to-red-100/50',
-    //   textColor: 'text-orange-700',
-    //   permissionKey: ['factory_read', 'factory_create'],
-    //   subItems: [
-    //     { name: 'All Factory', path: '/factories/all', icon: <Factory size={16} />, permissionKey: 'factory_read' },
-    //     { name: 'Add Factory', path: '/factories/add', icon: <Building size={16} />, permissionKey: 'factory_create' },
-    //     { name: 'Inventory', path: '/factoryinventory', icon: <Building size={16} />, permissionKey: 'factory_read' }
-    //   ]
-    // },
+    {
+      name: 'Factory',
+      icon: <Factory color='white' size={18} />,
+      color: 'from-orange-500 to-red-500',
+      bgColor: 'bg-gradient-to-r from-orange-50 to-red-100/50',
+      textColor: 'text-orange-700',
+      permissionKey: ['factory_read', 'factory_create'],
+      subItems: [
+        { name: 'All Factory', path: '/factories/all', icon: <Factory size={16} />, permissionKey: 'factory_read' },
+        { name: 'Add Factory', path: '/factories/add', icon: <Building size={16} />, permissionKey: 'factory_create' },
+        { name: 'Inventory', path: '/factoryinventory', icon: <Building size={16} />, permissionKey: 'factory_read' }
+      ]
+    },
     {
       name: 'Stores',
       icon: <Warehouse color='white' size={18} />,

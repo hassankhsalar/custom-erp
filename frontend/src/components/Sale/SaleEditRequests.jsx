@@ -7,6 +7,8 @@ export default function SaleEditRequests() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("pending");
   const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [approveMaxCount, setApproveMaxCount] = useState("");
+  const [approveDurationMinutes, setApproveDurationMinutes] = useState("");
 
   const fetchRows = async (status = statusFilter) => {
     setLoading(true);
@@ -35,12 +37,20 @@ export default function SaleEditRequests() {
     setActionLoadingId(requestId);
     try {
       const token = localStorage.getItem("token");
+      const payload = {};
+      if (String(approveMaxCount).trim() !== "") {
+        payload.maxEditCount = Number(approveMaxCount);
+      }
+      if (String(approveDurationMinutes).trim() !== "") {
+        payload.accessDurationMinutes = Number(approveDurationMinutes);
+      }
       const res = await fetch(API_ROUTES.SHOP_SALES_EDIT_REQUEST_APPROVE(requestId), {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to approve request");
@@ -90,20 +100,40 @@ export default function SaleEditRequests() {
       </div>
 
       <div className="mb-4">
-        <select
-          value={statusFilter}
-          onChange={(e) => {
-            const value = e.target.value;
-            setStatusFilter(value);
-            fetchRows(value);
-          }}
-          className="px-3 py-2 border rounded bg-white"
-        >
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-          <option value="all">All</option>
-        </select>
+        <div className="flex flex-wrap gap-3 items-center">
+          <select
+            value={statusFilter}
+            onChange={(e) => {
+              const value = e.target.value;
+              setStatusFilter(value);
+              fetchRows(value);
+            }}
+            className="px-3 py-2 border rounded bg-white"
+          >
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="all">All</option>
+          </select>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={approveMaxCount}
+            onChange={(e) => setApproveMaxCount(e.target.value)}
+            placeholder="Approve with count (e.g. 2)"
+            className="px-3 py-2 border rounded bg-white text-sm"
+          />
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={approveDurationMinutes}
+            onChange={(e) => setApproveDurationMinutes(e.target.value)}
+            placeholder="Approve with minutes (e.g. 5)"
+            className="px-3 py-2 border rounded bg-white text-sm"
+          />
+        </div>
       </div>
 
       <div className="bg-white rounded shadow overflow-x-auto">
@@ -125,6 +155,9 @@ export default function SaleEditRequests() {
                 <td className="p-3">
                   <div className="font-medium">{row.sale?.reference || "-"}</div>
                   <div className="text-xs text-gray-500">{row.sale?.shop?.name || "-"}</div>
+                  <div className="text-xs text-gray-500">
+                    Limit: {row.sale?.editMaxCount ?? "unlimited"} edits | Time: {row.sale?.editAccessDurationMinutes ?? "unlimited"} min
+                  </div>
                 </td>
                 <td className="p-3">
                   <div>{row.requester?.name || row.requester?.username || `User ${row.requesterUserId}`}</div>

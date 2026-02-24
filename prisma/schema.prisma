@@ -799,6 +799,10 @@ model Sale {
   editGrantedByUserId Int?
   editOpenedAt DateTime?
   editClosedAt DateTime?
+  editMaxCount Int?
+  editUsedCount Int @default(0)
+  editAccessDurationMinutes Int?
+  editExpiresAt DateTime?
   createdAt   DateTime     @default(now())
   saleItems   SaleItem[]
   warranties  UserWarranty[]

@@ -31,6 +31,8 @@ export default function AllSales() {
   const [userSearchTerm, setUserSearchTerm] = useState("");
   const [editAccessModalOpen, setEditAccessModalOpen] = useState(false);
   const [selectedSaleForEditAccess, setSelectedSaleForEditAccess] = useState(null);
+  const [editGrantMaxCount, setEditGrantMaxCount] = useState("");
+  const [editGrantDurationMinutes, setEditGrantDurationMinutes] = useState("");
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -260,13 +262,20 @@ export default function AllSales() {
     setGrantLoading(true);
     try {
       const token = localStorage.getItem("token");
+      const payload = { userId };
+      if (String(editGrantMaxCount).trim() !== "") {
+        payload.maxEditCount = Number(editGrantMaxCount);
+      }
+      if (String(editGrantDurationMinutes).trim() !== "") {
+        payload.accessDurationMinutes = Number(editGrantDurationMinutes);
+      }
       const res = await fetch(API_ROUTES.SHOP_SALES_EDIT_ACCESS_OPEN(sale.id), {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ userId })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to open sale edit access");
@@ -274,6 +283,8 @@ export default function AllSales() {
       setEditAccessModalOpen(false);
       setSelectedSaleForEditAccess(null);
       setUserSearchTerm("");
+      setEditGrantMaxCount("");
+      setEditGrantDurationMinutes("");
     } catch (err) {
       alert(err.message);
     } finally {
@@ -285,6 +296,8 @@ export default function AllSales() {
   const openEditAccessModal = (sale) => {
     setSelectedSaleForEditAccess(sale);
     setUserSearchTerm("");
+    setEditGrantMaxCount("");
+    setEditGrantDurationMinutes("");
     setEditAccessModalOpen(true);
     setActiveDropdown(null);
   };
@@ -1091,6 +1104,36 @@ export default function AllSales() {
               </p>
             </div>
             <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Max Edit Count (optional)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={editGrantMaxCount}
+                    onChange={(e) => setEditGrantMaxCount(e.target.value)}
+                    placeholder="Example: 2"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Access Time in Minutes (optional)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={editGrantDurationMinutes}
+                    onChange={(e) => setEditGrantDurationMinutes(e.target.value)}
+                    placeholder="Example: 5"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+              </div>
               <div className="relative mb-4">
                 <Search size={16} className="absolute left-3 top-3 text-gray-400" />
                 <input

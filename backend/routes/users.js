@@ -122,8 +122,8 @@ router.put("/:id", async (req, res) => {
     const { name, email, username, permissionId, loginStartTime, loginEndTime } = req.body;
 
     // Validate required fields
-    if (!name || !email || !username) {
-      return res.status(400).json({ error: "Name, email, and username are required" });
+    if (!name || !email) {
+      return res.status(400).json({ error: "Name, and email are required" });
     }
 
     // Check if user exists
@@ -148,16 +148,16 @@ router.put("/:id", async (req, res) => {
     }
 
     // Check if username already exists for other users
-    const usernameConflict = await prisma.user.findFirst({
-      where: {
-        username,
-        NOT: { id: parseInt(id) }
-      }
-    });
+    // const usernameConflict = await prisma.user.findFirst({
+    //   where: {
+    //     username,
+    //     NOT: { id: parseInt(id) }
+    //   }
+    // });
 
-    if (usernameConflict) {
-      return res.status(400).json({ error: "Username already exists" });
-    }
+    // if (usernameConflict) {
+    //   return res.status(400).json({ error: "Username already exists" });
+    // }
 
     // Check if permission exists if provided
     if (permissionId !== undefined) {
