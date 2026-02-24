@@ -144,7 +144,7 @@ const Dashboard = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
         {hasPermission(['sales_read', 'general_ledger_report', 'profit_loss_report']) && (
           <KPICard
             title="Total Revenue"

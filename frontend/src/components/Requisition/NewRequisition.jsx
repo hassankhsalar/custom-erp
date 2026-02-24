@@ -17,7 +17,9 @@ import {
   ShoppingBag,
   FileText,
   AlertCircle,
-  X
+  X,
+  Boxes,
+  Coins
 } from "lucide-react";
 
 const NewRequisition = () => {
@@ -298,18 +300,38 @@ const NewRequisition = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Request Type</label>
-                  <select
-                    value={form.requestType}
-                    onChange={(e) => setForm((p) => ({ ...p, requestType: e.target.value }))}
-                    className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+              {/* Request Type Toggle */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">Request Type</label>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setForm((p) => ({ ...p, requestType: "items" }))}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium transition-all duration-300 ${
+                      form.requestType === "items"
+                        ? "bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg scale-105"
+                        : "bg-white/60 text-gray-700 hover:bg-white/80 border border-white/60"
+                    }`}
                   >
-                    <option value="items"> Items</option>
-                    <option value="money"> Money</option>
-                  </select>
+                    <Boxes size={18} />
+                    Items
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm((p) => ({ ...p, requestType: "money" }))}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium transition-all duration-300 ${
+                      form.requestType === "money"
+                        ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg scale-105"
+                        : "bg-white/60 text-gray-700 hover:bg-white/80 border border-white/60"
+                    }`}
+                  >
+                    <Coins size={18} />
+                    Money
+                  </button>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Currency</label>
                   <input

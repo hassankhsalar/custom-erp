@@ -1,6 +1,25 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES } from "../../config";
-import { CheckCircle2, XCircle, RefreshCcw, ClipboardList } from "lucide-react";
+import {
+  CheckCircle2,
+  XCircle,
+  RefreshCcw,
+  ClipboardList,
+  Filter,
+  Search,
+  Clock,
+  User,
+  Calendar,
+  AlertCircle,
+  CheckCircle,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  ShoppingBag,
+  FileEdit
+} from "lucide-react";
 
 export default function SaleEditRequests() {
   const [rows, setRows] = useState([]);
@@ -9,17 +28,24 @@ export default function SaleEditRequests() {
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [approveLimitsByRequest, setApproveLimitsByRequest] = useState({});
 
-  const fetchRows = async (status = statusFilter) => {
+  const fetchRows = async (page = pagination.page, status = statusFilter, search = searchTerm) => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const query = new URLSearchParams({ status }).toString();
-      const res = await fetch(`${API_ROUTES.SHOP_SALES_EDIT_REQUESTS}?${query}`, {
+      const query = new URLSearchParams({ 
+        status,
+        page: String(page),
+        limit: String(pagination.limit)
+      });
+      if (search) query.set("search", search);
+      
+      const res = await fetch(`${API_ROUTES.SHOP_SALES_EDIT_REQUESTS}?${query.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to fetch requests");
       setRows(Array.isArray(data.rows) ? data.rows : []);
+      setPagination(data.pagination || { page, limit: pagination.limit, total: 0, totalPages: 1 });
     } catch (err) {
       alert(err.message);
       setRows([]);
@@ -29,7 +55,7 @@ export default function SaleEditRequests() {
   };
 
   useEffect(() => {
-    fetchRows("pending");
+    fetchRows(1, "pending", "");
   }, []);
 
   const handleApprove = async (requestId) => {
@@ -80,12 +106,60 @@ export default function SaleEditRequests() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to reject request");
-      await fetchRows(statusFilter);
+      await fetchRows(pagination.page, statusFilter, searchTerm);
     } catch (err) {
       alert(err.message);
     } finally {
       setActionLoadingId(null);
     }
+  };
+
+  const applyFilters = () => {
+    fetchRows(1, statusFilter, searchTerm);
+  };
+
+  const clearFilters = () => {
+    setStatusFilter("pending");
+    setSearchTerm("");
+    setApproveMaxCount("");
+    setApproveDurationMinutes("");
+    fetchRows(1, "pending", "");
+  };
+
+  const goToPage = (page) => {
+    if (page < 1 || page > pagination.totalPages) return;
+    fetchRows(page, statusFilter, searchTerm);
+  };
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case "approved":
+        return {
+          color: "bg-gradient-to-r from-emerald-500 to-green-500",
+          icon: <CheckCircle size={14} className="text-white" />,
+          text: "Approved"
+        };
+      case "rejected":
+        return {
+          color: "bg-gradient-to-r from-red-500 to-rose-500",
+          icon: <XCircle size={14} className="text-white" />,
+          text: "Rejected"
+        };
+      default:
+        return {
+          color: "bg-gradient-to-r from-amber-500 to-orange-500",
+          icon: <Clock size={14} className="text-white" />,
+          text: "Pending"
+        };
+    }
+  };
+
+  const formatDateTime = (dateTimeString) => {
+    const date = new Date(dateTimeString);
+    return {
+      date: date.toLocaleDateString(),
+      time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
   };
 
   return (
@@ -226,6 +300,23 @@ export default function SaleEditRequests() {
           </tbody>
         </table>
       </div>
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 }
