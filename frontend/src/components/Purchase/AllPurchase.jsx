@@ -5,7 +5,8 @@ import {
   Eye, CreditCard, DollarSign, Trash2, CheckCircle, XCircle,
   AlertCircle, Loader2, TrendingDown, FileText, MapPin,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
-  Filter, Settings, User, Clock, Shield, Edit
+  Filter, Settings, User, Clock, Shield, Edit,
+  X
 } from "lucide-react";
 import { API_ROUTES } from "../../config";
 
@@ -470,7 +471,7 @@ export default function AllPurchase() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
       {/* Background decorative elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-300/20 rounded-full blur-3xl"></div>
@@ -874,7 +875,7 @@ export default function AllPurchase() {
         </div>
       </div>
 
-      {/* Modals - Keeping all existing modals unchanged for functionality */}
+      {/* Modals - View details */}
       {viewModalOpen && selectedPurchase && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setViewModalOpen(false)}></div>
@@ -894,7 +895,7 @@ export default function AllPurchase() {
                   onClick={() => setViewModalOpen(false)}
                   className="p-2 bg-white/60 rounded-lg hover:bg-white/80 transition-colors duration-300"
                 >
-                  <XCircle size={20} className="text-gray-600" />
+                  <X size={20} className="text-gray-600" />
                 </button>
               </div>
             </div>

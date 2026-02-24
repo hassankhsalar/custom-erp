@@ -62,18 +62,10 @@ export default function AllSales() {
       
       const data = await response.json();
       
-      // Handle both array and paginated response formats
-      if (Array.isArray(data)) {
-        // Old format (backward compatibility)
-        setSales(data);
-        setTotalPages(Math.ceil(data.length / itemsPerPage));
-        setTotalCount(data.length);
-      } else {
-        // New paginated format
-        setSales(data.sales || []);
-        setTotalPages(data.pagination?.totalPages || 0);
-        setTotalCount(data.pagination?.totalCount || 0);
-      }
+      // Handle paginated response format
+      setSales(data.sales || []);
+      setTotalPages(data.pagination?.totalPages || 0);
+      setTotalCount(data.pagination?.totalCount || 0);
     } catch (error) {
       console.error("Error fetching sales:", error);
     } finally {
@@ -114,24 +106,35 @@ export default function AllSales() {
       direction = 'descending';
     }
     setSortConfig({ key, direction });
-    // Since sorting is handled on backend, we need to fetch with sort params
-    // For now, we'll just update the sort config and the table will re-render with sorted data
   };
 
   const formatSalesData = (sales) => {
-    return sales.map(sale => ({
-      id: sale.id,
-      reference: sale.reference,
-      shop: sale.shop?.name || "-",
-      customer: sale.customer || "-",
-      total: `$${sale.totalAmount?.toFixed(2) || "0.00"}`,
-      discount: `$${sale.discount?.toFixed(2) || "0.00"}`,
-      "grand total": `$${sale.grandTotal?.toFixed(2) || "0.00"}`,
-      paid: `$${sale.paidAmount?.toFixed(2) || "0.00"} (${sale.paymentType || "cash"})`,
-      date: new Date(sale.createdAt).toLocaleDateString(),
-      rawDate: sale.createdAt,
-      actions: ""
-    }));
+    return sales.map(sale => {
+      // Format customer display
+      let customerDisplay = "-";
+      if (sale.customer) {
+        if (typeof sale.customer === 'object') {
+          customerDisplay = sale.customer.name || sale.customer.mobile || "Customer";
+        } else {
+          customerDisplay = sale.customer;
+        }
+      }
+
+      return {
+        id: sale.id,
+        reference: sale.reference,
+        shop: sale.shop?.name || "-",
+        customer: customerDisplay,
+        customerObject: sale.customer, // Store original customer object for details
+        total: `$${sale.totalAmount?.toFixed(2) || "0.00"}`,
+        discount: `$${sale.discount?.toFixed(2) || "0.00"}`,
+        "grand total": `$${sale.grandTotal?.toFixed(2) || "0.00"}`,
+        paid: `$${sale.paidAmount?.toFixed(2) || "0.00"} (${sale.paymentType || "cash"})`,
+        date: new Date(sale.createdAt).toLocaleDateString(),
+        rawDate: sale.createdAt,
+        actions: ""
+      };
+    });
   };
 
   // Apply sorting to the current page's data
@@ -162,7 +165,7 @@ export default function AllSales() {
     }) : 
     formatSalesData(sales);
 
-  // Use sortedData for display (this is the current page's data already from backend)
+  // Use sortedData for display
   const currentItems = sortedData;
 
   // Pagination controls
@@ -185,11 +188,10 @@ export default function AllSales() {
   };
 
   const tableHeaders = sales.length > 0 ? 
-    Object.keys(formatSalesData(sales)[0]).filter(key => key !== 'id' && key !== 'rawDate') : 
+    Object.keys(formatSalesData(sales)[0]).filter(key => key !== 'id' && key !== 'rawDate' && key !== 'customerObject') : 
     ['reference', 'shop', 'customer', 'total', 'discount', 'grand total', 'paid', 'date', 'actions'];
 
-  // Calculate summary statistics from all sales (using totalCount for display, but we don't have all sales data)
-  // For accurate stats, we'd need a separate API endpoint
+  // Calculate summary statistics from current page sales
   const totalRevenue = sales.reduce((sum, sale) => sum + (sale.grandTotal || 0), 0);
   const totalDiscount = sales.reduce((sum, sale) => sum + (sale.discount || 0), 0);
   const averageSale = sales.length > 0 ? totalRevenue / sales.length : 0;
@@ -416,6 +418,7 @@ export default function AllSales() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to add payment");
+      alert("Payment done!");
       setAddPaymentModalOpen(false);
       await fetchPaymentHistory(selectedSale.id);
       await fetchSales();
@@ -535,34 +538,36 @@ export default function AllSales() {
               </tr>
             </thead>
             <tbody>
-              {currentItems.map((item, index) => (
-                <tr
-                  key={item.id}
-                  className={`border-t border-white/10 hover:bg-white/10 transition-all duration-200 ${
-                    index % 2 === 0 ? 'bg-white/5' : ''
-                  }`}
-                >
-                  {tableHeaders.map((key) => (
-                    <td key={key} className="p-4">
-                      {key === 'actions' ? (
-                        <div className="relative dropdown-container">
-                          <button
-                            onClick={() => setActiveDropdown(activeDropdown === item.id ? null : item.id)}
-                            className="p-2 hover:bg-gray-100 rounded-lg transition"
-                          >
-                            <MoreVertical size={18} className="text-gray-600" />
-                          </button>
+              {currentItems.map((item, index) => {
+                const sale = sales.find(s => s.id === item.id);
+                return (
+                  <tr
+                    key={item.id}
+                    className={`border-t border-white/10 hover:bg-white/10 transition-all duration-200 ${
+                      index % 2 === 0 ? 'bg-white/5' : ''
+                    }`}
+                  >
+                    {tableHeaders.map((key) => (
+                      <td key={key} className="p-4">
+                        {key === 'actions' ? (
+                          <div className="relative dropdown-container">
+                            <button
+                              onClick={() => setActiveDropdown(activeDropdown === item.id ? null : item.id)}
+                              className="p-2 hover:bg-gray-100 rounded-lg transition"
+                            >
+                              <MoreVertical size={18} className="text-gray-600" />
+                            </button>
 
-                          {activeDropdown === item.id && (
-                            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-10">
-                              <div className="py-1">
-                                <button
-                                  onClick={() => handleView(sales.find(s => s.id === item.id))}
-                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition"
-                                >
-                                  <Eye size={16} />
-                                  View Details
-                                </button>
+                            {activeDropdown === item.id && (
+                              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-10">
+                                <div className="py-1">
+                                  <button
+                                    onClick={() => handleView(sale)}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition"
+                                  >
+                                    <Eye size={16} />
+                                    View Details
+                                  </button>
 
                                 {sales.find(s => s.id === item.id)?.canEdit && (
                                   <button
@@ -638,7 +643,7 @@ export default function AllSales() {
                                   </button>
                                 )}
 
-                                <div className="border-t my-1"></div>
+                                  <div className="border-t my-1"></div>
 
                                 {sales.find(s => s.id === item.id)?.canDelete && (
                                   <button

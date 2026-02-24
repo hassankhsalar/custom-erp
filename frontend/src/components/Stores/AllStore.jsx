@@ -188,7 +188,7 @@ const AllStore = () => {
   const currentStores = getCurrentPageItems();
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-4 md:p-6">
       {/* Background decorative elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-emerald-300/20 rounded-full blur-3xl"></div>
@@ -635,17 +635,6 @@ const AllStore = () => {
 
             </div>
             
-            <div className="sticky bottom-0 p-6 border-t border-white/50">
-              <div className="flex justify-end gap-3">
-                
-                <button
-                  onClick={closeModal}
-                  className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
-                >
-                  Close Details
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}

@@ -58,7 +58,7 @@ const AddFactory = () => {
 };
 
   return (
-    <div className="container mx-auto p-4 min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+    <div className="container rounded-t-2xl mx-auto p-4 min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
       <div className="backdrop-blur-lg bg-white/70 rounded-2xl shadow-2xl p-6 border border-white/30">
         <div className="flex items-center justify-between mb-8">
           <div>

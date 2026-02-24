@@ -228,7 +228,7 @@ const EditStore = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+    <div className="min-h-screen w-full rounded-t-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
       {/* Header */}
       <div className="glass-card rounded-2xl p-6 mb-8 border border-white/30 shadow-xl backdrop-blur-sm">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -259,7 +259,7 @@ const EditStore = () => {
       {/* Main Form */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Store Details Card */}
-        <div className="lg:col-span-1">
+        <div className="col-span-1 lg:col-span-2">
           <div className="glass-card rounded-2xl border border-white/30 shadow-xl backdrop-blur-sm p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl">
