@@ -77,14 +77,13 @@ import TransferReceiveHistory from "./components/Transfer/TransferReceiveHistory
 import Navbar from "./components/Navbar";
 import Notifications from "./components/Notifications";
 import UserProfile from "./components/UserProfile";
-import ScrapRecord from "./components/ScrapRecord/ScrapRecord";
 import ProductRepair from "./components/ProductRepair/ProductRepair";
-import AddScrapRecord from "./components/ScrapRecord/AddScrapRecord";
 import AddRepairProduct from "./components/ProductRepair/AddRepairProduct";
 import AddRepairMaterial from "./components/MaterialRepair/AddRepairMaterial";
 import MaterialRepair from "./components/MaterialRepair/MaterialRepair";
-import AddMaterialScrapRecord from "./components/ScrapRecord/AddMaterialScrapRecord";
-import MaterialScrapRecord from "./components/ScrapRecord/MaterialScrapRecord";
+import DamageRecord from "./components/ScrapRecord/DamageRecord";
+import RepairCreate from "./components/Repair/RepairCreate";
+import RepairedItems from "./components/Repair/RepairedItems";
 import AddAccount from "./components/Accounts/AddAccount";
 import AllAccounts from "./components/Accounts/AllAccounts";
 import AssignAccount from "./components/Accounts/AssignAccount";
@@ -528,19 +527,22 @@ function App() {
 
             
             <Route element={<PermissionRoute requiredPermission="damage_read" />}>
-              <Route path="/scraprecord" element={<ScrapRecord />} />
+              <Route path="/damage-record" element={<DamageRecord />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="damage_create" />}>
-              <Route path="/addscraprecord" element={<AddScrapRecord />} />
+              <Route path="/damage-record/new" element={<DamageRecord />} />
             </Route>
+            <Route path="/scraprecord" element={<Navigate to="/damage-record" replace />} />
+            <Route path="/addscraprecord" element={<Navigate to="/damage-record" replace />} />
+            <Route path="/materialscraprecord" element={<Navigate to="/damage-record" replace />} />
+            <Route path="/addmaterialscraprecord" element={<Navigate to="/damage-record" replace />} />
 
-            <Route element={<PermissionRoute requiredPermission="damage_read" />}>
-              <Route path="/materialscraprecord" element={<MaterialScrapRecord />} />
+            <Route element={<PermissionRoute requiredPermission="repairs_read" />}>
+              <Route path="/repair/items" element={<RepairedItems />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission="damage_create" />}>
-              <Route path="/addmaterialscraprecord" element={<AddMaterialScrapRecord />} />
+            <Route element={<PermissionRoute requiredPermission="repairs_create" />}>
+              <Route path="/repair/new" element={<RepairCreate />} />
             </Route>
-
             <Route element={<PermissionRoute requiredPermission="repairs_read" />}>
               <Route path="/productrepair" element={<ProductRepair />} />
             </Route>

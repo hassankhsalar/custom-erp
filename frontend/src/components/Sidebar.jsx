@@ -14,6 +14,7 @@ import {
   Wrench,
   Recycle,
   Undo2,
+  AlertTriangle,
   BookA,
   NotebookPen,
   Calendar,
@@ -137,10 +138,8 @@ const Sidebar = () => {
       textColor: 'text-cyan-700',
       permissionKey: ['repairs_read', 'repairs_create'],
       subItems: [
-        { name: 'Repaired Products', path: '/productrepair', icon: <Box size={16} />, permissionKey: 'repairs_read' },
-        { name: 'Repair Product', path: '/addrepairproduct', icon: <Box size={16} />, permissionKey: 'repairs_create' },
-        { name: 'Repaired Materials', path: '/materialrepair', icon: <Package size={16} />, permissionKey: 'repairs_read' },
-        { name: 'Repair Materials', path: '/addrepairmaterial', icon: <Package size={16} />, permissionKey: 'repairs_create' },
+        { name: 'Repair', path: '/repair/new', icon: <Wrench size={16} />, permissionKey: 'repairs_create' },
+        { name: 'Repaired Item', path: '/repair/items', icon: <Box size={16} />, permissionKey: 'repairs_read' },
       ] 
     },
 
@@ -153,8 +152,8 @@ const Sidebar = () => {
       textColor: 'text-red-700',
       permissionKey: ['damage_read', 'damage_create'],
       subItems: [
-        { name: 'Products Damage Records', path: '/scraprecord', icon: <Box size={16} />, permissionKey: 'damage_read' },
-        { name: 'Material Damage Records', path: '/materialscraprecord', icon: <Package size={16} />, permissionKey: 'damage_read' },
+        { name: 'Damage Record', path: '/damage-record', icon: <AlertTriangle size={16} />, permissionKey: 'damage_read' },
+        { name: 'New Damage', path: '/damage-record/new', icon: <Recycle size={16} />, permissionKey: 'damage_create' },
         { name: 'Damage Return', path: '/purchase/damage-return', icon: <Undo2 size={16} />, permissionKey: 'damage_create' },
         { name: 'All Damage Returns', path: '/purchase/returns?type=damage_return', icon: <ClipboardList size={16} />, permissionKey: 'damage_read' },
       ] 

@@ -161,6 +161,9 @@ export const API_ROUTES = {
   STORE_TO_SHOP_TRANSFER_STATUS: (id) => `${API_BASE_URL}/store-to-shop-transfers/${id}/status`,
 
   //scrap
+  DAMAGE_RECORDS: `${API_BASE_URL}/damage-records`,
+  DAMAGE_RECORD_BY_ID: (id) => `${API_BASE_URL}/damage-records/${id}`,
+  DAMAGE_BRANCH_ITEMS: (fromType, fromId) => `${API_BASE_URL}/damage-records/branch-items?fromType=${encodeURIComponent(fromType)}&fromId=${encodeURIComponent(fromId)}`,
   SCRAP_RECORDS: `${API_BASE_URL}/scrap-records`,
   MATERIAL_SCRAP_RECORDS: `${API_BASE_URL}/materials-scrap-records`,
   BRANCH_MATERIALS: `${API_BASE_URL}/api/branch-materials`,
@@ -170,6 +173,10 @@ export const API_ROUTES = {
   
   // Add product repair routes
   PRODUCT_REPAIRS: `${API_BASE_URL}/product-repairs`,
+  REPAIRS: `${API_BASE_URL}/repairs`,
+  REPAIR_BY_ID: (id) => `${API_BASE_URL}/repairs/${id}`,
+  REPAIR_STATUS: (id) => `${API_BASE_URL}/repairs/${id}/status`,
+  REPAIR_DAMAGED_ITEMS: (sourceType, sourceId) => `${API_BASE_URL}/repairs/damaged-items?sourceType=${encodeURIComponent(sourceType)}&sourceId=${encodeURIComponent(sourceId)}`,
   
   DASHBOARD2: `${API_BASE_URL}/dash-board`,
 
