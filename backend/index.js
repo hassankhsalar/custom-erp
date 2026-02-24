@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const { Server } = require('socket.io');
 const { activityLoggerMiddleware, logActivity } = require('./utils/activityLogger');
-const { createSessionTracker, isWithinAllowedLoginWindow, LOGIN_WINDOW_ERROR } = require('./services/realtimeTracker');
+const { createSessionTracker, getAccessBlockReason } = require('./services/realtimeTracker');
 const { setRealtimeIo } = require('./services/realtimeEmitter');
 
 const prisma = new PrismaClient();
@@ -36,6 +36,9 @@ const authenticateToken = async (req, res, next) => {
         sessionVersion: true,
         loginStartTime: true,
         loginEndTime: true,
+        isActive: true,
+        bypassGlobalAccessWindow: true,
+        permission: { select: { name: true } },
       },
     });
 
@@ -43,8 +46,9 @@ const authenticateToken = async (req, res, next) => {
     if ((dbUser.sessionVersion || 0) !== tokenSessionVersion) {
       return res.status(401).json({ error: 'Session expired. Please login again.' });
     }
-    if (!isWithinAllowedLoginWindow(dbUser)) {
-      return res.status(403).json({ error: LOGIN_WINDOW_ERROR });
+    const blockReason = await getAccessBlockReason({ prisma, user: dbUser });
+    if (blockReason) {
+      return res.status(403).json({ error: blockReason });
     }
 
     req.user = {
@@ -124,18 +128,25 @@ app.post('/api/register', authenticateToken, hasPermission('create_user'), async
 // Login a user
 app.post('/api/login', async (req, res) => {
   const { identifier, password } = req.body;
-  let user = await prisma.user.findUnique({ where: { username: identifier } });
+  let user = await prisma.user.findUnique({
+    where: { username: identifier },
+    include: { permission: { select: { name: true } } },
+  });
 
   if (user == null) {
-    user = await prisma.user.findUnique({ where: { email: identifier } });
+    user = await prisma.user.findUnique({
+      where: { email: identifier },
+      include: { permission: { select: { name: true } } },
+    });
   }
 
   if (user == null) {
     return res.status(400).json({ error: 'Cannot find user' });
   }
 
-  if (!isWithinAllowedLoginWindow(user)) {
-    return res.status(403).json({ error: LOGIN_WINDOW_ERROR });
+  const blockReason = await getAccessBlockReason({ prisma, user });
+  if (blockReason) {
+    return res.status(403).json({ error: blockReason });
   }
 
   if (await bcrypt.compare(password, user.password)) {

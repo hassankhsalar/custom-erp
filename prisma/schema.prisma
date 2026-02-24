@@ -16,6 +16,8 @@ model User {
   username    String   @unique
   name        String?
   password    String
+  isActive    Boolean  @default(true)
+  bypassGlobalAccessWindow Boolean @default(false)
   sessionVersion Int   @default(0)
   loginStartTime String? @db.VarChar(5)
   loginEndTime   String? @db.VarChar(5)
@@ -27,7 +29,9 @@ model User {
   updatedAt        DateTime @updatedAt
   transactions   Transactions[]
   cashRegisterWithdraw  CashRegisterWithdraw[]
-  cashRegisterTransaction  CashRegisterRecord[]
+  cashRegisterDeposit   CashRegisterDeposit[]
+  cashRegisterOpenedRecords  CashRegisterRecord[] @relation("CashRegisterOpenedBy")
+  cashRegisterClosedRecords  CashRegisterRecord[] @relation("CashRegisterClosedBy")
   entityAccount             EntityAccount[]
   cashRegisterAssignment    CashRegisterAssignment[]
   userAssociate              UserAssociate[]
@@ -116,6 +120,8 @@ model Accounts {
   purchase     Purchase[]
   expenses     Expense[]
   repairOrders RepairOrder[]
+  cashRegisterWithdraws CashRegisterWithdraw[]
+  cashRegisterDeposits  CashRegisterDeposit[]
 
   @@index([createdAt])
 }
@@ -129,6 +135,8 @@ model BankAccount {
   withdraw_charge     Float?
   transactions        Transactions[]
   sales               Sale[]
+  cashRegisterWithdraws CashRegisterWithdraw[]
+  cashRegisterDeposits  CashRegisterDeposit[]
 }
 
 model EmployeeProfile {
@@ -308,6 +316,7 @@ model CashRegister {
   updatedAt   DateTime            @updatedAt
   transactions  Transactions[]
   cashRegisterWithdraw CashRegisterWithdraw[]
+  cashRegisterDeposit CashRegisterDeposit[]
   cashRegisterTransaction  CashRegisterRecord[]
   assignments       CashRegisterAssignment[]
   @@index([createdAt])
@@ -325,11 +334,13 @@ model CashRegisterRecord {
   starting_cash   Float
   ending_cash     Float?
 
-  shopId          Int
-  shop            Shop @relation(fields: [shopId], references: [id])
+  shopId          Int?
+  shop            Shop? @relation(fields: [shopId], references: [id])
 
   userId          Int
-  user            User @relation(fields: [userId], references: [id])
+  user            User @relation("CashRegisterOpenedBy", fields: [userId], references: [id])
+  closedById      Int?
+  closedBy        User? @relation("CashRegisterClosedBy", fields: [closedById], references: [id])
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -337,6 +348,7 @@ model CashRegisterRecord {
   @@index([cashRegisterId])
   @@index([shopId])
   @@index([userId])
+  @@index([closedById])
 }
 
 model CashRegisterWithdraw {
@@ -352,6 +364,10 @@ model CashRegisterWithdraw {
   user            User? @relation(fields: [userId], references: [id])
 
   note            String?
+  accountId       Int?
+  account         Accounts? @relation(fields: [accountId], references: [id])
+  bankAccountId   Int?
+  bankAccount     BankAccount? @relation(fields: [bankAccountId], references: [id])
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -359,6 +375,36 @@ model CashRegisterWithdraw {
   @@index([cashRegisterId])
   @@index([userId])
   @@index([time])
+  @@index([accountId])
+  @@index([bankAccountId])
+}
+
+model CashRegisterDeposit {
+  id              Int       @id @default(autoincrement())
+
+  time            DateTime
+  amount          Float
+
+  cashRegisterId  Int?
+  cashRegister    CashRegister? @relation(fields: [cashRegisterId], references: [id])
+
+  userId          Int?
+  user            User? @relation(fields: [userId], references: [id])
+
+  note            String?
+  accountId       Int?
+  account         Accounts? @relation(fields: [accountId], references: [id])
+  bankAccountId   Int?
+  bankAccount     BankAccount? @relation(fields: [bankAccountId], references: [id])
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([cashRegisterId])
+  @@index([userId])
+  @@index([time])
+  @@index([accountId])
+  @@index([bankAccountId])
 }
 
 
@@ -580,6 +626,7 @@ model Factory {
   factoryProducts FactoryProduct[]
   factoryMaterials FactoryMaterial[]
   stockAdjustments StockAdjustment[]
+  requisitionSections RequisitionSection[]
 }
 model Production {
   id                      Int                      @id @default(autoincrement()) // Changed to Int
@@ -613,6 +660,7 @@ model Store {
   storeMaterials          StoreMaterial[]
   storeProducts           StoreProduct[]
   stockAdjustments        StockAdjustment[]
+  requisitionSections     RequisitionSection[]
   
   //sales                   Sale[]
   //saleReturns             SaleReturn[]
@@ -1004,6 +1052,7 @@ model Shop {
   stockAdjustments StockAdjustment[]
   sales         Sale[]
   saleReturns   SaleReturn[]
+  requisitionSections RequisitionSection[]
   
   cashRegisterRecord  CashRegisterRecord[]
 }
@@ -1135,6 +1184,12 @@ model RequisitionSection {
   status           String                  @default("pending")
   destinationType  String?
   destinationId    Int?
+  storeId          Int?
+  store            Store?                  @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  shopId           Int?
+  shop             Shop?                   @relation(fields: [shopId], references: [id], onDelete: SetNull)
+  factoryId        Int?
+  factory          Factory?                @relation(fields: [factoryId], references: [id], onDelete: SetNull)
   assignedById     Int?
   assignedBy       User?                   @relation("AssignedRequisitionSections", fields: [assignedById], references: [id], onDelete: SetNull)
   createdAt        DateTime                @default(now())
@@ -1147,6 +1202,9 @@ model RequisitionSection {
   @@index([requisitionId])
   @@index([status])
   @@index([destinationType, destinationId])
+  @@index([storeId])
+  @@index([shopId])
+  @@index([factoryId])
 }
 
 model RequisitionSectionItem {

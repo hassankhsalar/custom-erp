@@ -51,6 +51,7 @@ const RequisitionList = () => {
   const [places, setPlaces] = useState({ shops: [], stores: [], factories: [] });
   const [segmentModal, setSegmentModal] = useState({ open: false, requisition: null });
   const [sections, setSections] = useState([]);
+  const [requisitionModal, setRequisitionModal] = useState({ open: false, loading: false, data: null, error: "" });
 
   useEffect(() => {
     const fetchPlaces = async () => {
@@ -238,6 +239,26 @@ const RequisitionList = () => {
         requisitionOrder: order,
       },
     });
+  };
+
+  const openRequisitionModal = async (orderRow) => {
+    const requisitionId = orderRow?.requisitionId || orderRow?.requisition?.id;
+    if (!requisitionId) return;
+
+    setRequisitionModal({ open: true, loading: true, data: null, error: "" });
+    try {
+      const res = await axios.get(API_ROUTES.REQUISITION_BY_ID(requisitionId), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setRequisitionModal({ open: true, loading: false, data: res.data || null, error: "" });
+    } catch (error) {
+      setRequisitionModal({
+        open: true,
+        loading: false,
+        data: null,
+        error: error?.response?.data?.error || "Failed to load requisition details",
+      });
+    }
   };
 
   const getStatusBadge = (status) => {
@@ -548,7 +569,11 @@ const RequisitionList = () => {
                               <div className="flex items-center gap-2">
                                 {getRequesterIcon(row.destinationType)}
                                 <span className="capitalize">{row.destinationType}</span>
-                                {row.destinationId && <span className="text-gray-500">#{row.destinationId}</span>}
+                                {row.destinationName ? (
+                                  <span className="text-gray-700">- {row.destinationName}</span>
+                                ) : row.destinationId ? (
+                                  <span className="text-gray-500">#{row.destinationId}</span>
+                                ) : null}
                               </div>
                             ) : (
                               <span className="text-gray-400">-</span>
@@ -557,6 +582,15 @@ const RequisitionList = () => {
                           
                           <td className="p-4">
                             <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openRequisitionModal(row)}
+                                className="px-4 py-2 rounded-lg bg-white/70 border border-white/60 hover:bg-white text-gray-700 text-xs font-semibold inline-flex items-center gap-2 transition-all duration-300"
+                              >
+                                <Eye size={14} />
+                                View Requisition
+                              </button>
+
                               <button
                                 type="button"
                                 onClick={() => acceptOrder(row, tab === "transfer_orders" ? "transfer" : tab === "production_orders" ? "production" : "purchase")}
@@ -655,6 +689,81 @@ const RequisitionList = () => {
         )}
       </div>
 
+      {requisitionModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setRequisitionModal({ open: false, loading: false, data: null, error: "" })}></div>
+          <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden">
+            <div className="sticky top-0 z-10 p-6 border-b border-white/50 bg-gradient-to-r from-indigo-500/10 to-purple-600/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
+                    <ClipboardList className="text-white" size={22} />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-800">Requisition Details</h2>
+                    {requisitionModal.data?.reference ? <p className="text-gray-600">{requisitionModal.data.reference}</p> : null}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setRequisitionModal({ open: false, loading: false, data: null, error: "" })}
+                  className="p-2 bg-white/60 rounded-lg hover:bg-white/80 transition-colors duration-300"
+                >
+                  <X size={20} className="text-gray-600" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-100px)]">
+              {requisitionModal.loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-600 rounded-full animate-spin"></div>
+                </div>
+              ) : requisitionModal.error ? (
+                <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700">{requisitionModal.error}</div>
+              ) : requisitionModal.data ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-xl bg-white/60 border border-white/60">
+                      <p><strong>Reference:</strong> {requisitionModal.data.reference}</p>
+                      <p><strong>Title:</strong> {requisitionModal.data.title || "-"}</p>
+                      <p><strong>Status:</strong> {requisitionModal.data.status}</p>
+                      <p><strong>Type:</strong> {requisitionModal.data.requestType}</p>
+                    </div>
+                    <div className="p-4 rounded-xl bg-white/60 border border-white/60">
+                      <p><strong>Requester:</strong> {requisitionModal.data.requesterType} #{requisitionModal.data.requesterId}</p>
+                      <p><strong>Parent:</strong> {requisitionModal.data.parentRequisition?.reference || "-"}</p>
+                      <p><strong>Created:</strong> {requisitionModal.data.createdAt ? new Date(requisitionModal.data.createdAt).toLocaleString() : "-"}</p>
+                      <p><strong>Updated:</strong> {requisitionModal.data.updatedAt ? new Date(requisitionModal.data.updatedAt).toLocaleString() : "-"}</p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-white/60 border border-white/60">
+                    <h3 className="font-semibold text-gray-800 mb-3">Items</h3>
+                    {(requisitionModal.data.items || []).length === 0 ? (
+                      <p className="text-gray-500">No items</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {(requisitionModal.data.items || []).map((it) => (
+                          <div key={it.id} className="flex items-center justify-between p-2 rounded-lg bg-white/70 border border-white/50">
+                            <div className="text-sm">
+                              <span className="font-medium">{it.product?.name || it.material?.name || "-"}</span>
+                              <span className="ml-2 text-xs text-gray-500">({it.itemType})</span>
+                            </div>
+                            <div className="text-sm text-gray-700">Requested: {it.requestedQty}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-gray-500">No data found.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Segment Modal */}
       {segmentModal.open && segmentModal.requisition && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -691,7 +800,7 @@ const RequisitionList = () => {
             </div>
 
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
-              <div className="space-y-6">
+              <div className="">
                 {sections.map((section, sIdx) => (
                   <div key={sIdx} className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-6">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
@@ -854,23 +963,22 @@ const RequisitionList = () => {
                     )}
                   </div>
                 ))}
-              </div>
-            </div>
-
-            <div className="sticky bottom-0 p-6 border-t border-white/50 bg-white/80 backdrop-blur-sm">
-              <div className="flex justify-end gap-3">
-                <button
-                  className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
-                  onClick={() => setSegmentModal({ open: false, requisition: null })}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-xl hover:shadow-lg transition-all duration-300"
-                  onClick={submitSegmentation}
-                >
-                  Save Segments
-                </button>
+                <div className="p-6 mb-5 border-t border-white/50 bg-white/80 backdrop-blur-sm">
+                  <div className="flex justify-end gap-3">
+                    <button
+                      className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
+                      onClick={() => setSegmentModal({ open: false, requisition: null })}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-xl hover:shadow-lg transition-all duration-300"
+                      onClick={submitSegmentation}
+                    >
+                      Save Segments
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
