@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES } from '../../config';
@@ -11,17 +11,14 @@ import {
   DollarSign,
   TrendingUp,
   Factory,
+  SeparatorVertical,
   Tag,
   Barcode,
   AlertCircle,
   CheckCircle,
+  Plus,
   Layers
 } from 'lucide-react';
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import axios from "axios";
-import { API_ROUTES } from "../../config";
-import { Image as ImageIcon, Upload, X, Plus } from "lucide-react";
 
 const emptyAltUnit = { unitname: "", multiplier: "" };
 
@@ -108,14 +105,6 @@ const AddMaterial = () => {
       console.error('Error uploading image:', error);
       throw error;
     }
-    formData.append("image", file);
-    const response = await axios.post(`${API_ROUTES.UPLOADS}/product`, formData, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "multipart/form-data",
-      },
-    });
-    return response.data.imageUrl;
   };
 
   const handleChange = (e) => {
@@ -153,9 +142,6 @@ const AddMaterial = () => {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file (jpg, png, gif, etc.)');
     if (!file.type.startsWith("image/")) {
       alert("Please select an image file");
       return;
@@ -215,15 +201,6 @@ const AddMaterial = () => {
       alert('Material created successfully!');
       navigate('/materials/all');
       
-
-      await axios.post(API_ROUTES.MATERIALS, materialData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-      alert("Material created successfully!");
-      navigate("/materials/all");
     } catch (error) {
       console.error("Error creating material:", error);
       alert(error.response?.data?.error || "Error creating material. Please try again.");
@@ -244,12 +221,13 @@ const AddMaterial = () => {
 
   const margin = calculateMargin();
 
+
   return (
-    <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl w-full bg-linear-to-br from-blue-50 via-green-50 to-teal-50 p-4 md:p-6">
       {/* Background decorative elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-300/20 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-300/20 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-teal-300/20 rounded-full blur-3xl"></div>
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-emerald-300/10 rounded-full blur-3xl"></div>
       </div>
 
@@ -258,11 +236,11 @@ const AddMaterial = () => {
         <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-blue-100/50 mb-6 p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="p-4 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl shadow-lg">
+              <div className="p-4 bg-linear-to-br from-teal-500 to-green-500 rounded-2xl shadow-lg">
                 <Package className="text-white" size={36} />
               </div>
               <div>
-                <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                <h1 className="text-3xl md:text-4xl font-bold bg-linear-to-r from-teal-600 to-green-600 bg-clip-text text-transparent">
                   Add New Material
                 </h1>
                 <p className="text-gray-600 mt-2">Create a new material for inventory management</p>
@@ -277,28 +255,17 @@ const AddMaterial = () => {
               Cancel
             </button>
           </div>
-    <div className="container mx-auto p-4 min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
-      <div className="backdrop-blur-lg bg-white/70 rounded-2xl shadow-2xl p-6 border border-white/30">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Add New Material</h1>
-            <p className="text-gray-600 mt-2">Create a new material for inventory management</p>
-          </div>
-          <button onClick={() => navigate("/materials/all")} className="bg-gray-100/80 px-4 py-2.5 rounded-lg border">
-            Back to Materials
-          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
             <h2 className="text-xl font-semibold mb-6 text-gray-800 flex items-center">
-              <Layers className="w-5 h-5 mr-2 text-purple-600" />
+              <Layers className="w-5 h-5 mr-2 text-teal-600" />
               Material Information
             </h2>
-          <div className="backdrop-blur-sm bg-white/50 rounded-xl p-6 border border-white/40 shadow-lg">
-            <h2 className="text-xl font-semibold mb-6 text-gray-800">Material Information</h2>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Image Upload Section */}
               <div className="lg:col-span-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Material Image</label>
                 <div className="space-y-4">
@@ -306,8 +273,16 @@ const AddMaterial = () => {
                     <div className="w-full aspect-square rounded-xl overflow-hidden border-2 border-dashed border-gray-300/50 bg-gray-50/50 flex items-center justify-center">
                       {imagePreview ? (
                         <>
-                          <img src={imagePreview} alt="Material preview" className="w-full h-full object-cover" />
-                          <button type="button" onClick={removeImage} className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full">
+                          <img 
+                            src={imagePreview} 
+                            alt="Material preview" 
+                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+                          <button
+                            type="button"
+                            onClick={removeImage}
+                            className="absolute top-2 right-2 bg-red-500/90 hover:bg-red-600 text-white p-2 rounded-full transition-all duration-200 hover:shadow-lg backdrop-blur-sm"
+                          >
                             <X className="w-4 h-4" />
                           </button>
                         </>
@@ -355,20 +330,13 @@ const AddMaterial = () => {
                       ✓ Image selected. It will be uploaded when you save.
                     </p>
                   )}
-                  <div>
-                    <input type="file" id="image-upload" accept="image/*" onChange={handleImageChange} className="hidden" disabled={uploadingImage} />
-                    <label htmlFor="image-upload" className="flex items-center justify-center w-full p-4 rounded-lg border-2 border-dashed border-blue-300/50 bg-blue-50/30 cursor-pointer">
-                      <div className="text-center">
-                        <Upload className="w-6 h-6 text-blue-500 mx-auto mb-2" />
-                        <p className="text-sm font-medium text-blue-600">{uploadingImage ? "Uploading..." : "Upload Image"}</p>
-                      </div>
-                    </label>
-                  </div>
                 </div>
               </div>
 
+              {/* Material Details Form */}
               <div className="lg:col-span-2 space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Left Column */}
                   <div className="space-y-5">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -381,24 +349,22 @@ const AddMaterial = () => {
                         onChange={handleChange}
                         placeholder="Enter material name"
                         required
-                        className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200"
+                        className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 transition-all duration-200"
                       />
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
-                      <input type="text" name="name" value={material.name} onChange={handleChange} required className="w-full p-3 border rounded-lg bg-white/80" />
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Alternative Names</label>
                       <div className="flex gap-2">
-                        <input type="text" value={altNameInput} onChange={(e) => setAltNameInput(e.target.value)} placeholder="Add another name" className="w-full p-3 border rounded-lg bg-white/80" />
-                        <button type="button" onClick={handleAddAltName} className="px-3 rounded-lg bg-indigo-600 text-white">
+                        <input type="text" value={altNameInput} onChange={(e) => setAltNameInput(e.target.value)} placeholder="Add another name" className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 transition-all duration-200" />
+                        <button type="button" onClick={handleAddAltName} className="px-3 rounded-lg bg-green-600 text-white">
                           <Plus size={16} />
                         </button>
                       </div>
                       {alternativeNames.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-2">
                           {alternativeNames.map((name, idx) => (
-                            <span key={`${name}-${idx}`} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-indigo-50 text-indigo-700 text-xs">
+                            <span key={`${name}-${idx}`} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-green-50 text-green-700 text-xs">
                               {name}
                               <button type="button" onClick={() => handleRemoveAltName(idx)}><X size={12} /></button>
                             </span>
@@ -417,33 +383,31 @@ const AddMaterial = () => {
                         onChange={handleChange}
                         placeholder="Material description..."
                         rows="3"
-                        className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200 resize-none"
+                        className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 transition-all duration-200 resize-none"
                       />
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                      <textarea name="description" value={material.description} onChange={handleChange} rows="3" className="w-full p-3 border rounded-lg bg-white/80 resize-none" />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Unit Type <span className="text-red-500">*</span>
                         </label>
                         <div className="relative">
                           <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                          <input
-                            type="text"
+                          <select 
                             name="unit"
-                            value={material.unit}
-                            onChange={handleChange}
-                            placeholder="kg/piece/litre"
+                            onChange={handleChange} 
+                            id="material-unit-list"
                             required
-                            className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200"
-                          />
+                            value={material.unit}
+                            className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200">
+                            {units.map((unit) => (
+                              <option key={unit.id} value={unit.name}> {unit.name} </option>
+                            ))}
+                          </select>
                         </div>
-                        <div className="mt-1 text-xs text-gray-500">Examples: kg, piece, litre, box</div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Unit *</label>
-                        <input list="material-unit-list" name="unit" value={material.unit} onChange={handleChange} required className="w-full p-3 border rounded-lg bg-white/80" />
                       </div>
+
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Unit Cost <span className="text-red-500">*</span>
@@ -462,41 +426,22 @@ const AddMaterial = () => {
                             className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200"
                           />
                         </div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Brand</label>
-                        <input list="material-brand-list" name="brand" value={material.brand} onChange={handleChange} className="w-full p-3 border rounded-lg bg-white/80" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                        <input list="material-category-list" name="category" value={material.category} onChange={handleChange} className="w-full p-3 border rounded-lg bg-white/80" />
                       </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-5">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Brand
-                      </label>
-                      <div className="relative">
-                        <Factory className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                        <input
-                          type="text"
-                          name="brand"
-                          value={material.brand}
-                          onChange={handleChange}
-                          placeholder="Brand name"
-                          className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200"
-                        />
-                      </div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Alternative Units</label>
                       <div className="grid grid-cols-2 gap-2">
-                        <input
-                          list="material-unit-list"
-                          placeholder="Unit name"
-                          value={altUnitDraft.unitname}
+                        <select 
+                          name="unit"
                           onChange={(e) => setAltUnitDraft((prev) => ({ ...prev, unitname: e.target.value }))}
-                          className="w-full p-3 border rounded-lg bg-white/80"
-                        />
+                          id="material-unit-list"
+                          value={altUnitDraft.unitname}
+                          className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200">
+                          {units.map((unit) => (
+                            <option key={unit.id} value={unit.name}> {unit.name} </option>
+                          ))}
+                        </select>
                         <input
                           type="number"
                           min="0.000001"
@@ -504,10 +449,10 @@ const AddMaterial = () => {
                           placeholder="Multiplier"
                           value={altUnitDraft.multiplier}
                           onChange={(e) => setAltUnitDraft((prev) => ({ ...prev, multiplier: e.target.value }))}
-                          className="w-full p-3 border rounded-lg bg-white/80"
+                          className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 transition-all duration-200 resize-none"
                         />
                       </div>
-                      <button type="button" onClick={() => handleAddAltUnit()} className="mt-2 px-3 py-2 rounded-lg bg-indigo-600 text-white">
+                      <button type="button" onClick={() => handleAddAltUnit()} className="mt-2 px-3 py-2 rounded-lg bg-green-600 text-white">
                         Add Alternative Unit
                       </button>
                       {unitSuggestions.length > 0 && (
@@ -527,13 +472,59 @@ const AddMaterial = () => {
                       {alternativeUnits.length > 0 && (
                         <div className="mt-2 space-y-2">
                           {alternativeUnits.map((unit, idx) => (
-                            <div key={`${unit.unitname}-${idx}`} className="flex items-center justify-between px-3 py-2 rounded bg-indigo-50 text-sm">
-                              <span>{unit.unitname} = {unit.multiplier} x {material.unit || "base unit"}</span>
+                            <div key={`${unit.unitname}-${idx}`} className="flex items-center justify-between px-3 py-2 rounded bg-green-50 text-sm">
+                              <span>1 {unit.unitname} = {unit.multiplier} {material.unit || "base unit"}</span>
                               <button type="button" onClick={() => handleRemoveAltUnit(idx)}><X size={14} /></button>
                             </div>
                           ))}
                         </div>
                       )}
+                    </div>
+
+                  </div>
+
+                  {/* Right Column */}
+                  <div className="space-y-5">
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Category
+                      </label>
+                      <div className="relative">
+                        <SeparatorVertical className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                        <select
+                          name="category"
+                          value={material.category}
+                          onChange={handleChange}
+                          className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 transition-all duration-200"
+                          id="material-brand-list">
+                          <option value="">Select a category</option>
+                          {categories.map((category) => (
+                            <option key={category.id} value={category.name}> {category.name} </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Brand
+                      </label>
+                      <div className="relative">
+                        <Factory className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+
+                        <select
+                          name="brand"
+                          value={material.brand}
+                          onChange={handleChange}
+                          className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 transition-all duration-200"
+                          id="material-brand-list">
+                          <option value="">Select a brand</option>
+                          {brands.map((brand) => (
+                            <option key={brand.id} value={brand.name}> {brand.name} </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
                     <div>
@@ -548,11 +539,9 @@ const AddMaterial = () => {
                           value={material.barcode}
                           onChange={handleChange}
                           placeholder="Barcode or SKU"
-                          className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200"
+                          className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 transition-all duration-200"
                         />
                       </div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Barcode / SKU</label>
-                      <input type="text" name="barcode" value={material.barcode} onChange={handleChange} className="w-full p-3 border rounded-lg bg-white/80" />
                     </div>
 
                     <div>
@@ -568,20 +557,13 @@ const AddMaterial = () => {
                           name="sale_price"
                           value={material.sale_price}
                           onChange={handleChange}
-                          placeholder="Optional sale price"
+                          placeholder="Sale price"
                           className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
                         />
                       </div>
                       <div className="mt-1 text-xs text-gray-500 bg-blue-50/50 p-2 rounded backdrop-blur-sm border border-blue-100/50">
                         Optional. Leave empty if material is not for direct sale.
                       </div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Unit Cost *</label>
-                      <input type="number" name="unit_cost" value={material.unit_cost} onChange={handleChange} required min="0" step="0.01" className="w-full p-3 border rounded-lg bg-white/80" />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Sale Price</label>
-                      <input type="number" step="0.01" min="0" name="sale_price" value={material.sale_price} onChange={handleChange} className="w-full p-3 border rounded-lg bg-white/80" />
                     </div>
 
                     <div>
@@ -604,8 +586,6 @@ const AddMaterial = () => {
                       <div className="mt-1 text-xs text-gray-500 bg-amber-50/50 p-2 rounded backdrop-blur-sm border border-amber-100/50">
                         Low stock alert threshold. Leave empty to disable alerts.
                       </div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Alert Quantity</label>
-                      <input type="number" name="alert_quantity" value={material.alert_quantity} onChange={handleChange} min="0" step="0.01" className="w-full p-3 border rounded-lg bg-white/80" />
                     </div>
                   </div>
                 </div>
@@ -642,10 +622,10 @@ const AddMaterial = () => {
                   )}
                   
                   {material.sale_price && material.unit_cost && parseFloat(material.unit_cost) > 0 && (
-                    <div className="backdrop-blur-sm bg-white/60 rounded-lg p-4 border border-purple-200/50">
+                    <div className="backdrop-blur-sm bg-white/60 rounded-lg p-4 border border-teal-200/50">
                       <div className="text-sm text-gray-600">Margin %</div>
                       <div className={`text-xl font-bold ${
-                        margin >= 0 ? 'text-purple-700' : 'text-red-700'
+                        margin >= 0 ? 'text-teal-700' : 'text-red-700'
                       }`}>
                         {margin}%
                       </div>
@@ -657,14 +637,20 @@ const AddMaterial = () => {
             )}
           </div>
 
+          {/* Action Buttons */}
           <div className="flex justify-between pt-4">
-            <button type="button" onClick={() => navigate("/materials/all")} className="bg-gray-100/80 p-3 px-8 rounded-xl border" disabled={uploadingImage}>
+            <button 
+              type="button" 
+              onClick={() => navigate('/materials/all')}
+              className="bg-gray-100/80 hover:bg-gray-200/80 text-gray-700 hover:text-gray-900 p-3 px-8 rounded-xl font-medium transition-all duration-200 hover:shadow-md backdrop-blur-sm border border-gray-300/50"
+              disabled={uploadingImage}
+            >
               Cancel
             </button>
             <button 
               type="submit" 
               disabled={uploadingImage}
-              className={`bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white p-3 px-12 rounded-xl font-medium text-lg transition-all duration-200 hover:shadow-xl backdrop-blur-sm transform hover:-translate-y-0.5 flex items-center ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`bg-linear-to-r from-teal-600 to-green-600 hover:from-teal-700 hover:to-green-700 text-white p-3 px-12 rounded-xl font-medium text-lg transition-all duration-200 hover:shadow-xl backdrop-blur-sm transform hover:-translate-y-0.5 flex items-center ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {uploadingImage ? (
                 <span className="flex items-center justify-center">
@@ -679,27 +665,9 @@ const AddMaterial = () => {
                   Add Material
                 </>
               )}
-            <button type="submit" disabled={uploadingImage} className={`bg-gradient-to-r from-blue-600 to-blue-700 text-white p-3 px-12 rounded-xl font-medium text-lg ${uploadingImage ? "opacity-50 cursor-not-allowed" : ""}`}>
-              {uploadingImage ? "Creating..." : "Add Material"}
             </button>
           </div>
         </form>
-
-        <datalist id="material-unit-list">
-          {units.map((unit) => (
-            <option key={unit.id} value={unit.name} />
-          ))}
-        </datalist>
-        <datalist id="material-brand-list">
-          {brands.map((brand) => (
-            <option key={brand.id} value={brand.name} />
-          ))}
-        </datalist>
-        <datalist id="material-category-list">
-          {categories.map((category) => (
-            <option key={category.id} value={category.name} />
-          ))}
-        </datalist>
       </div>
     </div>
   );

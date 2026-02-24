@@ -546,7 +546,7 @@ export default function AllSales() {
                     className={`border-t border-white/10 hover:bg-white/10 transition-all duration-200 ${
                       index % 2 === 0 ? 'bg-white/5' : ''
                     }`}
-                  >
+                    >
                     {tableHeaders.map((key) => (
                       <td key={key} className="p-4">
                         {key === 'actions' ? (
@@ -682,9 +682,10 @@ export default function AllSales() {
                         </div>
                       )}
                     </td>
-                  ))}
-                </tr>
-              ))}
+                    ))}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
 
