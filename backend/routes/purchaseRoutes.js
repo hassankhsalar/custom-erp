@@ -1129,7 +1129,7 @@ router.get('/returns', async (req, res) => {
       skip: usePagination ? skip : undefined,
       take: usePagination ? limitNumber : undefined,
       include: {
-        supplier: { select: { id: true, name: true, phone: true } },
+        supplier: { select: { id: true, name: true, mobile: true } },
         items: {
           include: {
             product: { select: { id: true, name: true } },
@@ -2829,7 +2829,7 @@ router.get('/returns/:returnId', async (req, res) => {
     const row = await prisma.purchaseReturn.findUnique({
       where: { id: returnId },
       include: {
-        supplier: { select: { id: true, name: true, phone: true } },
+        supplier: { select: { id: true, name: true, mobile: true } },
         items: { include: { product: true, material: true } },
         compensationShipments: { include: { items: { include: { product: true, material: true } } } },
         compensationPayments: { orderBy: { createdAt: 'desc' } },
