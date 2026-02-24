@@ -13,6 +13,7 @@ import {
   Bell, HelpCircle, Moon,
   Wrench,
   Recycle,
+  Undo2,
   BookA,
   NotebookPen,
   Calendar,
@@ -84,6 +85,7 @@ const Sidebar = () => {
       subItems: [
         { name: 'All Purchase', path: '/purchase/all', icon: <Package size={16} />, permissionKey: 'purchases_read' },
         { name: 'New Purchase', path: '/purchase/new', icon: <ShoppingCart size={16} />, permissionKey: 'purchases_create' },
+        { name: 'Purchase Return', path: '/purchase/return', icon: <Recycle size={16} />, permissionKey: 'purchases_create' },
         { name: 'All Supplier', path: '/purchase/all-supplier', icon: <Users size={16} />, permissionKey: ['supplier_read', 'supplier_create'] },
         { name: 'Add Supplier', path: '/purchase/add-supplier', icon: <UserPlus size={16} />, permissionKey: 'supplier_create' }
       ]
@@ -152,6 +154,7 @@ const Sidebar = () => {
       subItems: [
         { name: 'Products Damage Records', path: '/scraprecord', icon: <Box size={16} />, permissionKey: 'damage_read' },
         { name: 'Material Damage Records', path: '/materialscraprecord', icon: <Package size={16} />, permissionKey: 'damage_read' },
+        { name: 'Damage Return', path: '/purchase/damage-return', icon: <Undo2 size={16} />, permissionKey: 'damage_create' },
       ] 
     },
 

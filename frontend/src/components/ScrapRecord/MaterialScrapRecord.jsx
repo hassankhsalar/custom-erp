@@ -174,6 +174,13 @@ const MaterialScrapRecord = () => {
                   ${scrapRecords.reduce((sum, record) => sum + getTotalLoss(record), 0).toFixed(2)}
                 </p>
               </div>
+              <Link
+                to="/purchase/damage-return"
+                className="flex items-center gap-2 px-6 py-3 bg-white/80 hover:bg-white text-red-600 font-semibold rounded-xl border border-red-200 transition-all duration-300"
+              >
+                <Package size={18} />
+                Damage Return
+              </Link>
               
               <Link 
                 to="/addmaterialscraprecord" 

@@ -682,6 +682,7 @@ model Supplier {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   purchases Purchase[] @relation("SupplierPurchases")
+  purchaseReturns PurchaseReturn[]
 }
 
 model Purchase {
@@ -700,6 +701,7 @@ model Purchase {
   tax          Float?
   purchaseItems PurchaseItem[]
   purchaseShipments PurchaseShipment[]
+  purchaseReturns PurchaseReturn[]
   transactions Transactions[]
 
   accountId       Int?          
@@ -768,6 +770,97 @@ model PurchaseShipmentItem {
 
   @@index([shipmentId])
   @@index([purchaseItemId])
+  @@index([materialId])
+  @@index([productId])
+}
+
+model PurchaseReturn {
+  id                    Int      @id @default(autoincrement())
+  reference             String   @unique
+  purchaseId            Int?
+  purchase              Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  returnType            String   @default("purchase_return") // purchase_return | damage_return
+  supplierId            Int?
+  supplier              Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  sourceType            String?
+  sourceId              Int?
+  totalReturnValue      Float    @default(0)
+  compensationType      String   @default("money") // money | items
+  compensationAmount    Float?
+  compensationStatus    String   @default("pending") // pending | partial | completed
+  note                  String?
+  createdById           Int?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  items                 PurchaseReturnItem[]
+  compensationShipments PurchaseReturnCompensationShipment[]
+
+  @@index([purchaseId])
+  @@index([supplierId])
+  @@index([returnType])
+  @@index([createdAt])
+}
+
+model PurchaseReturnItem {
+  id                Int       @id @default(autoincrement())
+  purchaseReturnId  Int
+  purchaseReturn    PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
+  purchaseItemId    Int?
+  purchaseItem      PurchaseItem? @relation(fields: [purchaseItemId], references: [id], onDelete: SetNull)
+  itemType          String    @default("material")
+  materialId        Int?
+  material          Material? @relation(fields: [materialId], references: [id])
+  productId         Int?
+  product           Product?  @relation(fields: [productId], references: [id])
+  quantity          Float
+  unitPrice         Float
+  totalPrice        Float
+  isDamaged         Boolean   @default(false)
+  batchNumber       String?
+  expiryDate        DateTime?
+  manufactureDate   DateTime?
+  batchNotes        String?
+  createdAt         DateTime  @default(now())
+
+  @@index([purchaseReturnId])
+  @@index([purchaseItemId])
+  @@index([materialId])
+  @@index([productId])
+}
+
+model PurchaseReturnCompensationShipment {
+  id                Int       @id @default(autoincrement())
+  purchaseReturnId  Int
+  purchaseReturn    PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
+  reference         String?   @unique
+  destinationType   String?
+  destinationId     Int?
+  note              String?
+  receivedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  items             PurchaseReturnCompensationItem[]
+
+  @@index([purchaseReturnId])
+}
+
+model PurchaseReturnCompensationItem {
+  id                     Int       @id @default(autoincrement())
+  shipmentId             Int
+  shipment               PurchaseReturnCompensationShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  itemType               String    @default("material")
+  materialId             Int?
+  material               Material? @relation(fields: [materialId], references: [id])
+  productId              Int?
+  product                Product?  @relation(fields: [productId], references: [id])
+  quantity               Float
+  unitPrice              Float
+  batchNumber            String?
+  expiryDate             DateTime?
+  manufactureDate        DateTime?
+  batchNotes             String?
+  createdAt              DateTime  @default(now())
+
+  @@index([shipmentId])
   @@index([materialId])
   @@index([productId])
 }

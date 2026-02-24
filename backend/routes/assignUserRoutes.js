@@ -12,18 +12,18 @@ router.get('/all-assignments', async (req, res) => {
       include: {
         user: {
           select: {
-  id: true,
-  name: true,
-  email: true,
-  username: true,
-  createdAt: true,
-  permission: {
-    select: {
-      name: true,
-      permissions: true
-    }
-  }
-}
+          id: true,
+          name: true,
+          email: true,
+          username: true,
+          createdAt: true,
+          permission: {
+            select: {
+              name: true,
+              permissions: true
+            }
+          }
+        }
         }
       },
       orderBy: { id: 'desc' }

@@ -33,6 +33,7 @@ import AllPurchase from "./components/Purchase/AllPurchase";
 import NewPurchase from "./components/Purchase/NewPurchase";
 import AllSupplier from "./components/Purchase/AllSupplier";
 import AddSupplier from "./components/Purchase/AddSupplier";
+import PurchaseReturnPage from "./components/Purchase/PurchaseReturnPage";
 import AllFactory from "./components/Factory/AllFactory";
 import AddFactory from "./components/Factory/AddFactory";
 import EditFactory from "./components/Factory/EditFactory";
@@ -330,6 +331,12 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="purchases_create" />}>
               <Route path="/purchase/new" element={<NewPurchase />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="purchases_create" />}>
+              <Route path="/purchase/return" element={<PurchaseReturnPage mode="purchase_return" />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="damage_create" />}>
+              <Route path="/purchase/damage-return" element={<PurchaseReturnPage mode="damage_return" />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="supplier_read" />}>
               <Route path="/purchase/all-supplier" element={<AllSupplier />} />
