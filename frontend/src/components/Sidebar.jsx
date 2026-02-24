@@ -13,6 +13,8 @@ import {
   Bell, HelpCircle, Moon,
   Wrench,
   Recycle,
+  Undo2,
+  AlertTriangle,
   BookA,
   NotebookPen,
   Calendar,
@@ -54,6 +56,7 @@ const Sidebar = () => {
       subItems: [
         { name: 'POS', path: '/sale/pos', icon: <CreditCard size={16} />, permissionKey: 'sales_create' },
         { name: 'All Sales', path: '/sale/all', icon: <FileText size={16} />, permissionKey: 'sales_read' },
+        { name: 'Edit Requests', path: '/sale/edit-requests', icon: <ClipboardList size={16} />, permissionKey: 'sales_open_close' },
         { name: 'Create Sale', path: '/sale/create', icon: <ShoppingCart size={16} />, permissionKey: 'sales_create' },
         { name: 'Sale Return', path: '/sale/return', icon: <ClipboardList size={16} />, permissionKey: ['sales_return_create', 'sales_create'] },
         { name: 'All Sale Returns', path: '/sale/allreturns', icon: <FileText size={16} />, permissionKey: ['sales_return_read', 'sales_read'] },
@@ -82,7 +85,9 @@ const Sidebar = () => {
       permissionKey: ['purchases_read', 'purchases_create'],
       subItems: [
         { name: 'All Purchase', path: '/purchase/all', icon: <Package size={16} />, permissionKey: 'purchases_read' },
+        { name: 'All Returns', path: '/purchase/returns', icon: <Undo2 size={16} />, permissionKey: 'purchases_read' },
         { name: 'New Purchase', path: '/purchase/new', icon: <ShoppingCart size={16} />, permissionKey: 'purchases_create' },
+        { name: 'Purchase Return', path: '/purchase/return', icon: <Recycle size={16} />, permissionKey: 'purchases_create' },
         { name: 'All Supplier', path: '/purchase/all-supplier', icon: <Users size={16} />, permissionKey: ['supplier_read', 'supplier_create'] },
         { name: 'Add Supplier', path: '/purchase/add-supplier', icon: <UserPlus size={16} />, permissionKey: 'supplier_create' }
       ]
@@ -133,10 +138,8 @@ const Sidebar = () => {
       textColor: 'text-cyan-700',
       permissionKey: ['repairs_read', 'repairs_create'],
       subItems: [
-        { name: 'Repaired Products', path: '/productrepair', icon: <Box size={16} />, permissionKey: 'repairs_read' },
-        { name: 'Repair Product', path: '/addrepairproduct', icon: <Box size={16} />, permissionKey: 'repairs_create' },
-        { name: 'Repaired Materials', path: '/materialrepair', icon: <Package size={16} />, permissionKey: 'repairs_read' },
-        { name: 'Repair Materials', path: '/addrepairmaterial', icon: <Package size={16} />, permissionKey: 'repairs_create' },
+        { name: 'Repair', path: '/repair/new', icon: <Wrench size={16} />, permissionKey: 'repairs_create' },
+        { name: 'Repaired Item', path: '/repair/items', icon: <Box size={16} />, permissionKey: 'repairs_read' },
       ] 
     },
 
@@ -149,8 +152,10 @@ const Sidebar = () => {
       textColor: 'text-red-700',
       permissionKey: ['damage_read', 'damage_create'],
       subItems: [
-        { name: 'Products Damage Records', path: '/scraprecord', icon: <Box size={16} />, permissionKey: 'damage_read' },
-        { name: 'Material Damage Records', path: '/materialscraprecord', icon: <Package size={16} />, permissionKey: 'damage_read' },
+        { name: 'Damage Record', path: '/damage-record', icon: <AlertTriangle size={16} />, permissionKey: 'damage_read' },
+        { name: 'New Damage', path: '/damage-record/new', icon: <Recycle size={16} />, permissionKey: 'damage_create' },
+        { name: 'Damage Return', path: '/purchase/damage-return', icon: <Undo2 size={16} />, permissionKey: 'damage_create' },
+        { name: 'All Damage Returns', path: '/purchase/returns?type=damage_return', icon: <ClipboardList size={16} />, permissionKey: 'damage_read' },
       ] 
     },
 
@@ -425,12 +430,16 @@ const Sidebar = () => {
         <div className="mt-6 p-3 rounded-xl bg-gradient-to-r from-blue-50/50 to-blue-100/30 border border-blue-200/50">
           <p className="text-xs font-medium text-blue-700 mb-2">Quick Actions</p>
           <div className="flex gap-2">
+            <Link to="/report/best-selling">
             <button className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium hover:from-blue-600 hover:to-blue-700 transition-all hover:shadow-md">
+              sales Report
+            </button>
+            </Link>
+            <Link to="/purchase/new">
+            <button className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-medium hover:from-emerald-600 hover:to-green-700 transition-all hover:shadow-md">
               Add Stock
             </button>
-            <button className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-medium hover:from-emerald-600 hover:to-green-700 transition-all hover:shadow-md">
-              New Order
-            </button>
+            </Link>
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import React, { useState, createContext, useContext, useEffect } from "react";
+import React, { useState, createContext, useContext, useEffect, useRef, useCallback } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -17,6 +17,8 @@ import EditProduct from "./components/Products/EditProduct";
 import POS from "./components/Sale/POS";
 import AllSales from "./components/Sale/AllSales";
 import CreateSale from "./components/Sale/CreateSale";
+import EditSale from "./components/Sale/EditSale";
+import SaleEditRequests from "./components/Sale/SaleEditRequests";
 import SaleReturn from "./components/Sale/SaleReturn";
 import WarrantyList from "./components/Sale/WarrantyList";
 import AllMaterials from "./components/Materials/AllMaterials";
@@ -28,9 +30,11 @@ import AllProductions from "./components/Productions/AllProductions";
 import NewProduction from "./components/Productions/NewProduction";
 import EditProduction from "./components/Productions/EditProduction";
 import AllPurchase from "./components/Purchase/AllPurchase";
+import AllPurchaseReturns from "./components/Purchase/AllPurchaseReturns";
 import NewPurchase from "./components/Purchase/NewPurchase";
 import AllSupplier from "./components/Purchase/AllSupplier";
 import AddSupplier from "./components/Purchase/AddSupplier";
+import PurchaseReturnPage from "./components/Purchase/PurchaseReturnPage";
 import AllFactory from "./components/Factory/AllFactory";
 import AddFactory from "./components/Factory/AddFactory";
 import EditFactory from "./components/Factory/EditFactory";
@@ -73,14 +77,13 @@ import TransferReceiveHistory from "./components/Transfer/TransferReceiveHistory
 import Navbar from "./components/Navbar";
 import Notifications from "./components/Notifications";
 import UserProfile from "./components/UserProfile";
-import ScrapRecord from "./components/ScrapRecord/ScrapRecord";
 import ProductRepair from "./components/ProductRepair/ProductRepair";
-import AddScrapRecord from "./components/ScrapRecord/AddScrapRecord";
 import AddRepairProduct from "./components/ProductRepair/AddRepairProduct";
 import AddRepairMaterial from "./components/MaterialRepair/AddRepairMaterial";
 import MaterialRepair from "./components/MaterialRepair/MaterialRepair";
-import AddMaterialScrapRecord from "./components/ScrapRecord/AddMaterialScrapRecord";
-import MaterialScrapRecord from "./components/ScrapRecord/MaterialScrapRecord";
+import DamageRecord from "./components/ScrapRecord/DamageRecord";
+import RepairCreate from "./components/Repair/RepairCreate";
+import RepairedItems from "./components/Repair/RepairedItems";
 import AddAccount from "./components/Accounts/AddAccount";
 import AllAccounts from "./components/Accounts/AllAccounts";
 import AssignAccount from "./components/Accounts/AssignAccount";
@@ -105,6 +108,8 @@ import NewRequisition from "./components/Requisition/NewRequisition";
 import RequisitionList from "./components/Requisition/RequisitionList";
 import RequisitionView from "./components/Requisition/RequisitionView";
 import { API_ROUTES } from "./config";
+import { SOCKET_BASE_URL } from "./config";
+import { io } from "socket.io-client";
 
 import { useCurrentUser } from "./hooks/useCurrentUser";
 import { usePermission } from "./hooks/usePermission";
@@ -117,17 +122,19 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("token"));
+  const [socketInstance, setSocketInstance] = useState(null);
   const { currentUser, loading, error, refetch } = useCurrentUser();
+  const socketRef = useRef(null);
 
-  const login = (newToken) => {
+  const login = useCallback((newToken) => {
     setToken(newToken);
     localStorage.setItem("token", newToken);
     refetch(); // Refetch user data after login
-  };
+  }, [refetch]);
 
-  const logout = async () => {
+  const logout = useCallback(async ({ skipActivityLog = false } = {}) => {
     const existingToken = localStorage.getItem("token");
-    if (existingToken) {
+    if (existingToken && !skipActivityLog) {
       try {
         await fetch(API_ROUTES.ACTIVITY_LOGS_LOGOUT, {
           method: "POST",
@@ -139,14 +146,61 @@ export const AuthProvider = ({ children }) => {
         // Keep logout flow non-blocking
       }
     }
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+      setSocketInstance(null);
+    }
     setToken(null);
     localStorage.removeItem("token");
     localStorage.removeItem("userEmail"); // Clear user email on logout
+    localStorage.removeItem("username");
+    localStorage.removeItem("name");
+    localStorage.removeItem("email");
     // Optionally, clear currentUser state here if needed
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!token) {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setSocketInstance(null);
+      }
+      return;
+    }
+
+    const socket = io(SOCKET_BASE_URL, {
+      auth: { token },
+      transports: ["websocket", "polling"],
+    });
+    socketRef.current = socket;
+    setSocketInstance(socket);
+
+    const forceLogoutHandler = () => {
+      logout({ skipActivityLog: true });
+      window.location.href = "/login";
+    };
+
+    socket.on("session:force-logout", forceLogoutHandler);
+    socket.on("connect_error", (socketError) => {
+      if (socketError?.message === "Session expired") {
+        forceLogoutHandler();
+      }
+    });
+
+    return () => {
+      socket.off("session:force-logout", forceLogoutHandler);
+      socket.disconnect();
+      if (socketRef.current === socket) {
+        socketRef.current = null;
+      }
+      setSocketInstance((prev) => (prev === socket ? null : prev));
+    };
+  }, [token, logout]);
 
   return (
-    <AuthContext.Provider value={{ token, login, logout, currentUser, loading, error, refetch }}>
+    <AuthContext.Provider value={{ token, login, logout, currentUser, loading, error, refetch, socket: socketInstance }}>
       {children}
     </AuthContext.Provider>
   );
@@ -221,6 +275,12 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="sales_read" />}>
               <Route path="/sale/all" element={<AllSales />} />
             </Route>
+            <Route element={<PermissionRoute requiredPermission="sales_read" />}>
+              <Route path="/sale/edit/:id" element={<EditSale />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="sales_open_close" />}>
+              <Route path="/sale/edit-requests" element={<SaleEditRequests />} />
+            </Route>
             <Route element={<PermissionRoute requiredPermission="sales_create" />}>
               <Route path="/sale/create" element={<CreateSale />} />
             </Route>
@@ -269,8 +329,17 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="purchases_read" />}>
               <Route path="/purchase/all" element={<AllPurchase />} />
             </Route>
+            <Route element={<PermissionRoute requiredPermission="purchases_read" />}>
+              <Route path="/purchase/returns" element={<AllPurchaseReturns />} />
+            </Route>
             <Route element={<PermissionRoute requiredPermission="purchases_create" />}>
               <Route path="/purchase/new" element={<NewPurchase />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="purchases_create" />}>
+              <Route path="/purchase/return" element={<PurchaseReturnPage mode="purchase_return" />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="damage_create" />}>
+              <Route path="/purchase/damage-return" element={<PurchaseReturnPage mode="damage_return" />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="supplier_read" />}>
               <Route path="/purchase/all-supplier" element={<AllSupplier />} />
@@ -458,19 +527,22 @@ function App() {
 
             
             <Route element={<PermissionRoute requiredPermission="damage_read" />}>
-              <Route path="/scraprecord" element={<ScrapRecord />} />
+              <Route path="/damage-record" element={<DamageRecord />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="damage_create" />}>
-              <Route path="/addscraprecord" element={<AddScrapRecord />} />
+              <Route path="/damage-record/new" element={<DamageRecord />} />
             </Route>
+            <Route path="/scraprecord" element={<Navigate to="/damage-record" replace />} />
+            <Route path="/addscraprecord" element={<Navigate to="/damage-record" replace />} />
+            <Route path="/materialscraprecord" element={<Navigate to="/damage-record" replace />} />
+            <Route path="/addmaterialscraprecord" element={<Navigate to="/damage-record" replace />} />
 
-            <Route element={<PermissionRoute requiredPermission="damage_read" />}>
-              <Route path="/materialscraprecord" element={<MaterialScrapRecord />} />
+            <Route element={<PermissionRoute requiredPermission="repairs_read" />}>
+              <Route path="/repair/items" element={<RepairedItems />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission="damage_create" />}>
-              <Route path="/addmaterialscraprecord" element={<AddMaterialScrapRecord />} />
+            <Route element={<PermissionRoute requiredPermission="repairs_create" />}>
+              <Route path="/repair/new" element={<RepairCreate />} />
             </Route>
-
             <Route element={<PermissionRoute requiredPermission="repairs_read" />}>
               <Route path="/productrepair" element={<ProductRepair />} />
             </Route>

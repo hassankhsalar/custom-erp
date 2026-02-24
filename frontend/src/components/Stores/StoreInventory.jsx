@@ -347,7 +347,7 @@ const StoreInventory = () => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl w-full bg-linear-to-br from-emerald-50 via-teal-50 to-cyan-50 p-4 md:p-6">
       {/* Background decorative elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-emerald-300/20 rounded-full blur-3xl"></div>
@@ -360,11 +360,11 @@ const StoreInventory = () => {
         <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-emerald-100/50 mb-6 p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="p-4 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl shadow-lg">
+              <div className="p-4 bg-linear-to-br from-emerald-500 to-teal-500 rounded-2xl shadow-lg">
                 <Store className="text-white" size={36} />
               </div>
               <div>
-                <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                <h1 className="text-3xl md:text-4xl font-bold bg-linear-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
                   Store Inventory
                 </h1>
                 <p className="text-gray-600 mt-2">Manage store materials and products inventory</p>
@@ -439,7 +439,7 @@ const StoreInventory = () => {
         {/* Statistics Cards */}
         {summary && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div className="backdrop-blur-lg bg-gradient-to-br from-emerald-50/60 to-teal-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="backdrop-blur-lg bg-linear-to-br from-emerald-50/60 to-teal-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Materials Overview</p>
@@ -453,7 +453,7 @@ const StoreInventory = () => {
               </div>
             </div>
             
-            <div className="backdrop-blur-lg bg-gradient-to-br from-teal-50/60 to-cyan-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="backdrop-blur-lg bg-linear-to-br from-teal-50/60 to-cyan-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Products Overview</p>
@@ -467,7 +467,7 @@ const StoreInventory = () => {
               </div>
             </div>
             
-            <div className="backdrop-blur-lg bg-gradient-to-br from-red-50/60 to-rose-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="backdrop-blur-lg bg-linear-to-br from-red-50/60 to-rose-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Scrap Items</p>
@@ -508,7 +508,7 @@ const StoreInventory = () => {
                 }}
                 className={`px-4 py-2 rounded-xl font-medium transition-colors duration-300 ${
                   filterType === 'all'
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white'
+                    ? 'bg-linear-to-r from-emerald-500 to-teal-500 text-white'
                     : 'bg-white/60 hover:bg-white/80 text-gray-700'
                 }`}
               >
@@ -521,7 +521,7 @@ const StoreInventory = () => {
                 }}
                 className={`px-4 py-2 rounded-xl font-medium transition-colors duration-300 ${
                   filterType === 'material'
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white'
+                    ? 'bg-linear-to-r from-emerald-500 to-teal-500 text-white'
                     : 'bg-white/60 hover:bg-white/80 text-gray-700'
                 }`}
               >
@@ -534,7 +534,7 @@ const StoreInventory = () => {
                 }}
                 className={`px-4 py-2 rounded-xl font-medium transition-colors duration-300 ${
                   filterType === 'product'
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white'
+                    ? 'bg-linear-to-r from-emerald-500 to-teal-500 text-white'
                     : 'bg-white/60 hover:bg-white/80 text-gray-700'
                 }`}
               >
@@ -762,7 +762,7 @@ const StoreInventory = () => {
                               onClick={() => goToPage(pageNum)}
                               className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
                                 currentPage === pageNum
-                                  ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white"
+                                  ? "bg-linear-to-r from-emerald-500 to-teal-500 text-white"
                                   : "hover:bg-white/50 text-gray-700"
                               }`}
                             >
@@ -778,7 +778,7 @@ const StoreInventory = () => {
                               onClick={() => goToPage(totalPages)}
                               className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
                                 currentPage === totalPages
-                                  ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white"
+                                  ? "bg-linear-to-r from-emerald-500 to-teal-500 text-white"
                                   : "hover:bg-white/50 text-gray-700"
                               }`}
                             >
@@ -821,10 +821,10 @@ const StoreInventory = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeModal}></div>
           <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-            <div className="sticky top-0 z-10 p-6 border-b border-white/50 bg-gradient-to-r from-emerald-500/10 to-teal-500/10">
+            <div className="sticky top-0 z-10 p-6 border-b border-white/50 bg-linear-to-r from-emerald-500/10 to-teal-500/10">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl shadow-lg">
+                  <div className="p-3 bg-linear-to-br from-emerald-500 to-teal-500 rounded-xl shadow-lg">
                     {modal.data.type === 'material' ? (
                       <Package className="text-white" size={24} />
                     ) : (
@@ -919,19 +919,19 @@ const StoreInventory = () => {
               <div className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-5 mb-6">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Pricing Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 bg-gradient-to-r from-emerald-50/50 to-emerald-100/30 rounded-lg">
+                  <div className="p-4 bg-linear-to-r from-emerald-50/50 to-emerald-100/30 rounded-lg">
                     <p className="text-sm text-gray-600 mb-1">Unit Cost</p>
                     <p className="text-2xl font-bold text-emerald-600">
                       ${modal.data.unit_cost?.toFixed(2) || 'N/A'}
                     </p>
                   </div>
-                  <div className="p-4 bg-gradient-to-r from-teal-50/50 to-teal-100/30 rounded-lg">
+                  <div className="p-4 bg-linear-to-r from-teal-50/50 to-teal-100/30 rounded-lg">
                     <p className="text-sm text-gray-600 mb-1">Sale Price</p>
                     <p className="text-2xl font-bold text-teal-600">
                       ${modal.data.sale_price?.toFixed(2) || 'N/A'}
                     </p>
                   </div>
-                  <div className="p-4 bg-gradient-to-r from-purple-50/50 to-purple-100/30 rounded-lg">
+                  <div className="p-4 bg-linear-to-r from-purple-50/50 to-purple-100/30 rounded-lg">
                     <p className="text-sm text-gray-600 mb-1">Average Cost</p>
                     <p className="text-2xl font-bold text-purple-600">
                       ${modal.data.avg_cost?.toFixed(2) || 'N/A'}
@@ -951,74 +951,6 @@ const StoreInventory = () => {
               )}
             </div>
             
-          </div>
-        </div>
-      )}
-
-      {editModal.isOpen && editModal.data && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeEditModal}></div>
-          <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden">
-            <div className="p-6 border-b border-white/50 bg-gradient-to-r from-blue-500/10 to-cyan-500/10">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-800">Edit Inventory Item</h2>
-                <button onClick={closeEditModal} className="p-2 bg-white/60 rounded-lg hover:bg-white/80 transition-colors duration-300">
-                  <X size={20} className="text-gray-600" />
-                </button>
-              </div>
-              <p className="text-gray-600 mt-1">{editModal.data.name}</p>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Stock</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.0001"
-                  value={editForm.stock}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, stock: e.target.value }))}
-                  className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Sale Price</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.0001"
-                  value={editForm.sale_price}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, sale_price: e.target.value }))}
-                  className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Alert Quantity</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.0001"
-                  value={editForm.alert_quantity}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, alert_quantity: e.target.value }))}
-                  className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                />
-              </div>
-            </div>
-            <div className="p-6 border-t border-white/50 bg-white/80 backdrop-blur-sm flex justify-end gap-3">
-              <button onClick={closeEditModal} className="px-5 py-2.5 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60">
-                Cancel
-              </button>
-              <button
-                onClick={saveEditModal}
-                disabled={savingEdit}
-                className={`px-5 py-2.5 rounded-xl font-semibold transition-all duration-300 ${
-                  savingEdit
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg hover:shadow-xl'
-                }`}
-              >
-                {savingEdit ? 'Saving...' : 'Save'}
-              </button>
-            </div>
           </div>
         </div>
       )}

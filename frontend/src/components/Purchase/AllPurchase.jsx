@@ -5,7 +5,8 @@ import {
   Eye, CreditCard, DollarSign, Trash2, CheckCircle, XCircle,
   AlertCircle, Loader2, TrendingDown, FileText, MapPin,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
-  Filter, Settings, User, Clock, Shield, Edit
+  Filter, Settings, User, Clock, Shield, Edit,
+  X
 } from "lucide-react";
 import { API_ROUTES } from "../../config";
 
@@ -26,6 +27,9 @@ export default function AllPurchase() {
   const [viewPaymentModalOpen, setViewPaymentModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [addShipmentModalOpen, setAddShipmentModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [returnMode, setReturnMode] = useState("purchase_return");
   const [shipments, setShipments] = useState([]);
   const [shipmentItems, setShipmentItems] = useState([]);
   const [shipmentNote, setShipmentNote] = useState("");
@@ -41,6 +45,19 @@ export default function AllPurchase() {
   const [accounts, setAccounts] = useState([]);
   const [selectedAccount, setSelectedAccount] = useState("");
   const [paymentHistory, setPaymentHistory] = useState([]);
+  const [editItems, setEditItems] = useState([]);
+  const [editShippingCost, setEditShippingCost] = useState(0);
+  const [editDiscount, setEditDiscount] = useState(0);
+  const [editTax, setEditTax] = useState(0);
+  const [editAdditionalPayment, setEditAdditionalPayment] = useState(0);
+  const [editPaymentMethod, setEditPaymentMethod] = useState("cash");
+  const [editSaving, setEditSaving] = useState(false);
+  const [returnItems, setReturnItems] = useState([]);
+  const [returnCompensationType, setReturnCompensationType] = useState("money");
+  const [returnCompensationAmount, setReturnCompensationAmount] = useState("");
+  const [returnCompDestType, setReturnCompDestType] = useState("store");
+  const [returnCompDestId, setReturnCompDestId] = useState("");
+  const [returnSubmitting, setReturnSubmitting] = useState(false);
   const token = localStorage.getItem('token');
 
   useEffect(() => {
@@ -214,6 +231,50 @@ export default function AllPurchase() {
   const handleDelete = (purchase) => {
     setSelectedPurchase(purchase);
     setDeleteModalOpen(true);
+    setActiveDropdown(null);
+  };
+
+  const handleEditPurchase = (purchase) => {
+    setSelectedPurchase(purchase);
+    setEditItems((purchase.purchaseItems || []).map((item) => ({
+      purchaseItemId: item.id,
+      itemType: item.itemType,
+      productId: item.productId,
+      materialId: item.materialId,
+      name: item.itemType === "product" ? item.product?.name : item.material?.name,
+      quantity: Number(item.quantity || 0),
+      unitPrice: Number(item.unitPrice || 0),
+      receivedQuantity: Number(item.quantity || 0),
+      batchNumber: item.batchNumber || "",
+      expiryDate: item.expiryDate ? new Date(item.expiryDate).toISOString().slice(0, 10) : "",
+    })));
+    setEditShippingCost(Number(purchase.shippingCost || 0));
+    setEditDiscount(Number(purchase.discount || 0));
+    setEditTax(Number(purchase.tax || 0));
+    setEditAdditionalPayment(0);
+    setEditPaymentMethod("cash");
+    setEditModalOpen(true);
+    setActiveDropdown(null);
+  };
+
+  const handleOpenReturn = (purchase, mode = "purchase_return") => {
+    setSelectedPurchase(purchase);
+    setReturnMode(mode);
+    setReturnItems((purchase.purchaseItems || []).map((item) => ({
+      purchaseItemId: item.id,
+      itemType: item.itemType,
+      productId: item.productId,
+      materialId: item.materialId,
+      name: item.itemType === "product" ? item.product?.name : item.material?.name,
+      unitPrice: Number(item.unitPrice || 0),
+      quantity: 0,
+      isDamaged: mode === "damage_return",
+    })));
+    setReturnCompensationType("money");
+    setReturnCompensationAmount("");
+    setReturnCompDestType(purchase.destination?.type || "store");
+    setReturnCompDestId(String(purchase.destination?.id || ""));
+    setReturnModalOpen(true);
     setActiveDropdown(null);
   };
 
@@ -398,6 +459,121 @@ export default function AllPurchase() {
     }
   };
 
+  const handleEditSubmit = async () => {
+    if (!selectedPurchase) return;
+    const payloadItems = editItems
+      .filter((i) => Number(i.quantity) > 0)
+      .map((i) => ({
+        itemType: i.itemType,
+        productId: i.itemType === "product" ? i.productId : null,
+        materialId: i.itemType === "material" ? i.materialId : null,
+        quantity: Number(i.quantity),
+        unitPrice: Number(i.unitPrice),
+        receivedQuantity: Number(i.receivedQuantity ?? i.quantity),
+        batchNumber: i.batchNumber || null,
+        expiryDate: i.expiryDate || null,
+      }));
+
+    if (!payloadItems.length) {
+      alert("At least one item is required");
+      return;
+    }
+
+    setEditSaving(true);
+    try {
+      const res = await fetch(API_ROUTES.PURCHASE_BY_ID(selectedPurchase.id), {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          shippingCost: Number(editShippingCost || 0),
+          discount: Number(editDiscount || 0),
+          tax: Number(editTax || 0),
+          additionalPayment: Number(editAdditionalPayment || 0),
+          paymentMethod: editPaymentMethod,
+          items: payloadItems,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to edit purchase");
+      await fetchPurchases();
+      setEditModalOpen(false);
+      alert(data.message || "Purchase updated successfully");
+    } catch (err) {
+      alert(err.message || "Failed to edit purchase");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleReturnSubmit = async () => {
+    if (!selectedPurchase) return;
+    const items = returnItems
+      .filter((i) => Number(i.quantity) > 0)
+      .map((i) => ({
+        purchaseItemId: i.purchaseItemId,
+        itemType: i.itemType,
+        productId: i.productId || null,
+        materialId: i.materialId || null,
+        quantity: Number(i.quantity),
+        unitPrice: Number(i.unitPrice),
+        isDamaged: returnMode === "damage_return" ? true : !!i.isDamaged,
+      }));
+    if (!items.length) {
+      alert("Select at least one return item quantity");
+      return;
+    }
+
+    setReturnSubmitting(true);
+    try {
+      const isDamage = returnMode === "damage_return";
+      const url = isDamage
+        ? API_ROUTES.PURCHASE_DAMAGE_RETURNS(selectedPurchase.id)
+        : API_ROUTES.PURCHASE_RETURNS(selectedPurchase.id);
+      const payload = {
+        items,
+        compensationType: returnCompensationType,
+      };
+      if (returnCompensationType === "money") {
+        payload.compensationAmount = Number(returnCompensationAmount || 0);
+        payload.payment_method = "cash";
+      } else {
+        payload.compensationShipments = [
+          {
+            destinationType: returnCompDestType,
+            destinationId: Number(returnCompDestId),
+            items: items.map((i) => ({
+              itemType: i.itemType,
+              productId: i.productId || null,
+              materialId: i.materialId || null,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+            })),
+          },
+        ];
+      }
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to create return");
+      await fetchPurchases();
+      setReturnModalOpen(false);
+      alert(data.message || "Return created successfully");
+    } catch (err) {
+      alert(err.message || "Failed to create return");
+    } finally {
+      setReturnSubmitting(false);
+    }
+  };
+
   // Handle purchase deletion
   const handleDeleteSubmit = async () => {
     if (!selectedPurchase) return;
@@ -470,7 +646,7 @@ export default function AllPurchase() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
       {/* Background decorative elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-300/20 rounded-full blur-3xl"></div>
@@ -708,6 +884,14 @@ export default function AllPurchase() {
                                       <Eye size={16} />
                                       View Details
                                     </button>
+
+                                    <button
+                                      onClick={() => handleEditPurchase(purchase)}
+                                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition"
+                                    >
+                                      <Edit size={16} />
+                                      Edit Purchase
+                                    </button>
                                     
                                     {!isPaid && (
                                       <button
@@ -728,7 +912,7 @@ export default function AllPurchase() {
                                         Add Shipment
                                       </button>
                                     )}
-                                    
+
                                     <div className="border-t my-1"></div>
                                     
                                     <button
@@ -874,7 +1058,7 @@ export default function AllPurchase() {
         </div>
       </div>
 
-      {/* Modals - Keeping all existing modals unchanged for functionality */}
+      {/* Modals - View details */}
       {viewModalOpen && selectedPurchase && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setViewModalOpen(false)}></div>
@@ -894,7 +1078,7 @@ export default function AllPurchase() {
                   onClick={() => setViewModalOpen(false)}
                   className="p-2 bg-white/60 rounded-lg hover:bg-white/80 transition-colors duration-300"
                 >
-                  <XCircle size={20} className="text-gray-600" />
+                  <X size={20} className="text-gray-600" />
                 </button>
               </div>
             </div>
@@ -1362,6 +1546,139 @@ export default function AllPurchase() {
                   ) : (
                     'Save Shipment'
                   )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editModalOpen && selectedPurchase && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b flex items-center justify-between">
+              <h3 className="text-xl font-bold text-gray-800">Edit Purchase - {selectedPurchase.reference}</h3>
+              <button onClick={() => setEditModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <XCircle size={22} className="text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <input type="number" className="border rounded p-2" placeholder="Shipping cost" value={editShippingCost} onChange={(e) => setEditShippingCost(e.target.value)} />
+                <input type="number" className="border rounded p-2" placeholder="Discount %" value={editDiscount} onChange={(e) => setEditDiscount(e.target.value)} />
+                <input type="number" className="border rounded p-2" placeholder="Tax %" value={editTax} onChange={(e) => setEditTax(e.target.value)} />
+                <input type="number" className="border rounded p-2" placeholder="Additional payment" value={editAdditionalPayment} onChange={(e) => setEditAdditionalPayment(e.target.value)} />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <select className="border rounded p-2" value={editPaymentMethod} onChange={(e) => setEditPaymentMethod(e.target.value)}>
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="bank">Bank</option>
+                </select>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="p-2 text-left">Item</th>
+                      <th className="p-2 text-left">Qty</th>
+                      <th className="p-2 text-left">Received</th>
+                      <th className="p-2 text-left">Unit Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editItems.map((item) => (
+                      <tr key={item.purchaseItemId} className="border-b">
+                        <td className="p-2">{item.name} <span className="text-xs text-gray-500">({item.itemType})</span></td>
+                        <td className="p-2">
+                          <input type="number" min="0.01" step="0.01" className="border rounded p-1 w-28" value={item.quantity}
+                            onChange={(e) => setEditItems((prev) => prev.map((x) => x.purchaseItemId === item.purchaseItemId ? { ...x, quantity: e.target.value } : x))} />
+                        </td>
+                        <td className="p-2">
+                          <input type="number" min="0" step="0.01" className="border rounded p-1 w-28" value={item.receivedQuantity}
+                            onChange={(e) => setEditItems((prev) => prev.map((x) => x.purchaseItemId === item.purchaseItemId ? { ...x, receivedQuantity: e.target.value } : x))} />
+                        </td>
+                        <td className="p-2">
+                          <input type="number" min="0.01" step="0.01" className="border rounded p-1 w-28" value={item.unitPrice}
+                            onChange={(e) => setEditItems((prev) => prev.map((x) => x.purchaseItemId === item.purchaseItemId ? { ...x, unitPrice: e.target.value } : x))} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setEditModalOpen(false)} className="flex-1 bg-gray-200 py-3 rounded-lg">Cancel</button>
+                <button onClick={handleEditSubmit} disabled={editSaving} className="flex-1 bg-indigo-600 text-white py-3 rounded-lg disabled:opacity-50">
+                  {editSaving ? "Saving..." : "Save Edit"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {returnModalOpen && selectedPurchase && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b flex items-center justify-between">
+              <h3 className="text-xl font-bold text-gray-800">{returnMode === "damage_return" ? "Damage Return" : "Purchase Return"} - {selectedPurchase.reference}</h3>
+              <button onClick={() => setReturnModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <XCircle size={22} className="text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="p-2 text-left">Item</th>
+                      <th className="p-2 text-left">Return Qty</th>
+                      <th className="p-2 text-left">Unit Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {returnItems.map((item) => (
+                      <tr key={item.purchaseItemId} className="border-b">
+                        <td className="p-2">{item.name} <span className="text-xs text-gray-500">({item.itemType})</span></td>
+                        <td className="p-2">
+                          <input type="number" min="0" step="0.01" className="border rounded p-1 w-28" value={item.quantity}
+                            onChange={(e) => setReturnItems((prev) => prev.map((x) => x.purchaseItemId === item.purchaseItemId ? { ...x, quantity: e.target.value } : x))} />
+                        </td>
+                        <td className="p-2">
+                          <input type="number" min="0.01" step="0.01" className="border rounded p-1 w-28" value={item.unitPrice}
+                            onChange={(e) => setReturnItems((prev) => prev.map((x) => x.purchaseItemId === item.purchaseItemId ? { ...x, unitPrice: e.target.value } : x))} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <select className="border rounded p-2" value={returnCompensationType} onChange={(e) => setReturnCompensationType(e.target.value)}>
+                  <option value="money">Money Compensation</option>
+                  <option value="items">Items Compensation</option>
+                </select>
+                {returnCompensationType === "money" ? (
+                  <input type="number" className="border rounded p-2" value={returnCompensationAmount} onChange={(e) => setReturnCompensationAmount(e.target.value)} placeholder="Compensation amount" />
+                ) : (
+                  <>
+                    <select className="border rounded p-2" value={returnCompDestType} onChange={(e) => setReturnCompDestType(e.target.value)}>
+                      <option value="store">Store</option>
+                      <option value="shop">Shop</option>
+                      <option value="factory">Factory</option>
+                    </select>
+                    <input type="number" className="border rounded p-2" value={returnCompDestId} onChange={(e) => setReturnCompDestId(e.target.value)} placeholder="Destination ID" />
+                  </>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => setReturnModalOpen(false)} className="flex-1 bg-gray-200 py-3 rounded-lg">Cancel</button>
+                <button onClick={handleReturnSubmit} disabled={returnSubmitting} className="flex-1 bg-amber-600 text-white py-3 rounded-lg disabled:opacity-50">
+                  {returnSubmitting ? "Submitting..." : "Submit Return"}
                 </button>
               </div>
             </div>

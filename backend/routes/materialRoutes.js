@@ -17,7 +17,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Get all materials
+// Get all materials with pagination
 router.get('/', async (req, res) => {
   try {
     const { search, page = 1, limit = 10 } = req.query;
@@ -68,6 +68,24 @@ router.get('/', async (req, res) => {
       totalCount,
       totalPages: Math.ceil(totalCount / limitNum),
       currentPage: pageNum,
+    });
+  } catch (error) {
+    console.error('Error fetching materials:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all materials
+router.get('/all-materials', async (req, res) => {
+  try {
+    const materials = await prisma.material.findMany({
+      orderBy: {
+        name: 'asc',
+      },
+    });
+
+    res.json({
+      materials
     });
   } catch (error) {
     console.error('Error fetching materials:', error);

@@ -10,34 +10,25 @@ import {
   Search,
   Filter,
   Download,
-  Printer,
-  Eye,
-  EyeOff,
   ChevronDown,
   ChevronUp,
-  MoreVertical,
   UserMinus,
   UserCheck,
   Calendar,
-  Mail,
-  Phone,
-  MapPin,
-  DollarSign,
-  Shield,
   Briefcase,
   Home,
-  Wallet,
-  Banknote,
-  BarChart3,
   RefreshCw,
   X,
   AlertCircle,
   CheckCircle,
-  ExternalLink,
   List,
   Grid,
   UserX,
-  UserPlus
+  UserPlus,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from '../../config';
@@ -50,9 +41,9 @@ export default function AllAssignedUsers() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState("all"); // all, store, shop, factory, cashRegister, account
+  const [filterType, setFilterType] = useState("all");
   const [filterUser, setFilterUser] = useState("all");
-  const [viewMode, setViewMode] = useState("table"); // table, grid
+  const [viewMode, setViewMode] = useState("table");
   const [expandedRows, setExpandedRows] = useState({});
   const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' });
   const [users, setUsers] = useState([]);
@@ -64,87 +55,99 @@ export default function AllAssignedUsers() {
     uniqueEntities: 0
   });
 
-  // Fetch data on component mount
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 10,
+    hasNext: false,
+    hasPrev: false
+  });
+  const [pageSize, setPageSize] = useState(10);
+
+  // Fetch data on component mount and when page/pageSize changes
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchData(pagination.currentPage);
+  }, [pagination.currentPage, pageSize]);
 
-  const fetchData = async () => {
-  setLoading(true);
-  setError("");
-  
-  try {
-    // Get token from localStorage
-    const token = localStorage.getItem('token');
+  const fetchData = async (page = 1) => {
+    setLoading(true);
+    setError("");
     
-    if (!token) {
-      setError("Authentication required. Please log in.");
-      setLoading(false);
-      return;
-    }
-    
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-
-    const [assignmentsRes, usersRes] = await Promise.all([
-      fetch(`${API_ROUTES.ASSIGNUSER}/all-assignments`, { headers }),
-      fetch(`${API_ROUTES.ASSIGNUSER}/available-users`, { headers })
-    ]);
-
-    // Check for authentication errors
-    if (assignmentsRes.status === 401 || usersRes.status === 401) {
-      localStorage.removeItem('token');
-      setError("Session expired. Please log in again.");
-      setLoading(false);
-      return;
-    }
-
-    if (!assignmentsRes.ok || !usersRes.ok) {
-      throw new Error("Failed to fetch data");
-    }
-
-    const assignmentsData = await assignmentsRes.json();
-    const usersData = await usersRes.json();
-
-    setAssignments(assignmentsData);
-    setUsers(usersData);
-
-    // Calculate statistics
-    const assignmentsByType = {};
-    const assignmentsByUser = {};
-    const uniqueUsers = new Set();
-    const uniqueEntities = new Set();
-
-    assignmentsData.forEach(assignment => {
-      // Count by type
-      assignmentsByType[assignment.associateName] = (assignmentsByType[assignment.associateName] || 0) + 1;
+    try {
+      const token = localStorage.getItem('token');
       
-      // Count by user
-      const userId = assignment.userId;
-      assignmentsByUser[userId] = (assignmentsByUser[userId] || 0) + 1;
+      if (!token) {
+        setError("Authentication required. Please log in.");
+        setLoading(false);
+        return;
+      }
       
-      // Track unique users and entities
-      uniqueUsers.add(userId);
-      uniqueEntities.add(`${assignment.associateName}-${assignment.associateId}`);
-    });
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
 
-    setStats({
-      totalAssignments: assignmentsData.length,
-      assignmentsByType,
-      assignmentsByUser,
-      uniqueUsers: uniqueUsers.size,
-      uniqueEntities: uniqueEntities.size
-    });
-    
-  } catch (err) {
-    console.error("Error fetching data:", err);
-    setError(err.message || "An error occurred while fetching data");
-  } finally {
-    setLoading(false);
-  }
-};
+      const [assignmentsRes, usersRes] = await Promise.all([
+        fetch(`${API_ROUTES.ASSIGNUSER}/all-assignments?page=${page}&limit=${pageSize}`, { headers }),
+        fetch(`${API_ROUTES.ASSIGNUSER}/available-users`, { headers })
+      ]);
+
+      if (assignmentsRes.status === 401 || usersRes.status === 401) {
+        localStorage.removeItem('token');
+        setError("Session expired. Please log in again.");
+        setLoading(false);
+        return;
+      }
+
+      if (!assignmentsRes.ok || !usersRes.ok) {
+        throw new Error("Failed to fetch data");
+      }
+
+      const assignmentsData = await assignmentsRes.json();
+      const usersData = await usersRes.json();
+
+      setAssignments(assignmentsData.data || []);
+      setPagination(assignmentsData.pagination || {
+        currentPage: 1,
+        totalPages: 1,
+        totalItems: 0,
+        itemsPerPage: pageSize,
+        hasNext: false,
+        hasPrev: false
+      });
+      setUsers(usersData);
+
+      // Calculate statistics
+      const assignmentsByType = {};
+      const assignmentsByUser = {};
+      const uniqueUsers = new Set();
+      const uniqueEntities = new Set();
+
+      (assignmentsData.data || []).forEach(assignment => {
+        assignmentsByType[assignment.associateName] = (assignmentsByType[assignment.associateName] || 0) + 1;
+        const userId = assignment.userId;
+        assignmentsByUser[userId] = (assignmentsByUser[userId] || 0) + 1;
+        uniqueUsers.add(userId);
+        uniqueEntities.add(`${assignment.associateName}-${assignment.associateId}`);
+      });
+
+      setStats({
+        totalAssignments: assignmentsData.pagination?.totalItems || 0,
+        assignmentsByType,
+        assignmentsByUser,
+        uniqueUsers: uniqueUsers.size,
+        uniqueEntities: uniqueEntities.size
+      });
+      
+    } catch (err) {
+      console.error("Error fetching data:", err);
+      setError(err.message || "An error occurred while fetching data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Handle sorting
   const handleSort = (key) => {
@@ -157,57 +160,51 @@ export default function AllAssignedUsers() {
 
   // Handle remove assignment
   const handleRemoveAssignment = async (assignmentId, userName, entityName) => {
-  if (!confirm(`Are you sure you want to remove ${userName} from ${entityName}?`)) {
-    return;
-  }
-
-  try {
-    // Get token from localStorage
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-      setError("Authentication required. Please log in.");
+    if (!confirm(`Are you sure you want to remove ${userName} from ${entityName}?`)) {
       return;
     }
-    
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-    
-    const res = await fetch(
-      `${API_ROUTES.UPLOADS}/assignment/${assignmentId}`,
-      { 
-        method: "DELETE",
-        headers 
+
+    try {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        setError("Authentication required. Please log in.");
+        return;
       }
-    );
+      
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+      
+      const res = await fetch(
+        `${API_ROUTES.ASSIGNUSER}/assignment/${assignmentId}`,
+        { 
+          method: "DELETE",
+          headers 
+        }
+      );
 
-    // Check for authentication errors
-    if (res.status === 401 || res.status === 403) {
-      localStorage.removeItem('token');
-      setError("Session expired. Please log in again.");
-      return;
-    }
-    
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || "Failed to remove assignment");
-    }
+      if (res.status === 401 || res.status === 403) {
+        localStorage.removeItem('token');
+        setError("Session expired. Please log in again.");
+        return;
+      }
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to remove assignment");
+      }
 
-    // Refresh data
-    fetchData();
-    
-    setSuccess("Assignment removed successfully!");
-    
-    // Clear success message after 3 seconds
-    setTimeout(() => setSuccess(""), 3000);
-    
-  } catch (err) {
-    console.error("Error removing assignment:", err);
-    setError(err.message || "An error occurred while removing assignment");
-  }
-};
+      fetchData(pagination.currentPage);
+      setSuccess("Assignment removed successfully!");
+      setTimeout(() => setSuccess(""), 3000);
+      
+    } catch (err) {
+      console.error("Error removing assignment:", err);
+      setError(err.message || "An error occurred while removing assignment");
+    }
+  };
 
   // Toggle row expansion
   const toggleRowExpansion = (assignmentId) => {
@@ -217,20 +214,30 @@ export default function AllAssignedUsers() {
     }));
   };
 
+  // Pagination handlers
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= pagination.totalPages) {
+      setPagination(prev => ({ ...prev, currentPage: newPage }));
+    }
+  };
+
+  const handlePageSizeChange = (e) => {
+    const newSize = parseInt(e.target.value);
+    setPageSize(newSize);
+    setPagination(prev => ({ ...prev, currentPage: 1 }));
+  };
+
   // Filter and sort assignments
   const filteredAssignments = assignments
     .filter(assignment => {
-      // Filter by entity type
       if (filterType !== "all" && assignment.associateName !== filterType) {
         return false;
       }
 
-      // Filter by user
       if (filterUser !== "all" && assignment.userId.toString() !== filterUser) {
         return false;
       }
 
-      // Filter by search term
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase();
         return (
@@ -249,7 +256,6 @@ export default function AllAssignedUsers() {
       let aValue = a[sortConfig.key];
       let bValue = b[sortConfig.key];
 
-      // Handle nested properties
       if (sortConfig.key === 'userName') {
         aValue = a.user?.name || a.user?.email || '';
         bValue = b.user?.name || b.user?.email || '';
@@ -258,30 +264,18 @@ export default function AllAssignedUsers() {
         bValue = b.entityName || '';
       }
 
-      // Handle numeric sorting
       if (typeof aValue === 'number' && typeof bValue === 'number') {
         return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
       }
 
-      // Handle string sorting
       if (typeof aValue === 'string' && typeof bValue === 'string') {
         return sortConfig.direction === 'asc' 
           ? aValue.localeCompare(bValue)
           : bValue.localeCompare(aValue);
       }
 
-      // Handle date sorting
-      if (aValue instanceof Date && bValue instanceof Date) {
-        return sortConfig.direction === 'asc' 
-          ? aValue.getTime() - bValue.getTime()
-          : bValue.getTime() - aValue.getTime();
-      }
-
       return 0;
     });
-
-    
-console.log(users);
 
   // Get entity icon based on type
   const getEntityIcon = (type) => {
@@ -374,7 +368,7 @@ console.log(users);
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-gray-50 via-white to-blue-50 p-4 md:p-6">
       {/* Header */}
       <div className="glass-card p-6 mb-6 border border-white/20 backdrop-blur-xl shadow-lg">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -400,7 +394,7 @@ console.log(users);
               Assign Users
             </button>
             <button
-              onClick={fetchData}
+              onClick={() => fetchData(pagination.currentPage)}
               className="glass-button px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-300 flex items-center gap-2"
             >
               <RefreshCw size={18} />
@@ -456,7 +450,7 @@ console.log(users);
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600 mb-1">Total Assignments</p>
-              <h3 className="text-xl font-bold text-gray-900">{stats.totalAssignments}</h3>
+              <h3 className="text-xl font-bold text-gray-900">{pagination.totalItems}</h3>
             </div>
             <div className="glass-icon p-2 rounded-xl bg-gradient-to-r from-purple-500/10 to-purple-600/10">
               <UserCheck className="text-purple-600" size={20} />
@@ -525,7 +519,7 @@ console.log(users);
               Assignments List
             </h2>
             <p className="text-gray-600 text-sm">
-              Showing {filteredAssignments.length} of {assignments.length} assignments
+              Showing {filteredAssignments.length} of {pagination.totalItems} assignments
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -762,7 +756,7 @@ console.log(users);
                         </td>
                         <td className="p-4">
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
-                            {assignment.user?.permission.name}
+                            {assignment.user?.permission?.name || 'default'}
                           </span>
                         </td>
                         <td className="p-4">
@@ -815,7 +809,7 @@ console.log(users);
                                   </div>
                                   <div className="flex items-center justify-between">
                                     <span className="text-sm text-gray-600">Role:</span>
-                                    <span className="font-medium">{assignment.user?.permission.name}</span>
+                                    <span className="font-medium">{assignment.user?.permission?.name || 'default'}</span>
                                   </div>
                                   <div className="flex items-center justify-between">
                                     <span className="text-sm text-gray-600">User ID:</span>
@@ -971,7 +965,7 @@ console.log(users);
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">Role:</span>
                         <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
-                          {assignment.user?.role}
+                          {assignment.user?.permission?.name || 'default'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
@@ -1046,6 +1040,113 @@ console.log(users);
         </div>
       )}
 
+      {/* Pagination Controls */}
+      <div className="glass-card p-4 mt-4 border border-white/20 backdrop-blur-xl">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Rows per page:</span>
+            <select
+              value={pageSize}
+              onChange={handlePageSizeChange}
+              className="glass-input px-2 py-1 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">
+              Page {pagination.currentPage} of {pagination.totalPages}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => handlePageChange(1)}
+                disabled={!pagination.hasPrev}
+                className={`p-2 rounded-lg transition-all duration-200 ${
+                  pagination.hasPrev
+                    ? 'hover:bg-white/50 text-gray-700'
+                    : 'text-gray-400 cursor-not-allowed'
+                }`}
+                title="First Page"
+              >
+                <ChevronsLeft size={18} />
+              </button>
+              <button
+                onClick={() => handlePageChange(pagination.currentPage - 1)}
+                disabled={!pagination.hasPrev}
+                className={`p-2 rounded-lg transition-all duration-200 ${
+                  pagination.hasPrev
+                    ? 'hover:bg-white/50 text-gray-700'
+                    : 'text-gray-400 cursor-not-allowed'
+                }`}
+                title="Previous Page"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              
+              {/* Page Numbers */}
+              <div className="flex items-center gap-1 mx-2">
+                {[...Array(Math.min(5, pagination.totalPages))].map((_, i) => {
+                  let pageNum;
+                  if (pagination.totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (pagination.currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (pagination.currentPage >= pagination.totalPages - 2) {
+                    pageNum = pagination.totalPages - 4 + i;
+                  } else {
+                    pageNum = pagination.currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-all duration-200 ${
+                        pagination.currentPage === pageNum
+                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+                          : 'hover:bg-white/50 text-gray-700'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={() => handlePageChange(pagination.currentPage + 1)}
+                disabled={!pagination.hasNext}
+                className={`p-2 rounded-lg transition-all duration-200 ${
+                  pagination.hasNext
+                    ? 'hover:bg-white/50 text-gray-700'
+                    : 'text-gray-400 cursor-not-allowed'
+                }`}
+                title="Next Page"
+              >
+                <ChevronRight size={18} />
+              </button>
+              <button
+                onClick={() => handlePageChange(pagination.totalPages)}
+                disabled={!pagination.hasNext}
+                className={`p-2 rounded-lg transition-all duration-200 ${
+                  pagination.hasNext
+                    ? 'hover:bg-white/50 text-gray-700'
+                    : 'text-gray-400 cursor-not-allowed'
+                }`}
+                title="Last Page"
+              >
+                <ChevronsRight size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Summary Footer */}
       <div className="glass-card p-4 mt-6 border border-white/20 backdrop-blur-xl">
         <div className="flex flex-col md:flex-row justify-between items-center gap-4">
@@ -1063,6 +1164,9 @@ console.log(users);
               <span className="text-sm text-gray-600">
                 {stats.uniqueUsers} unique users assigned
               </span>
+            </div>
+            <div className="text-sm text-gray-600">
+              Showing page {pagination.currentPage} of {pagination.totalPages} • Total: {pagination.totalItems} assignments
             </div>
             <div className="text-sm text-gray-600">
               Last updated: {new Date().toLocaleTimeString()}

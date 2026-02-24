@@ -144,7 +144,7 @@ const MaterialScrapRecord = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
       {/* Background decorative elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-red-300/20 rounded-full blur-3xl"></div>
@@ -174,6 +174,13 @@ const MaterialScrapRecord = () => {
                   ${scrapRecords.reduce((sum, record) => sum + getTotalLoss(record), 0).toFixed(2)}
                 </p>
               </div>
+              <Link
+                to="/purchase/damage-return"
+                className="flex items-center gap-2 px-6 py-3 bg-white/80 hover:bg-white text-red-600 font-semibold rounded-xl border border-red-200 transition-all duration-300"
+              >
+                <Package size={18} />
+                Damage Return
+              </Link>
               
               <Link 
                 to="/addmaterialscraprecord" 

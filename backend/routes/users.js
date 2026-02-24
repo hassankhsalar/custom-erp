@@ -5,6 +5,36 @@ const prisma = new PrismaClient();
 const router = express.Router();
 const cache = require('../cachingService');
 
+const TIME_24H_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+const normalizeTimeValue = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string" || !TIME_24H_REGEX.test(value)) return "__invalid__";
+  return value;
+};
+
+const getCurrentUserWithPermission = async (userId) => {
+  if (!userId) return null;
+  return prisma.user.findUnique({
+    where: { id: Number(userId) },
+    include: {
+      permission: {
+        select: {
+          name: true,
+          permissions: true,
+        },
+      },
+    },
+  });
+};
+
+const canManageUserSessions = (user) => {
+  if (!user || !user.permission) return false;
+  if (user.permission.name === "admin" || user.permission.name === "superadmin") return true;
+  const perms = Array.isArray(user.permission.permissions) ? user.permission.permissions : [];
+  return perms.includes("user_logout");
+};
+
 // Create new user
 router.post("/", async (req, res) => {
   try {
@@ -68,7 +98,9 @@ router.post("/", async (req, res) => {
             permissions: true
           }
         },
-        profile: true
+        profile: true,
+        loginStartTime: true,
+        loginEndTime: true,
       }
     });
 
@@ -87,11 +119,11 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, username, permissionId } = req.body;
+    const { name, email, username, permissionId, loginStartTime, loginEndTime } = req.body;
 
     // Validate required fields
-    if (!name || !email || !username) {
-      return res.status(400).json({ error: "Name, email, and username are required" });
+    if (!name || !email) {
+      return res.status(400).json({ error: "Name, and email are required" });
     }
 
     // Check if user exists
@@ -116,16 +148,16 @@ router.put("/:id", async (req, res) => {
     }
 
     // Check if username already exists for other users
-    const usernameConflict = await prisma.user.findFirst({
-      where: {
-        username,
-        NOT: { id: parseInt(id) }
-      }
-    });
+    // const usernameConflict = await prisma.user.findFirst({
+    //   where: {
+    //     username,
+    //     NOT: { id: parseInt(id) }
+    //   }
+    // });
 
-    if (usernameConflict) {
-      return res.status(400).json({ error: "Username already exists" });
-    }
+    // if (usernameConflict) {
+    //   return res.status(400).json({ error: "Username already exists" });
+    // }
 
     // Check if permission exists if provided
     if (permissionId !== undefined) {
@@ -142,6 +174,12 @@ router.put("/:id", async (req, res) => {
       }
     }
 
+    const normalizedStartTime = normalizeTimeValue(loginStartTime);
+    const normalizedEndTime = normalizeTimeValue(loginEndTime);
+    if (normalizedStartTime === "__invalid__" || normalizedEndTime === "__invalid__") {
+      return res.status(400).json({ error: "Invalid time format. Use HH:mm" });
+    }
+
     // Update user
     const updatedUser = await prisma.user.update({
       where: { id: parseInt(id) },
@@ -149,7 +187,9 @@ router.put("/:id", async (req, res) => {
         name,
         email,
         username,
-        permissionId: permissionId !== undefined ? (permissionId ? parseInt(permissionId) : null) : existingUser.permissionId
+        permissionId: permissionId !== undefined ? (permissionId ? parseInt(permissionId) : null) : existingUser.permissionId,
+        loginStartTime: normalizedStartTime !== null || loginStartTime === null || loginStartTime === "" ? normalizedStartTime : existingUser.loginStartTime,
+        loginEndTime: normalizedEndTime !== null || loginEndTime === null || loginEndTime === "" ? normalizedEndTime : existingUser.loginEndTime,
       },
       select: {
         id: true,
@@ -164,6 +204,8 @@ router.put("/:id", async (req, res) => {
           }
         },
         profile: true,
+        loginStartTime: true,
+        loginEndTime: true,
         createdAt: true,
         updatedAt: true
       }
@@ -204,6 +246,8 @@ router.get("/", async (req, res) => {
           }
         },
         profile: true,
+        loginStartTime: true,
+        loginEndTime: true,
         createdAt: true,
         updatedAt: true
       },
@@ -220,9 +264,12 @@ router.get("/", async (req, res) => {
 });
 
 // Get user by ID
-router.get("/:id", async (req, res) => {
+router.get("/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
+    if (!/^\d+$/.test(id)) {
+      return next();
+    }
     const cacheKey = `user_${id}`;
 
     const cachedUser = cache.get(cacheKey);
@@ -245,6 +292,8 @@ router.get("/:id", async (req, res) => {
           }
         },
         profile: true,
+        loginStartTime: true,
+        loginEndTime: true,
         createdAt: true,
         updatedAt: true
       }
@@ -305,6 +354,8 @@ router.get("/username/:username", async (req, res) => {
           }
         },
         profile: true,
+        loginStartTime: true,
+        loginEndTime: true,
         createdAt: true,
         updatedAt: true
       }
@@ -411,6 +462,69 @@ router.get("/:userId/permissions", async (req, res) => {
   } catch (error) {
     console.error("Error fetching user permissions:", error);
     res.status(500).json({ error: "Failed to fetch user permissions" });
+  }
+});
+
+// Get currently active users (real-time presence data)
+router.get("/active-sessions", async (req, res) => {
+  try {
+    const currentUser = await getCurrentUserWithPermission(req.user?.userId);
+    if (!canManageUserSessions(currentUser)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const sessionTracker = req.app.get("sessionTracker");
+    if (!sessionTracker) {
+      return res.status(500).json({ error: "Session tracker is not initialized" });
+    }
+
+    res.json(sessionTracker.getActiveUsers());
+  } catch (error) {
+    console.error("Error fetching active sessions:", error);
+    res.status(500).json({ error: "Failed to fetch active sessions" });
+  }
+});
+
+// Force logout a user immediately
+router.post("/:id/force-logout", async (req, res) => {
+  try {
+    const currentUser = await getCurrentUserWithPermission(req.user?.userId);
+    if (!canManageUserSessions(currentUser)) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const targetUserId = Number(req.params.id);
+    if (!Number.isInteger(targetUserId)) {
+      return res.status(400).json({ error: "Invalid user id" });
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, sessionVersion: true, username: true },
+    });
+    if (!targetUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    await prisma.user.update({
+      where: { id: targetUserId },
+      data: {
+        sessionVersion: (targetUser.sessionVersion || 0) + 1,
+      },
+    });
+
+    const sessionTracker = req.app.get("sessionTracker");
+    if (sessionTracker) {
+      await sessionTracker.forceLogoutUser(
+        targetUserId,
+        "You have been logged out by an administrator."
+      );
+    }
+
+    res.json({ message: "User logged out successfully" });
+  } catch (error) {
+    console.error("Error forcing user logout:", error);
+    res.status(500).json({ error: "Failed to force logout user" });
   }
 });
 

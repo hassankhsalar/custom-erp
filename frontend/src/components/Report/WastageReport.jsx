@@ -169,7 +169,7 @@ const WastageReport = () => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-emerald-50 via-teal-50 to-green-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-emerald-50 via-teal-50 to-green-50 p-4 md:p-6">
       {/* Background decorative elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-emerald-300/20 rounded-full blur-3xl"></div>

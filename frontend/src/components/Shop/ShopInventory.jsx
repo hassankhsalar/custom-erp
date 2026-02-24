@@ -337,7 +337,7 @@ const ShopInventory = () => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 p-4 md:p-6">
       {/* Background decorative elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-orange-300/20 rounded-full blur-3xl"></div>

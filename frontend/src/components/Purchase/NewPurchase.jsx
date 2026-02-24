@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Plus, Trash2, Package, Tag, Truck, Building2, Store, Factory, ShoppingBag, Check, Image as ImageIcon, CreditCard, DollarSign, Percent, Truck as ShippingIcon } from "lucide-react";
 import { useLocation } from "react-router-dom";
-import { API_ROUTES } from "../../config";
+import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
 
 export default function NewPurchase() {
   const location = useLocation();
@@ -137,7 +137,7 @@ export default function NewPurchase() {
       headers.Authorization = `Bearer ${token}`;
     }
     
-    const res = await fetch("http://localhost:3001/api/materials", { headers });
+    const res = await fetch(API_ROUTES.MATERIALS_ALL, { headers });
     const data = await res.json();
     setMaterials(data.materials || data || []);
   } catch (error) {
@@ -171,7 +171,7 @@ const fetchSuppliers = async () => {
       headers.Authorization = `Bearer ${token}`;
     }
     
-    const res = await fetch("http://localhost:3001/api/suppliers", { headers });
+    const res = await fetch(API_ROUTES.SUPPLIERS, { headers });
     const data = await res.json();
     setSuppliers(data || []);
   } catch (error) {
@@ -187,7 +187,7 @@ const fetchBankAccounts = async () => {
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
-    const res = await fetch("http://localhost:3001/api/bank-accounts", { headers });
+    const res = await fetch(API_ROUTES.BANK_ACCOUNTS, { headers });
     const data = await res.json();
     setBankAccounts(Array.isArray(data) ? data : []);
   } catch (error) {
@@ -201,16 +201,16 @@ const fetchBankAccounts = async () => {
       let endpoint = "";
       switch (destinationType) {
         case "store":
-          endpoint = "http://localhost:3001/api/stores";
+          endpoint = API_ROUTES.STORES;
           break;
         case "shop":
-          endpoint = "http://localhost:3001/api/shops";
+          endpoint = API_ROUTES.SHOPS;
           break;
         case "factory":
-          endpoint = "http://localhost:3001/api/factories";
+          endpoint = API_ROUTES.FACTORIES;
           break;
         default:
-          endpoint = "http://localhost:3001/api/stores";
+          endpoint = API_ROUTES.STORES;
       }
 
       const token = localStorage.getItem("token");
@@ -577,7 +577,7 @@ const fetchBankAccounts = async () => {
         }))
       };
 
-      const res = await fetch("http://localhost:3001/api/purchases", {
+      const res = await fetch(API_ROUTES.PURCHASES, {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
@@ -652,12 +652,12 @@ const fetchBankAccounts = async () => {
   const getImageUrl = (imagePath) => {
     if (!imagePath) return null;
     if (imagePath.startsWith('http')) return imagePath;
-    if (imagePath.startsWith('/uploads/')) return `http://localhost:3001${imagePath}`;
-    return `http://localhost:3001/uploads/${imagePath}`;
+    if (imagePath.startsWith('/uploads/')) return `${MEDIA_BASE_URL}${imagePath}`;
+    return `${MEDIA_BASE_URL}/uploads/${imagePath}`;
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
       {/* Background decorative elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-300/20 rounded-full blur-3xl"></div>

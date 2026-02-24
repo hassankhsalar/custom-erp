@@ -1,3 +1,5 @@
+const { emitNotificationCreated } = require("../services/realtimeEmitter");
+
 const createNotification = async (prismaClient, data) => {
   const {
     title,
@@ -9,7 +11,7 @@ const createNotification = async (prismaClient, data) => {
     forRole = "admin"
   } = data;
 
-  return prismaClient.Notification.create({
+  const notification = await prismaClient.Notification.create({
     data: {
       title,
       description,
@@ -20,6 +22,8 @@ const createNotification = async (prismaClient, data) => {
       forRole
     }
   });
+  emitNotificationCreated(notification);
+  return notification;
 };
 
 module.exports = {

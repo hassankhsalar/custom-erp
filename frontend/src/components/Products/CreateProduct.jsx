@@ -163,7 +163,6 @@ const CreateProduct = () => {
   };
 
   const handleEditMaterial = (material, index) => {
-    setNewMaterial(material);
     setEditingMaterialIndex(index);
     setSearchTerm(material.material_name);
   };

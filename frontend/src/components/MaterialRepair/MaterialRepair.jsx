@@ -270,7 +270,7 @@ const MaterialRepair = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-orange-50 to-amber-50 p-4 md:p-6">
       <div className="w-full mx-auto">
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-lg mb-6 p-6">

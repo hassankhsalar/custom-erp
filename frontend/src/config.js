@@ -1,5 +1,6 @@
 export const API_BASE_URL = 'http://localhost:3001/api';
 export const MEDIA_BASE_URL = 'http://localhost:3001';
+export const SOCKET_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
 export const API_ROUTES = {
   LOGIN: `${API_BASE_URL}/login`,
@@ -9,6 +10,7 @@ export const API_ROUTES = {
   DASHBOARD: `${API_BASE_URL}/dashboard`,
 
   MATERIALS: `${API_BASE_URL}/materials`,
+  MATERIALS_ALL: `${API_BASE_URL}/materials/all-materials`,
 
   // Product routes
   PRODUCTS: `${API_BASE_URL}/products`,
@@ -28,6 +30,16 @@ export const API_ROUTES = {
   STORE_INVENTORY_ITEM_UPDATE: (storeId) => `${API_BASE_URL}/stores/inventory/${storeId}/item`,
   SALES: `${API_BASE_URL}/sales`,
   PURCHASES: `${API_BASE_URL}/purchases`,
+  PURCHASE_BY_ID: (id) => `${API_BASE_URL}/purchases/${id}`,
+  PURCHASE_DESTINATIONS: (type) => `${API_BASE_URL}/purchases/destinations/${type}`,
+  PURCHASE_RETURNS_ALL: `${API_BASE_URL}/purchases/returns`,
+  PURCHASE_DAMAGE_RETURNS_ALL: `${API_BASE_URL}/purchases/damage-returns`,
+  PURCHASE_RETURN_BY_ID: (id) => `${API_BASE_URL}/purchases/returns/${id}`,
+  PURCHASE_RETURN_PAYMENTS: (id) => `${API_BASE_URL}/purchases/returns/${id}/payments`,
+  PURCHASE_RETURN_DAMAGE_ITEMS: (sourceType, sourceId) => `${API_BASE_URL}/purchases/returns/damage-items?sourceType=${encodeURIComponent(sourceType)}&sourceId=${encodeURIComponent(sourceId)}`,
+  PURCHASE_RETURNS: (id) => `${API_BASE_URL}/purchases/${id}/returns`,
+  PURCHASE_DAMAGE_RETURNS: (id) => `${API_BASE_URL}/purchases/${id}/damage-returns`,
+  PURCHASE_RETURN_COMP_SHIPMENTS: (returnId) => `${API_BASE_URL}/purchases/returns/${returnId}/compensation-shipments`,
   SUPPLIERS: `${API_BASE_URL}/suppliers`,
   ACCOUNTS: `${API_BASE_URL}/accounts`,
   ASSIGNACCOUNT: `${API_BASE_URL}/assign-account`,
@@ -48,6 +60,14 @@ export const API_ROUTES = {
   SHOP_SALES_CASH_REGISTERS: (shopId) => `${API_BASE_URL}/shop-sales/cash-registers/shop/${shopId}`,
   SHOP_SALES_ITEMS: (shopId) => `${API_BASE_URL}/shop-sales/items/shop/${shopId}`,
   SHOP_SALES_BY_ID: (id) => `${API_BASE_URL}/shop-sales/${id}`,
+  SHOP_SALES_DETAILS_BY_ID: (id) => `${API_BASE_URL}/shop-sales/details/${id}`,
+  SHOP_SALES_EDIT_ACCESS_OPEN: (id) => `${API_BASE_URL}/shop-sales/${id}/edit-access/open`,
+  SHOP_SALES_EDIT_ACCESS_REQUEST: (id) => `${API_BASE_URL}/shop-sales/${id}/edit-access/request`,
+  SHOP_SALES_EDIT_ACCESS_CLOSE: (id) => `${API_BASE_URL}/shop-sales/${id}/edit-access/close`,
+  SHOP_SALES_TRANSACTION_STATUS: (id) => `${API_BASE_URL}/shop-sales/${id}/transaction-status`,
+  SHOP_SALES_EDIT_REQUESTS: `${API_BASE_URL}/shop-sales/edit-access/requests`,
+  SHOP_SALES_EDIT_REQUEST_APPROVE: (requestId) => `${API_BASE_URL}/shop-sales/edit-access/requests/${requestId}/approve`,
+  SHOP_SALES_EDIT_REQUEST_REJECT: (requestId) => `${API_BASE_URL}/shop-sales/edit-access/requests/${requestId}/reject`,
   
   CUSTOMERS: `${API_BASE_URL}/customers`,
   CUSTOMERS_ALL: `${API_BASE_URL}/customers/all-customers`,
@@ -141,6 +161,9 @@ export const API_ROUTES = {
   STORE_TO_SHOP_TRANSFER_STATUS: (id) => `${API_BASE_URL}/store-to-shop-transfers/${id}/status`,
 
   //scrap
+  DAMAGE_RECORDS: `${API_BASE_URL}/damage-records`,
+  DAMAGE_RECORD_BY_ID: (id) => `${API_BASE_URL}/damage-records/${id}`,
+  DAMAGE_BRANCH_ITEMS: (fromType, fromId) => `${API_BASE_URL}/damage-records/branch-items?fromType=${encodeURIComponent(fromType)}&fromId=${encodeURIComponent(fromId)}`,
   SCRAP_RECORDS: `${API_BASE_URL}/scrap-records`,
   MATERIAL_SCRAP_RECORDS: `${API_BASE_URL}/materials-scrap-records`,
   BRANCH_MATERIALS: `${API_BASE_URL}/api/branch-materials`,
@@ -150,6 +173,10 @@ export const API_ROUTES = {
   
   // Add product repair routes
   PRODUCT_REPAIRS: `${API_BASE_URL}/product-repairs`,
+  REPAIRS: `${API_BASE_URL}/repairs`,
+  REPAIR_BY_ID: (id) => `${API_BASE_URL}/repairs/${id}`,
+  REPAIR_STATUS: (id) => `${API_BASE_URL}/repairs/${id}/status`,
+  REPAIR_DAMAGED_ITEMS: (sourceType, sourceId) => `${API_BASE_URL}/repairs/damaged-items?sourceType=${encodeURIComponent(sourceType)}&sourceId=${encodeURIComponent(sourceId)}`,
   
   DASHBOARD2: `${API_BASE_URL}/dash-board`,
 
@@ -165,6 +192,8 @@ export const API_ROUTES = {
 
   //user routes
   USERS: `${API_BASE_URL}/users`,
+  USER_ACTIVE_SESSIONS: `${API_BASE_URL}/users/active-sessions`,
+  USER_FORCE_LOGOUT: (id) => `${API_BASE_URL}/users/${id}/force-logout`,
   ASSIGNUSER: `${API_BASE_URL}/assign-user`,
   PERMISSIONS: `${API_BASE_URL}/permissions`,
   USERMANAGEMENT: `${API_BASE_URL}/user-management`,
