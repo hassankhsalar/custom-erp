@@ -1,111 +1,118 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Factory, Package, Plus, ShoppingBag, Store, Trash2, Undo2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, Factory, Package, Plus, ShoppingBag, Store, Trash2, Truck, Undo2 } from "lucide-react";
 import { API_ROUTES } from "../../config";
 
-const getLocationIcon = (type) => {
-  if (type === "store") return <Store size={16} />;
-  if (type === "shop") return <ShoppingBag size={16} />;
-  return <Factory size={16} />;
+const blankItem = () => ({
+  uniqueId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  itemType: "",
+  itemId: "",
+  name: "",
+  quantity: "1",
+  unitPrice: "",
+});
+
+const lineKey = (itemType, id) => `${itemType}:${id}`;
+
+const locationIcon = (type) => {
+  if (type === "store") return <Store size={14} />;
+  if (type === "shop") return <ShoppingBag size={14} />;
+  return <Factory size={14} />;
 };
 
-const blankReturnItem = () => ({
-  itemType: "product",
-  itemId: "",
-  quantity: "",
-  unitPrice: "",
-  searchTerm: "",
-});
-
-const blankShipment = () => ({
-  destinationType: "store",
-  destinationId: "",
-  items: [blankReturnItem()],
-});
-
 export default function PurchaseReturnPage({ mode = "purchase_return" }) {
-  const [suppliers, setSuppliers] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [materials, setMaterials] = useState([]);
+  const isDamage = mode === "damage_return";
+  const token = localStorage.getItem("token");
+  const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
+  const searchInputRef = useRef(null);
 
+  const [suppliers, setSuppliers] = useState([]);
+  const [materials, setMaterials] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [damageItems, setDamageItems] = useState([]);
   const [sourceType, setSourceType] = useState("store");
   const [sourceId, setSourceId] = useState("");
   const [sourceOptions, setSourceOptions] = useState([]);
-
   const [supplierId, setSupplierId] = useState("");
   const [note, setNote] = useState("");
-  const [returnItems, setReturnItems] = useState([blankReturnItem()]);
+  const [returnItems, setReturnItems] = useState([]);
 
-  const [compensationType, setCompensationType] = useState("money");
-  const [compensationAmount, setCompensationAmount] = useState("");
-  const [shipments, setShipments] = useState([blankShipment()]);
-  const [shipmentDestinations, setShipmentDestinations] = useState({ 0: [] });
+  const [searchState, setSearchState] = useState({
+    searchTerm: "",
+    showSearchResults: false,
+    filteredResults: [],
+  });
 
-  const [submitting, setSubmitting] = useState(false);
+  const [compType, setCompType] = useState("money");
+  const [compAmount, setCompAmount] = useState("");
+  const [initDestType, setInitDestType] = useState("store");
+  const [initDestId, setInitDestId] = useState("");
+  const [initDestinations, setInitDestinations] = useState([]);
+  const [initCompLines, setInitCompLines] = useState([]);
+
   const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const [existingReturns, setExistingReturns] = useState([]);
+  const [returns, setReturns] = useState([]);
   const [loadingReturns, setLoadingReturns] = useState(false);
 
-  const token = localStorage.getItem("token");
-  const isDamageReturn = mode === "damage_return";
+  const [shipModal, setShipModal] = useState({
+    open: false,
+    returnId: null,
+    reference: "",
+    destinationType: "store",
+    destinationId: "",
+    destinationOptions: [],
+    lines: [],
+    error: "",
+    saving: false,
+  });
 
-  const catalog = useMemo(
-    () => ({
-      product: products.map((x) => ({ id: x.id, name: x.name })),
-      material: materials.map((x) => ({ id: x.id, name: x.name })),
-    }),
-    [products, materials]
-  );
+  useEffect(() => {
+    const onClickOutside = (event) => {
+      if (searchInputRef.current && !searchInputRef.current.contains(event.target)) {
+        setSearchState((prev) => ({ ...prev, showSearchResults: false }));
+      }
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
 
-  const fetchSourceOptions = async (type) => {
-    const res = await fetch(API_ROUTES.PURCHASE_DESTINATIONS(type), {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) throw new Error("Failed to fetch locations");
+  const fetchDestinations = async (type) => {
+    const res = await fetch(API_ROUTES.PURCHASE_DESTINATIONS(type), { headers });
     const data = await res.json();
     return Array.isArray(data) ? data : [];
-  };
-
-  const fetchInitial = async () => {
-    const headers = { Authorization: `Bearer ${token}` };
-    const [supplierRes, productRes, materialRes] = await Promise.all([
-      fetch(API_ROUTES.SUPPLIERS, { headers }),
-      fetch(API_ROUTES.PRODUCTS_ALL, { headers }),
-      fetch(API_ROUTES.MATERIALS, { headers }),
-    ]);
-    const [supplierData, productData, materialData] = await Promise.all([
-      supplierRes.json(),
-      productRes.json(),
-      materialRes.json(),
-    ]);
-
-    setSuppliers(Array.isArray(supplierData) ? supplierData : []);
-    setProducts(productData?.products || productData || []);
-    setMaterials(materialData?.materials || materialData || []);
   };
 
   const fetchReturns = async () => {
     setLoadingReturns(true);
     try {
-      const res = await fetch(`${API_ROUTES.PURCHASE_RETURNS_ALL}?returnType=${isDamageReturn ? "damage_return" : "purchase_return"}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${API_ROUTES.PURCHASE_RETURNS_ALL}?returnType=${isDamage ? "damage_return" : "purchase_return"}`, { headers });
       const data = await res.json();
-      setExistingReturns(data?.returns || []);
+      setReturns(data?.returns || []);
     } catch (_) {
-      setExistingReturns([]);
+      setReturns([]);
     } finally {
       setLoadingReturns(false);
     }
   };
 
   useEffect(() => {
-    fetchInitial().catch(() => setMessage("Failed to load suppliers/items"));
-    fetchReturns();
-  }, [isDamageReturn]);
+    Promise.all([
+      fetch(API_ROUTES.SUPPLIERS, { headers }).then((r) => r.json()),
+      fetch(API_ROUTES.MATERIALS_ALL, { headers }).then((r) => r.json()),
+      fetch(API_ROUTES.PRODUCTS_ALL, { headers }).then((r) => r.json()),
+      fetchReturns(),
+    ])
+      .then(([suppliersData, materialsData, productsData]) => {
+        setSuppliers(Array.isArray(suppliersData) ? suppliersData : []);
+        setMaterials(materialsData?.materials || materialsData || []);
+        setProducts(productsData?.products || productsData || []);
+      })
+      .catch(() => setMessage("Failed to load initial data"));
+  }, [isDamage]);
 
   useEffect(() => {
-    fetchSourceOptions(sourceType)
+    fetchDestinations(sourceType)
       .then((rows) => {
         setSourceOptions(rows);
         setSourceId(rows[0]?.id ? String(rows[0].id) : "");
@@ -117,169 +124,210 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
   }, [sourceType]);
 
   useEffect(() => {
-    shipments.forEach((shipment, shipmentIndex) => {
-      fetchSourceOptions(shipment.destinationType)
-        .then((rows) => {
-          setShipmentDestinations((prev) => ({ ...prev, [shipmentIndex]: rows }));
-          setShipments((prev) =>
-            prev.map((x, idx) =>
-              idx !== shipmentIndex
-                ? x
-                : {
-                    ...x,
-                    destinationId: x.destinationId
-                      ? String(x.destinationId)
-                      : (rows[0]?.id ? String(rows[0].id) : ""),
-                  }
-            )
-          );
-        })
-        .catch(() => {
-          setShipmentDestinations((prev) => ({ ...prev, [shipmentIndex]: [] }));
-        });
-    });
-  }, [shipments.map((x) => x.destinationType).join("|")]);
-
-  const addReturnItem = () => setReturnItems((prev) => [...prev, blankReturnItem()]);
-  const removeReturnItem = (index) =>
-    setReturnItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
-
-  const updateReturnItem = (index, key, value) => {
-    setReturnItems((prev) =>
-      prev.map((item, i) =>
-        i === index
-          ? {
-              ...item,
-              [key]: value,
-              ...(key === "itemType" ? { itemId: "", searchTerm: "" } : {}),
-            }
-          : item
-      )
-    );
-  };
-
-  const addShipment = () => setShipments((prev) => [...prev, blankShipment()]);
-  const removeShipment = (index) =>
-    setShipments((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
-
-  const updateShipment = (index, key, value) => {
-    setShipments((prev) =>
-      prev.map((shipment, i) =>
-        i === index
-          ? {
-              ...shipment,
-              [key]: value,
-              ...(key === "destinationType" ? { destinationId: "" } : {}),
-            }
-          : shipment
-      )
-    );
-  };
-
-  const updateShipmentItem = (shipmentIndex, itemIndex, key, value) => {
-    setShipments((prev) =>
-      prev.map((shipment, i) =>
-        i !== shipmentIndex
-          ? shipment
-          : {
-              ...shipment,
-              items: shipment.items.map((item, idx) =>
-                idx === itemIndex
-                  ? {
-                      ...item,
-                      [key]: value,
-                      ...(key === "itemType" ? { itemId: "", searchTerm: "" } : {}),
-                    }
-                  : item
-              ),
-            }
-      )
-    );
-  };
-
-  const addShipmentItem = (shipmentIndex) => {
-    setShipments((prev) =>
-      prev.map((shipment, i) =>
-        i === shipmentIndex ? { ...shipment, items: [...shipment.items, blankReturnItem()] } : shipment
-      )
-    );
-  };
-
-  const removeShipmentItem = (shipmentIndex, itemIndex) => {
-    setShipments((prev) =>
-      prev.map((shipment, i) => {
-        if (i !== shipmentIndex) return shipment;
-        if (shipment.items.length <= 1) return shipment;
-        return { ...shipment, items: shipment.items.filter((_, idx) => idx !== itemIndex) };
+    if (!isDamage || !sourceType || !sourceId) {
+      setDamageItems([]);
+      return;
+    }
+    fetch(API_ROUTES.PURCHASE_RETURN_DAMAGE_ITEMS(sourceType, sourceId), { headers })
+      .then((res) => res.json())
+      .then((data) => {
+        setDamageItems(Array.isArray(data?.items) ? data.items : []);
       })
-    );
-  };
+      .catch(() => setDamageItems([]));
+  }, [isDamage, sourceType, sourceId]);
 
-  const serializeReturnItems = (items) =>
-    items
-      .filter((item) => Number(item.quantity) > 0 && Number(item.unitPrice) > 0 && item.itemId)
+  useEffect(() => {
+    if (compType !== "items") return;
+    fetchDestinations(initDestType)
+      .then((rows) => {
+        setInitDestinations(rows);
+        setInitDestId((prev) => (prev ? prev : rows[0]?.id ? String(rows[0].id) : ""));
+      })
+      .catch(() => {
+        setInitDestinations([]);
+        setInitDestId("");
+      });
+  }, [compType, initDestType]);
+
+  useEffect(() => {
+    const mapped = returnItems
+      .filter((item) => item.itemType && item.itemId && Number(item.quantity) > 0 && Number(item.unitPrice) > 0)
       .map((item) => ({
+        key: lineKey(item.itemType, Number(item.itemId)),
         itemType: item.itemType,
         productId: item.itemType === "product" ? Number(item.itemId) : null,
         materialId: item.itemType === "material" ? Number(item.itemId) : null,
-        quantity: Number(item.quantity),
+        name: item.name,
+        returnQuantity: Number(item.quantity),
         unitPrice: Number(item.unitPrice),
-        isDamaged: isDamageReturn,
+        receiveQuantity: 0,
+      }));
+    setInitCompLines((prev) =>
+      mapped.map((line) => ({
+        ...line,
+        receiveQuantity: prev.find((p) => p.key === line.key)?.receiveQuantity || 0,
+      }))
+    );
+  }, [returnItems]);
+
+  const handleSearchInputChange = (value) => {
+    const lower = value.toLowerCase();
+    let results = [];
+    let showResults = false;
+
+    if (value.length > 0) {
+      if (isDamage) {
+        results = damageItems
+          .filter((item) =>
+            String(item.name || "").toLowerCase().includes(lower) ||
+            (item.barcode && String(item.barcode).toLowerCase().includes(lower))
+          )
+          .map((item) => ({
+            type: item.itemType,
+            id: item.id,
+            name: item.name,
+            unitPrice: Number(item.unitPrice || 0),
+            availableQuantity: Number(item.availableQuantity || 0),
+          }));
+      } else {
+        const filteredMaterials = materials
+          .filter((m) =>
+            String(m.name || "").toLowerCase().includes(lower) ||
+            (Array.isArray(m.alternative_names) && m.alternative_names.some((n) => String(n || "").toLowerCase().includes(lower))) ||
+            (m.barcode && String(m.barcode).toLowerCase().includes(lower))
+          )
+          .map((m) => ({
+            type: "material",
+            id: m.id,
+            name: m.name,
+            unitPrice: Number(m.unit_cost || 0),
+          }));
+
+        const filteredProducts = products
+          .filter((p) =>
+            String(p.name || "").toLowerCase().includes(lower) ||
+            (Array.isArray(p.alternative_names) && p.alternative_names.some((n) => String(n || "").toLowerCase().includes(lower))) ||
+            (p.barcode && String(p.barcode).toLowerCase().includes(lower))
+          )
+          .map((p) => ({
+            type: "product",
+            id: p.id,
+            name: p.name,
+            unitPrice: Number(p.cost || 0),
+          }));
+
+        results = [...filteredMaterials, ...filteredProducts];
+      }
+      showResults = true;
+    }
+
+    setSearchState({
+      searchTerm: value,
+      showSearchResults: showResults,
+      filteredResults: results,
+    });
+  };
+
+  const handleItemSelect = (selected) => {
+    setReturnItems((prev) => [
+      ...prev,
+      {
+        uniqueId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        itemType: selected.type,
+        itemId: String(selected.id),
+        name: selected.name,
+        quantity: "1",
+        unitPrice: String(selected.unitPrice || 0),
+        availableQuantity: selected.availableQuantity ?? null,
+      },
+    ]);
+
+    setSearchState({
+      searchTerm: "",
+      showSearchResults: false,
+      filteredResults: [],
+    });
+  };
+
+  const serializeItems = () =>
+    returnItems
+      .filter((i) => i.itemType && i.itemId && Number(i.quantity) > 0 && Number(i.unitPrice) > 0)
+      .map((i) => ({
+        itemType: i.itemType,
+        productId: i.itemType === "product" ? Number(i.itemId) : null,
+        materialId: i.itemType === "material" ? Number(i.itemId) : null,
+        quantity: Number(i.quantity),
+        unitPrice: Number(i.unitPrice),
+        isDamaged: isDamage,
       }));
 
-  const handleSubmit = async () => {
+  const handleCreateReturn = async () => {
     setMessage("");
-    const serializedReturnItems = serializeReturnItems(returnItems);
-    if (!sourceId) return setMessage("Select a source location.");
-    if (!serializedReturnItems.length) return setMessage("Add at least one valid return item.");
+    const items = serializeItems();
+    if (!sourceId) return setMessage("Select source location.");
+    if (!items.length) return setMessage("Add at least one valid return item.");
+
+    if (isDamage) {
+      const overLimit = returnItems.find((item) =>
+        item.availableQuantity !== null &&
+        item.availableQuantity !== undefined &&
+        Number(item.quantity || 0) > Number(item.availableQuantity || 0)
+      );
+      if (overLimit) {
+        return setMessage(`Quantity exceeds damaged stock for ${overLimit.name}`);
+      }
+    }
 
     const payload = {
       supplierId: supplierId ? Number(supplierId) : null,
       sourceType,
       sourceId: Number(sourceId),
+      items,
       note: note || null,
-      items: serializedReturnItems,
-      compensationType,
+      compensationType: compType,
     };
 
-    if (compensationType === "money") {
-      payload.compensationAmount = Number(compensationAmount || 0);
+    if (compType === "money") {
+      const amount = Number(compAmount || 0);
+      if (amount <= 0) return setMessage("Compensation amount must be greater than 0.");
+      payload.compensationAmount = amount;
       payload.payment_method = "cash";
     } else {
-      const serializedShipments = shipments
-        .filter((shipment) => shipment.destinationId)
-        .map((shipment) => ({
-          destinationType: shipment.destinationType,
-          destinationId: Number(shipment.destinationId),
-          items: serializeReturnItems(shipment.items),
-        }))
-        .filter((shipment) => shipment.items.length);
-
-      if (!serializedShipments.length) {
-        return setMessage("Add at least one valid compensation shipment with specific location.");
+      const receiveItems = initCompLines.filter((x) => Number(x.receiveQuantity) > 0);
+      if (receiveItems.length > 0) {
+        if (!initDestId) return setMessage("Select destination location for initial shipment.");
+        payload.compensationShipments = [
+          {
+            destinationType: initDestType,
+            destinationId: Number(initDestId),
+            items: receiveItems.map((x) => ({
+              itemType: x.itemType,
+              productId: x.productId,
+              materialId: x.materialId,
+              quantity: Number(x.receiveQuantity),
+              unitPrice: Number(x.unitPrice),
+            })),
+          },
+        ];
       }
-      payload.compensationShipments = serializedShipments;
     }
 
     try {
       setSubmitting(true);
-      const endpoint = isDamageReturn ? API_ROUTES.PURCHASE_DAMAGE_RETURNS_ALL : API_ROUTES.PURCHASE_RETURNS_ALL;
+      const endpoint = isDamage ? API_ROUTES.PURCHASE_DAMAGE_RETURNS_ALL : API_ROUTES.PURCHASE_RETURNS_ALL;
       const res = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to create return");
 
-      setMessage(data?.message || "Return created successfully");
-      setReturnItems([blankReturnItem()]);
-      setCompensationType("money");
-      setCompensationAmount("");
-      setShipments([blankShipment()]);
+      setMessage(data?.message || "Return created");
+      setReturnItems([]);
+      setCompType("money");
+      setCompAmount("");
+      setInitCompLines([]);
       setNote("");
       fetchReturns();
     } catch (error) {
@@ -289,236 +337,197 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
     }
   };
 
-  const filteredOptions = (itemType, searchTerm) =>
-    catalog[itemType].filter((x) =>
-      x.name.toLowerCase().includes(String(searchTerm || "").toLowerCase())
-    );
+  const openAddShipmentModal = async (row) => {
+    try {
+      const destinationType = row.sourceType || "store";
+      const destinationOptions = await fetchDestinations(destinationType);
+      setShipModal({
+        open: true,
+        returnId: row.id,
+        reference: row.reference,
+        destinationType,
+        destinationId: destinationOptions[0]?.id ? String(destinationOptions[0].id) : "",
+        destinationOptions,
+        lines: (row.items || []).map((item) => ({
+          key: lineKey(item.itemType, item.itemType === "product" ? item.productId : item.materialId),
+          itemType: item.itemType,
+          productId: item.productId,
+          materialId: item.materialId,
+          name: item.product?.name || item.material?.name || "-",
+          returnQuantity: Number(item.quantity || 0),
+          unitPrice: Number(item.unitPrice || 0),
+          receiveQuantity: 0,
+        })),
+        error: "",
+        saving: false,
+      });
+    } catch (_) {
+      setMessage("Failed to open shipment modal");
+    }
+  };
+
+  const submitShipment = async () => {
+    const selected = shipModal.lines.filter((x) => Number(x.receiveQuantity) > 0);
+    if (!selected.length) return setShipModal((prev) => ({ ...prev, error: "Set receive qty for at least one item." }));
+    if (!shipModal.destinationId) return setShipModal((prev) => ({ ...prev, error: "Select destination location." }));
+
+    const payload = {
+      destinationType: shipModal.destinationType,
+      destinationId: Number(shipModal.destinationId),
+      items: selected.map((x) => ({
+        itemType: x.itemType,
+        productId: x.productId,
+        materialId: x.materialId,
+        quantity: Number(x.receiveQuantity),
+        unitPrice: Number(x.unitPrice),
+      })),
+    };
+
+    try {
+      setShipModal((prev) => ({ ...prev, saving: true, error: "" }));
+      const res = await fetch(API_ROUTES.PURCHASE_RETURN_COMP_SHIPMENTS(shipModal.returnId), {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to add shipment");
+      setShipModal((prev) => ({ ...prev, open: false, saving: false }));
+      setMessage("Shipment added.");
+      fetchReturns();
+    } catch (error) {
+      setShipModal((prev) => ({ ...prev, saving: false, error: error.message || "Failed to add shipment" }));
+    }
+  };
 
   return (
     <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
-      <div className="relative w-full mx-auto space-y-6">
-        <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl p-6">
-          <div className="flex items-center gap-4">
-            <div className={`p-4 rounded-2xl shadow-lg ${isDamageReturn ? "bg-gradient-to-br from-red-500 to-orange-500" : "bg-gradient-to-br from-violet-500 to-indigo-500"}`}>
-              {isDamageReturn ? <AlertTriangle className="text-white" size={34} /> : <Undo2 className="text-white" size={34} />}
-            </div>
-            <div>
-              <h1 className={`text-3xl md:text-4xl font-bold bg-clip-text text-transparent ${isDamageReturn ? "bg-gradient-to-r from-red-600 to-orange-600" : "bg-gradient-to-r from-violet-600 to-indigo-600"}`}>
-                {isDamageReturn ? "Damage Return" : "Purchase Return"}
-              </h1>
-              <p className="text-gray-600 mt-2">Create independent item returns with exact source and destination locations.</p>
-            </div>
+      <div className="space-y-6">
+        <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl p-6 flex items-center gap-4">
+          <div className={`p-4 rounded-2xl shadow-lg ${isDamage ? "bg-gradient-to-br from-red-500 to-orange-500" : "bg-gradient-to-br from-violet-500 to-indigo-500"}`}>
+            {isDamage ? <AlertTriangle className="text-white" size={34} /> : <Undo2 className="text-white" size={34} />}
+          </div>
+          <div>
+            <h1 className={`text-3xl font-bold bg-clip-text text-transparent ${isDamage ? "bg-gradient-to-r from-red-600 to-orange-600" : "bg-gradient-to-r from-violet-600 to-indigo-600"}`}>
+              {isDamage ? "Damage Return" : "Purchase Return"}
+            </h1>
           </div>
         </div>
 
-        <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Supplier</label>
-              <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2">
-                <option value="">Select supplier</option>
-                {suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Source Type</label>
-              <select value={sourceType} onChange={(e) => setSourceType(e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2">
-                <option value="store">Store</option>
-                <option value="shop">Shop</option>
-                <option value="factory">Factory</option>
-              </select>
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Source Location</label>
-              <select value={sourceId} onChange={(e) => setSourceId(e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2">
-                <option value="">Select location</option>
-                {sourceOptions.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </div>
+        <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2">
+              <option value="">Supplier</option>
+              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <select value={sourceType} onChange={(e) => setSourceType(e.target.value)} className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2">
+              <option value="store">Store</option>
+              <option value="shop">Shop</option>
+              <option value="factory">Factory</option>
+            </select>
+            <select value={sourceId} onChange={(e) => setSourceId(e.target.value)} className="md:col-span-2 rounded-xl border border-gray-200 bg-white/70 px-3 py-2">
+              <option value="">Source location</option>
+              {sourceOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
           </div>
 
-          <div className="rounded-2xl border border-white/60 bg-white/50 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-gray-800 flex items-center gap-2"><Package size={16} /> Return Items</h3>
-              <button onClick={addReturnItem} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-sm">
-                <Plus size={14} /> Add Item
-              </button>
-            </div>
-            {returnItems.map((item, index) => (
-              <div key={`return-item-${index}`} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Type</label>
-                  <select value={item.itemType} onChange={(e) => updateReturnItem(index, "itemType", e.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-2 py-2">
-                    <option value="product">Product</option>
-                    <option value="material">Material</option>
-                  </select>
-                </div>
-                <div className="md:col-span-4 relative">
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Item Search</label>
-                  <input
-                    value={item.searchTerm}
-                    onChange={(e) => updateReturnItem(index, "searchTerm", e.target.value)}
-                    className="w-full rounded-lg border border-gray-200 bg-white px-2 py-2"
-                    placeholder={`Search ${item.itemType}...`}
-                  />
-                  {item.searchTerm && (
-                    <div className="absolute z-10 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow">
-                      {filteredOptions(item.itemType, item.searchTerm).slice(0, 20).map((opt) => (
-                        <button
-                          key={`${item.itemType}-${opt.id}`}
-                          onClick={() => updateReturnItem(index, "itemId", String(opt.id))}
-                          className={`w-full px-3 py-2 text-left text-sm hover:bg-indigo-50 ${String(item.itemId) === String(opt.id) ? "bg-indigo-100" : ""}`}
-                        >
-                          {opt.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Quantity</label>
-                  <input type="number" min="0" step="0.01" value={item.quantity} onChange={(e) => updateReturnItem(index, "quantity", e.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-2 py-2" />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-gray-600 mb-1">Unit Price</label>
-                  <input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(e) => updateReturnItem(index, "unitPrice", e.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-2 py-2" />
-                </div>
-                <div className="md:col-span-2">
-                  <button onClick={() => removeReturnItem(index)} className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 text-red-600 px-3 py-2">
-                    <Trash2 size={14} /> Remove
+          <div className="rounded-2xl border border-white/60 bg-white/50 p-4" ref={searchInputRef}>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Search Items</label>
+            <input
+              value={searchState.searchTerm}
+              onChange={(e) => handleSearchInputChange(e.target.value)}
+              onFocus={() => setSearchState((prev) => ({ ...prev, showSearchResults: prev.searchTerm.length > 0 }))}
+              placeholder={isDamage ? "Search damaged/scrap items only" : "Search products/materials by name, alternative name, barcode"}
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2"
+            />
+            {searchState.showSearchResults && searchState.filteredResults.length > 0 && (
+              <div className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                {searchState.filteredResults.map((result) => (
+                  <button
+                    key={`${result.type}-${result.id}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleItemSelect(result)}
+                    className="w-full text-left px-3 py-2 hover:bg-indigo-50 border-b last:border-b-0 border-gray-100"
+                  >
+                    <span className="font-medium text-gray-800">{result.name}</span>
+                    <span className="ml-2 text-xs text-gray-500">({result.type})</span>
+                    {isDamage && (
+                      <span className="ml-2 text-xs text-rose-600">damaged: {Number(result.availableQuantity || 0)}</span>
+                    )}
                   </button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="rounded-2xl border border-white/60 bg-white/50 p-4 space-y-3">
-            <h3 className="font-semibold text-gray-800">Compensation</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Type</label>
-                <select value={compensationType} onChange={(e) => setCompensationType(e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2">
-                  <option value="money">Money</option>
-                  <option value="items">Items</option>
-                </select>
-              </div>
-              {compensationType === "money" && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Amount</label>
-                  <input type="number" min="0" step="0.01" value={compensationAmount} onChange={(e) => setCompensationAmount(e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2" />
-                </div>
-              )}
-            </div>
-
-            {compensationType === "items" && (
-              <div className="space-y-4">
-                <div className="flex justify-end">
-                  <button onClick={addShipment} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 text-white px-3 py-1.5 text-sm">
-                    <Plus size={14} /> Add Shipment
-                  </button>
-                </div>
-                {shipments.map((shipment, shipmentIndex) => (
-                  <div key={`shipment-${shipmentIndex}`} className="rounded-xl border border-emerald-100 bg-white/70 p-4 space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-600 mb-1">Destination Type</label>
-                        <select value={shipment.destinationType} onChange={(e) => updateShipment(shipmentIndex, "destinationType", e.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-2 py-2">
-                          <option value="store">Store</option>
-                          <option value="shop">Shop</option>
-                          <option value="factory">Factory</option>
-                        </select>
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="block text-xs font-semibold text-gray-600 mb-1">Specific Location</label>
-                        <select value={shipment.destinationId} onChange={(e) => updateShipment(shipmentIndex, "destinationId", e.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-2 py-2">
-                          <option value="">Select location</option>
-                          {(shipmentDestinations[shipmentIndex] || []).map((d) => (
-                            <option key={`dest-${shipmentIndex}-${d.id}`} value={d.id}>{d.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    {shipment.items.map((item, itemIndex) => (
-                      <div key={`shipment-item-${shipmentIndex}-${itemIndex}`} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                        <div className="md:col-span-2">
-                          <label className="block text-xs font-semibold text-gray-600 mb-1">Type</label>
-                          <select value={item.itemType} onChange={(e) => updateShipmentItem(shipmentIndex, itemIndex, "itemType", e.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-2 py-2">
-                            <option value="product">Product</option>
-                            <option value="material">Material</option>
-                          </select>
-                        </div>
-                        <div className="md:col-span-4 relative">
-                          <label className="block text-xs font-semibold text-gray-600 mb-1">Item Search</label>
-                          <input
-                            value={item.searchTerm}
-                            onChange={(e) => updateShipmentItem(shipmentIndex, itemIndex, "searchTerm", e.target.value)}
-                            className="w-full rounded-lg border border-gray-200 bg-white px-2 py-2"
-                            placeholder={`Search ${item.itemType}...`}
-                          />
-                          {item.searchTerm && (
-                            <div className="absolute z-10 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow">
-                              {filteredOptions(item.itemType, item.searchTerm).slice(0, 20).map((opt) => (
-                                <button
-                                  key={`comp-${shipmentIndex}-${item.itemType}-${opt.id}`}
-                                  onClick={() => updateShipmentItem(shipmentIndex, itemIndex, "itemId", String(opt.id))}
-                                  className={`w-full px-3 py-2 text-left text-sm hover:bg-emerald-50 ${String(item.itemId) === String(opt.id) ? "bg-emerald-100" : ""}`}
-                                >
-                                  {opt.name}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <div className="md:col-span-2">
-                          <label className="block text-xs font-semibold text-gray-600 mb-1">Qty</label>
-                          <input type="number" min="0" step="0.01" value={item.quantity} onChange={(e) => updateShipmentItem(shipmentIndex, itemIndex, "quantity", e.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-2 py-2" />
-                        </div>
-                        <div className="md:col-span-2">
-                          <label className="block text-xs font-semibold text-gray-600 mb-1">Unit Price</label>
-                          <input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(e) => updateShipmentItem(shipmentIndex, itemIndex, "unitPrice", e.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-2 py-2" />
-                        </div>
-                        <div className="md:col-span-2">
-                          <button onClick={() => removeShipmentItem(shipmentIndex, itemIndex)} className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 text-red-600 px-3 py-2">
-                            <Trash2 size={14} /> Remove
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-
-                    <div className="flex items-center justify-between">
-                      <button onClick={() => addShipmentItem(shipmentIndex)} className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 text-emerald-700 px-3 py-1.5 text-sm">
-                        <Plus size={14} /> Add Item
-                      </button>
-                      <button onClick={() => removeShipment(shipmentIndex)} className="inline-flex items-center gap-2 rounded-lg border border-red-200 text-red-600 px-3 py-1.5 text-sm">
-                        <Trash2 size={14} /> Remove Shipment
-                      </button>
-                    </div>
-                  </div>
                 ))}
               </div>
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">Note</label>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="w-full rounded-xl border border-gray-200 bg-white/70 px-3 py-2" />
+          <div className="rounded-2xl border border-white/60 bg-white/50 p-4 space-y-2">
+            <div className="font-semibold text-gray-800 flex items-center gap-2"><Package size={16} /> Selected Return Items</div>
+            {returnItems.map((item, idx) => (
+              <div key={item.uniqueId} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
+                <div className="md:col-span-5 text-sm text-gray-800">{item.name} <span className="text-xs text-gray-500">({item.itemType})</span></div>
+                {isDamage && (
+                  <div className="md:col-span-1 text-xs text-rose-600">damaged: {Number(item.availableQuantity || 0)}</div>
+                )}
+                <input type="number" min="0" step="0.01" value={item.quantity} onChange={(e) => setReturnItems((prev) => prev.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} className={`${isDamage ? "md:col-span-2" : "md:col-span-3"} rounded-lg border border-gray-200 bg-white px-2 py-2`} placeholder="Return qty" />
+                <input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(e) => setReturnItems((prev) => prev.map((x, i) => i === idx ? { ...x, unitPrice: e.target.value } : x))} className="md:col-span-3 rounded-lg border border-gray-200 bg-white px-2 py-2" placeholder="Unit price" />
+                <button onClick={() => setReturnItems((prev) => prev.filter((_, i) => i !== idx))} className="md:col-span-1 rounded-lg border border-red-200 text-red-600 px-2 py-2"><Trash2 size={14} /></button>
+              </div>
+            ))}
+            {!returnItems.length && <div className="text-sm text-gray-500">No items selected yet.</div>}
           </div>
 
+          <div className="rounded-2xl border border-white/60 bg-white/50 p-4 space-y-2">
+            <div className="font-semibold text-gray-800">Compensation</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <select value={compType} onChange={(e) => setCompType(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-2 py-2">
+                <option value="money">Money</option>
+                <option value="items">Items</option>
+              </select>
+              {compType === "money" && (
+                <input type="number" min="0" step="0.01" value={compAmount} onChange={(e) => setCompAmount(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-2 py-2" placeholder="Compensation amount" />
+              )}
+            </div>
+
+            {compType === "items" && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <select value={initDestType} onChange={(e) => setInitDestType(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-2 py-2">
+                    <option value="store">Store</option>
+                    <option value="shop">Shop</option>
+                    <option value="factory">Factory</option>
+                  </select>
+                  <select value={initDestId} onChange={(e) => setInitDestId(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-2 py-2">
+                    <option value="">Destination location</option>
+                    {initDestinations.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
+                  {initCompLines.map((line) => (
+                    <div key={line.key} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
+                      <div className="md:col-span-5 text-sm">{line.name} <span className="text-xs text-gray-500">({line.itemType})</span></div>
+                      <div className="md:col-span-2 text-xs text-gray-500">Return: {line.returnQuantity}</div>
+                      <div className="md:col-span-2 text-xs text-gray-500">Price: {line.unitPrice}</div>
+                      <input type="number" min="0" step="0.01" value={line.receiveQuantity} onChange={(e) => setInitCompLines((prev) => prev.map((x) => x.key === line.key ? { ...x, receiveQuantity: e.target.value } : x))} className="md:col-span-3 rounded-lg border border-gray-200 bg-white px-2 py-2" placeholder="Receive (default 0)" />
+                    </div>
+                  ))}
+                  {!initCompLines.length && <div className="text-sm text-gray-500">Return items will auto-fill here.</div>}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2" placeholder="Note" />
+
           <div className="flex items-center justify-between">
-            <p className={`text-sm ${message ? "text-rose-600" : "text-gray-500"}`}>{message || "Submit to create return and post stock/account effects."}</p>
-            <button onClick={handleSubmit} disabled={submitting} className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-white ${isDamageReturn ? "bg-gradient-to-r from-red-500 to-orange-500" : "bg-gradient-to-r from-violet-500 to-indigo-500"} disabled:opacity-60`}>
-              {submitting ? "Submitting..." : isDamageReturn ? "Create Damage Return" : "Create Purchase Return"}
+            <p className={`text-sm ${message ? "text-rose-600" : "text-gray-500"}`}>{message || "If all receive quantities are 0, no initial shipment is created."}</p>
+            <button onClick={handleCreateReturn} disabled={submitting} className={`px-5 py-2.5 rounded-xl text-white ${isDamage ? "bg-gradient-to-r from-red-500 to-orange-500" : "bg-gradient-to-r from-violet-500 to-indigo-500"} disabled:opacity-60`}>
+              {submitting ? "Submitting..." : "Create Return"}
             </button>
           </div>
         </div>
 
         <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">{isDamageReturn ? "Recent Damage Returns" : "Recent Purchase Returns"}</h3>
+          <div className="font-semibold text-gray-800 mb-3">Return List</div>
           {loadingReturns ? (
             <div className="text-gray-600">Loading...</div>
           ) : (
@@ -532,32 +541,27 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
                     <th className="p-3 text-left">Value</th>
                     <th className="p-3 text-left">Compensation</th>
                     <th className="p-3 text-left">Date</th>
+                    <th className="p-3 text-left">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {existingReturns.map((row) => (
+                  {returns.map((row) => (
                     <tr key={row.id} className="border-t border-white/50">
-                      <td className="p-3 font-semibold text-gray-800">{row.reference}</td>
-                      <td className="p-3">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">
-                          {getLocationIcon(row.sourceType)}
-                          {row.sourceType} #{row.sourceId}
-                        </span>
-                      </td>
+                      <td className="p-3 font-semibold">{row.reference}</td>
+                      <td className="p-3"><span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs">{locationIcon(row.sourceType)}{row.sourceType} #{row.sourceId}</span></td>
                       <td className="p-3">{row.supplier?.name || "-"}</td>
                       <td className="p-3">${Number(row.totalReturnValue || 0).toFixed(2)}</td>
-                      <td className="p-3">
-                        <span className="text-xs rounded-full bg-emerald-100 text-emerald-700 px-2 py-1">
-                          {row.compensationType} / {row.compensationStatus}
-                        </span>
-                      </td>
+                      <td className="p-3"><span className="text-xs rounded-full bg-emerald-100 text-emerald-700 px-2 py-1">{row.compensationType} / {row.compensationStatus}</span></td>
                       <td className="p-3">{new Date(row.createdAt).toLocaleString()}</td>
+                      <td className="p-3">
+                        {row.compensationType === "items" ? (
+                          <button onClick={() => openAddShipmentModal(row)} className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 text-indigo-700 px-2 py-1 text-xs hover:bg-indigo-50"><Truck size={12} />Add Shipment</button>
+                        ) : "-"}
+                      </td>
                     </tr>
                   ))}
-                  {!existingReturns.length && (
-                    <tr>
-                      <td className="p-6 text-center text-gray-500" colSpan={6}>No returns found.</td>
-                    </tr>
+                  {!returns.length && (
+                    <tr><td className="p-6 text-center text-gray-500" colSpan={7}>No returns found.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -565,6 +569,60 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
           )}
         </div>
       </div>
+
+      {shipModal.open && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-5 border-b flex items-center justify-between">
+              <div className="font-semibold text-gray-800">Add Shipment - {shipModal.reference}</div>
+              <button onClick={() => setShipModal((prev) => ({ ...prev, open: false }))} className="text-gray-500">Close</button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <select
+                  value={shipModal.destinationType}
+                  onChange={async (e) => {
+                    const type = e.target.value;
+                    const options = await fetchDestinations(type);
+                    setShipModal((prev) => ({
+                      ...prev,
+                      destinationType: type,
+                      destinationOptions: options,
+                      destinationId: options[0]?.id ? String(options[0].id) : "",
+                    }));
+                  }}
+                  className="rounded-lg border border-gray-200 bg-white px-2 py-2"
+                >
+                  <option value="store">Store</option>
+                  <option value="shop">Shop</option>
+                  <option value="factory">Factory</option>
+                </select>
+                <select value={shipModal.destinationId} onChange={(e) => setShipModal((prev) => ({ ...prev, destinationId: e.target.value }))} className="rounded-lg border border-gray-200 bg-white px-2 py-2">
+                  <option value="">Destination location</option>
+                  {shipModal.destinationOptions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div className="rounded-lg border border-gray-200 p-3 space-y-2">
+                {shipModal.lines.map((line) => (
+                  <div key={line.key} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
+                    <div className="md:col-span-5 text-sm">{line.name} <span className="text-xs text-gray-500">({line.itemType})</span></div>
+                    <div className="md:col-span-3 text-xs text-gray-500">Return: {line.returnQuantity}</div>
+                    <div className="md:col-span-2 text-xs text-gray-500">Price: {line.unitPrice}</div>
+                    <input type="number" min="0" step="0.01" value={line.receiveQuantity} onChange={(e) => setShipModal((prev) => ({ ...prev, lines: prev.lines.map((x) => x.key === line.key ? { ...x, receiveQuantity: e.target.value } : x) }))} className="md:col-span-2 rounded-lg border border-gray-200 bg-white px-2 py-2" placeholder="Receive" />
+                  </div>
+                ))}
+              </div>
+              {shipModal.error && <div className="text-sm text-rose-600">{shipModal.error}</div>}
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setShipModal((prev) => ({ ...prev, open: false }))} className="px-4 py-2 rounded-lg border border-gray-300">Cancel</button>
+                <button onClick={submitShipment} disabled={shipModal.saving} className="px-4 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-60">
+                  {shipModal.saving ? "Saving..." : "Add Shipment"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

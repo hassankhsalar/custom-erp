@@ -30,6 +30,7 @@ import AllProductions from "./components/Productions/AllProductions";
 import NewProduction from "./components/Productions/NewProduction";
 import EditProduction from "./components/Productions/EditProduction";
 import AllPurchase from "./components/Purchase/AllPurchase";
+import AllPurchaseReturns from "./components/Purchase/AllPurchaseReturns";
 import NewPurchase from "./components/Purchase/NewPurchase";
 import AllSupplier from "./components/Purchase/AllSupplier";
 import AddSupplier from "./components/Purchase/AddSupplier";
@@ -328,6 +329,9 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="purchases_read" />}>
               <Route path="/purchase/all" element={<AllPurchase />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="purchases_read" />}>
+              <Route path="/purchase/returns" element={<AllPurchaseReturns />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="purchases_create" />}>
               <Route path="/purchase/new" element={<NewPurchase />} />

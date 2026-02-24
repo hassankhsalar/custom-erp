@@ -84,6 +84,7 @@ const Sidebar = () => {
       permissionKey: ['purchases_read', 'purchases_create'],
       subItems: [
         { name: 'All Purchase', path: '/purchase/all', icon: <Package size={16} />, permissionKey: 'purchases_read' },
+        { name: 'All Returns', path: '/purchase/returns', icon: <Undo2 size={16} />, permissionKey: 'purchases_read' },
         { name: 'New Purchase', path: '/purchase/new', icon: <ShoppingCart size={16} />, permissionKey: 'purchases_create' },
         { name: 'Purchase Return', path: '/purchase/return', icon: <Recycle size={16} />, permissionKey: 'purchases_create' },
         { name: 'All Supplier', path: '/purchase/all-supplier', icon: <Users size={16} />, permissionKey: ['supplier_read', 'supplier_create'] },
@@ -155,6 +156,7 @@ const Sidebar = () => {
         { name: 'Products Damage Records', path: '/scraprecord', icon: <Box size={16} />, permissionKey: 'damage_read' },
         { name: 'Material Damage Records', path: '/materialscraprecord', icon: <Package size={16} />, permissionKey: 'damage_read' },
         { name: 'Damage Return', path: '/purchase/damage-return', icon: <Undo2 size={16} />, permissionKey: 'damage_create' },
+        { name: 'All Damage Returns', path: '/purchase/returns?type=damage_return', icon: <ClipboardList size={16} />, permissionKey: 'damage_read' },
       ] 
     },
 

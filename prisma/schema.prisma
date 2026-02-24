@@ -447,6 +447,8 @@ model Material {
   materialRepairItem  MaterialRepairItem[]
   ScrapMaterial       ScrapMaterial[]
   purchaseShipmentItems PurchaseShipmentItem[]
+  purchaseReturnItems     PurchaseReturnItem[]
+  purchaseReturnCompensationItems PurchaseReturnCompensationItem[]
   transferReceiptItems TransferReceiptItem[]
   warranties            UserWarranty[]
   requisitionItems      RequisitionItem[]
@@ -542,6 +544,8 @@ model Product {
   productRepairItem       ProductRepairItem[]
   scrapProduct            ScrapProduct[]
   purchaseShipmentItems   PurchaseShipmentItem[]
+  purchaseReturnItems     PurchaseReturnItem[]
+  purchaseReturnCompensationItems PurchaseReturnCompensationItem[]
   transferReceiptItems    TransferReceiptItem[]
   requisitionItems        RequisitionItem[]
   requisitionSectionItems RequisitionSectionItem[]
@@ -732,6 +736,7 @@ model PurchaseItem {
   totalPrice Float
   createdAt  DateTime @default(now())
   shipmentItems PurchaseShipmentItem[]
+  purchaseReturnItems PurchaseReturnItem[]
 
   @@unique([purchaseId, productId, materialId])
   @@index([productId])
@@ -794,10 +799,25 @@ model PurchaseReturn {
   updatedAt             DateTime @updatedAt
   items                 PurchaseReturnItem[]
   compensationShipments PurchaseReturnCompensationShipment[]
+  compensationPayments  PurchaseReturnPayment[]
 
   @@index([purchaseId])
   @@index([supplierId])
   @@index([returnType])
+  @@index([createdAt])
+}
+
+model PurchaseReturnPayment {
+  id                Int      @id @default(autoincrement())
+  purchaseReturnId  Int
+  purchaseReturn    PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
+  amount            Float
+  paymentMethod     String   @default("cash")
+  note              String?
+  createdById       Int?
+  createdAt         DateTime @default(now())
+
+  @@index([purchaseReturnId])
   @@index([createdAt])
 }
 
