@@ -32,47 +32,103 @@ async function createManyInChunks(model, data, chunkSize = 1000) {
   }
 }
 
+async function safeDelete(model) {
+  if (!prisma[model] || typeof prisma[model].deleteMany !== 'function') return;
+  await prisma[model].deleteMany();
+}
+
 async function main() {
   console.log('Cleaning up existing data...');
+  const cleanupOrder = [
+    // Operational / child tables first
+    'activityLog',
+    'saleEditAccessRequest',
+    'warrantyClaim',
+    'userWarranty',
+    'saleReturnItem',
+    'saleReturn',
+    'saleItem',
+    'sale',
+    'purchaseReturnCompensationItem',
+    'purchaseReturnCompensationShipment',
+    'purchaseReturnPayment',
+    'purchaseReturnItem',
+    'purchaseReturn',
+    'purchaseShipmentItem',
+    'purchaseShipment',
+    'purchaseItem',
+    'purchase',
+    'transferReceiptItem',
+    'transferReceipt',
+    'transferItem',
+    'transfer',
+    'requisitionSectionItem',
+    'requisitionSection',
+    'requisitionItem',
+    'requisition',
+    'productionMaterial',
+    'productionProducts',
+    'production',
+    'repairOrderItem',
+    'repairOrder',
+    'damageRecordItem',
+    'damageRecord',
+    'productRepairItem',
+    'productRepair',
+    'materialRepairItem',
+    'materialRepair',
+    'scrapProduct',
+    'scrapProductRecord',
+    'scrapMaterial',
+    'scrapMaterialRecord',
+    'stockAdjustment',
+    'transactions',
+    'cashRegisterRecord',
+    'cashRegisterWithdraw',
+    'cashRegisterAssignment',
+    'entityAccount',
+    'expense',
+    'expenseCategory',
+    'salary',
+    'leaveApproval',
+    'leaveRequest',
+    'leaveCategory',
+    'holiday',
+    'clockInOut',
+    'employeeProfile',
+    'userManager',
+    'userAssociate',
+    'dailyStockSnapshotItem',
+    'dailyStockSnapshot',
+    'productMaterial',
+    'storeProduct',
+    'shopProduct',
+    'factoryProduct',
+    'storeMaterial',
+    'shopMaterial',
+    'factoryMaterial',
+    'notification',
+    'profile',
 
-  await prisma.notification.deleteMany();
-  await prisma.cashRegisterAssignment.deleteMany();
-  await prisma.entityAccount.deleteMany();
-  await prisma.userAssociate.deleteMany();
-  await prisma.cashRegisterRecord.deleteMany();
-  await prisma.cashRegisterWithdraw.deleteMany();
-  await prisma.transactions.deleteMany();
-  await prisma.saleReturnItem.deleteMany();
-  await prisma.saleReturn.deleteMany();
-  await prisma.saleItem.deleteMany();
-  await prisma.sale.deleteMany();
-  await prisma.purchaseShipmentItem.deleteMany();
-  await prisma.purchaseShipment.deleteMany();
-  await prisma.purchaseItem.deleteMany();
-  await prisma.purchase.deleteMany();
-  await prisma.transferItem.deleteMany();
-  await prisma.transfer.deleteMany();
-  await prisma.productionMaterial.deleteMany();
-  await prisma.productionProducts.deleteMany();
-  await prisma.production.deleteMany();
-  await prisma.productMaterial.deleteMany();
-  await prisma.storeProduct.deleteMany();
-  await prisma.shopProduct.deleteMany();
-  await prisma.storeMaterial.deleteMany();
-  await prisma.shopMaterial.deleteMany();
-  await prisma.factoryProduct.deleteMany();
-  await prisma.factoryMaterial.deleteMany();
-  await prisma.product.deleteMany();
-  await prisma.material.deleteMany();
-  await prisma.supplier.deleteMany();
-  await prisma.shop.deleteMany();
-  await prisma.store.deleteMany();
-  await prisma.factory.deleteMany();
-  await prisma.bankAccount.deleteMany();
-  await prisma.accounts.deleteMany();
-  await prisma.cashRegister.deleteMany();
-  await prisma.user.deleteMany();
-  await prisma.permission.deleteMany();
+    // Master tables / parent tables
+    'customer',
+    'supplier',
+    'shop',
+    'store',
+    'factory',
+    'product',
+    'material',
+    'bankAccount',
+    'accounts',
+    'cashRegister',
+    'businessSettings',
+    'user',
+    'permission',
+  ];
+
+  for (const model of cleanupOrder) {
+    await safeDelete(model);
+  }
 
   console.log('Existing data cleaned up.');
 
@@ -134,6 +190,11 @@ async function main() {
         'supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete',
         'general_settings_edit', 'company_settings_edit', 'notification_read',
         'data_import', 'data_export',
+        
+        // Compatibility aliases (old/new permission key variants)
+        'product_update', 'material_update', 'customer_update', 'supplier_update',
+        'sales_update', 'purchases_update', 'production_update',
+        'transfers_update', 'store_update', 'shop_update', 'factory_update',
       ],
     },
   });
@@ -751,6 +812,116 @@ async function main() {
     await prisma.production.create({ data: production });
   }
 
+  console.log('Seeding combined damage records (120)...');
+  for (let i = 0; i < 120; i += 1) {
+    const fromType = pick(['store', 'shop', 'factory']);
+    const fromId =
+      fromType === 'store'
+        ? pick(stores).id
+        : fromType === 'shop'
+          ? pick(shops).id
+          : pick(factories).id;
+
+    const itemCount = randInt(1, 4);
+    const items = [];
+    let totalLoss = 0;
+    for (let j = 0; j < itemCount; j += 1) {
+      const itemType = pick(['product', 'material']);
+      if (itemType === 'product') {
+        const product = pick(products);
+        const quantity = randFloat(1, 10, 2);
+        const lossPerUnit = Number((product.cost * randFloat(0.8, 1.2)).toFixed(2));
+        totalLoss += quantity * lossPerUnit;
+        items.push({
+          itemType: 'product',
+          productId: product.id,
+          quantity,
+          lossPerUnit,
+        });
+      } else {
+        const material = pick(materials);
+        const quantity = randFloat(1, 20, 2);
+        const lossPerUnit = Number((material.unit_cost * randFloat(0.8, 1.2)).toFixed(2));
+        totalLoss += quantity * lossPerUnit;
+        items.push({
+          itemType: 'material',
+          materialId: material.id,
+          quantity,
+          lossPerUnit,
+        });
+      }
+    }
+
+    await prisma.damageRecord.create({
+      data: {
+        reason: pick(['Broken', 'Damaged in handling', 'Defect', 'Expired']),
+        note: `Seeded damage record ${i + 1}`,
+        fromType,
+        fromId,
+        totalLoss: Number(totalLoss.toFixed(2)),
+        items: { create: items },
+      },
+    });
+  }
+
+  console.log('Seeding combined repair orders (120)...');
+  for (let i = 0; i < 120; i += 1) {
+    const fromType = pick(['store', 'shop', 'factory']);
+    const fromId =
+      fromType === 'store'
+        ? pick(stores).id
+        : fromType === 'shop'
+          ? pick(shops).id
+          : pick(factories).id;
+
+    const itemsCount = randInt(1, 3);
+    const items = [];
+    for (let j = 0; j < itemsCount; j += 1) {
+      const itemType = pick(['product', 'material']);
+      if (itemType === 'product') {
+        items.push({
+          itemType: 'product',
+          productId: pick(products).id,
+          quantity: randFloat(1, 8, 2),
+          success: 0,
+          fail: 0,
+        });
+      } else {
+        items.push({
+          itemType: 'material',
+          materialId: pick(materials).id,
+          quantity: randFloat(1, 12, 2),
+          success: 0,
+          fail: 0,
+        });
+      }
+    }
+
+    await prisma.repairOrder.create({
+      data: {
+        reference: `REP-${String(i + 1).padStart(6, '0')}`,
+        destination: pick(['Vendor A', 'Service Center', 'In-house Unit']),
+        shippingCost: randFloat(0, 2000, 2),
+        note: `Seeded repair order ${i + 1}`,
+        status: pick(['pending', 'in_progress', 'completed']),
+        from: fromType,
+        fromId,
+        accountId: pick(accounts).id,
+        createdById: admin.id,
+        items: { create: items },
+      },
+    });
+  }
+
+  await prisma.businessSettings.createMany({
+    data: [
+      { key: 'company', value: { name: 'BSP Engineering', country: 'BD' } },
+      { key: 'sales', value: { allowNegativeStock: false } },
+      { key: 'purchases', value: { requireApproval: false } },
+    ],
+    skipDuplicates: true,
+  });
+
   console.log('✅ Seeding completed successfully!');
   console.log(`Created ${await prisma.permission.count()} permissions`);
   console.log(`Created ${await prisma.user.count()} users`);
@@ -768,6 +939,8 @@ async function main() {
   console.log(`Created ${await prisma.sale.count()} sales`);
   console.log(`Created ${await prisma.transfer.count()} transfers`);
   console.log(`Created ${await prisma.notification.count()} notifications`);
+  console.log(`Created ${await prisma.damageRecord.count()} damage records`);
+  console.log(`Created ${await prisma.repairOrder.count()} repair orders`);
   console.log(`Created ${await prisma.cashRegisterAssignment.count()} cash register assignments`);
   console.log(`Created ${await prisma.entityAccount.count()} entity accounts`);
   console.log(`Created ${await prisma.userAssociate.count()} user associates`);
