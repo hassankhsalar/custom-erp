@@ -2,7 +2,21 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
-import { Image as ImageIcon, X, Upload } from 'lucide-react';
+import { 
+  Image as ImageIcon, 
+  X, 
+  Upload, 
+  Eye, 
+  Layers, 
+  DollarSign, 
+  Package, 
+  TrendingUp, 
+  Factory, 
+  Pen, 
+  Trash2,
+  AlertCircle,
+  CheckCircle
+} from 'lucide-react';
 
 const EditProduct = () => {
   const { id } = useParams();
@@ -19,6 +33,7 @@ const EditProduct = () => {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [selectedImageFile, setSelectedImageFile] = useState(null);
+  const [expandedMaterialDetails, setExpandedMaterialDetails] = useState(null);
 
   // Function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -36,74 +51,87 @@ const EditProduct = () => {
   };
 
   useEffect(() => {
-  const fetchProduct = async () => {
-    if (!token) {
-      alert('Authentication required. Please login.');
-      navigate('/login');
-      return;
-    }
-
-    try {
-      const response = await axios.get(`${API_ROUTES.PRODUCTS}/${id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      setProduct(response.data);
-      setMaterials(response.data.materials.map(m => ({...m, material_name: m.material.name})));
-      
-      if (response.data.image) {
-        setImagePreview(getImageUrl(response.data.image));
-      }
-      
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching product:', error);
-      
-      // Handle authentication errors
-      if (error.response?.status === 401) {
-        alert('Session expired. Please login again.');
-        localStorage.removeItem('token');
+    const fetchProduct = async () => {
+      if (!token) {
+        alert('Authentication required. Please login.');
         navigate('/login');
-      } else if (error.response?.status === 403) {
-        alert('Permission denied. You do not have access to this product.');
+        return;
       }
-      
-      setLoading(false);
-    }
-  };
 
-  const fetchMaterials = async () => {
-    if (!token) return;
-    
-    try {
-      const response = await axios.get(API_ROUTES.MATERIALS, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      setAllMaterials(response.data.materials);
-    } catch (error) {
-      console.error('Error fetching materials:', error);
-      
-      // Handle authentication errors
-      if (error.response?.status === 401) {
-        alert('Session expired. Please login again.');
-        localStorage.removeItem('token');
-        navigate('/login');
-      } else if (error.response?.status === 403) {
-        alert('Permission denied. You do not have access to materials.');
+      try {
+        const response = await axios.get(`${API_ROUTES.PRODUCTS}/${id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        // Ensure all fields are present with defaults if missing
+        const productData = {
+          name: response.data.name || '',
+          description: response.data.description || '',
+          sale_price: response.data.sale_price || '',
+          wholesale_price: response.data.wholesale_price || '',
+          cost: response.data.cost || '',
+          stock: response.data.stock || 0,
+          alert_quantity: response.data.alert_quantity || '0',
+          category: response.data.category || '',
+          barcode: response.data.barcode || '',
+          image: response.data.image || null,
+        };
+        
+        setProduct(productData);
+        setMaterials(response.data.materials.map(m => ({...m, material_name: m.material.name})));
+        
+        if (response.data.image) {
+          setImagePreview(getImageUrl(response.data.image));
+        }
+        
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching product:', error);
+        
+        if (error.response?.status === 401) {
+          alert('Session expired. Please login again.');
+          localStorage.removeItem('token');
+          navigate('/login');
+        } else if (error.response?.status === 403) {
+          alert('Permission denied. You do not have access to this product.');
+        }
+        
+        setLoading(false);
       }
-    }
-  };
+    };
 
-  if (token) {
-    fetchProduct();
-    fetchMaterials();
-  }
-}, [id, token, navigate]);
+    const fetchMaterials = async () => {
+      if (!token) return;
+      
+      try {
+        const response = await axios.get(API_ROUTES.MATERIALS, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        setAllMaterials(response.data.materials || []);
+      } catch (error) {
+        console.error('Error fetching materials:', error);
+        
+        if (error.response?.status === 401) {
+          alert('Session expired. Please login again.');
+          localStorage.removeItem('token');
+          navigate('/login');
+        } else if (error.response?.status === 403) {
+          alert('Permission denied. You do not have access to materials.');
+        }
+      }
+    };
+
+    if (token) {
+      fetchProduct();
+      fetchMaterials();
+    }
+  }, [id, token, navigate]);
 
   useEffect(() => {
     if (searchTerm) {
@@ -144,9 +172,11 @@ const EditProduct = () => {
   };
 
   const handleDeleteMaterial = (index) => {
-    const updatedMaterials = [...materials];
-    updatedMaterials.splice(index, 1);
-    setMaterials(updatedMaterials);
+    if (window.confirm('Are you sure you want to remove this material?')) {
+      const updatedMaterials = [...materials];
+      updatedMaterials.splice(index, 1);
+      setMaterials(updatedMaterials);
+    }
   };
 
   const handleEditMaterial = (material, index) => {
@@ -155,59 +185,58 @@ const EditProduct = () => {
     setSearchTerm(material.material_name);
   };
 
+  const toggleMaterialDetails = (index) => {
+    setExpandedMaterialDetails(expandedMaterialDetails === index ? null : index);
+  };
+
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Check file type
     if (!file.type.startsWith('image/')) {
       alert('Please select an image file (jpg, png, gif, etc.)');
       return;
     }
 
-    // Check file size (5MB limit)
     if (file.size > 5 * 1024 * 1024) {
       alert('File size too large. Maximum size is 5MB.');
       return;
     }
 
-    // Create preview
     const reader = new FileReader();
     reader.onloadend = () => {
       setImagePreview(reader.result);
     };
     reader.readAsDataURL(file);
 
-    // Store the file for later upload
     setSelectedImageFile(file);
   };
 
   const uploadImage = async (file) => {
-  const formData = new FormData();
-  formData.append('image', file);
-  
-  try {
-    const response = await axios.post(`${API_ROUTES.UPLOADS}/product`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        'Authorization': `Bearer ${token}`,
-      },
-    });
+    const formData = new FormData();
+    formData.append('image', file);
     
-    return response.data.imageUrl;
-  } catch (error) {
-    console.error('Error uploading image:', error);
-    
-    // Handle authentication errors
-    if (error.response?.status === 401) {
-      alert('Session expired during image upload. Please login again.');
-      localStorage.removeItem('token');
-      navigate('/login');
+    try {
+      const response = await axios.post(`${API_ROUTES.UPLOADS}/product`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      return response.data.imageUrl;
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      
+      if (error.response?.status === 401) {
+        alert('Session expired during image upload. Please login again.');
+        localStorage.removeItem('token');
+        navigate('/login');
+      }
+      
+      throw error;
     }
-    
-    throw error;
-  }
-};
+  };
 
   const removeImage = () => {
     setProduct({ ...product, image: null });
@@ -216,107 +245,87 @@ const EditProduct = () => {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  
-  // Check authentication
-  if (!token) {
-    alert('Authentication required. Please login.');
-    navigate('/login');
-    return;
-  }
-  
-  setUploadingImage(true);
-  
-  try {
-    let imageUrl = product.image;
+    e.preventDefault();
     
-    // Upload image if a new one was selected
-    if (selectedImageFile) {
-      try {
-        imageUrl = await uploadImage(selectedImageFile);
-        setProduct({ ...product, image: imageUrl });
-      } catch (uploadError) {
-        console.error('Image upload failed:', uploadError);
-        alert('Failed to upload image. Product will be updated without changing the image.');
-      }
-    }
-    
-    // Prepare product data
-    const productData = {
-      ...product,
-      sale_price: parseFloat(product.sale_price),
-      wholesale_price: parseFloat(product.wholesale_price),
-      cost: parseFloat(product.cost),
-      stock: parseInt(product.stock),
-      alert_quantity: product.alert_quantity ? parseInt(product.alert_quantity) : 0,
-      image: selectedImageFile ? imageUrl : product.image,
-      materials: materials.map(m => ({
-        material_id: parseInt(m.material_id),
-        material_quantity: parseFloat(m.material_quantity),
-        price: parseFloat(m.price)
-      })),
-    };
-    
-    // Update the product
-    await axios.put(`${API_ROUTES.PRODUCTS}/${id}`, productData, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
-    
-    alert('Product updated successfully!');
-    navigate('/products/all');
-    
-  } catch (error) {
-    console.error('Error updating product:', error);
-    
-    // Handle authentication errors
-    if (error.response?.status === 401) {
-      alert('Session expired. Please login again.');
-      localStorage.removeItem('token');
+    if (!token) {
+      alert('Authentication required. Please login.');
       navigate('/login');
       return;
-    } else if (error.response?.status === 403) {
-      alert('Permission denied. You cannot update this product.');
-      return;
     }
     
-    // Try a simpler approach if the first fails
+    setUploadingImage(true);
+    
     try {
-      const simpleData = {
+      let imageUrl = product.image;
+      
+      if (selectedImageFile) {
+        try {
+          imageUrl = await uploadImage(selectedImageFile);
+        } catch (uploadError) {
+          console.error('Image upload failed:', uploadError);
+          alert('Failed to upload image. Product will be updated without changing the image.');
+        }
+      }
+      
+      const productData = {
         name: product.name,
         description: product.description || '',
         sale_price: parseFloat(product.sale_price),
         wholesale_price: parseFloat(product.wholesale_price),
         cost: parseFloat(product.cost),
-        stock: parseInt(product.stock),
+        stock: parseInt(product.stock) || 0,
+        alert_quantity: product.alert_quantity ? parseInt(product.alert_quantity) : 0,
+        category: product.category || null,
+        barcode: product.barcode || null,
+        image: selectedImageFile ? imageUrl : product.image,
+        materials: materials.map(m => ({
+          material_id: parseInt(m.material_id),
+          material_quantity: parseFloat(m.material_quantity),
+          price: parseFloat(m.price)
+        })),
       };
       
-      await axios.put(`${API_ROUTES.PRODUCTS}/${id}`, simpleData, {
+      await axios.put(`${API_ROUTES.PRODUCTS}/${id}`, productData, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
-      alert('Basic product information updated successfully!');
+      
+      alert('Product updated successfully!');
       navigate('/products/all');
-    } catch (secondError) {
-      console.error('Second attempt failed:', secondError);
-      alert('Error updating product. Please try again.');
+      
+    } catch (error) {
+      console.error('Error updating product:', error);
+      
+      if (error.response?.status === 401) {
+        alert('Session expired. Please login again.');
+        localStorage.removeItem('token');
+        navigate('/login');
+        return;
+      } else if (error.response?.status === 403) {
+        alert('Permission denied. You cannot update this product.');
+        return;
+      }
+      
+      alert(error.response?.data?.error || 'Error updating product. Please try again.');
+    } finally {
+      setUploadingImage(false);
     }
-  } finally {
-    setUploadingImage(false);
-  }
-};
+  };
 
   const selectedMaterial = allMaterials.find(
     (m) => m.id === parseInt(newMaterial.material_id)
   );
 
+  // Calculate total cost of materials
+  const totalMaterialsCost = materials.reduce((sum, mat) => 
+    sum + (parseFloat(mat.price) * parseFloat(mat.material_quantity)), 0
+  );
+
   if (loading) {
     return (
-      <div className="container mx-auto p-4 min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center">
+      <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
         <div className="backdrop-blur-lg bg-white/70 rounded-2xl shadow-2xl p-12 border border-white/30 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading product details...</p>
@@ -328,26 +337,43 @@ const EditProduct = () => {
   if (!product) return <div>Product not found</div>;
 
   return (
-    <div className="container mx-auto p-4 min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
-      <div className="backdrop-blur-lg bg-white/70 rounded-2xl shadow-2xl p-6 border border-white/30">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-amber-600 to-amber-700 bg-clip-text text-transparent">
-              Edit Product
-            </h1>
-            <p className="text-gray-600 mt-2">Update product details and materials</p>
+    <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+      {/* Background decorative elements */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-300/20 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-300/20 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-emerald-300/10 rounded-full blur-3xl"></div>
+      </div>
+
+      <div className="relative w-full mx-auto">
+        {/* Header Card */}
+        <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-blue-100/50 mb-6 p-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-4 bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl shadow-lg">
+                <Package className="text-white" size={36} />
+              </div>
+              <div>
+                <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
+                  Edit Product
+                </h1>
+                <p className="text-gray-600 mt-2">Update product details and materials</p>
+              </div>
+            </div>
+            
+            <button 
+              onClick={() => navigate('/products/all')}
+              className="flex items-center gap-2 px-6 py-3 bg-gray-100/80 hover:bg-gray-200/80 text-gray-700 hover:text-gray-900 font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 border border-white/60"
+            >
+              <X size={20} />
+              Cancel
+            </button>
           </div>
-          <button 
-            onClick={() => navigate('/products/all')}
-            className="bg-gray-100/80 hover:bg-gray-200/80 text-gray-700 hover:text-gray-900 px-4 py-2.5 rounded-lg font-medium transition-all duration-200 hover:shadow-md backdrop-blur-sm border border-gray-300/50"
-          >
-            ← Back to Products
-          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Product Details Card */}
-          <div className="backdrop-blur-sm bg-white/50 rounded-xl p-6 border border-white/40 shadow-lg">
+          <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
             <h2 className="text-xl font-semibold mb-6 text-gray-800 flex items-center">
               <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -360,7 +386,6 @@ const EditProduct = () => {
               <div className="lg:col-span-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Product Image</label>
                 <div className="space-y-4">
-                  {/* Image Preview */}
                   <div className="relative group">
                     <div className="w-full aspect-square rounded-xl overflow-hidden border-2 border-dashed border-gray-300/50 bg-gray-50/50 flex items-center justify-center">
                       {imagePreview ? (
@@ -379,14 +404,23 @@ const EditProduct = () => {
                           </button>
                         </>
                       ) : (
-                        <div className="text-center p-6">
-                          <ImageIcon className="w-16 h-16 text-gray-400 mx-auto mb-3" />
-                          <p className="text-sm text-gray-500">No image uploaded</p>
-                        </div>
+                        <label className="w-full h-full cursor-pointer flex items-center justify-center">
+                          <div className="text-center p-6">
+                            <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                            <p className="text-sm text-gray-600 font-medium">Click to upload</p>
+                            <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 5MB</p>
+                          </div>
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            accept="image/*"
+                            onChange={handleImageChange}
+                            disabled={uploadingImage}
+                          />
+                        </label>
                       )}
                     </div>
                     
-                    {/* Upload Progress */}
                     {uploadingImage && (
                       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center rounded-xl">
                         <div className="text-center">
@@ -397,34 +431,22 @@ const EditProduct = () => {
                     )}
                   </div>
 
-                  {/* Upload Button */}
-                  <div>
-                    <input
-                      type="file"
-                      id="image-upload"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="hidden"
-                      disabled={uploadingImage}
-                    />
-                    <label
-                      htmlFor="image-upload"
-                      className={`flex items-center justify-center w-full p-4 rounded-lg border-2 border-dashed border-blue-300/50 bg-blue-50/30 cursor-pointer transition-all duration-200 hover:bg-blue-50/50 hover:border-blue-400/50 hover:shadow-md ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  {imagePreview && (
+                    <button
+                      type="button"
+                      onClick={() => window.open(imagePreview, '_blank')}
+                      className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
                     >
-                      <div className="text-center">
-                        <Upload className="w-6 h-6 text-blue-500 mx-auto mb-2" />
-                        <p className="text-sm font-medium text-blue-600">
-                          {uploadingImage ? 'Uploading...' : 'Upload New Image'}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">JPG, PNG, GIF up to 5MB</p>
-                      </div>
-                    </label>
-                    {selectedImageFile && !uploadingImage && (
-                      <p className="text-xs text-green-600 mt-2 text-center">
-                        ✓ New image selected. It will be uploaded when you save.
-                      </p>
-                    )}
-                  </div>
+                      <Eye size={16} />
+                      View Full Preview
+                    </button>
+                  )}
+                  
+                  {selectedImageFile && !uploadingImage && (
+                    <p className="text-xs text-green-600 mt-2 text-center">
+                      ✓ New image selected. It will be uploaded when you save.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -443,62 +465,59 @@ const EditProduct = () => {
                   />
                 </div>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                  <textarea 
-                    name="description" 
-                    value={product.description} 
-                    onChange={handleProductChange} 
-                    placeholder="Product description..." 
-                    rows="3"
-                    className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 resize-none"
-                  ></textarea>
-                </div>
-                
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Sale Price *</label>
-                    <input 
-                      type="number" 
-                      name="sale_price" 
-                      value={product.sale_price} 
-                      onChange={handleProductChange} 
-                      placeholder="0.00" 
-                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200" 
-                      required 
-                      min="0"
-                      step="0.01"
-                    />
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                      <input 
+                        type="number" 
+                        name="sale_price" 
+                        value={product.sale_price} 
+                        onChange={handleProductChange} 
+                        placeholder="0.00" 
+                        className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200" 
+                        required 
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Wholesale Price *</label>
-                    <input 
-                      type="number" 
-                      name="wholesale_price" 
-                      value={product.wholesale_price} 
-                      onChange={handleProductChange} 
-                      placeholder="0.00" 
-                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200" 
-                      required 
-                      min="0"
-                      step="0.01"
-                    />
+                    <div className="relative">
+                      <TrendingUp className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                      <input 
+                        type="number" 
+                        name="wholesale_price" 
+                        value={product.wholesale_price} 
+                        onChange={handleProductChange} 
+                        placeholder="0.00" 
+                        className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200" 
+                        required 
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Cost *</label>
-                    <input 
-                      type="number" 
-                      name="cost" 
-                      value={product.cost} 
-                      onChange={handleProductChange} 
-                      placeholder="0.00" 
-                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-all duration-200" 
-                      required 
-                      min="0"
-                      step="0.01"
-                    />
+                    <div className="relative">
+                      <Factory className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                      <input 
+                        type="number" 
+                        name="cost" 
+                        value={product.cost} 
+                        onChange={handleProductChange} 
+                        placeholder="0.00" 
+                        className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-red-500/30 focus:border-red-500 transition-all duration-200" 
+                        required 
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
                   </div>
                 </div>
                 
@@ -523,7 +542,7 @@ const EditProduct = () => {
                     <input 
                       type="number" 
                       name="alert_quantity" 
-                      value={product.alert_quantity || ''} 
+                      value={product.alert_quantity === '0' ? '' : product.alert_quantity}
                       onChange={handleProductChange} 
                       placeholder="Low stock alert level" 
                       className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all duration-200" 
@@ -532,23 +551,8 @@ const EditProduct = () => {
                     />
                   </div>
                 </div>
-                
-                {/* Additional fields if they exist in your product model */}
-                {product.category !== undefined && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                    <input 
-                      type="text" 
-                      name="category" 
-                      value={product.category || ''} 
-                      onChange={handleProductChange} 
-                      placeholder="Product category" 
-                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                    />
-                  </div>
-                )}
-                
-                {product.barcode !== undefined && (
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Barcode</label>
                     <input 
@@ -557,21 +561,43 @@ const EditProduct = () => {
                       value={product.barcode || ''} 
                       onChange={handleProductChange} 
                       placeholder="Product barcode" 
-                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-gray-500/30 focus:border-gray-500 transition-all duration-200"
                     />
                   </div>
-                )}
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                    <input 
+                      type="text" 
+                      name="category" 
+                      value={product.category || ''} 
+                      onChange={handleProductChange} 
+                      placeholder="Product category" 
+                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-gray-500/30 focus:border-gray-500 transition-all duration-200"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                  <textarea 
+                    name="description" 
+                    value={product.description} 
+                    onChange={handleProductChange} 
+                    placeholder="Product description..." 
+                    rows="4"
+                    className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 resize-none"
+                  ></textarea>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Materials Section */}
-          <div className="backdrop-blur-sm bg-white/50 rounded-xl p-6 border border-white/40 shadow-lg">
+          <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-semibold text-gray-800 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
+                <Layers className="w-5 h-5 mr-2 text-purple-600" />
                 Materials
               </h2>
               <span className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1.5 rounded-full backdrop-blur-sm border border-blue-200/50">
@@ -581,67 +607,116 @@ const EditProduct = () => {
 
             {/* Materials Table */}
             {materials.length > 0 ? (
-              <div className="mb-6 overflow-hidden rounded-lg border border-gray-200/50 bg-white/60 backdrop-blur-sm">
-                <table className="min-w-full">
+              <div className="mb-6 overflow-hidden rounded-xl border border-white/60 bg-white/40 backdrop-blur-sm">
+                <table className="w-full text-sm">
                   <thead className="bg-gradient-to-r from-gray-800 to-gray-700 text-white">
                     <tr>
-                      <th className="py-3 px-4 text-left font-medium">Material</th>
-                      <th className="py-3 px-4 text-left font-medium">Quantity</th>
-                      <th className="py-3 px-4 text-left font-medium">Price</th>
-                      <th className="py-3 px-4 text-left font-medium">Total</th>
-                      <th className="py-3 px-4 text-left font-medium">Actions</th>
+                      <th className="py-4 px-6 text-left font-medium">Material</th>
+                      <th className="py-4 px-6 text-left font-medium">Quantity</th>
+                      <th className="py-4 px-6 text-left font-medium">Price</th>
+                      <th className="py-4 px-6 text-left font-medium">Total</th>
+                      <th className="py-4 px-6 text-left font-medium">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200/50">
-                    {materials.map((mat, index) => (
-                      <tr key={index} className="hover:bg-gray-50/50 transition-colors duration-150">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center space-x-2">
-                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                            <span className="font-medium text-gray-800">{mat.material_name}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-1 rounded-full">
-                            {mat.material_quantity}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 font-medium text-gray-900">
-                          ${parseFloat(mat.price).toFixed(2)}
-                        </td>
-                        <td className="py-3 px-4 font-semibold text-gray-900">
-                          ${(parseFloat(mat.price) * parseFloat(mat.material_quantity)).toFixed(2)}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex space-x-2">
-                            <button 
-                              type="button" 
-                              onClick={() => handleEditMaterial(mat, index)} 
-                              className="bg-amber-500/90 hover:bg-amber-600 text-white p-2 px-4 rounded-lg text-sm font-medium transition-all duration-200 hover:shadow-md backdrop-blur-sm"
-                            >
-                              Edit
-                            </button>
-                            <button 
-                              type="button" 
-                              onClick={() => handleDeleteMaterial(index)} 
-                              className="bg-red-500/90 hover:bg-red-600 text-white p-2 px-4 rounded-lg text-sm font-medium transition-all duration-200 hover:shadow-md backdrop-blur-sm"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {materials.map((mat, index) => {
+                      const total = parseFloat(mat.price) * parseFloat(mat.material_quantity);
+                      
+                      return (
+                        <React.Fragment key={index}>
+                          <tr className="hover:bg-white/30 transition-colors duration-150">
+                            <td className="py-4 px-6">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                                <span className="font-medium text-gray-800">{mat.material_name}</span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6">
+                              <span className="bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-1 rounded-full">
+                                {mat.material_quantity}
+                              </span>
+                            </td>
+                            <td className="py-4 px-6 font-medium text-gray-900">
+                              ${parseFloat(mat.price).toFixed(2)}
+                            </td>
+                            <td className="py-4 px-6 font-semibold text-gray-900">
+                              ${total.toFixed(2)}
+                            </td>
+                            <td className="py-4 px-6">
+                              <div className="flex items-center gap-2">
+                                <button 
+                                  type="button" 
+                                  onClick={() => handleEditMaterial(mat, index)} 
+                                  className="p-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors duration-300"
+                                  title="Edit"
+                                >
+                                  <Pen size={16} />
+                                </button>
+                                <button 
+                                  type="button" 
+                                  onClick={() => handleDeleteMaterial(index)} 
+                                  className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                                <button 
+                                  type="button" 
+                                  onClick={() => toggleMaterialDetails(index)} 
+                                  className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-300"
+                                  title="Details"
+                                >
+                                  <Eye size={16} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          
+                          {/* Expanded Material Details */}
+                          {expandedMaterialDetails === index && (
+                            <tr className="border-t border-blue-100/50 bg-blue-50/30">
+                              <td colSpan="5" className="p-4">
+                                <div className="backdrop-blur-sm bg-white/50 rounded-xl p-4 border border-white/40">
+                                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Material Details</h4>
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div>
+                                      <p className="text-xs text-gray-500">Quantity</p>
+                                      <p className="font-medium">{mat.material_quantity} units</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-gray-500">Unit Price</p>
+                                      <p className="font-medium">${parseFloat(mat.price).toFixed(2)}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-xs text-gray-500">Total Cost</p>
+                                      <p className="font-medium text-purple-600">${total.toFixed(2)}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
+                
+                {/* Materials Summary */}
+                <div className="bg-gradient-to-r from-purple-50/50 to-blue-50/50 p-4 border-t border-white/60">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-700">Total Materials Cost:</span>
+                    <span className="text-lg font-bold text-purple-600">${totalMaterialsCost.toFixed(2)}</span>
+                  </div>
+                </div>
               </div>
             ) : (
-              <div className="text-center py-8 mb-6 backdrop-blur-sm bg-gray-50/50 rounded-lg border border-gray-200/50">
-                <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <p className="text-gray-600 mb-2">No materials added yet</p>
-                <p className="text-sm text-gray-500">Add materials to create your product</p>
+              <div className="text-center py-12 mb-6 backdrop-blur-sm bg-gray-50/50 rounded-xl border border-gray-200/50">
+                <div className="p-4 bg-white/50 rounded-xl inline-block mb-4">
+                  <Layers size={48} className="text-gray-300" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">No Materials Added</h3>
+                <p className="text-gray-600 mb-4">Add materials to this product</p>
               </div>
             )}
 
@@ -653,7 +728,7 @@ const EditProduct = () => {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="🔍 Search for a material..."
-                  className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
+                  className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200"
                 />
                 {filteredMaterials.length > 0 && (
                   <div className="absolute z-20 w-full mt-1 overflow-hidden rounded-lg border border-gray-200/70 bg-white/95 backdrop-blur-lg shadow-xl">
@@ -662,7 +737,7 @@ const EditProduct = () => {
                         <li
                           key={material.id}
                           onMouseDown={() => handleSelectMaterial(material)}
-                          className="p-3 hover:bg-blue-50/80 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors duration-150"
+                          className="p-3 hover:bg-purple-50/80 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors duration-150"
                         >
                           <div className="font-medium text-gray-800">{material.name}</div>
                           {material.unit_cost && (
@@ -708,11 +783,12 @@ const EditProduct = () => {
                   <button 
                     type="button" 
                     onClick={handleAddOrUpdateMaterial} 
+                    disabled={!newMaterial.material_id || !newMaterial.material_quantity || !newMaterial.price}
                     className={`w-full p-3 rounded-lg font-medium transition-all duration-200 backdrop-blur-sm ${
                       editingMaterialIndex !== null 
                         ? 'bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white hover:shadow-lg' 
                         : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white hover:shadow-lg'
-                    }`}
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {editingMaterialIndex !== null ? 'Update Material' : 'Add Material'}
                   </button>

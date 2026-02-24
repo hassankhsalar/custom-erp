@@ -9,6 +9,11 @@ const { buildScope, ensureIdScope } = require("../utils/associateScope");
 // Create a new product with materials
 router.post('/', async (req, res) => {
   const { materials, ...productData } = req.body;
+  const hasCode = Object.keys(productData).some(key => key === 'barcode');
+  if (!hasCode) {
+    let code = Date.now();
+    productData.barcode = code;
+  }
   try {
     const product = await prisma.product.create({
       data: {
@@ -50,6 +55,7 @@ router.get('/', async (req, res) => {
         skip,
         take,
         where,
+        orderBy: { created_at: "desc" },
         include: {
           materials: {
             include: {
@@ -81,7 +87,8 @@ router.get('/all-products', async (req, res) => {
   try {
     const [products, totalCount] = await prisma.$transaction([
       prisma.product.findMany({
-        where
+        where,
+        orderBy: { created_at: "desc" },
       }),
       prisma.product.count({ where }),
     ]);

@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { API_ROUTES } from "../config";
+import { useAuth } from "../App";
 
 const Notifications = () => {
   const [rows, setRows] = useState([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1 });
   const token = localStorage.getItem("token");
+  const { socket } = useAuth();
 
   const fetchRows = async (page = 1, limit = 10) => {
     const params = new URLSearchParams();
@@ -33,6 +36,17 @@ const Notifications = () => {
     init();
   }, []);
 
+  useEffect(() => {
+    if (!socket) return;
+    const handleNewNotification = (notification) => {
+      setRows((prev) => [notification, ...prev].slice(0, pagination.limit));
+    };
+    socket.on("notification:new", handleNewNotification);
+    return () => {
+      socket.off("notification:new", handleNewNotification);
+    };
+  }, [socket, pagination.limit]);
+
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-4">Notifications</h1>
@@ -48,9 +62,12 @@ const Notifications = () => {
           </thead>
           <tbody>
             {rows.map((n) => (
+              console.log(n),
               <tr key={n.id} className="border-t">
                 <td className="p-2">{n.title}</td>
-                <td className="p-2">{n.description || "-"}</td>
+                <td className="p-2">
+                  <Link to={n.link}>{n.description || "-"}</Link>
+                </td>
                 <td className="p-2">{n.isRead ? "Read" : "Unread"}</td>
                 <td className="p-2">{new Date(n.createdAt).toLocaleString()}</td>
               </tr>

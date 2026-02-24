@@ -19,6 +19,7 @@ import {
   Tag,
   Archive,
   Trash2,
+  Pencil,
   X,
   Building2
 } from 'lucide-react';
@@ -32,6 +33,9 @@ const StoreInventory = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [modal, setModal] = useState({ isOpen: false, data: null });
+  const [editModal, setEditModal] = useState({ isOpen: false, data: null });
+  const [editForm, setEditForm] = useState({ stock: '', sale_price: '', alert_quantity: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
   const token = localStorage.getItem('token');
   
   // Table states
@@ -56,7 +60,7 @@ const StoreInventory = () => {
   const fetchStores = async () => {
     try {
       console.log('Fetching stores...');
-      const response = await fetch(`${API_ROUTES.STORES}?pagination=false`, {
+      const response = await fetch(`${API_ROUTES.STORES}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -72,7 +76,7 @@ const StoreInventory = () => {
       console.log('Stores fetched:', data);
       
       // Handle both paginated and non-paginated responses
-      const storesList = data.stores || data;
+      const storesList = data.stores || data || [];
       setStores(storesList);
       
       if (storesList.length > 0) {
@@ -118,7 +122,8 @@ const StoreInventory = () => {
         scrap: sp.scrap || 0,
         unit: 'pcs',
         unit_cost: sp.product.cost,
-        sale_price: sp.product.sale_price,
+        sale_price: sp.sale_price ?? sp.product.sale_price,
+        alert_quantity: sp.alert_quantity ?? sp.product.alert_quantity ?? 10,
         wholesale_price: sp.product.wholesale_price,
         description: sp.product.description,
         category: sp.product.category,
@@ -136,7 +141,8 @@ const StoreInventory = () => {
         scrap: sm.scrap || 0,
         unit: sm.material.unit,
         unit_cost: sm.material.unit_cost,
-        sale_price: sm.material.sale_price,
+        sale_price: sm.sale_price ?? sm.material.sale_price,
+        alert_quantity: sm.alert_quantity ?? sm.material.alert_quantity ?? 10,
         description: sm.material.description,
         brand: sm.material.brand,
         barcode: sm.material.barcode,
@@ -159,12 +165,12 @@ const StoreInventory = () => {
           totalScrap: products.reduce((sum, p) => sum + p.scrap, 0)
         },
         lowStock: {
-          materials: materials.filter(m => m.stock <= 10).map(m => ({
+          materials: materials.filter(m => m.stock <= (Number(m.alert_quantity) || 10)).map(m => ({
             name: m.name,
             stock: m.stock,
             unit: m.unit
           })),
-          products: products.filter(p => p.stock <= 10).map(p => ({
+          products: products.filter(p => p.stock <= (Number(p.alert_quantity) || 10)).map(p => ({
             name: p.name,
             stock: p.stock,
             unit: 'pcs'
@@ -206,6 +212,56 @@ const StoreInventory = () => {
     setModal({ isOpen: false, data: null });
   };
 
+  const openEditModal = (item) => {
+    setEditModal({ isOpen: true, data: item });
+    setEditForm({
+      stock: String(item.stock ?? ''),
+      sale_price: item.sale_price === null || item.sale_price === undefined ? '' : String(item.sale_price),
+      alert_quantity: item.alert_quantity === null || item.alert_quantity === undefined ? '' : String(item.alert_quantity),
+    });
+  };
+
+  const closeEditModal = () => {
+    setEditModal({ isOpen: false, data: null });
+    setEditForm({ stock: '', sale_price: '', alert_quantity: '' });
+    setSavingEdit(false);
+  };
+
+  const saveEditModal = async () => {
+    if (!editModal.data || !selectedStore) return;
+    try {
+      setSavingEdit(true);
+      setError(null);
+      const response = await fetch(API_ROUTES.STORE_INVENTORY_ITEM_UPDATE(selectedStore), {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          itemType: editModal.data.type,
+          itemId: editModal.data.id,
+          stock: editForm.stock,
+          sale_price: editForm.sale_price,
+          alert_quantity: editForm.alert_quantity,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update inventory item');
+      }
+
+      await fetchInventory(selectedStore);
+      await fetchSummary(selectedStore);
+      closeEditModal();
+    } catch (err) {
+      setError(err.message || 'Failed to update inventory item');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   // Filter inventory based on search and type
   const filteredInventory = inventory.filter(item => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -241,13 +297,13 @@ const StoreInventory = () => {
     }
   };
 
-  const getStockStatus = (stock) => {
+  const getStockStatus = (stock, alertQty = 10) => {
     if (stock <= 0) return { 
       text: 'Out of Stock', 
       color: 'bg-gradient-to-r from-red-500 to-rose-500',
       icon: <AlertCircle size={14} />
     };
-    if (stock <= 10) return { 
+    if (stock <= alertQty) return { 
       text: 'Low Stock', 
       color: 'bg-gradient-to-r from-amber-500 to-orange-500',
       icon: <AlertCircle size={14} />
@@ -291,7 +347,7 @@ const StoreInventory = () => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl w-full bg-linear-to-br from-emerald-50 via-teal-50 to-cyan-50 p-4 md:p-6">
       {/* Background decorative elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-emerald-300/20 rounded-full blur-3xl"></div>
@@ -304,11 +360,11 @@ const StoreInventory = () => {
         <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-emerald-100/50 mb-6 p-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="p-4 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl shadow-lg">
+              <div className="p-4 bg-linear-to-br from-emerald-500 to-teal-500 rounded-2xl shadow-lg">
                 <Store className="text-white" size={36} />
               </div>
               <div>
-                <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                <h1 className="text-3xl md:text-4xl font-bold bg-linear-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
                   Store Inventory
                 </h1>
                 <p className="text-gray-600 mt-2">Manage store materials and products inventory</p>
@@ -383,7 +439,7 @@ const StoreInventory = () => {
         {/* Statistics Cards */}
         {summary && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div className="backdrop-blur-lg bg-gradient-to-br from-emerald-50/60 to-teal-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="backdrop-blur-lg bg-linear-to-br from-emerald-50/60 to-teal-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Materials Overview</p>
@@ -397,7 +453,7 @@ const StoreInventory = () => {
               </div>
             </div>
             
-            <div className="backdrop-blur-lg bg-gradient-to-br from-teal-50/60 to-cyan-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="backdrop-blur-lg bg-linear-to-br from-teal-50/60 to-cyan-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Products Overview</p>
@@ -411,7 +467,7 @@ const StoreInventory = () => {
               </div>
             </div>
             
-            <div className="backdrop-blur-lg bg-gradient-to-br from-red-50/60 to-rose-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="backdrop-blur-lg bg-linear-to-br from-red-50/60 to-rose-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Scrap Items</p>
@@ -452,7 +508,7 @@ const StoreInventory = () => {
                 }}
                 className={`px-4 py-2 rounded-xl font-medium transition-colors duration-300 ${
                   filterType === 'all'
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white'
+                    ? 'bg-linear-to-r from-emerald-500 to-teal-500 text-white'
                     : 'bg-white/60 hover:bg-white/80 text-gray-700'
                 }`}
               >
@@ -465,7 +521,7 @@ const StoreInventory = () => {
                 }}
                 className={`px-4 py-2 rounded-xl font-medium transition-colors duration-300 ${
                   filterType === 'material'
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white'
+                    ? 'bg-linear-to-r from-emerald-500 to-teal-500 text-white'
                     : 'bg-white/60 hover:bg-white/80 text-gray-700'
                 }`}
               >
@@ -478,7 +534,7 @@ const StoreInventory = () => {
                 }}
                 className={`px-4 py-2 rounded-xl font-medium transition-colors duration-300 ${
                   filterType === 'product'
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white'
+                    ? 'bg-linear-to-r from-emerald-500 to-teal-500 text-white'
                     : 'bg-white/60 hover:bg-white/80 text-gray-700'
                 }`}
               >
@@ -515,7 +571,8 @@ const StoreInventory = () => {
                       <th className="p-4 text-left font-medium text-gray-700">Unit</th>
                       <th className="p-4 text-left font-medium text-gray-700">Avg Cost</th>
                       <th className="p-4 text-left font-medium text-gray-700">Sale Price</th>
-                      <th className="p-4 text-left font-medium text-gray-700">Category/Brand</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Category</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Brand</th>
                       <th className="p-4 text-left font-medium text-gray-700">Status</th>
                       <th className="p-4 text-left font-medium text-gray-700">Scrap</th>
                       <th className="p-4 text-left font-medium text-gray-700">Actions</th>
@@ -523,7 +580,7 @@ const StoreInventory = () => {
                   </thead>
                   <tbody>
                     {paginatedInventory.map((item, index) => {
-                      const stockStatus = getStockStatus(item.stock);
+                      const stockStatus = getStockStatus(item.stock, Number(item.alert_quantity) || 10);
                       
                       return (
                         <tr key={`${item.type}-${item.id}`} className={`border-t border-white/50 hover:bg-white/30 transition-colors duration-200 ${
@@ -571,7 +628,12 @@ const StoreInventory = () => {
                           </td>
                           <td className="p-4">
                             <span className="text-gray-700">
-                              {item.type === 'material' ? item.brand || '-' : item.category || '-'}
+                              { item.brand || '-'}
+                            </span>
+                          </td>
+                          <td className="p-4">
+                            <span className="text-gray-700">
+                              { item.category || '-'}
                             </span>
                           </td>
                           <td className="p-4">
@@ -588,13 +650,22 @@ const StoreInventory = () => {
                             ) : '0'}
                           </td>
                           <td className="p-4">
-                            <button
-                              onClick={() => openDetailsModal(item)}
-                              className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors duration-300"
-                              title="View Details"
-                            >
-                              <Eye size={16} />
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => openDetailsModal(item)}
+                                className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors duration-300"
+                                title="View Details"
+                              >
+                                <Eye size={16} />
+                              </button>
+                              <button
+                                onClick={() => openEditModal(item)}
+                                className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-300"
+                                title="Edit Inventory"
+                              >
+                                <Pencil size={16} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -691,7 +762,7 @@ const StoreInventory = () => {
                               onClick={() => goToPage(pageNum)}
                               className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
                                 currentPage === pageNum
-                                  ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white"
+                                  ? "bg-linear-to-r from-emerald-500 to-teal-500 text-white"
                                   : "hover:bg-white/50 text-gray-700"
                               }`}
                             >
@@ -707,7 +778,7 @@ const StoreInventory = () => {
                               onClick={() => goToPage(totalPages)}
                               className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
                                 currentPage === totalPages
-                                  ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white"
+                                  ? "bg-linear-to-r from-emerald-500 to-teal-500 text-white"
                                   : "hover:bg-white/50 text-gray-700"
                               }`}
                             >
@@ -750,10 +821,10 @@ const StoreInventory = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeModal}></div>
           <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-            <div className="sticky top-0 z-10 p-6 border-b border-white/50 bg-gradient-to-r from-emerald-500/10 to-teal-500/10">
+            <div className="sticky top-0 z-10 p-6 border-b border-white/50 bg-linear-to-r from-emerald-500/10 to-teal-500/10">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl shadow-lg">
+                  <div className="p-3 bg-linear-to-br from-emerald-500 to-teal-500 rounded-xl shadow-lg">
                     {modal.data.type === 'material' ? (
                       <Package className="text-white" size={24} />
                     ) : (
@@ -824,7 +895,7 @@ const StoreInventory = () => {
                       <p className="text-sm text-gray-600">Stock Status</p>
                       <div className="mt-1">
                         {(() => {
-                          const status = getStockStatus(modal.data.stock);
+                          const status = getStockStatus(modal.data.stock, Number(modal.data.alert_quantity) || 10);
                           return (
                             <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-sm font-semibold ${status.color}`}>
                               {status.icon}
@@ -848,19 +919,19 @@ const StoreInventory = () => {
               <div className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-5 mb-6">
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">Pricing Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 bg-gradient-to-r from-emerald-50/50 to-emerald-100/30 rounded-lg">
+                  <div className="p-4 bg-linear-to-r from-emerald-50/50 to-emerald-100/30 rounded-lg">
                     <p className="text-sm text-gray-600 mb-1">Unit Cost</p>
                     <p className="text-2xl font-bold text-emerald-600">
                       ${modal.data.unit_cost?.toFixed(2) || 'N/A'}
                     </p>
                   </div>
-                  <div className="p-4 bg-gradient-to-r from-teal-50/50 to-teal-100/30 rounded-lg">
+                  <div className="p-4 bg-linear-to-r from-teal-50/50 to-teal-100/30 rounded-lg">
                     <p className="text-sm text-gray-600 mb-1">Sale Price</p>
                     <p className="text-2xl font-bold text-teal-600">
                       ${modal.data.sale_price?.toFixed(2) || 'N/A'}
                     </p>
                   </div>
-                  <div className="p-4 bg-gradient-to-r from-purple-50/50 to-purple-100/30 rounded-lg">
+                  <div className="p-4 bg-linear-to-r from-purple-50/50 to-purple-100/30 rounded-lg">
                     <p className="text-sm text-gray-600 mb-1">Average Cost</p>
                     <p className="text-2xl font-bold text-purple-600">
                       ${modal.data.avg_cost?.toFixed(2) || 'N/A'}
@@ -880,16 +951,6 @@ const StoreInventory = () => {
               )}
             </div>
             
-            <div className="sticky bottom-0 p-6 border-t border-white/50 bg-white/80 backdrop-blur-sm">
-              <div className="flex justify-end">
-                <button
-                  onClick={closeModal}
-                  className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
-                >
-                  Close Details
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}

@@ -12,18 +12,18 @@ router.get('/all-assignments', async (req, res) => {
       include: {
         user: {
           select: {
-  id: true,
-  name: true,
-  email: true,
-  username: true,
-  createdAt: true,
-  permission: {
-    select: {
-      name: true,
-      permissions: true
-    }
-  }
-}
+          id: true,
+          name: true,
+          email: true,
+          username: true,
+          createdAt: true,
+          permission: {
+            select: {
+              name: true,
+              permissions: true
+            }
+          }
+        }
         }
       },
       orderBy: { id: 'desc' }
@@ -436,9 +436,7 @@ const formattedAssignment = {
   }
 };
 
-res.status(201).json(formattedAssignment);
-
-    res.status(201).json(assignment);
+    return res.status(201).json(formattedAssignment);
   } catch (error) {
     console.error('Error assigning user:', error);
     res.status(400).json({ error: error.message });

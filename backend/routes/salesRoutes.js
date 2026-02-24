@@ -131,7 +131,8 @@ router.get("/", async (req, res) => {
       include: { 
         saleItems: {
           include: {
-            product: true
+            product: true,
+            material: true
           }
         }, 
         store: true 

@@ -65,7 +65,8 @@ import {
   History,
   LogOut,
   Activity,
-  BanknoteIcon
+  BanknoteIcon,
+  Bell
 } from "lucide-react";
 import { API_ROUTES } from '../../config';
 
@@ -93,7 +94,7 @@ export default function PermissionsManagement() {
   const allPermissions = [
     // Product and material management permissions
     'material_create', 'material_read', 'material_edit', 'material_delete',
-    'product_read', 'product_create', 'product_edit', 'product_delete',
+    'product_read', 'product_create', 'product_edit', 'product_update', 'product_delete',
     'unit_read', 'unit_create', 'unit_edit', 'unit_delete',
     'brand_read', 'brand_create', 'brand_edit', 'brand_delete',
     'product_category_read', 'product_category_create', 'product_category_edit', 'product_category_delete',
@@ -122,11 +123,11 @@ export default function PermissionsManagement() {
     'production_create', 'production_edit', 'production_delete', 'production_read', 'production_change_status', 
 
     // Add sales permissions
-    'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_add_payment',
+    'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_edit_any_day', 'sales_open_close', 'sales_add_payment',
     'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read',
 
     // Add transfer permissions
-    'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive',
+    'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive', 'transfer_return',
 
     // Add Wastage/Damage permissions
     'damage_create', 'damage_edit', 'damage_delete', 'damage_read',
@@ -148,7 +149,7 @@ export default function PermissionsManagement() {
     'general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report',
     'sales_report', 'purchases_report', 'stock_report', 'transfer_report',
     'profit_loss_report', 'purchase_sales_report', 'customer_report', 'supplier_report',
-    'best_selling_product_report', 'worst_selling_product_report', 'profit_calender_report',
+    'best_selling_product_report', 'worst_selling_product_report', 'profit_calender_report', 'production_report', 'wastage_report',
 
     // Add user management permissions
     'user_create', 'user_edit', 'user_delete', 'user_read', 'user_activate_deactivate', 'user_logout', 'user_associate_create', 'user_activity_log_read',
@@ -157,10 +158,16 @@ export default function PermissionsManagement() {
     'role_create', 'role_edit', 'role_delete', 'role_read',
 
     // Add customer permissions
-    'customer_read', 'customer_create', 'customer_edit', 'customer_delete',
+    'customer_read', 'customer_create', 'customer_edit', 'customer_update', 'customer_delete',
 
     // Add supplier permissions
     'supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete',
+
+    // Requisition permissions
+    'requisition_create', 'requisition_read', 'requisition_update',
+
+    // Notification permissions
+    'notification_read',
 
     // System Management
     'general_settings_edit', 'company_settings_edit', 
@@ -181,7 +188,7 @@ export default function PermissionsManagement() {
       key: 'product',
       name: 'Product',
       icon: <Tag size={18} className="text-purple-500" />,
-      permissions: ['product_read', 'product_create', 'product_edit', 'product_delete']
+      permissions: ['product_read', 'product_create', 'product_edit', 'product_update', 'product_delete']
     },
     // Unit Management
     {
@@ -291,7 +298,7 @@ export default function PermissionsManagement() {
       name: 'Sales',
       icon: <Receipt size={18} className="text-emerald-500" />,
       permissions: [
-        'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_add_payment'
+        'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_edit_any_day', 'sales_open_close', 'sales_add_payment'
       ]
     },
     // Sales Return Management
@@ -306,7 +313,7 @@ export default function PermissionsManagement() {
       key: 'transfer',
       name: 'Transfer',
       icon: <Truck size={18} className="text-gray-600" />,
-      permissions: ['transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive']
+      permissions: ['transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive', 'transfer_return']
     },
     // Damage/Wastage Management
     {
@@ -362,7 +369,7 @@ export default function PermissionsManagement() {
       key: 'customer',
       name: 'Customer',
       icon: <UserCircle size={18} className="text-blue-500" />,
-      permissions: ['customer_read', 'customer_create', 'customer_edit', 'customer_delete']
+      permissions: ['customer_read', 'customer_create', 'customer_edit', 'customer_update', 'customer_delete']
     },
     // Supplier Management
     {
@@ -397,8 +404,22 @@ export default function PermissionsManagement() {
         'general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report',
         'sales_report', 'purchases_report', 'stock_report', 'transfer_report',
         'profit_loss_report', 'purchase_sales_report', 'customer_report', 'supplier_report',
-        'best_selling_product_report', 'worst_selling_product_report', 'profit_calender_report'
+        'best_selling_product_report', 'worst_selling_product_report', 'profit_calender_report', 'production_report', 'wastage_report'
       ]
+    },
+    // Requisition Management
+    {
+      key: 'requisition',
+      name: 'Requisition',
+      icon: <ClipboardList size={18} className="text-violet-500" />,
+      permissions: ['requisition_create', 'requisition_read', 'requisition_update']
+    },
+    // Notifications
+    {
+      key: 'notification',
+      name: 'Notifications',
+      icon: <Bell size={18} className="text-sky-500" />,
+      permissions: ['notification_read']
     },
     // System Management
     {
@@ -757,11 +778,13 @@ export default function PermissionsManagement() {
       'change_status': 'Change Status',
       'add_payment': 'Add Payment',
       'edit_today': 'Edit Today',
+      'edit_any_day': 'Edit Any Day',
       'receive': 'Receive',
       'activate_deactivate': 'Activate/Deactivate',
       'associate_create': 'Create Associate',
       'activity_log_read': 'Activity Log',
-      'report': 'Report'
+      'report': 'Report',
+      'update': 'Update'
     };
     
     return actionMap[action] || 

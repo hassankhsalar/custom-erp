@@ -3,7 +3,7 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// Get all customers
+// Get customers
 router.get("/", async (req, res) => {
   try {
     const { search, page = 1, limit = 10 } = req.query;
@@ -37,6 +37,36 @@ router.get("/", async (req, res) => {
       totalCount,
       currentPage: parseInt(page),
       totalPages: Math.ceil(totalCount / take),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all customers
+router.get("/all-customers", async (req, res) => {
+  try {
+    const { search } = req.query;
+
+    // Build where clause for search
+    const where = search
+      ? {
+          OR: [
+            { name: { contains: search } },
+            { mobile: { contains: search } },
+            { email: { contains: search } },
+          ],
+        }
+      : {};
+
+    // Get paginated customers
+    const customers = await prisma.customer.findMany({
+      where,
+      orderBy: { name: "asc" }
+    });
+
+    res.json({
+      customers
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

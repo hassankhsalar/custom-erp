@@ -1,15 +1,19 @@
-import { ArrowUpDown, ClipboardList, TrendingUp, DollarSign, Calendar, Store, User, Tag, CreditCard, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreVertical, Eye, Edit, Trash2, XCircle, Loader2 } from "lucide-react";
+import { ArrowUpDown, ClipboardList, TrendingUp, DollarSign, Calendar, Store, User, Tag, CreditCard, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreVertical, Eye, Edit, Trash2, XCircle, Loader2, Search } from "lucide-react";
 import { useState, useEffect } from "react";
 import { API_ROUTES } from '../../config';
+import { Link, useNavigate } from "react-router-dom";
+import { usePermission } from "../../hooks/usePermission";
 
 export default function AllSales() {
+  const navigate = useNavigate();
+  const { hasPermission } = usePermission();
+  const canViewEditRequests = hasPermission("sales_open_close");
   const [sales, setSales] = useState([]);
   const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'descending' });
   const [loading, setLoading] = useState(true);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [selectedSale, setSelectedSale] = useState(null);
   const [viewModalOpen, setViewModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [addPaymentModalOpen, setAddPaymentModalOpen] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
@@ -19,9 +23,16 @@ export default function AllSales() {
   const [bankAccounts, setBankAccounts] = useState([]);
   const [paymentNote, setPaymentNote] = useState("");
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [lockActionLoading, setLockActionLoading] = useState(false);
+  const [grantLoading, setGrantLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [editForm, setEditForm] = useState({ customer: "", discount: "" });
   const [activeViewTab, setActiveViewTab] = useState("items");
+  const [allUsers, setAllUsers] = useState([]);
+  const [userSearchTerm, setUserSearchTerm] = useState("");
+  const [editAccessModalOpen, setEditAccessModalOpen] = useState(false);
+  const [selectedSaleForEditAccess, setSelectedSaleForEditAccess] = useState(null);
+  const [editGrantMaxCount, setEditGrantMaxCount] = useState("");
+  const [editGrantDurationMinutes, setEditGrantDurationMinutes] = useState("");
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -32,6 +43,7 @@ export default function AllSales() {
   useEffect(() => {
     fetchSales();
     fetchBankAccounts();
+    fetchUsers();
   }, [currentPage, itemsPerPage]);
 
   const fetchSales = async () => {
@@ -50,18 +62,10 @@ export default function AllSales() {
       
       const data = await response.json();
       
-      // Handle both array and paginated response formats
-      if (Array.isArray(data)) {
-        // Old format (backward compatibility)
-        setSales(data);
-        setTotalPages(Math.ceil(data.length / itemsPerPage));
-        setTotalCount(data.length);
-      } else {
-        // New paginated format
-        setSales(data.sales || []);
-        setTotalPages(data.pagination?.totalPages || 0);
-        setTotalCount(data.pagination?.totalCount || 0);
-      }
+      // Handle paginated response format
+      setSales(data.sales || []);
+      setTotalPages(data.pagination?.totalPages || 0);
+      setTotalCount(data.pagination?.totalCount || 0);
     } catch (error) {
       console.error("Error fetching sales:", error);
     } finally {
@@ -102,24 +106,35 @@ export default function AllSales() {
       direction = 'descending';
     }
     setSortConfig({ key, direction });
-    // Since sorting is handled on backend, we need to fetch with sort params
-    // For now, we'll just update the sort config and the table will re-render with sorted data
   };
 
   const formatSalesData = (sales) => {
-    return sales.map(sale => ({
-      id: sale.id,
-      reference: sale.reference,
-      shop: sale.shop?.name || "-",
-      customer: sale.customer || "-",
-      total: `$${sale.totalAmount?.toFixed(2) || "0.00"}`,
-      discount: `$${sale.discount?.toFixed(2) || "0.00"}`,
-      "grand total": `$${sale.grandTotal?.toFixed(2) || "0.00"}`,
-      paid: `$${sale.paidAmount?.toFixed(2) || "0.00"} (${sale.paymentType || "cash"})`,
-      date: new Date(sale.createdAt).toLocaleDateString(),
-      rawDate: sale.createdAt,
-      actions: ""
-    }));
+    return sales.map(sale => {
+      // Format customer display
+      let customerDisplay = "-";
+      if (sale.customer) {
+        if (typeof sale.customer === 'object') {
+          customerDisplay = sale.customer.name || sale.customer.mobile || "Customer";
+        } else {
+          customerDisplay = sale.customer;
+        }
+      }
+
+      return {
+        id: sale.id,
+        reference: sale.reference,
+        shop: sale.shop?.name || "-",
+        customer: customerDisplay,
+        customerObject: sale.customer, // Store original customer object for details
+        total: `$${sale.totalAmount?.toFixed(2) || "0.00"}`,
+        discount: `$${sale.discount?.toFixed(2) || "0.00"}`,
+        "grand total": `$${sale.grandTotal?.toFixed(2) || "0.00"}`,
+        paid: `$${sale.paidAmount?.toFixed(2) || "0.00"} (${sale.paymentType || "cash"})`,
+        date: new Date(sale.createdAt).toLocaleDateString(),
+        rawDate: sale.createdAt,
+        actions: ""
+      };
+    });
   };
 
   // Apply sorting to the current page's data
@@ -150,7 +165,7 @@ export default function AllSales() {
     }) : 
     formatSalesData(sales);
 
-  // Use sortedData for display (this is the current page's data already from backend)
+  // Use sortedData for display
   const currentItems = sortedData;
 
   // Pagination controls
@@ -173,11 +188,10 @@ export default function AllSales() {
   };
 
   const tableHeaders = sales.length > 0 ? 
-    Object.keys(formatSalesData(sales)[0]).filter(key => key !== 'id' && key !== 'rawDate') : 
+    Object.keys(formatSalesData(sales)[0]).filter(key => key !== 'id' && key !== 'rawDate' && key !== 'customerObject') : 
     ['reference', 'shop', 'customer', 'total', 'discount', 'grand total', 'paid', 'date', 'actions'];
 
-  // Calculate summary statistics from all sales (using totalCount for display, but we don't have all sales data)
-  // For accurate stats, we'd need a separate API endpoint
+  // Calculate summary statistics from current page sales
   const totalRevenue = sales.reduce((sum, sale) => sum + (sale.grandTotal || 0), 0);
   const totalDiscount = sales.reduce((sum, sale) => sum + (sale.discount || 0), 0);
   const averageSale = sales.length > 0 ? totalRevenue / sales.length : 0;
@@ -190,7 +204,7 @@ export default function AllSales() {
       case 'total': return <DollarSign size={14} className="mr-2" />;
       case 'discount': return <Tag size={14} className="mr-2" />;
       case 'grand total': return <TrendingUp size={14} className="mr-2" />;
-      case 'paid': return <CreditCard size={14} className="mr-2" />;
+      case 'payment': return <CreditCard size={14} className="mr-2" />;
       case 'date': return <Calendar size={14} className="mr-2" />;
       default: return <Tag size={14} className="mr-2" />;
     }
@@ -211,12 +225,7 @@ export default function AllSales() {
   };
 
   const handleEdit = (sale) => {
-    setSelectedSale(sale);
-    setEditForm({
-      customer: sale.customer || "",
-      discount: sale.discount || 0
-    });
-    setEditModalOpen(true);
+    navigate(`/sale/edit/${sale.id}`);
     setActiveDropdown(null);
   };
 
@@ -236,29 +245,129 @@ export default function AllSales() {
     setActiveDropdown(null);
   };
 
-  const handleEditSubmit = async () => {
-    if (!selectedSale) return;
+  const fetchUsers = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_ROUTES.SHOP_SALES}/${selectedSale.id}`, {
-        method: "PUT",
+      const res = await fetch(API_ROUTES.USERS, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Failed to fetch users");
+      const data = await res.json();
+      setAllUsers(Array.isArray(data) ? data : []);
+    } catch (_) {
+      setAllUsers([]);
+    }
+  };
+
+  const handleOpenEditAccess = async (sale, userId) => {
+    if (!sale?.canGrantSaleEdit || !userId) return;
+    setGrantLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const payload = { userId };
+      if (String(editGrantMaxCount).trim() !== "") {
+        payload.maxEditCount = Number(editGrantMaxCount);
+      }
+      if (String(editGrantDurationMinutes).trim() !== "") {
+        payload.accessDurationMinutes = Number(editGrantDurationMinutes);
+      }
+      const res = await fetch(API_ROUTES.SHOP_SALES_EDIT_ACCESS_OPEN(sale.id), {
+        method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          customer: editForm.customer,
-          discount: parseFloat(editForm.discount) || 0
-        })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to update sale");
-      setEditModalOpen(false);
-      fetchSales(); // Refresh the list
+      if (!res.ok) throw new Error(data.error || "Failed to open sale edit access");
+      await fetchSales();
+      setEditAccessModalOpen(false);
+      setSelectedSaleForEditAccess(null);
+      setUserSearchTerm("");
+      setEditGrantMaxCount("");
+      setEditGrantDurationMinutes("");
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setGrantLoading(false);
+      setActiveDropdown(null);
+    }
+  };
+
+  const openEditAccessModal = (sale) => {
+    setSelectedSaleForEditAccess(sale);
+    setUserSearchTerm("");
+    setEditGrantMaxCount("");
+    setEditGrantDurationMinutes("");
+    setEditAccessModalOpen(true);
+    setActiveDropdown(null);
+  };
+
+  const handleCloseEditAccess = async (sale) => {
+    setLockActionLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(API_ROUTES.SHOP_SALES_EDIT_ACCESS_CLOSE(sale.id), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to close sale edit access");
+      await fetchSales();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setLockActionLoading(false);
+      setActiveDropdown(null);
+    }
+  };
+
+  const handleSetTransactionStatus = async (sale, status) => {
+    setLockActionLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(API_ROUTES.SHOP_SALES_TRANSACTION_STATUS(sale.id), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ status })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update transaction status");
+      await fetchSales();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setLockActionLoading(false);
+      setActiveDropdown(null);
+    }
+  };
+
+  const handleRequestEditAccess = async (sale) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(API_ROUTES.SHOP_SALES_EDIT_ACCESS_REQUEST(sale.id), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to request edit access");
+      alert(data.message || "Edit access request sent.");
+      setActiveDropdown(null);
     } catch (err) {
       alert(err.message);
     }
   };
+
 
   const handleDeleteSubmit = async () => {
     if (!selectedSale) return;
@@ -283,8 +392,8 @@ export default function AllSales() {
   const handlePaymentSubmit = async () => {
     if (!selectedSale) return;
     const amount = parseFloat(paymentAmount);
-    if (!amount || amount <= 0) {
-      alert("Payment amount must be greater than 0");
+    if (!amount || amount === 0) {
+      alert("Payment amount cannot be zero");
       return;
     }
     if (["bank", "card"].includes(paymentMethod) && !bankAccountId) {
@@ -309,9 +418,10 @@ export default function AllSales() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to add payment");
+      alert("Payment done!");
       setAddPaymentModalOpen(false);
       await fetchPaymentHistory(selectedSale.id);
-      fetchSales(); // Refresh the list
+      await fetchSales();
     } catch (err) {
       alert(err.message);
     } finally {
@@ -347,9 +457,14 @@ export default function AllSales() {
             </div>
           </div>
           <div className="flex items-center gap-2 glass-tag px-4 py-2 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
+            {canViewEditRequests && (
+              <Link to="/sale/edit-requests" className="px-3 py-1 rounded border bg-white hover:bg-gray-50 text-xs">
+                Edit Requests
+              </Link>
+            )}
             <Filter size={16} className="text-emerald-600" />
             <span className="text-sm font-medium text-gray-700">
-              {totalCount} {totalCount === 1 ? 'Sale' : 'Sales'}
+              {sales.length} {sales.length === 1 ? 'Sale' : 'Sales'}
             </span>
           </div>
         </div>
@@ -403,7 +518,7 @@ export default function AllSales() {
                 {tableHeaders.map((key) => (
                   <th
                     key={key}
-                    className="p-4 text-left font-medium text-gray-700 border-b border-white/20"
+                    className="p-4 text-left font-medium text-gray-700 cursor-pointer border-b border-white/20"
                   >
                     <div className="flex items-center gap-2">
                       {getColumnIcon(key)}
@@ -423,44 +538,48 @@ export default function AllSales() {
               </tr>
             </thead>
             <tbody>
-              {currentItems.map((item, index) => (
-                <tr
-                  key={item.id}
-                  className={`border-t border-white/10 hover:bg-white/10 transition-all duration-200 ${
-                    index % 2 === 0 ? 'bg-white/5' : ''
-                  }`}
-                >
-                  {tableHeaders.map((key) => (
-                    <td key={key} className="p-4">
-                      {key === 'actions' ? (
-                        <div className="relative dropdown-container">
-                          <button
-                            onClick={() => setActiveDropdown(activeDropdown === item.id ? null : item.id)}
-                            className="p-2 hover:bg-gray-100 rounded-lg transition"
-                          >
-                            <MoreVertical size={18} className="text-gray-600" />
-                          </button>
+              {currentItems.map((item, index) => {
+                const sale = sales.find(s => s.id === item.id);
+                return (
+                  <tr
+                    key={item.id}
+                    className={`border-t border-white/10 hover:bg-white/10 transition-all duration-200 ${
+                      index % 2 === 0 ? 'bg-white/5' : ''
+                    }`}
+                    >
+                    {tableHeaders.map((key) => (
+                      <td key={key} className="p-4">
+                        {key === 'actions' ? (
+                          <div className="relative dropdown-container">
+                            <button
+                              onClick={() => setActiveDropdown(activeDropdown === item.id ? null : item.id)}
+                              className="p-2 hover:bg-gray-100 rounded-lg transition"
+                            >
+                              <MoreVertical size={18} className="text-gray-600" />
+                            </button>
 
-                          {activeDropdown === item.id && (
-                            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-10">
-                              <div className="py-1">
-                                <button
-                                  onClick={() => handleView(sales.find(s => s.id === item.id))}
-                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition"
-                                >
-                                  <Eye size={16} />
-                                  View Details
-                                </button>
+                            {activeDropdown === item.id && (
+                              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-10">
+                                <div className="py-1">
+                                  <button
+                                    onClick={() => handleView(sale)}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition"
+                                  >
+                                    <Eye size={16} />
+                                    View Details
+                                  </button>
 
-                                <button
-                                  onClick={() => handleEdit(sales.find(s => s.id === item.id))}
-                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-600 transition"
-                                >
-                                  <Edit size={16} />
-                                  Edit Sale
-                                </button>
+                                {sales.find(s => s.id === item.id)?.canEdit && (
+                                  <button
+                                    onClick={() => handleEdit(sales.find(s => s.id === item.id))}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-600 transition"
+                                  >
+                                    <Edit size={16} />
+                                    Edit Sale
+                                  </button>
+                                )}
 
-                                {calculateDueAmount(sales.find(s => s.id === item.id)) > 0 && (
+                                {calculateDueAmount(sales.find(s => s.id === item.id)) > 0 && !sales.find(s => s.id === item.id)?.isTransactionClosed && (
                                   <button
                                     onClick={() => handleAddPayment(sales.find(s => s.id === item.id))}
                                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-600 transition"
@@ -470,34 +589,90 @@ export default function AllSales() {
                                   </button>
                                 )}
 
-                                <div className="border-t my-1"></div>
+                                {sales.find(s => s.id === item.id)?.canGrantSaleEdit && (
+                                  <button
+                                    onClick={() => openEditAccessModal(sales.find(s => s.id === item.id))}
+                                    disabled={lockActionLoading}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition disabled:opacity-50"
+                                  >
+                                    <User size={16} />
+                                    Open Edit For User
+                                  </button>
+                                )}
 
-                                <button
-                                  onClick={() => handleDelete(sales.find(s => s.id === item.id))}
-                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
-                                >
-                                  <Trash2 size={16} />
-                                  Delete Sale
-                                </button>
+                                {!sales.find(s => s.id === item.id)?.canEdit && (
+                                  <button
+                                    onClick={() => handleRequestEditAccess(sales.find(s => s.id === item.id))}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-violet-50 hover:text-violet-700 transition"
+                                  >
+                                    <Edit size={16} />
+                                    Request Edit Access
+                                  </button>
+                                )}
+
+                                {sales.find(s => s.id === item.id)?.isSaleEditOpen && (
+                                  <button
+                                    onClick={() => handleCloseEditAccess(sales.find(s => s.id === item.id))}
+                                    disabled={lockActionLoading}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-slate-50 hover:text-slate-700 transition disabled:opacity-50"
+                                  >
+                                    <XCircle size={16} />
+                                    Close Edit Access
+                                  </button>
+                                )}
+
+                                {sales.find(s => s.id === item.id)?.canCloseTransaction && !sales.find(s => s.id === item.id)?.isTransactionClosed && (
+                                  <button
+                                    onClick={() => handleSetTransactionStatus(sales.find(s => s.id === item.id), "closed")}
+                                    disabled={lockActionLoading}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition disabled:opacity-50"
+                                  >
+                                    <XCircle size={16} />
+                                    Close Transaction
+                                  </button>
+                                )}
+
+                                {sales.find(s => s.id === item.id)?.canCloseTransaction && sales.find(s => s.id === item.id)?.isTransactionClosed && (
+                                  <button
+                                    onClick={() => handleSetTransactionStatus(sales.find(s => s.id === item.id), "open")}
+                                    disabled={lockActionLoading}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition disabled:opacity-50"
+                                  >
+                                    <Edit size={16} />
+                                    Reopen Transaction
+                                  </button>
+                                )}
+
+                                  <div className="border-t my-1"></div>
+
+                                {sales.find(s => s.id === item.id)?.canDelete && (
+                                  <button
+                                    onClick={() => handleDelete(sales.find(s => s.id === item.id))}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
+                                  >
+                                    <Trash2 size={16} />
+                                    Delete Sale
+                                  </button>
+                                )}
                               </div>
                             </div>
                           )}
                         </div>
-                      ) : key === 'customer' && typeof item.customer === 'object' ? (
+                      ) : key === 'customer' ? (
                         <div className="flex items-center gap-2">
                           <div>
-                            <p className="font-medium text-gray-800">{item.customer.name}</p>
-                            <p className="text-sm text-gray-500">{item.customer.mobile}</p>
+                            <p className="font-medium text-gray-800">{item.customer?.name}</p>
+                            <p className="text-sm text-gray-500">{item.customer?.mobile}</p>
                           </div>
                         </div>
                       ) : (
                         <div className={`flex items-center ${
                           key === 'total' || key === 'grand total' ? 'font-semibold text-gray-900' :
                           key === 'discount' ? 'text-amber-600' :
-                          key === 'paid' ? 'font-medium text-blue-600' :
+                          key === 'payment' ? 'font-medium text-blue-600' :
                           'text-gray-700'
                         }`}>
-                          {key === 'paid' && (
+                          {key === 'payment' && (
                             <CreditCard size={12} className="mr-2 text-gray-400" />
                           )}
                           {key === 'date' && (
@@ -507,9 +682,10 @@ export default function AllSales() {
                         </div>
                       )}
                     </td>
-                  ))}
-                </tr>
-              ))}
+                    ))}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
 
@@ -647,6 +823,416 @@ export default function AllSales() {
               >
                 <ChevronsRight size={16} className="text-gray-600" />
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Footer Stats */}
+      {sales.length > 0 && (
+        <div className="glass-card p-4 mt-4 border border-white/20 backdrop-blur-xl">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div className="glass-tag px-3 py-1.5 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
+                <span className="text-sm font-medium text-gray-700">
+                  Showing <span className="text-emerald-600 font-bold">{currentItems.length}</span> of{" "}
+                  <span className="text-emerald-600 font-bold">{sortedData.length}</span> sales
+                </span>
+              </div>
+              <div className="glass-tag px-3 py-1.5 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
+                <span className="text-sm font-medium text-gray-700">
+                  Sorted by: <span className="text-blue-600 font-medium">
+                    {sortConfig.key ? sortConfig.key.replace(/([A-Z])/g, ' $1') : 'Date'} 
+                    <span className="ml-1">{sortConfig.direction === 'ascending' ? '↑' : '↓'}</span>
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div className="text-sm text-gray-500">
+              Page <span className="font-semibold">{currentPage}</span> of{" "}
+              <span className="font-semibold">{totalPages}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Details Modal */}
+      {viewModalOpen && selectedSale && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <Eye size={24} />
+                  Sale Details - {selectedSale.reference}
+                </h3>
+                <button
+                  onClick={() => setViewModalOpen(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                >
+                  <XCircle size={24} className="text-gray-500" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-2 gap-6 mb-6">
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-2">Shop</h4>
+                  <p className="text-lg font-semibold">{selectedSale.shop?.name || "-"}</p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-2">Customer</h4>
+                  <p className="text-lg font-semibold">{selectedSale.customer?.name || "-"}</p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-2">Grand Total</h4>
+                  <p className="text-2xl font-bold text-green-600">
+                    ${selectedSale.grandTotal?.toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-2">Due Amount</h4>
+                  <p className={`text-2xl font-bold ${calculateDueAmount(selectedSale) > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+                    ${calculateDueAmount(selectedSale).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="border-t pt-6">
+                <div className="flex items-center gap-2 mb-4">
+                  {["items", "payments"].map((tab) => (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveViewTab(tab)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                        activeViewTab === tab
+                          ? "bg-emerald-600 text-white"
+                          : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                      }`}
+                    >
+                      {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                    </button>
+                  ))}
+                </div>
+
+                {activeViewTab === "items" && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="p-3 text-left">Type</th>
+                          <th className="p-3 text-left">Item</th>
+                          <th className="p-3 text-left">Quantity</th>
+                          <th className="p-3 text-left">Unit Price</th>
+                          <th className="p-3 text-left">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedSale.saleItems?.map((item, index) => (
+                          <tr key={index} className="border-t">
+                            <td className="p-3">
+                              <span className="px-2 py-1 bg-gray-100 rounded text-xs">
+                                {item.productId ? "product" : "material"}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              {item.product?.name || item.material?.name}
+                              <span className="text-sm text-gray-500 block">{item.selectedName}</span>
+                              <span className="text-sm text-gray-500 block">{item.product?.barcode || item.material?.barcode}</span>
+                            </td>
+                            <td className="p-3">
+                              {item.quantity} {item.product?.unit || item.material?.unit || "unit"}
+                              <span className="text-sm text-gray-500 block">{item.selectedQuantity} {item.selectedUnit} </span>
+                            </td>
+                            <td className="p-3">${item.unitPrice?.toFixed(2)}</td>
+                            <td className="p-3 font-semibold">${item.totalPrice?.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {activeViewTab === "payments" && (
+                  <div className="space-y-3">
+                    {paymentHistory.length > 0 ? (
+                      paymentHistory.map((txn, index) => (
+                        <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <div>
+                            <div className="font-medium text-gray-800">Payment #{index + 1}</div>
+                            <div className="text-sm text-gray-600">{new Date(txn.createdAt).toLocaleString()}</div>
+                            <div className="text-sm text-gray-600">Method: {txn.payment_method}</div>
+                            {txn.account && (
+                              <div className="text-sm text-gray-600">Account: {txn.account.name}</div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-green-600">
+                              ${txn.amount?.toFixed(2)}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              {txn.note || 'No notes'}
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        <DollarSign size={48} className="mx-auto mb-4 text-gray-300" />
+                        <p>No payments recorded yet</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Payment Modal */}
+      {addPaymentModalOpen && selectedSale && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="p-6 border-b">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <CreditCard size={24} />
+                  Add Payment
+                </h3>
+                <button
+                  onClick={() => setAddPaymentModalOpen(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  disabled={paymentLoading}
+                >
+                  <XCircle size={24} className="text-gray-500" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
+                <input
+                  type="number"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="bank">Bank</option>
+                </select>
+              </div>
+              {(paymentMethod === "card" || paymentMethod === "bank") && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Bank Account</label>
+                  <select
+                    value={bankAccountId}
+                    onChange={(e) => setBankAccountId(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded-lg"
+                  >
+                    <option value="">Select Bank</option>
+                    {bankAccounts.map(bank => (
+                      <option key={bank.id} value={bank.id}>{bank.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Note</label>
+                <textarea
+                  value={paymentNote}
+                  onChange={(e) => setPaymentNote(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-lg"
+                  rows="2"
+                ></textarea>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setAddPaymentModalOpen(false)}
+                  className="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg"
+                  disabled={paymentLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePaymentSubmit}
+                  className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white py-3 rounded-lg flex items-center justify-center gap-2"
+                  disabled={paymentLoading}
+                >
+                  {paymentLoading ? (
+                    <>
+                      <Loader2 size={20} className="animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Payment'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Open Edit Access Modal */}
+      {editAccessModalOpen && selectedSaleForEditAccess && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden">
+            <div className="p-6 border-b">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <User size={22} />
+                  Grant Sale Edit Access
+                </h3>
+                <button
+                  onClick={() => {
+                    setEditAccessModalOpen(false);
+                    setSelectedSaleForEditAccess(null);
+                    setUserSearchTerm("");
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  disabled={grantLoading}
+                >
+                  <XCircle size={22} className="text-gray-500" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 mt-2">
+                Sale: <span className="font-semibold">{selectedSaleForEditAccess.reference}</span>
+              </p>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Max Edit Count (optional)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={editGrantMaxCount}
+                    onChange={(e) => setEditGrantMaxCount(e.target.value)}
+                    placeholder="Example: 2"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Access Time in Minutes (optional)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={editGrantDurationMinutes}
+                    onChange={(e) => setEditGrantDurationMinutes(e.target.value)}
+                    placeholder="Example: 5"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+              </div>
+              <div className="relative mb-4">
+                <Search size={16} className="absolute left-3 top-3 text-gray-400" />
+                <input
+                  type="text"
+                  value={userSearchTerm}
+                  onChange={(e) => setUserSearchTerm(e.target.value)}
+                  placeholder="Search by name, email, username, or ID"
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                />
+              </div>
+              <div className="border rounded-lg max-h-[50vh] overflow-y-auto">
+                {allUsers
+                  .filter((u) => {
+                    const q = userSearchTerm.trim().toLowerCase();
+                    if (!q) return true;
+                    return (
+                      String(u.id).includes(q) ||
+                      String(u.name || "").toLowerCase().includes(q) ||
+                      String(u.username || "").toLowerCase().includes(q) ||
+                      String(u.email || "").toLowerCase().includes(q)
+                    );
+                  })
+                  .map((user) => (
+                    <div key={user.id} className="flex items-center justify-between px-4 py-3 border-b last:border-b-0">
+                      <div>
+                        <p className="font-medium text-gray-800">{user.name || user.username || `User ${user.id}`}</p>
+                        <p className="text-xs text-gray-500">{user.email} | @{user.username} | ID: {user.id}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditAccess(selectedSaleForEditAccess, user.id)}
+                        disabled={grantLoading}
+                        className="px-3 py-2 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {grantLoading ? "Granting..." : "Grant"}
+                      </button>
+                    </div>
+                  ))}
+                {allUsers.length === 0 && (
+                  <div className="p-6 text-center text-sm text-gray-500">No users found.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Modal */}
+      {deleteModalOpen && selectedSale && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="p-6 border-b">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <Trash2 size={24} className="text-red-600" />
+                  Delete Sale
+                </h3>
+                <button
+                  onClick={() => setDeleteModalOpen(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  disabled={deleteLoading}
+                >
+                  <XCircle size={24} className="text-gray-500" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              <p className="text-gray-600 mb-4">
+                Are you sure you want to delete sale <span className="font-semibold">{selectedSale.reference}</span>?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteModalOpen(false)}
+                  className="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg"
+                  disabled={deleteLoading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteSubmit}
+                  className="flex-1 bg-gradient-to-r from-red-500 to-red-600 text-white py-3 rounded-lg flex items-center justify-center gap-2"
+                  disabled={deleteLoading}
+                >
+                  {deleteLoading ? (
+                    <>
+                      <Loader2 size={20} className="animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    'Delete'
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

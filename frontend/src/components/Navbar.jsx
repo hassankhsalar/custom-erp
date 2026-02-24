@@ -16,7 +16,7 @@ const Navbar = () => {
     const profileRef = useRef(null);
     const notificationRef = useRef(null);
     const location = useLocation();
-    const { currentUser, loading, error, logout } = useAuth();
+    const { currentUser, loading, error, logout, socket } = useAuth();
 
     const localUserName = localStorage.getItem('name');
     const localUserEmail = localStorage.getItem('email');
@@ -61,6 +61,19 @@ const Navbar = () => {
         fetchNotifications();
     }, []);
 
+    useEffect(() => {
+        if (!socket) return;
+        const handleNewNotification = (notification) => {
+            setNotifications((prev) => [notification, ...prev].slice(0, 5));
+            setUnreadCount((prev) => prev + 1);
+        };
+
+        socket.on("notification:new", handleNewNotification);
+        return () => {
+            socket.off("notification:new", handleNewNotification);
+        };
+    }, [socket]);
+
 
     const navItems = [
         { name: "Dashboard", icon: <Home size={18} />, path: "/dashboard" },
@@ -80,8 +93,8 @@ const Navbar = () => {
                     
                     {/* Logo and Brand */}
                     <div className="flex items-center gap-4">
-                        <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-white/30 backdrop-blur-md bg-white/90 shadow-[0_4px_12px_rgba(0,0,0,0.05)]">
-                            <img src={logo} alt="Company Logo" className="w-12 h-12 object-contain" />
+                        <div className="p-2 rounded-xl bg-gradient-to-br border border-white/30 backdrop-blur-md bg-white/90 shadow-[0_4px_12px_rgba(0,0,0,0.05)]">
+                            <img src={logo} alt="Company Logo" className="max-w-24 max-h-12 object-contain" />
                         </div>
                     </div>
 

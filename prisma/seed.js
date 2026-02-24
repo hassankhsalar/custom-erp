@@ -85,23 +85,33 @@ async function main() {
         'unit_read', 'unit_create', 'unit_edit', 'unit_delete',
         'brand_read', 'brand_create', 'brand_edit', 'brand_delete',
         'product_category_read', 'product_category_create', 'product_category_edit', 'product_category_delete',
-        'factory_create', 'factory_edit', 'factory_delete', 'factory_read',
-        'store_create', 'store_edit', 'store_delete', 'store_read',
-        'shop_create', 'shop_edit', 'shop_delete', 'shop_read',
+        
+        'factory_create', 'factory_edit', 'factory_delete', 'factory_read', 'factory_item_edit',
+        'store_create', 'store_edit', 'store_delete', 'store_read', 'store_item_edit',
+        'shop_create', 'shop_edit', 'shop_delete', 'shop_read', 'shop_item_edit',
+        
         'inventory_adjustment_create', 'inventory_adjustment_read',
+        
         'cash_register_read', 'cash_register_create', 'cash_register_edit', 'cash_register_delete',
         'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit',
         'bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete',
         'bank_account_deposit', 'bank_account_withdraw',
+        
         'account_read', 'account_create', 'account_edit', 'account_delete',
         'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement',
+        
         'purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment',
         'purchases_return_create', 'purchases_return_edit', 'purchases_return_delete', 'purchases_return_read',
+        
         'production_create', 'production_edit', 'production_delete', 'production_read', 'production_change_status', 'production_complete',
-        'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_add_payment',
+        
+        'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_edit_any_day', 'sales_add_payment',
         'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read',
-        'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive',
+        
+        'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive', 'transfer_return',
+
         'requisition_create', 'requisition_read', 'requisition_update', 'requisition_delete', 'requisition_approve', 'requisition_segment', 'requisition_order_accept',
+        
         'damage_create', 'damage_edit', 'damage_delete', 'damage_read',
         'repairs_create', 'repairs_edit', 'repairs_delete', 'repairs_read',
         

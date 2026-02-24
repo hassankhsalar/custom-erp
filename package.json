@@ -30,6 +30,7 @@
     "node-cache": "^5.1.2",
     "node-cron": "^4.2.1",
     "prisma": "^6.16.2",
+    "socket.io": "^4.8.1",
     "tailwindcss": "^4.1.13"
   },
   "devDependencies": {

@@ -4,7 +4,8 @@ const { buildScope, ensureHasAnyScope, ensureTypeScope, ensureIdScope, buildLoca
 const prisma = new PrismaClient();
 const router = express.Router();
 const { createTransaction } = require('../utils/transactionHelper');
-const { parseDateOnly, mergeIncomingBatch } = require('../utils/batchDetails');
+const { createNotification } = require('../utils/notificationHelper');
+const { parseDateOnly, mergeIncomingBatch, decrementBatch } = require('../utils/batchDetails');
 
 // Generate unique reference for transactions
 const generateTransactionReference = () => {
@@ -158,23 +159,29 @@ router.post("/", async (req, res) => {
       }
     }
 
+    // Normalize numeric values once and reuse for calculations + persistence
+    const shippingCostValue = parseFloat(shippingCost) || 0;
+    const discountValue = parseFloat(discount) || 0;
+    const taxValue = parseFloat(tax) || 0;
+    const paidAmountValue = parseFloat(paidAmount) || 0;
+
     // Calculate subtotal from items
     const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
     
     // Calculate discount amount
-    const discountAmount = (discount / 100) * subtotal;
+    const discountAmount = (discountValue / 100) * subtotal;
     
     // Calculate amount after discount
     const amountAfterDiscount = subtotal - discountAmount;
     
     // Calculate tax amount
-    const taxAmount = (tax / 100) * amountAfterDiscount;
+    const taxAmount = (taxValue / 100) * amountAfterDiscount;
     
     // Calculate final grand total
-    const calculatedGrandTotal = amountAfterDiscount + taxAmount + parseFloat(shippingCost);
+    const calculatedGrandTotal = amountAfterDiscount + taxAmount + shippingCostValue;
     
     // Validate that paid amount is not greater than grand total
-    if ((parseFloat(paidAmount).toFixed(2) - calculatedGrandTotal.toFixed(2)) > 0 ) {
+    if (paidAmountValue > calculatedGrandTotal + Number.EPSILON) {
       return res.status(400).json({ 
         error: "Paid amount cannot exceed grand total from" 
       });
@@ -220,11 +227,11 @@ router.post("/", async (req, res) => {
           supplierId: parseInt(supplierId),
           destinationType: actualDestinationType,
           destinationId: actualDestinationId,
-          grandTotal: calculatedGrandTotal.toFixed(2),
-          shippingCost: parseFloat(shippingCost).toFixed(2),
-          discount: parseFloat(discount).toFixed(2),
-          tax: parseFloat(tax).toFixed(2),
-          paidAmount: parseFloat(paidAmount).toFixed(2),
+          grandTotal: calculatedGrandTotal,
+          shippingCost: shippingCostValue,
+          discount: discountValue,
+          tax: taxValue,
+          paidAmount: paidAmountValue,
           shippingStatus: computedShippingStatus,
         },
       });
@@ -240,13 +247,16 @@ router.post("/", async (req, res) => {
           const purchaseItemData = {
             purchaseId: purchase.id,
             itemType: item.itemType,
+            selectedName: item.selectedName ? String(item.selectedName).trim() : null,
+            selectedUnit: item.selectedUnit ? String(item.selectedUnit).trim() : null,
+            selectedQuantity: item.selectedQuantity !== undefined && item.selectedQuantity !== null ? parseFloat(item.selectedQuantity) : null,
             batchNumber: item.batchNumber ? String(item.batchNumber).trim() : null,
             expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
             manufactureDate: item.manufactureDate ? new Date(item.manufactureDate) : null,
             batchNotes: item.batchNotes || null,
             quantity: parseFloat(item.quantity),
             unitPrice: parseFloat(item.unitPrice),
-            totalPrice: totalPrice.toFixed(2),
+            totalPrice,
           };
 
           // Set productId or materialId based on item type
@@ -810,6 +820,149 @@ async function updateFactoryMaterialStock(tx, factoryId, materialId, quantity, u
   });
 }
 
+async function decrementStoreProductStock(tx, storeId, productId, quantity, batchInfo = null) {
+  const existing = await tx.storeProduct.findUnique({
+    where: { store_id_product_id: { store_id: storeId, product_id: productId } }
+  });
+  if (!existing || (parseFloat(existing.stock) || 0) < quantity) {
+    throw new Error(`Insufficient store product stock for product ${productId}`);
+  }
+  const updateData = { stock: { decrement: quantity } };
+  if (batchInfo?.batchNumber) {
+    updateData.batchDetails = decrementBatch(existing.batchDetails, batchInfo, quantity);
+  }
+  await tx.storeProduct.update({
+    where: { store_id_product_id: { store_id: storeId, product_id: productId } },
+    data: updateData
+  });
+  await tx.product.update({ where: { id: productId }, data: { stock: { decrement: quantity } } });
+}
+
+async function decrementShopProductStock(tx, shopId, productId, quantity, batchInfo = null) {
+  const existing = await tx.shopProduct.findUnique({
+    where: { shop_id_product_id: { shop_id: shopId, product_id: productId } }
+  });
+  if (!existing || (parseFloat(existing.stock) || 0) < quantity) {
+    throw new Error(`Insufficient shop product stock for product ${productId}`);
+  }
+  const updateData = { stock: { decrement: quantity } };
+  if (batchInfo?.batchNumber) {
+    updateData.batchDetails = decrementBatch(existing.batchDetails, batchInfo, quantity);
+  }
+  await tx.shopProduct.update({
+    where: { shop_id_product_id: { shop_id: shopId, product_id: productId } },
+    data: updateData
+  });
+  await tx.product.update({ where: { id: productId }, data: { stock: { decrement: quantity } } });
+}
+
+async function decrementFactoryProductStock(tx, factoryId, productId, quantity, batchInfo = null) {
+  const existing = await tx.factoryProduct.findUnique({
+    where: { factoryId_productId: { factoryId, productId } }
+  });
+  if (!existing || (parseFloat(existing.stock) || 0) < quantity) {
+    throw new Error(`Insufficient factory product stock for product ${productId}`);
+  }
+  const updateData = { stock: { decrement: quantity } };
+  if (batchInfo?.batchNumber) {
+    updateData.batchDetails = decrementBatch(existing.batchDetails, batchInfo, quantity);
+  }
+  await tx.factoryProduct.update({
+    where: { factoryId_productId: { factoryId, productId } },
+    data: updateData
+  });
+  await tx.product.update({ where: { id: productId }, data: { stock: { decrement: quantity } } });
+}
+
+async function decrementStoreMaterialStock(tx, storeId, materialId, quantity, batchInfo = null) {
+  const existing = await tx.storeMaterial.findUnique({
+    where: { store_id_material_id: { store_id: storeId, material_id: materialId } }
+  });
+  if (!existing || (parseFloat(existing.stock) || 0) < quantity) {
+    throw new Error(`Insufficient store material stock for material ${materialId}`);
+  }
+  const updateData = { stock: { decrement: quantity } };
+  if (batchInfo?.batchNumber) {
+    updateData.batchDetails = decrementBatch(existing.batchDetails, batchInfo, quantity);
+  }
+  await tx.storeMaterial.update({
+    where: { store_id_material_id: { store_id: storeId, material_id: materialId } },
+    data: updateData
+  });
+  await tx.material.update({ where: { id: materialId }, data: { current_stock: { decrement: quantity } } });
+}
+
+async function decrementShopMaterialStock(tx, shopId, materialId, quantity, batchInfo = null) {
+  const existing = await tx.shopMaterial.findUnique({
+    where: { shop_id_material_id: { shop_id: shopId, material_id: materialId } }
+  });
+  if (!existing || (parseFloat(existing.stock) || 0) < quantity) {
+    throw new Error(`Insufficient shop material stock for material ${materialId}`);
+  }
+  const updateData = { stock: { decrement: quantity } };
+  if (batchInfo?.batchNumber) {
+    updateData.batchDetails = decrementBatch(existing.batchDetails, batchInfo, quantity);
+  }
+  await tx.shopMaterial.update({
+    where: { shop_id_material_id: { shop_id: shopId, material_id: materialId } },
+    data: updateData
+  });
+  await tx.material.update({ where: { id: materialId }, data: { current_stock: { decrement: quantity } } });
+}
+
+async function decrementFactoryMaterialStock(tx, factoryId, materialId, quantity, batchInfo = null) {
+  const existing = await tx.factoryMaterial.findUnique({
+    where: { factoryId_materialId: { factoryId, materialId } }
+  });
+  if (!existing || (parseFloat(existing.stock) || 0) < quantity) {
+    throw new Error(`Insufficient factory material stock for material ${materialId}`);
+  }
+  const updateData = { stock: { decrement: quantity } };
+  if (batchInfo?.batchNumber) {
+    updateData.batchDetails = decrementBatch(existing.batchDetails, batchInfo, quantity);
+  }
+  await tx.factoryMaterial.update({
+    where: { factoryId_materialId: { factoryId, materialId } },
+    data: updateData
+  });
+  await tx.material.update({ where: { id: materialId }, data: { current_stock: { decrement: quantity } } });
+}
+
+async function decrementProductStock(tx, destinationType, destinationId, productId, quantity, batchInfo = null) {
+  if (quantity <= 0) return;
+  if (destinationType === "store") return decrementStoreProductStock(tx, destinationId, productId, quantity, batchInfo);
+  if (destinationType === "shop") return decrementShopProductStock(tx, destinationId, productId, quantity, batchInfo);
+  if (destinationType === "factory") return decrementFactoryProductStock(tx, destinationId, productId, quantity, batchInfo);
+  throw new Error("Invalid destination type for product stock decrement");
+}
+
+async function decrementMaterialStock(tx, destinationType, destinationId, materialId, quantity, batchInfo = null) {
+  if (quantity <= 0) return;
+  if (destinationType === "store") return decrementStoreMaterialStock(tx, destinationId, materialId, quantity, batchInfo);
+  if (destinationType === "shop") return decrementShopMaterialStock(tx, destinationId, materialId, quantity, batchInfo);
+  if (destinationType === "factory") return decrementFactoryMaterialStock(tx, destinationId, materialId, quantity, batchInfo);
+  throw new Error("Invalid destination type for material stock decrement");
+}
+
+const normalizePurchaseItemsInput = (items = []) =>
+  (Array.isArray(items) ? items : []).map((item) => ({
+    itemType: item.itemType,
+    productId: item.itemType === "product" ? parseInt(item.productId || item.itemId) : null,
+    materialId: item.itemType === "material" ? parseInt(item.materialId || item.itemId) : null,
+    selectedName: item.selectedName ? String(item.selectedName).trim() : null,
+    selectedUnit: item.selectedUnit ? String(item.selectedUnit).trim() : null,
+    selectedQuantity: item.selectedQuantity !== undefined && item.selectedQuantity !== null ? parseFloat(item.selectedQuantity) : null,
+    batchNumber: item.batchNumber ? String(item.batchNumber).trim() : null,
+    expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
+    manufactureDate: item.manufactureDate ? new Date(item.manufactureDate) : null,
+    batchNotes: item.batchNotes || null,
+    quantity: parseFloat(item.quantity || 0),
+    unitPrice: parseFloat(item.unitPrice || 0),
+    receivedQuantity: item.receivedQuantity !== undefined && item.receivedQuantity !== null
+      ? parseFloat(item.receivedQuantity)
+      : parseFloat(item.quantity || 0),
+  }));
+
 // GET all purchases with calculated due and status
 router.get('/', async (req, res) => {
   try {
@@ -935,6 +1088,109 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/returns', async (req, res) => {
+  try {
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    const requestedType = String(req.query.returnType || '').trim().toLowerCase();
+    const page = parseInt(req.query.page, 10);
+    const limit = parseInt(req.query.limit, 10);
+    const usePagination = Number.isFinite(page) || Number.isFinite(limit);
+    const pageNumber = Number.isFinite(page) && page > 0 ? page : 1;
+    const limitNumber = Number.isFinite(limit) && limit > 0 ? limit : 10;
+    const skip = (pageNumber - 1) * limitNumber;
+    const where = {};
+    if (requestedType === 'purchase_return' || requestedType === 'damage_return') {
+      where.returnType = requestedType;
+    }
+    if (!scope.isAdmin) {
+      const storeIds = Array.from(scope.stores || []);
+      const shopIds = Array.from(scope.shops || []);
+      const factoryIds = Array.from(scope.factories || []);
+      const scopedOr = [];
+      if (storeIds.length) scopedOr.push({ sourceType: 'store', sourceId: { in: storeIds } });
+      if (shopIds.length) scopedOr.push({ sourceType: 'shop', sourceId: { in: shopIds } });
+      if (factoryIds.length) scopedOr.push({ sourceType: 'factory', sourceId: { in: factoryIds } });
+      if (!scopedOr.length) {
+        if (usePagination) {
+          return res.json({
+            data: [],
+            pagination: { page: pageNumber, limit: limitNumber, totalCount: 0, totalPages: 0 },
+          });
+        }
+        return res.json({ returns: [] });
+      }
+      where.OR = scopedOr;
+    }
+
+    const totalCount = await prisma.purchaseReturn.count({ where });
+    const rows = await prisma.purchaseReturn.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: usePagination ? skip : undefined,
+      take: usePagination ? limitNumber : undefined,
+      include: {
+        supplier: { select: { id: true, name: true, phone: true } },
+        items: {
+          include: {
+            product: { select: { id: true, name: true } },
+            material: { select: { id: true, name: true } },
+          },
+        },
+        compensationShipments: {
+          include: {
+            items: {
+              include: {
+                product: { select: { id: true, name: true } },
+                material: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+        compensationPayments: {
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    const mapped = rows.map((row) => {
+      const paymentsTotal = (row.compensationPayments || []).reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+      return {
+        ...row,
+        paymentsTotal,
+        shipmentsCount: row.compensationShipments?.length || 0,
+      };
+    });
+
+    if (usePagination) {
+      return res.json({
+        data: mapped,
+        pagination: {
+          page: pageNumber,
+          limit: limitNumber,
+          totalCount,
+          totalPages: Math.ceil(totalCount / limitNumber),
+        },
+      });
+    }
+
+    res.json({ returns: mapped });
+  } catch (error) {
+    if (error.status === 403) {
+      if (req.query.page || req.query.limit) {
+        return res.json({
+          data: [],
+          pagination: { page: 1, limit: 10, totalCount: 0, totalPages: 0 },
+        });
+      }
+      return res.json({ returns: [] });
+    }
+    res.status(500).json({ error: error.message || 'Failed to fetch returns' });
+  }
+});
+
+router.post('/returns', async (req, res) => createStandalonePurchaseOrDamageReturn(req, res, 'purchase_return'));
+router.post('/damage-returns', async (req, res) => createStandalonePurchaseOrDamageReturn(req, res, 'damage_return'));
+
 // GET single purchase by ID
 router.get('/:id', async (req, res) => {
   try {
@@ -1034,32 +1290,21 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// PUT update purchase
+// PUT update purchase with stock/payment reconciliation
 router.put('/:id', async (req, res) => {
   try {
-    const purchaseId = parseInt(req.params.id);
-    
+    const purchaseId = parseInt(req.params.id, 10);
     if (isNaN(purchaseId)) {
       return res.status(400).json({ error: 'Invalid purchase ID' });
     }
 
-    const { 
-      supplierId, 
-      destinationType, 
-      destinationId, 
-      grandTotal, 
-      shippingCost,
-      discount,
-      tax,
-      items,
-      accountId 
-    } = req.body;
-
-    // Check if purchase exists
     const existingPurchase = await prisma.purchase.findUnique({
-      where: { id: purchaseId }
+      where: { id: purchaseId },
+      include: {
+        purchaseItems: true,
+        purchaseShipments: { include: { items: true } }
+      }
     });
-
     if (!existingPurchase) {
       return res.status(404).json({ error: 'Purchase not found' });
     }
@@ -1071,84 +1316,279 @@ router.put('/:id', async (req, res) => {
       ensureHasAnyScope(scope);
     }
 
-    if (destinationType || destinationId) {
-      const nextType = destinationType || existingPurchase.destinationType;
-      const nextId = destinationId ? parseInt(destinationId) : existingPurchase.destinationId;
-      ensureIdScope(scope, nextType, nextId);
+    const {
+      supplierId,
+      destinationType,
+      destinationId,
+      shippingCost,
+      discount,
+      tax,
+      items,
+      additionalPayment = 0,
+      paymentMethod = 'cash',
+      bankAccountId,
+      cashRegisterId,
+      accountId,
+      note
+    } = req.body;
+
+    const nextDestinationType = destinationType || existingPurchase.destinationType;
+    const nextDestinationId = destinationId ? parseInt(destinationId, 10) : existingPurchase.destinationId;
+    if (!nextDestinationType || !nextDestinationId) {
+      return res.status(400).json({ error: 'Destination is required' });
+    }
+    ensureIdScope(scope, nextDestinationType, nextDestinationId);
+
+    const normalizedItems = normalizePurchaseItemsInput(items);
+    if (!normalizedItems.length) {
+      return res.status(400).json({ error: 'At least one item is required' });
     }
 
-    // Check if purchase has payments (cannot edit if paid)
-    if (existingPurchase.paidAmount > 0) {
-      return res.status(400).json({ error: 'Cannot edit purchase with existing payments' });
+    for (const item of normalizedItems) {
+      if (!item.itemType || !['product', 'material'].includes(item.itemType)) {
+        return res.status(400).json({ error: 'Each item must have valid itemType' });
+      }
+      if (item.itemType === 'product' && !item.productId) {
+        return res.status(400).json({ error: 'Product item must have productId' });
+      }
+      if (item.itemType === 'material' && !item.materialId) {
+        return res.status(400).json({ error: 'Material item must have materialId' });
+      }
+      if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
+        return res.status(400).json({ error: 'Item quantity must be > 0' });
+      }
+      if (!Number.isFinite(item.unitPrice) || item.unitPrice <= 0) {
+        return res.status(400).json({ error: 'Item unitPrice must be > 0' });
+      }
+      if (!Number.isFinite(item.receivedQuantity) || item.receivedQuantity < 0 || item.receivedQuantity > item.quantity) {
+        return res.status(400).json({ error: 'receivedQuantity must be between 0 and quantity' });
+      }
     }
 
-    // Update purchase
-    const updatedPurchase = await prisma.$transaction(async (prisma) => {
-      // Delete existing items
-      await prisma.purchaseItem.deleteMany({
-        where: { purchaseId }
+    const shippingCostValue = shippingCost !== undefined ? parseFloat(shippingCost) || 0 : parseFloat(existingPurchase.shippingCost) || 0;
+    const discountValue = discount !== undefined ? parseFloat(discount) || 0 : parseFloat(existingPurchase.discount) || 0;
+    const taxValue = tax !== undefined ? parseFloat(tax) || 0 : parseFloat(existingPurchase.tax) || 0;
+
+    const subtotal = normalizedItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    const discountAmount = (discountValue / 100) * subtotal;
+    const amountAfterDiscount = subtotal - discountAmount;
+    const taxAmount = (taxValue / 100) * amountAfterDiscount;
+    const nextGrandTotal = amountAfterDiscount + taxAmount + shippingCostValue;
+
+    const paymentDelta = parseFloat(additionalPayment) || 0;
+    if (paymentDelta < 0) {
+      return res.status(400).json({ error: 'additionalPayment cannot be negative' });
+    }
+
+    const oldPaid = parseFloat(existingPurchase.paidAmount) || 0;
+    const nextPaid = oldPaid + paymentDelta;
+    if (nextPaid > nextGrandTotal + Number.EPSILON) {
+      return res.status(400).json({ error: 'Total paid cannot exceed grand total after edit' });
+    }
+
+    const receivedByOldItemId = {};
+    for (const shipment of existingPurchase.purchaseShipments || []) {
+      for (const si of shipment.items || []) {
+        if (!si.purchaseItemId) continue;
+        receivedByOldItemId[si.purchaseItemId] = (receivedByOldItemId[si.purchaseItemId] || 0) + (parseFloat(si.received_quantity) || 0);
+      }
+    }
+
+    const entityAccount = await prisma.entityAccount.findFirst({
+      where: {
+        entityType: nextDestinationType,
+        entityId: nextDestinationId,
+        isPrimary: true
+      },
+      include: { account: true }
+    });
+    if (!entityAccount) {
+      return res.status(400).json({ error: 'No primary account found for destination' });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Step 1: reverse previously received stock
+      for (const oldItem of existingPurchase.purchaseItems) {
+        const receivedQty = parseFloat(receivedByOldItemId[oldItem.id] || 0);
+        if (receivedQty <= 0) continue;
+        const batchInfo = {
+          batchNumber: oldItem.batchNumber,
+          expiryDate: parseDateOnly(oldItem.expiryDate),
+        };
+        if (oldItem.itemType === 'product') {
+          await decrementProductStock(
+            tx,
+            existingPurchase.destinationType,
+            existingPurchase.destinationId,
+            oldItem.productId,
+            receivedQty,
+            batchInfo
+          );
+        } else {
+          await decrementMaterialStock(
+            tx,
+            existingPurchase.destinationType,
+            existingPurchase.destinationId,
+            oldItem.materialId,
+            receivedQty,
+            batchInfo
+          );
+        }
+      }
+
+      await tx.purchaseShipmentItem.deleteMany({
+        where: { shipment: { purchaseId } }
       });
+      await tx.purchaseShipment.deleteMany({ where: { purchaseId } });
+      await tx.purchaseItem.deleteMany({ where: { purchaseId } });
 
-      // Update purchase
-      const purchase = await prisma.purchase.update({
+      const updatedPurchase = await tx.purchase.update({
         where: { id: purchaseId },
         data: {
-          supplierId: supplierId ? parseInt(supplierId) : existingPurchase.supplierId,
-          destinationType: destinationType || existingPurchase.destinationType,
-          destinationId: destinationId ? parseInt(destinationId) : existingPurchase.destinationId,
-          grandTotal: grandTotal ? parseFloat(grandTotal) : existingPurchase.grandTotal,
-          shippingCost: shippingCost !== undefined ? parseFloat(shippingCost) : existingPurchase.shippingCost,
-          discount: discount !== undefined ? parseFloat(discount) : existingPurchase.discount,
-          tax: tax !== undefined ? parseFloat(tax) : existingPurchase.tax,
-          accountId: accountId ? parseInt(accountId) : existingPurchase.accountId,
-          purchaseItems: {
-            create: items?.map(item => ({
-              materialId: item.itemType === 'material' ? parseInt(item.itemId) : null,
-              productId: item.itemType === 'product' ? parseInt(item.itemId) : null,
-              itemType: item.itemType,
-              batchNumber: item.batchNumber ? String(item.batchNumber).trim() : null,
-              expiryDate: item.expiryDate ? new Date(item.expiryDate) : null,
-              manufactureDate: item.manufactureDate ? new Date(item.manufactureDate) : null,
-              batchNotes: item.batchNotes || null,
-              quantity: parseFloat(item.quantity),
-              unitPrice: parseFloat(item.unitPrice),
-              totalPrice: parseFloat(item.totalPrice)
-            })) || []
+          supplierId: supplierId ? parseInt(supplierId, 10) : existingPurchase.supplierId,
+          destinationType: nextDestinationType,
+          destinationId: nextDestinationId,
+          shippingCost: shippingCostValue,
+          discount: discountValue,
+          tax: taxValue,
+          grandTotal: nextGrandTotal,
+          paidAmount: nextPaid,
+          accountId: accountId ? parseInt(accountId, 10) : existingPurchase.accountId,
+        }
+      });
+
+      const createdItems = [];
+      for (const item of normalizedItems) {
+        const created = await tx.purchaseItem.create({
+          data: {
+            purchaseId,
+            itemType: item.itemType,
+            productId: item.productId,
+            materialId: item.materialId,
+            selectedName: item.selectedName,
+            selectedUnit: item.selectedUnit,
+            selectedQuantity: item.selectedQuantity,
+            batchNumber: item.batchNumber,
+            expiryDate: item.expiryDate,
+            manufactureDate: item.manufactureDate,
+            batchNotes: item.batchNotes,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            totalPrice: item.quantity * item.unitPrice,
           }
-        },
-        include: {
-          purchaseItems: {
-            include: {
-              material: true,
-              product: true
+        });
+        createdItems.push({ created, receivedQty: item.receivedQuantity });
+      }
+
+      const shipmentStatus = calculateShippingStatusFromReceived(
+        createdItems.map((entry) => ({
+          quantity: entry.created.quantity,
+          receivedQuantity: entry.receivedQty
+        }))
+      );
+
+      const shipment = await tx.purchaseShipment.create({
+        data: {
+          purchaseId,
+          reference: `SHIP-EDIT-${Date.now()}`,
+          status: shipmentStatus,
+          receivedAt: shipmentStatus === 'received' ? new Date() : null,
+          note: 'Auto shipment recreated from purchase edit'
+        }
+      });
+
+      for (const entry of createdItems) {
+        const { created, receivedQty } = entry;
+        if (receivedQty > 0) {
+          await tx.purchaseShipmentItem.create({
+            data: {
+              shipmentId: shipment.id,
+              purchaseItemId: created.id,
+              itemType: created.itemType,
+              materialId: created.materialId,
+              productId: created.productId,
+              quantity: receivedQty,
+              received_quantity: receivedQty
             }
-          },
+          });
+          const batchInfo = {
+            batchNumber: created.batchNumber,
+            expiryDate: parseDateOnly(created.expiryDate),
+            quantity: receivedQty,
+            unitCost: created.unitPrice
+          };
+          if (created.itemType === 'product') {
+            await updateProductStock(tx, nextDestinationType, nextDestinationId, created.productId, receivedQty, created.unitPrice, batchInfo);
+          } else {
+            await updateMaterialStock(tx, nextDestinationType, nextDestinationId, created.materialId, receivedQty, created.unitPrice, batchInfo);
+          }
+        }
+      }
+
+      await tx.purchase.update({
+        where: { id: purchaseId },
+        data: { shippingStatus: shipmentStatus }
+      });
+
+      if (paymentDelta > 0) {
+        const updatedAccount = await tx.accounts.update({
+          where: { id: entityAccount.accountId },
+          data: { balance: { decrement: paymentDelta } }
+        });
+
+        let bankRecord = null;
+        if (["bank", "card", "bank_transfer"].includes(String(paymentMethod || "cash").toLowerCase()) && bankAccountId) {
+          bankRecord = await tx.bankAccount.update({
+            where: { id: parseInt(bankAccountId, 10) },
+            data: { current_balance: { decrement: paymentDelta } }
+          });
+        }
+
+        await createTransaction(tx, {
+          reference: generateTransactionReference(),
+          createdById: req.user?.userId || 1,
+          cashRegisterId: cashRegisterId ? parseInt(cashRegisterId, 10) : null,
+          bankAccountId: bankRecord ? bankRecord.id : null,
+          accountId: entityAccount.accountId,
+          purchaseId,
+          purpose: 'Purchase Edit Additional Payment',
+          added_to_account: false,
+          amount: paymentDelta,
+          payment_method: paymentMethod || 'cash',
+          current_account_balance: updatedAccount.balance,
+          note: note || `Additional payment on purchase edit (${updatedPurchase.reference || updatedPurchase.id})`
+        });
+      }
+
+      if (nextGrandTotal < oldPaid) {
+        await createNotification(tx, {
+          title: `Purchase ${updatedPurchase.reference || updatedPurchase.id} overpaid after edit`,
+          description: `Grand total reduced to ${nextGrandTotal.toFixed(2)} while already paid is ${oldPaid.toFixed(2)}. Admin review needed.`,
+          forRole: "admin",
+          link: "/purchase/all"
+        });
+      }
+
+      return tx.purchase.findUnique({
+        where: { id: purchaseId },
+        include: {
+          purchaseItems: { include: { material: true, product: true } },
           supplier: true,
           transactions: true
         }
       });
-
-      return purchase;
     });
 
-    // Add calculated fields
-    const { dueAmount, status } = calculatePurchaseStatus(updatedPurchase);
-    
+    const { dueAmount, status } = calculatePurchaseStatus(result);
     res.json({
-      ...updatedPurchase,
-      dueAmount,
-      status
+      message: 'Purchase updated successfully',
+      purchase: { ...result, dueAmount, status }
     });
   } catch (error) {
     console.error('Error updating purchase:', error);
     if (error.status === 403) {
       return res.status(403).json({ error: "Forbidden" });
     }
-    
-    if (error.code === 'P2025') {
-      return res.status(404).json({ error: 'Purchase not found' });
-    }
-    
     res.status(400).json({ error: error.message || 'Failed to update purchase' });
   }
 });
@@ -1571,6 +2011,980 @@ router.get('/:id/payments', async (req, res) => {
       });
     }
     res.status(500).json({ error: 'Failed to fetch payment history' });
+  }
+});
+
+const validateCompensationDestination = async (tx, destinationType, destinationId) => {
+  if (!destinationType || !destinationId) {
+    throw new Error('Compensation destination is required');
+  }
+  if (!['store', 'shop', 'factory'].includes(destinationType)) {
+    throw new Error('Invalid compensation destination type');
+  }
+  await validateDestinationExists(destinationType, parseInt(destinationId, 10));
+};
+
+async function applyCompensationItemsShipment(tx, payload) {
+  const {
+    purchaseReturnId,
+    destinationType,
+    destinationId,
+    shipmentNote,
+    items
+  } = payload;
+
+  await validateCompensationDestination(tx, destinationType, destinationId);
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error('Compensation items are required');
+  }
+
+  const shipment = await tx.purchaseReturnCompensationShipment.create({
+    data: {
+      purchaseReturnId,
+      reference: `PR-COMP-${Date.now()}`,
+      destinationType,
+      destinationId: parseInt(destinationId, 10),
+      note: shipmentNote || null,
+      receivedAt: new Date(),
+    }
+  });
+
+  let shipmentValue = 0;
+  for (const item of items) {
+    const itemType = String(item.itemType || '').toLowerCase();
+    const quantity = parseFloat(item.quantity || 0);
+    const unitPrice = parseFloat(item.unitPrice || 0);
+    if (!['product', 'material'].includes(itemType)) {
+      throw new Error('Compensation item type must be product or material');
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      throw new Error('Compensation item quantity must be > 0');
+    }
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+      throw new Error('Compensation item unitPrice must be > 0');
+    }
+    const productId = itemType === 'product' ? parseInt(item.productId || item.itemId, 10) : null;
+    const materialId = itemType === 'material' ? parseInt(item.materialId || item.itemId, 10) : null;
+    if (itemType === 'product' && !productId) throw new Error('Compensation product item needs productId');
+    if (itemType === 'material' && !materialId) throw new Error('Compensation material item needs materialId');
+
+    const batchNumber = item.batchNumber ? String(item.batchNumber).trim() : null;
+    const expiryDate = item.expiryDate ? new Date(item.expiryDate) : null;
+    const manufactureDate = item.manufactureDate ? new Date(item.manufactureDate) : null;
+    const batchNotes = item.batchNotes || null;
+
+    await tx.purchaseReturnCompensationItem.create({
+      data: {
+        shipmentId: shipment.id,
+        itemType,
+        productId,
+        materialId,
+        quantity,
+        unitPrice,
+        batchNumber,
+        expiryDate,
+        manufactureDate,
+        batchNotes,
+      }
+    });
+
+    const batchInfo = {
+      batchNumber,
+      expiryDate: parseDateOnly(expiryDate),
+      quantity,
+      unitCost: unitPrice,
+    };
+    if (itemType === 'product') {
+      await updateProductStock(tx, destinationType, parseInt(destinationId, 10), productId, quantity, unitPrice, batchInfo);
+    } else {
+      await updateMaterialStock(tx, destinationType, parseInt(destinationId, 10), materialId, quantity, unitPrice, batchInfo);
+    }
+    shipmentValue += quantity * unitPrice;
+  }
+
+  return { shipment, shipmentValue };
+}
+
+const normalizePositiveCompensationItems = (items = []) =>
+  (Array.isArray(items) ? items : [])
+    .map((item) => ({
+      ...item,
+      quantity: parseFloat(item.quantity || 0),
+      unitPrice: parseFloat(item.unitPrice || 0),
+    }))
+    .filter((item) => Number.isFinite(item.quantity) && item.quantity > 0 && Number.isFinite(item.unitPrice) && item.unitPrice > 0);
+
+const normalizeCompensationShipments = (shipments = []) =>
+  (Array.isArray(shipments) ? shipments : [])
+    .map((shipment) => ({
+      destinationType: shipment.destinationType,
+      destinationId: shipment.destinationId,
+      shipmentNote: shipment.shipmentNote || null,
+      items: normalizePositiveCompensationItems(shipment.items),
+    }))
+    .filter((shipment) => shipment.items.length > 0);
+
+const calculateCompensationStatus = (totalReturnValue, moneyValue, itemValue) => {
+  const total = parseFloat(totalReturnValue || 0);
+  const compensated = (parseFloat(moneyValue || 0) || 0) + (parseFloat(itemValue || 0) || 0);
+  if (compensated >= total && total > 0) return 'completed';
+  if (compensated > 0) return 'partial';
+  return 'pending';
+};
+
+const getCompensationItemValue = async (tx, purchaseReturnId) => {
+  const rows = await tx.purchaseReturnCompensationItem.findMany({
+    where: { shipment: { purchaseReturnId } },
+    select: { quantity: true, unitPrice: true },
+  });
+  return rows.reduce(
+    (sum, row) => sum + ((parseFloat(row.quantity) || 0) * (parseFloat(row.unitPrice) || 0)),
+    0
+  );
+};
+
+const normalizeStandaloneReturnItems = (items = [], returnType = "purchase_return") => {
+  const normalized = [];
+  for (const raw of Array.isArray(items) ? items : []) {
+    const itemType = String(raw.itemType || "").toLowerCase();
+    if (!["product", "material"].includes(itemType)) {
+      throw new Error("Return item type must be product or material");
+    }
+    const quantity = parseFloat(raw.quantity || 0);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      throw new Error("Return item quantity must be > 0");
+    }
+    const unitPrice = parseFloat(raw.unitPrice || 0);
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+      throw new Error("Return item unitPrice must be > 0");
+    }
+    const productId = itemType === "product" ? parseInt(raw.productId || raw.itemId, 10) : null;
+    const materialId = itemType === "material" ? parseInt(raw.materialId || raw.itemId, 10) : null;
+    if (itemType === "product" && !productId) throw new Error("Product return item needs productId");
+    if (itemType === "material" && !materialId) throw new Error("Material return item needs materialId");
+
+    normalized.push({
+      itemType,
+      productId,
+      materialId,
+      quantity,
+      unitPrice,
+      isDamaged: returnType === "damage_return" ? true : !!raw.isDamaged,
+      batchNumber: raw.batchNumber ? String(raw.batchNumber).trim() : null,
+      expiryDate: raw.expiryDate ? new Date(raw.expiryDate) : null,
+      manufactureDate: raw.manufactureDate ? new Date(raw.manufactureDate) : null,
+      batchNotes: raw.batchNotes || null,
+    });
+  }
+  if (!normalized.length) {
+    throw new Error("Return items are required");
+  }
+  return normalized;
+};
+
+const createStandalonePurchaseOrDamageReturn = async (req, res, returnType) => {
+  try {
+    const {
+      supplierId,
+      sourceType,
+      sourceId,
+      items = [],
+      compensationType = "money",
+      compensationAmount = 0,
+      payment_method = "cash",
+      bankAccountId,
+      cashRegisterId,
+      note,
+      compensationDestinationType,
+      compensationDestinationId,
+      compensationShipments = [],
+    } = req.body || {};
+
+    if (!sourceType || !["store", "shop", "factory"].includes(String(sourceType).toLowerCase())) {
+      return res.status(400).json({ error: "Valid sourceType is required (store/shop/factory)" });
+    }
+    const parsedSourceId = parseInt(sourceId, 10);
+    if (!parsedSourceId) {
+      return res.status(400).json({ error: "Valid sourceId is required" });
+    }
+    const parsedSupplierId = supplierId ? parseInt(supplierId, 10) : null;
+
+    await validateDestinationExists(sourceType, parsedSourceId);
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, sourceType, parsedSourceId);
+
+    const normalizedReturnItems = normalizeStandaloneReturnItems(items, returnType);
+    const totalReturnValue = normalizedReturnItems.reduce(
+      (sum, item) => sum + item.quantity * item.unitPrice,
+      0
+    );
+
+    const normalizedCompensationType = String(compensationType || "money").toLowerCase();
+    if (!["money", "items"].includes(normalizedCompensationType)) {
+      return res.status(400).json({ error: "compensationType must be money or items" });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      for (const entry of normalizedReturnItems) {
+        const batchInfo = {
+          batchNumber: entry.batchNumber,
+          expiryDate: parseDateOnly(entry.expiryDate),
+        };
+        if (entry.itemType === "product") {
+          await decrementProductStock(
+            tx,
+            sourceType,
+            parsedSourceId,
+            entry.productId,
+            entry.quantity,
+            batchInfo
+          );
+        } else {
+          await decrementMaterialStock(
+            tx,
+            sourceType,
+            parsedSourceId,
+            entry.materialId,
+            entry.quantity,
+            batchInfo
+          );
+        }
+      }
+
+      const purchaseReturn = await tx.purchaseReturn.create({
+        data: {
+          reference: `${returnType === "damage_return" ? "DR" : "PR"}-${Date.now()}`,
+          purchaseId: null,
+          supplierId: parsedSupplierId,
+          returnType,
+          sourceType,
+          sourceId: parsedSourceId,
+          totalReturnValue,
+          compensationType: normalizedCompensationType,
+          compensationAmount:
+            normalizedCompensationType === "money"
+              ? parseFloat(compensationAmount || 0)
+              : null,
+          compensationStatus: "pending",
+          note: note || null,
+          createdById: req.user?.userId || null,
+        },
+      });
+
+      for (const entry of normalizedReturnItems) {
+        await tx.purchaseReturnItem.create({
+          data: {
+            purchaseReturnId: purchaseReturn.id,
+            purchaseItemId: null,
+            itemType: entry.itemType,
+            productId: entry.productId,
+            materialId: entry.materialId,
+            quantity: entry.quantity,
+            unitPrice: entry.unitPrice,
+            totalPrice: entry.quantity * entry.unitPrice,
+            isDamaged: entry.isDamaged,
+            batchNumber: entry.batchNumber,
+            expiryDate: entry.expiryDate,
+            manufactureDate: entry.manufactureDate,
+            batchNotes: entry.batchNotes,
+          },
+        });
+      }
+
+      let compensatedValue = 0;
+      if (normalizedCompensationType === "money") {
+        const moneyAmount = parseFloat(compensationAmount || 0);
+        if (!Number.isFinite(moneyAmount) || moneyAmount <= 0) {
+          throw new Error("compensationAmount must be > 0 for money compensation");
+        }
+
+        const entityAccount = await tx.entityAccount.findFirst({
+          where: {
+            entityType: sourceType,
+            entityId: parsedSourceId,
+            isPrimary: true,
+          },
+        });
+        if (!entityAccount) {
+          throw new Error("No primary account found for compensation transaction");
+        }
+
+        const updatedAccount = await tx.accounts.update({
+          where: { id: entityAccount.accountId },
+          data: { balance: { increment: moneyAmount } },
+        });
+
+        let bankRecord = null;
+        if (
+          ["bank", "card", "bank_transfer"].includes(
+            String(payment_method || "cash").toLowerCase()
+          ) &&
+          bankAccountId
+        ) {
+          bankRecord = await tx.bankAccount.update({
+            where: { id: parseInt(bankAccountId, 10) },
+            data: { current_balance: { increment: moneyAmount } },
+          });
+        }
+
+        await createTransaction(tx, {
+          reference: generateTransactionReference(),
+          createdById: req.user?.userId || 1,
+          cashRegisterId: cashRegisterId ? parseInt(cashRegisterId, 10) : null,
+          bankAccountId: bankRecord ? bankRecord.id : null,
+          accountId: entityAccount.accountId,
+          purchaseId: null,
+          purpose: returnType === "damage_return" ? "Damage Return Compensation" : "Purchase Return Compensation",
+          added_to_account: true,
+          amount: moneyAmount,
+          payment_method: payment_method || "cash",
+          current_account_balance: updatedAccount.balance,
+          note: note || `Compensation for ${purchaseReturn.reference}`,
+        });
+        compensatedValue += moneyAmount;
+      } else {
+        const providedShipments = normalizeCompensationShipments(compensationShipments);
+        const fallbackItems = normalizePositiveCompensationItems(req.body.compensationItems || []);
+        const shipments = providedShipments.length > 0
+          ? providedShipments
+          : (fallbackItems.length > 0
+              ? [
+                  {
+                    destinationType: compensationDestinationType,
+                    destinationId: compensationDestinationId,
+                    items: fallbackItems,
+                    shipmentNote: note || null,
+                  },
+                ]
+              : []);
+
+        for (const shipmentPayload of shipments) {
+          const applied = await applyCompensationItemsShipment(tx, {
+            purchaseReturnId: purchaseReturn.id,
+            destinationType: shipmentPayload.destinationType,
+            destinationId: shipmentPayload.destinationId,
+            shipmentNote: shipmentPayload.shipmentNote,
+            items: shipmentPayload.items,
+          });
+          compensatedValue += applied.shipmentValue;
+        }
+      }
+
+      const compensationStatus =
+        compensatedValue >= totalReturnValue
+          ? "completed"
+          : compensatedValue > 0
+            ? "partial"
+            : "pending";
+      return tx.purchaseReturn.update({
+        where: { id: purchaseReturn.id },
+        data: { compensationStatus },
+      });
+    });
+
+    res.status(201).json({
+      success: true,
+      message: `${returnType === "damage_return" ? "Damage return" : "Purchase return"} created successfully`,
+      purchaseReturn: result,
+    });
+  } catch (error) {
+    console.error("Error creating standalone return:", error);
+    if (error.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    res.status(400).json({ error: error.message || "Failed to create return" });
+  }
+};
+
+const createPurchaseOrDamageReturn = async (req, res, returnType) => {
+  try {
+    const purchaseId = parseInt(req.params.id, 10);
+    if (isNaN(purchaseId)) {
+      return res.status(400).json({ error: 'Invalid purchase ID' });
+    }
+
+    const {
+      items = [],
+      compensationType = 'money',
+      compensationAmount = 0,
+      payment_method = 'cash',
+      bankAccountId,
+      cashRegisterId,
+      note,
+      compensationDestinationType,
+      compensationDestinationId,
+      compensationShipments = [],
+    } = req.body || {};
+
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: purchaseId },
+      include: {
+        purchaseItems: true,
+        purchaseShipments: { include: { items: true } }
+      }
+    });
+    if (!purchase) {
+      return res.status(404).json({ error: 'Purchase not found' });
+    }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (purchase.destinationType && purchase.destinationId) {
+      ensureIdScope(scope, purchase.destinationType, purchase.destinationId);
+    } else {
+      ensureHasAnyScope(scope);
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Return items are required' });
+    }
+
+    const receivedByPurchaseItemId = {};
+    for (const shipment of purchase.purchaseShipments || []) {
+      for (const si of shipment.items || []) {
+        if (!si.purchaseItemId) continue;
+        receivedByPurchaseItemId[si.purchaseItemId] = (receivedByPurchaseItemId[si.purchaseItemId] || 0) + (parseFloat(si.received_quantity) || 0);
+      }
+    }
+
+    const previousReturns = await prisma.purchaseReturnItem.groupBy({
+      by: ['purchaseItemId'],
+      where: {
+        purchaseReturn: { purchaseId },
+      },
+      _sum: { quantity: true }
+    });
+    const returnedByPurchaseItemId = {};
+    for (const row of previousReturns) {
+      if (!row.purchaseItemId) continue;
+      returnedByPurchaseItemId[row.purchaseItemId] = parseFloat(row._sum.quantity || 0);
+    }
+
+    let totalReturnValue = 0;
+    const normalizedReturnItems = [];
+    for (const raw of items) {
+      const purchaseItemId = parseInt(raw.purchaseItemId, 10);
+      const quantity = parseFloat(raw.quantity || 0);
+      const unitPrice = parseFloat(raw.unitPrice || 0);
+      const isDamaged = !!raw.isDamaged;
+      const purchaseItem = purchase.purchaseItems.find((pi) => pi.id === purchaseItemId);
+      if (!purchaseItem) {
+        return res.status(400).json({ error: `Invalid purchaseItemId ${raw.purchaseItemId}` });
+      }
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        return res.status(400).json({ error: 'Return quantity must be > 0' });
+      }
+      if (returnType === 'damage_return' && !isDamaged) {
+        return res.status(400).json({ error: 'Damage return items must be marked damaged' });
+      }
+      const receivedQty = parseFloat(receivedByPurchaseItemId[purchaseItemId] || 0);
+      const alreadyReturned = parseFloat(returnedByPurchaseItemId[purchaseItemId] || 0);
+      const available = receivedQty - alreadyReturned;
+      if (quantity > available + Number.EPSILON) {
+        return res.status(400).json({ error: `Return quantity exceeds available for purchase item ${purchaseItemId}` });
+      }
+      const finalUnitPrice = Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : parseFloat(purchaseItem.unitPrice || 0);
+      totalReturnValue += quantity * finalUnitPrice;
+      normalizedReturnItems.push({
+        purchaseItem,
+        quantity,
+        unitPrice: finalUnitPrice,
+        isDamaged,
+      });
+    }
+
+    const normalizedCompensationType = String(compensationType || 'money').toLowerCase();
+    if (!['money', 'items'].includes(normalizedCompensationType)) {
+      return res.status(400).json({ error: 'compensationType must be money or items' });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      for (const entry of normalizedReturnItems) {
+        const purchaseItem = entry.purchaseItem;
+        const batchInfo = {
+          batchNumber: purchaseItem.batchNumber,
+          expiryDate: parseDateOnly(purchaseItem.expiryDate),
+        };
+        if (purchaseItem.itemType === 'product') {
+          await decrementProductStock(
+            tx,
+            purchase.destinationType,
+            purchase.destinationId,
+            purchaseItem.productId,
+            entry.quantity,
+            batchInfo
+          );
+        } else {
+          await decrementMaterialStock(
+            tx,
+            purchase.destinationType,
+            purchase.destinationId,
+            purchaseItem.materialId,
+            entry.quantity,
+            batchInfo
+          );
+        }
+      }
+
+      const purchaseReturn = await tx.purchaseReturn.create({
+        data: {
+          reference: `${returnType === 'damage_return' ? 'DR' : 'PR'}-${Date.now()}`,
+          purchaseId: purchase.id,
+          supplierId: purchase.supplierId,
+          returnType,
+          sourceType: purchase.destinationType,
+          sourceId: purchase.destinationId,
+          totalReturnValue,
+          compensationType: normalizedCompensationType,
+          compensationAmount: normalizedCompensationType === 'money' ? parseFloat(compensationAmount || 0) : null,
+          compensationStatus: 'pending',
+          note: note || null,
+          createdById: req.user?.userId || null,
+        }
+      });
+
+      for (const entry of normalizedReturnItems) {
+        const purchaseItem = entry.purchaseItem;
+        await tx.purchaseReturnItem.create({
+          data: {
+            purchaseReturnId: purchaseReturn.id,
+            purchaseItemId: purchaseItem.id,
+            itemType: purchaseItem.itemType,
+            productId: purchaseItem.productId,
+            materialId: purchaseItem.materialId,
+            quantity: entry.quantity,
+            unitPrice: entry.unitPrice,
+            totalPrice: entry.quantity * entry.unitPrice,
+            isDamaged: entry.isDamaged,
+            batchNumber: purchaseItem.batchNumber,
+            expiryDate: purchaseItem.expiryDate,
+            manufactureDate: purchaseItem.manufactureDate,
+            batchNotes: purchaseItem.batchNotes,
+          }
+        });
+      }
+
+      let compensatedValue = 0;
+      if (normalizedCompensationType === 'money') {
+        const moneyAmount = parseFloat(compensationAmount || 0);
+        if (!Number.isFinite(moneyAmount) || moneyAmount <= 0) {
+          throw new Error('compensationAmount must be > 0 for money compensation');
+        }
+
+        const entityAccount = await tx.entityAccount.findFirst({
+          where: {
+            entityType: purchase.destinationType,
+            entityId: purchase.destinationId,
+            isPrimary: true
+          }
+        });
+        if (!entityAccount) {
+          throw new Error('No primary account found for compensation transaction');
+        }
+
+        const updatedAccount = await tx.accounts.update({
+          where: { id: entityAccount.accountId },
+          data: { balance: { increment: moneyAmount } }
+        });
+
+        let bankRecord = null;
+        if (["bank", "card", "bank_transfer"].includes(String(payment_method || "cash").toLowerCase()) && bankAccountId) {
+          bankRecord = await tx.bankAccount.update({
+            where: { id: parseInt(bankAccountId, 10) },
+            data: { current_balance: { increment: moneyAmount } }
+          });
+        }
+
+        await createTransaction(tx, {
+          reference: generateTransactionReference(),
+          createdById: req.user?.userId || 1,
+          cashRegisterId: cashRegisterId ? parseInt(cashRegisterId, 10) : null,
+          bankAccountId: bankRecord ? bankRecord.id : null,
+          accountId: entityAccount.accountId,
+          purchaseId: purchase.id,
+          purpose: returnType === 'damage_return' ? 'Damage Return Compensation' : 'Purchase Return Compensation',
+          added_to_account: true,
+          amount: moneyAmount,
+          payment_method: payment_method || 'cash',
+          current_account_balance: updatedAccount.balance,
+          note: note || `Compensation for ${purchaseReturn.reference}`
+        });
+        compensatedValue += moneyAmount;
+      } else {
+        const providedShipments = normalizeCompensationShipments(compensationShipments);
+        const fallbackItems = normalizePositiveCompensationItems(req.body.compensationItems || []);
+        const shipments = providedShipments.length > 0
+          ? providedShipments
+          : (fallbackItems.length > 0
+              ? [{
+                  destinationType: compensationDestinationType,
+                  destinationId: compensationDestinationId,
+                  items: fallbackItems,
+                  shipmentNote: note || null,
+                }]
+              : []);
+
+        for (const shipmentPayload of shipments) {
+          const applied = await applyCompensationItemsShipment(tx, {
+            purchaseReturnId: purchaseReturn.id,
+            destinationType: shipmentPayload.destinationType,
+            destinationId: shipmentPayload.destinationId,
+            shipmentNote: shipmentPayload.shipmentNote,
+            items: shipmentPayload.items,
+          });
+          compensatedValue += applied.shipmentValue;
+        }
+      }
+
+      const compensationStatus = compensatedValue >= totalReturnValue ? 'completed' : compensatedValue > 0 ? 'partial' : 'pending';
+      const updatedReturn = await tx.purchaseReturn.update({
+        where: { id: purchaseReturn.id },
+        data: { compensationStatus }
+      });
+
+      return updatedReturn;
+    });
+
+    res.status(201).json({
+      success: true,
+      message: `${returnType === 'damage_return' ? 'Damage return' : 'Purchase return'} created successfully`,
+      purchaseReturn: result
+    });
+  } catch (error) {
+    console.error('Error creating purchase return:', error);
+    if (error.status === 403) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    res.status(400).json({ error: error.message || 'Failed to create return' });
+  }
+};
+
+router.post('/:id/returns', async (req, res) => createPurchaseOrDamageReturn(req, res, 'purchase_return'));
+router.post('/:id/damage-returns', async (req, res) => createPurchaseOrDamageReturn(req, res, 'damage_return'));
+
+router.get('/:id/returns', async (req, res) => {
+  try {
+    const purchaseId = parseInt(req.params.id, 10);
+    if (isNaN(purchaseId)) return res.status(400).json({ error: 'Invalid purchase ID' });
+
+    const purchase = await prisma.purchase.findUnique({
+      where: { id: purchaseId },
+      select: { id: true, destinationType: true, destinationId: true }
+    });
+    if (!purchase) return res.status(404).json({ error: 'Purchase not found' });
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (purchase.destinationType && purchase.destinationId) {
+      ensureIdScope(scope, purchase.destinationType, purchase.destinationId);
+    }
+
+    const rows = await prisma.purchaseReturn.findMany({
+      where: { purchaseId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: { include: { product: true, material: true } },
+        compensationShipments: { include: { items: { include: { product: true, material: true } } } },
+      }
+    });
+    res.json({ returns: rows });
+  } catch (error) {
+    if (error.status === 403) return res.json({ returns: [] });
+    res.status(500).json({ error: error.message || 'Failed to fetch returns' });
+  }
+});
+
+router.post('/returns/:returnId/compensation-shipments', async (req, res) => {
+  try {
+    const returnId = parseInt(req.params.returnId, 10);
+    if (isNaN(returnId)) return res.status(400).json({ error: 'Invalid return ID' });
+    const { destinationType, destinationId, items, shipmentNote } = req.body || {};
+
+    const purchaseReturn = await prisma.purchaseReturn.findUnique({
+      where: { id: returnId },
+      include: { purchase: true }
+    });
+    if (!purchaseReturn) return res.status(404).json({ error: 'Return not found' });
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (purchaseReturn.purchase?.destinationType && purchaseReturn.purchase?.destinationId) {
+      ensureIdScope(scope, purchaseReturn.purchase.destinationType, purchaseReturn.purchase.destinationId);
+    } else if (purchaseReturn.sourceType && purchaseReturn.sourceId) {
+      ensureIdScope(scope, purchaseReturn.sourceType, purchaseReturn.sourceId);
+    } else {
+      ensureHasAnyScope(scope);
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const applied = await applyCompensationItemsShipment(tx, {
+        purchaseReturnId: purchaseReturn.id,
+        destinationType,
+        destinationId,
+        shipmentNote,
+        items,
+      });
+
+      const compensation = await tx.purchaseReturnCompensationItem.aggregate({
+        where: { shipment: { purchaseReturnId: purchaseReturn.id } },
+        _sum: { quantity: true }
+      });
+
+      const money = parseFloat(purchaseReturn.compensationAmount || 0);
+      const itemValue = await getCompensationItemValue(tx, purchaseReturn.id);
+      const status = calculateCompensationStatus(purchaseReturn.totalReturnValue, money, itemValue);
+      await tx.purchaseReturn.update({
+        where: { id: purchaseReturn.id },
+        data: { compensationStatus: status }
+      });
+
+      return { shipment: applied.shipment, compensatedQuantity: compensation._sum.quantity || 0 };
+    });
+
+    res.status(201).json({ success: true, ...result });
+  } catch (error) {
+    if (error.status === 403) return res.status(403).json({ error: 'Forbidden' });
+    res.status(400).json({ error: error.message || 'Failed to add compensation shipment' });
+  }
+});
+
+router.get('/returns/damage-items', async (req, res) => {
+  try {
+    const sourceType = String(req.query.sourceType || req.query.type || "").toLowerCase();
+    const sourceId = parseInt(req.query.sourceId || req.query.branchId || req.query.id, 10);
+    if (!["store", "shop", "factory"].includes(sourceType)) {
+      return res.status(400).json({ error: "sourceType must be store, shop, or factory" });
+    }
+    if (!sourceId) {
+      return res.status(400).json({ error: "sourceId is required" });
+    }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, sourceType, sourceId);
+
+    let productRows = [];
+    let materialRows = [];
+
+    if (sourceType === 'store') {
+      productRows = await prisma.storeProduct.findMany({
+        where: { store_id: sourceId, scrap: { gt: 0 } },
+        include: { product: true }
+      });
+      materialRows = await prisma.storeMaterial.findMany({
+        where: { store_id: sourceId, scrap: { gt: 0 } },
+        include: { material: true }
+      });
+    } else if (sourceType === 'shop') {
+      productRows = await prisma.shopProduct.findMany({
+        where: { shop_id: sourceId, scrap: { gt: 0 } },
+        include: { product: true }
+      });
+      materialRows = await prisma.shopMaterial.findMany({
+        where: { shop_id: sourceId, scrap: { gt: 0 } },
+        include: { material: true }
+      });
+    } else {
+      productRows = await prisma.factoryProduct.findMany({
+        where: { factoryId: sourceId, scrap: { gt: 0 } },
+        include: { product: true }
+      });
+      materialRows = await prisma.factoryMaterial.findMany({
+        where: { factoryId: sourceId, scrap: { gt: 0 } },
+        include: { material: true }
+      });
+    }
+
+    const products = productRows.map((row) => ({
+      itemType: "product",
+      id: row.product_id ?? row.productId,
+      name: row.product?.name || "-",
+      barcode: row.product?.barcode || null,
+      availableQuantity: parseFloat(row.scrap || 0),
+      unitPrice: parseFloat(row.product?.cost || row.avg_cost || 0),
+    }));
+    const materials = materialRows.map((row) => ({
+      itemType: "material",
+      id: row.material_id ?? row.materialId,
+      name: row.material?.name || "-",
+      barcode: row.material?.barcode || null,
+      availableQuantity: parseFloat(row.scrap || 0),
+      unitPrice: parseFloat(row.material?.unit_cost || row.avg_cost || 0),
+    }));
+
+    res.json({
+      sourceType,
+      sourceId,
+      items: [...products, ...materials],
+      products,
+      materials,
+    });
+  } catch (error) {
+    if (error.status === 403) return res.status(403).json({ error: "Forbidden" });
+    res.status(500).json({ error: error.message || "Failed to fetch damage items" });
+  }
+});
+
+router.get('/returns/:returnId', async (req, res) => {
+  try {
+    const returnId = parseInt(req.params.returnId, 10);
+    if (isNaN(returnId)) return res.status(400).json({ error: 'Invalid return ID' });
+
+    const row = await prisma.purchaseReturn.findUnique({
+      where: { id: returnId },
+      include: {
+        supplier: { select: { id: true, name: true, phone: true } },
+        items: { include: { product: true, material: true } },
+        compensationShipments: { include: { items: { include: { product: true, material: true } } } },
+        compensationPayments: { orderBy: { createdAt: 'desc' } },
+      }
+    });
+    if (!row) return res.status(404).json({ error: 'Return not found' });
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (row.sourceType && row.sourceId) {
+      ensureIdScope(scope, row.sourceType, row.sourceId);
+    } else {
+      ensureHasAnyScope(scope);
+    }
+
+    res.json({ purchaseReturn: row });
+  } catch (error) {
+    if (error.status === 403) return res.status(403).json({ error: 'Forbidden' });
+    res.status(500).json({ error: error.message || 'Failed to fetch return details' });
+  }
+});
+
+router.get('/returns/:returnId/payments', async (req, res) => {
+  try {
+    const returnId = parseInt(req.params.returnId, 10);
+    if (isNaN(returnId)) return res.status(400).json({ error: 'Invalid return ID' });
+
+    const purchaseReturn = await prisma.purchaseReturn.findUnique({
+      where: { id: returnId },
+      select: { id: true, sourceType: true, sourceId: true }
+    });
+    if (!purchaseReturn) return res.status(404).json({ error: 'Return not found' });
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (purchaseReturn.sourceType && purchaseReturn.sourceId) {
+      ensureIdScope(scope, purchaseReturn.sourceType, purchaseReturn.sourceId);
+    } else {
+      ensureHasAnyScope(scope);
+    }
+
+    const payments = await prisma.purchaseReturnPayment.findMany({
+      where: { purchaseReturnId: returnId },
+      orderBy: { createdAt: 'desc' }
+    });
+    const totalPaid = payments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    res.json({ payments, totalPaid });
+  } catch (error) {
+    if (error.status === 403) return res.status(403).json({ error: 'Forbidden' });
+    res.status(500).json({ error: error.message || 'Failed to fetch return payments' });
+  }
+});
+
+router.post('/returns/:returnId/payments', async (req, res) => {
+  try {
+    const returnId = parseInt(req.params.returnId, 10);
+    if (isNaN(returnId)) return res.status(400).json({ error: 'Invalid return ID' });
+
+    const {
+      amount,
+      paymentMethod = 'cash',
+      note = null,
+      bankAccountId,
+      cashRegisterId
+    } = req.body || {};
+
+    const moneyAmount = parseFloat(amount || 0);
+    if (!Number.isFinite(moneyAmount) || moneyAmount <= 0) {
+      return res.status(400).json({ error: 'amount must be greater than 0' });
+    }
+
+    const purchaseReturn = await prisma.purchaseReturn.findUnique({
+      where: { id: returnId },
+      include: { purchase: true }
+    });
+    if (!purchaseReturn) return res.status(404).json({ error: 'Return not found' });
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (purchaseReturn.purchase?.destinationType && purchaseReturn.purchase?.destinationId) {
+      ensureIdScope(scope, purchaseReturn.purchase.destinationType, purchaseReturn.purchase.destinationId);
+    } else if (purchaseReturn.sourceType && purchaseReturn.sourceId) {
+      ensureIdScope(scope, purchaseReturn.sourceType, purchaseReturn.sourceId);
+    } else {
+      ensureHasAnyScope(scope);
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const sourceType = purchaseReturn.sourceType || purchaseReturn.purchase?.destinationType;
+      const sourceId = purchaseReturn.sourceId || purchaseReturn.purchase?.destinationId;
+      if (!sourceType || !sourceId) {
+        throw new Error('Cannot resolve source location for compensation payment');
+      }
+
+      const entityAccount = await tx.entityAccount.findFirst({
+        where: { entityType: sourceType, entityId: sourceId, isPrimary: true }
+      });
+      if (!entityAccount) {
+        throw new Error('No primary account found for compensation payment');
+      }
+
+      const updatedAccount = await tx.accounts.update({
+        where: { id: entityAccount.accountId },
+        data: { balance: { increment: moneyAmount } }
+      });
+
+      let bankRecord = null;
+      if (["bank", "card", "bank_transfer"].includes(String(paymentMethod || "cash").toLowerCase()) && bankAccountId) {
+        bankRecord = await tx.bankAccount.update({
+          where: { id: parseInt(bankAccountId, 10) },
+          data: { current_balance: { increment: moneyAmount } }
+        });
+      }
+
+      const payment = await tx.purchaseReturnPayment.create({
+        data: {
+          purchaseReturnId: returnId,
+          amount: moneyAmount,
+          paymentMethod: paymentMethod || 'cash',
+          note: note || null,
+          createdById: req.user?.userId || null,
+        }
+      });
+
+      await createTransaction(tx, {
+        reference: generateTransactionReference(),
+        createdById: req.user?.userId || 1,
+        cashRegisterId: cashRegisterId ? parseInt(cashRegisterId, 10) : null,
+        bankAccountId: bankRecord ? bankRecord.id : null,
+        accountId: entityAccount.accountId,
+        purchaseId: purchaseReturn.purchaseId || null,
+        purpose: purchaseReturn.returnType === 'damage_return' ? 'Damage Return Compensation Payment' : 'Purchase Return Compensation Payment',
+        added_to_account: true,
+        amount: moneyAmount,
+        payment_method: paymentMethod || 'cash',
+        current_account_balance: updatedAccount.balance,
+        note: note || `Compensation payment for ${purchaseReturn.reference}`
+      });
+
+      const currentMoney = parseFloat(purchaseReturn.compensationAmount || 0) + moneyAmount;
+      const itemValue = await getCompensationItemValue(tx, returnId);
+      const status = calculateCompensationStatus(purchaseReturn.totalReturnValue, currentMoney, itemValue);
+
+      const updatedReturn = await tx.purchaseReturn.update({
+        where: { id: returnId },
+        data: {
+          compensationAmount: currentMoney,
+          compensationStatus: status,
+        }
+      });
+
+      return { payment, updatedReturn };
+    });
+
+    res.status(201).json({ success: true, ...result });
+  } catch (error) {
+    if (error.status === 403) return res.status(403).json({ error: 'Forbidden' });
+    res.status(400).json({ error: error.message || 'Failed to add payment' });
   }
 });
 

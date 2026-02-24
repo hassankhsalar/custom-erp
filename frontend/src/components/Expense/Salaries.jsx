@@ -16,17 +16,34 @@ import {
   FileText,
   AlertCircle,
   Plus,
-  Download
+  Download,
+  Pencil,
+  Settings
 } from "lucide-react";
 
 export default function Salaries() {
   const [salaries, setSalaries] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [companyProfile, setCompanyProfile] = useState({
+    companyName: "Company",
+    address: "",
+    phone: "",
+    email: "",
+    footerNote: ""
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(false);
   const [totalSalaries, setTotalSalaries] = useState(0);
+  const [editingSalary, setEditingSalary] = useState(null);
+  const [editForm, setEditForm] = useState({ baseSalary: "", allowances: "", deductions: "" });
+  const [statusSalary, setStatusSalary] = useState(null);
+  const [statusDraft, setStatusDraft] = useState("generated");
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [saving, setSaving] = useState(false);
   const token = localStorage.getItem("token");
+  const STATUS_OPTIONS = ["generated", "created", "approve", "paid"];
 
   const fetchSalaries = async () => {
     try {
@@ -47,8 +64,41 @@ export default function Salaries() {
     }
   };
 
+  const fetchAccounts = async () => {
+    try {
+      const res = await fetch(`${API_ROUTES.ACCOUNTS}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setAccounts(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching accounts:", error);
+      setAccounts([]);
+    }
+  };
+
+  const fetchCompanyProfile = async () => {
+    try {
+      const res = await fetch(API_ROUTES.BUSINESS_SETTINGS_BY_KEY("company_profile"), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const row = await res.json();
+      if (row?.value) {
+        setCompanyProfile((prev) => ({
+          ...prev,
+          ...row.value
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching company profile:", error);
+    }
+  };
+
   useEffect(() => {
     fetchSalaries();
+    fetchAccounts();
+    fetchCompanyProfile();
   }, []);
 
   // Get paginated salaries
@@ -89,6 +139,19 @@ export default function Salaries() {
   // Get status styling
   const getStatusStyle = (status) => {
     switch(status?.toLowerCase()) {
+      case 'generated':
+        return {
+          bg: 'bg-gradient-to-r from-indigo-500 to-blue-500',
+          icon: <Clock size={14} />,
+          text: 'text-white'
+        };
+      case 'created':
+        return {
+          bg: 'bg-gradient-to-r from-cyan-500 to-sky-500',
+          icon: <CheckCircle size={14} />,
+          text: 'text-white'
+        };
+      case 'approve':
       case 'paid':
         return {
           bg: 'bg-gradient-to-r from-emerald-500 to-green-500',
@@ -119,11 +182,221 @@ export default function Salaries() {
 
   // Calculate statistics
   const paidSalaries = salaries.filter(s => s.status?.toLowerCase() === 'paid').length;
-  const pendingSalaries = salaries.filter(s => s.status?.toLowerCase() === 'pending').length;
+  const pendingSalaries = salaries.filter(s => ['generated', 'created', 'approve'].includes((s.status || '').toLowerCase())).length;
   const totalNetAmount = salaries.reduce((sum, s) => sum + (parseFloat(s.net) || 0), 0);
 
+  const openEditModal = (salary) => {
+    setEditingSalary(salary);
+    setEditForm({
+      baseSalary: String(parseFloat(salary.baseSalary || 0)),
+      allowances: String(parseFloat(salary.allowances || 0)),
+      deductions: String(parseFloat(salary.deductions || 0)),
+    });
+  };
+
+  const openStatusModal = (salary) => {
+    setStatusSalary(salary);
+    const normalized = (salary.status || "generated").toLowerCase();
+    setStatusDraft(normalized === "approved" ? "approve" : normalized);
+    setSelectedAccountId("");
+  };
+
+  const closeModals = () => {
+    setEditingSalary(null);
+    setStatusSalary(null);
+    setSelectedAccountId("");
+    setSaving(false);
+  };
+
+  const saveEdit = async () => {
+    if (!editingSalary) return;
+    try {
+      setSaving(true);
+      const res = await fetch(`${API_ROUTES.HRM}/payroll/${editingSalary.id}`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          allowances: parseFloat(editForm.allowances) || 0,
+          deductions: parseFloat(editForm.deductions) || 0
+        })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update salary");
+      }
+      await fetchSalaries();
+      closeModals();
+    } catch (error) {
+      alert(error.message || "Failed to update salary");
+      setSaving(false);
+    }
+  };
+
+  const saveStatus = async () => {
+    if (!statusSalary) return;
+    if (statusDraft === "paid" && !selectedAccountId) {
+      alert("Please select an account for salary payment.");
+      return;
+    }
+    try {
+      setSaving(true);
+      const res = await fetch(`${API_ROUTES.HRM}/payroll/${statusSalary.id}`, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          status: statusDraft,
+          accountId: statusDraft === "paid" ? parseInt(selectedAccountId) : undefined
+        })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update status");
+      }
+      await fetchSalaries();
+      closeModals();
+    } catch (error) {
+      alert(error.message || "Failed to update status");
+      setSaving(false);
+    }
+  };
+
+  const canDownloadPayslip = (status) => {
+    const s = (status || "").toLowerCase();
+    return s === "approve" || s === "approved" || s === "paid";
+  };
+
+  const formatMonthName = (monthNumber) => {
+    const month = parseInt(monthNumber) || 1;
+    const date = new Date(2000, Math.max(0, month - 1), 1);
+    return date.toLocaleString("en-US", { month: "long" });
+  };
+
+  const handleDownloadPayslip = (salary) => {
+    if (!canDownloadPayslip(salary.status)) {
+      alert("Pay slip can be downloaded only after salary is approved.");
+      return;
+    }
+
+    const employeeName = salary.user?.name || salary.user?.username || "Employee";
+    const baseSalary = parseFloat(salary.baseSalary || 0);
+    const allowances = parseFloat(salary.allowances || 0);
+    const deductions = parseFloat(salary.deductions || 0);
+    const gross = parseFloat(salary.gross || (baseSalary + allowances));
+    const net = parseFloat(salary.net || (gross - deductions));
+    const period = `${formatMonthName(salary.month)} ${salary.year}`;
+    const generatedOn = new Date().toLocaleString();
+
+    const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Pay Slip - ${employeeName}</title>
+    <style>
+      body { font-family: Arial, sans-serif; color: #111827; padding: 24px; }
+      .card { max-width: 820px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+      .header { background: #f3f4f6; padding: 18px 22px; border-bottom: 1px solid #e5e7eb; }
+      .title { margin: 0; font-size: 24px; }
+      .sub { margin: 4px 0 0; color: #4b5563; font-size: 13px; }
+      .content { padding: 22px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+      .box { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+      .label { color: #6b7280; font-size: 12px; }
+      .value { margin-top: 4px; font-weight: 700; }
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+      th, td { border: 1px solid #e5e7eb; padding: 10px; font-size: 14px; text-align: left; }
+      th { background: #f9fafb; }
+      .right { text-align: right; }
+      .total { font-size: 18px; font-weight: 700; }
+      .footer { margin-top: 18px; color: #6b7280; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="header">
+        <h1 class="title">${companyProfile.companyName || "Company"}</h1>
+        <p class="sub">${companyProfile.address || ""}</p>
+        <p class="sub">${companyProfile.phone || ""} ${companyProfile.email ? " | " + companyProfile.email : ""}</p>
+      </div>
+      <div class="content">
+        <h2 style="margin: 0 0 12px;">Pay Slip</h2>
+        <div class="grid">
+          <div class="box">
+            <div class="label">Employee</div>
+            <div class="value">${employeeName}</div>
+          </div>
+          <div class="box">
+            <div class="label">Salary Period</div>
+            <div class="value">${period}</div>
+          </div>
+          <div class="box">
+            <div class="label">Current Status</div>
+            <div class="value">${salary.status || "N/A"}</div>
+          </div>
+          <div class="box">
+            <div class="label">Generated On</div>
+            <div class="value">${generatedOn}</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Component</th>
+              <th class="right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Base Salary</td>
+              <td class="right">${formatCurrency(baseSalary)}</td>
+            </tr>
+            <tr>
+              <td>Allowances</td>
+              <td class="right">${formatCurrency(allowances)}</td>
+            </tr>
+            <tr>
+              <td>Deductions</td>
+              <td class="right">${formatCurrency(deductions)}</td>
+            </tr>
+            <tr>
+              <td><strong>Gross</strong></td>
+              <td class="right"><strong>${formatCurrency(gross)}</strong></td>
+            </tr>
+            <tr>
+              <td class="total">Net Pay</td>
+              <td class="right total">${formatCurrency(net)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="footer">
+          ${companyProfile.footerNote || "This is a system-generated pay slip."}
+        </div>
+      </div>
+    </div>
+  </body>
+</html>`;
+
+    const file = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    const safeEmployee = employeeName.replace(/[^a-z0-9]/gi, "_");
+    link.href = url;
+    link.download = `PaySlip_${safeEmployee}_${salary.month}_${salary.year}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
       {/* Background decorative elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-blue-300/20 rounded-full blur-3xl"></div>
@@ -233,8 +506,8 @@ export default function Salaries() {
                       <th className="p-4 text-left font-medium text-gray-700">Employee</th>
                       <th className="p-4 text-left font-medium text-gray-700">Period</th>
                       <th className="p-4 text-left font-medium text-gray-700">Net Salary</th>
-                      <th className="p-4 text-left font-medium text-gray-700">Status</th>
-                      <th className="p-4 text-left font-medium text-gray-700">Details</th>
+                          <th className="p-4 text-left font-medium text-gray-700">Status</th>
+                          <th className="p-4 text-left font-medium text-gray-700">Details</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -242,6 +515,7 @@ export default function Salaries() {
                       const statusStyle = getStatusStyle(salary.status);
                       const monthYear = `${salary.month}/${salary.year}`;
                       const employeeName = salary.user?.name || salary.user?.username || 'Unknown Employee';
+                      const isPaid = (salary.status || "").toLowerCase() === "paid";
                       
                       return (
                         <tr 
@@ -286,7 +560,7 @@ export default function Salaries() {
                             </div>
                           </td>
                           <td className="p-4">
-                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-semibold">
+                            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-semibold ${statusStyle.bg}`}>
                               {statusStyle.icon}
                               <span className={statusStyle.text}>
                                 {salary.status || 'Unknown'}
@@ -296,16 +570,33 @@ export default function Salaries() {
                           <td className="p-4">
                             <div className="flex items-center gap-2">
                               <button
-                                onClick={() => alert(`Salary details for ${employeeName} (${monthYear})`)}
-                                className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-300"
-                                title="View Details"
+                                onClick={() => openEditModal(salary)}
+                                disabled={isPaid}
+                                className={`p-2 rounded-lg transition-colors duration-300 ${
+                                  isPaid
+                                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                    : "bg-blue-50 text-blue-600 hover:bg-blue-100"
+                                }`}
+                                title="Edit Salary"
                               >
-                                <FileText size={16} />
+                                <Pencil size={16} />
                               </button>
                               <button
-                                onClick={() => alert(`Download payslip for ${employeeName}`)}
+                                onClick={() => openStatusModal(salary)}
                                 className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors duration-300"
-                                title="Download Payslip"
+                                title="Change Status"
+                              >
+                                <Settings size={16} />
+                              </button>
+                              <button
+                                onClick={() => handleDownloadPayslip(salary)}
+                                disabled={!canDownloadPayslip(salary.status)}
+                                className={`p-2 rounded-lg transition-colors duration-300 ${
+                                  canDownloadPayslip(salary.status)
+                                    ? "bg-purple-50 text-purple-600 hover:bg-purple-100"
+                                    : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                }`}
+                                title={canDownloadPayslip(salary.status) ? "Download Pay Slip" : "Available after approval"}
                               >
                                 <Download size={16} />
                               </button>
@@ -464,6 +755,87 @@ export default function Salaries() {
           )}
         </div>
       </div>
+
+      {editingSalary && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl w-full max-w-lg p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Edit Salary</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Base Salary (Read only)</label>
+                <input value={editForm.baseSalary} readOnly className="w-full border border-gray-300 rounded-xl p-3 bg-gray-100/70" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Allowances</label>
+                <input type="number" step="0.01" value={editForm.allowances} onChange={(e) => setEditForm((p) => ({ ...p, allowances: e.target.value }))} className="w-full border border-gray-300 rounded-xl p-3 bg-white/80" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Deductions</label>
+                <input type="number" step="0.01" value={editForm.deductions} onChange={(e) => setEditForm((p) => ({ ...p, deductions: e.target.value }))} className="w-full border border-gray-300 rounded-xl p-3 bg-white/80" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={closeModals} className="px-5 py-2.5 rounded-xl bg-gray-200/70 text-gray-700 hover:bg-gray-300/80">Cancel</button>
+              <button onClick={saveEdit} disabled={saving} className={`px-5 py-2.5 rounded-xl text-white ${saving ? 'bg-gray-400' : 'bg-gradient-to-r from-blue-500 to-cyan-500'}`}>{saving ? 'Saving...' : 'Save'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {statusSalary && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl w-full max-w-xl p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Change Salary Status</h3>
+            {(() => {
+              const currentStatus = (statusSalary.status || "").toLowerCase();
+              const canPay = ["approve", "approved", "paid"].includes(currentStatus);
+              const optionsToShow = STATUS_OPTIONS.filter((s) => s !== "paid" || canPay);
+              return (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {optionsToShow.map((s) => {
+                    const selected = statusDraft === s;
+                    const style = getStatusStyle(s);
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setStatusDraft(s)}
+                        className={`px-3 py-3 rounded-xl text-sm font-medium transition-all ${
+                          selected ? `${style.bg} text-white` : "bg-white/80 border border-white/60 hover:bg-white text-gray-700"
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {statusDraft === "paid" && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Account</label>
+                <select
+                  value={selectedAccountId}
+                  onChange={(e) => setSelectedAccountId(e.target.value)}
+                  className="w-full border border-gray-300 rounded-xl p-3 bg-white/80"
+                >
+                  <option value="">Select account</option>
+                  {accounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} ({acc.account_number})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={closeModals} className="px-5 py-2.5 rounded-xl bg-gray-200/70 text-gray-700 hover:bg-gray-300/80">Cancel</button>
+              <button onClick={saveStatus} disabled={saving} className={`px-5 py-2.5 rounded-xl text-white ${saving ? 'bg-gray-400' : 'bg-gradient-to-r from-emerald-500 to-green-500'}`}>{saving ? 'Saving...' : 'Update Status'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

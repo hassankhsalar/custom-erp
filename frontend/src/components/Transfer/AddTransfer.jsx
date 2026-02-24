@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { 
   Truck, 
   Package, 
@@ -20,6 +20,9 @@ import {
 
 const AddTransfer = () => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { id: transferId } = useParams();
+  const isEditMode = Boolean(transferId);
   const requisitionOrder = location.state?.requisitionOrder || null;
   const [fromType, setFromType] = useState('store');
   const [toType, setToType] = useState('store');
@@ -40,6 +43,9 @@ const AddTransfer = () => {
     requisitionId: null,
     requisitionSectionId: null,
   });
+  const toAltUnits = (arr) => (Array.isArray(arr) ? arr : [])
+    .map((u) => ({ unitname: String(u?.unitname || "").trim(), multiplier: Number(u?.multiplier) }))
+    .filter((u) => u.unitname && Number.isFinite(u.multiplier) && u.multiplier > 0);
   const token = localStorage.getItem('token');
 
   useEffect(() => {
@@ -60,7 +66,7 @@ const AddTransfer = () => {
             headers: { Authorization: `Bearer ${token}` }
           }),
         ]);
-        setStores(storesRes.data.stores);
+        setStores(storesRes.data.stores || storesRes.data || []);
         setShops(shopsRes.data);
         setFactories(factoriesRes.data);
       } catch (error) {
@@ -74,6 +80,7 @@ const AddTransfer = () => {
 
   useEffect(() => {
     if (!requisitionOrder) return;
+    if (isEditMode) return;
     const requesterType = requisitionOrder?.requisition?.requesterType;
     const requesterId = requisitionOrder?.requisition?.requesterId;
     const sourceType = requisitionOrder?.destinationType;
@@ -93,6 +100,13 @@ const AddTransfer = () => {
       name: it.itemType === "product" ? it.product?.name : it.material?.name,
       itemType: it.itemType,
       quantity: it.quantity || 1,
+      selectedQuantity: it.quantity || 1,
+      selectedName: it.itemType === "product" ? it.product?.name : it.material?.name,
+      defaultUnit: it.itemType === "product" ? (it.product?.unit || "unit") : (it.material?.unit || "unit"),
+      selectedUnit: it.itemType === "product" ? (it.product?.unit || "unit") : (it.material?.unit || "unit"),
+      conversionMultiplier: 1,
+      alternativeNames: it.itemType === "product" ? (it.product?.alternative_names || []) : (it.material?.alternative_names || []),
+      alternativeUnits: toAltUnits(it.itemType === "product" ? it.product?.alternative_units : it.material?.alternative_units),
       stock: it.quantity || 0,
       batches: [],
       batchNumber: null,
@@ -104,7 +118,56 @@ const AddTransfer = () => {
       requisitionId: requisitionOrder.requisitionId,
       requisitionSectionId: requisitionOrder.id,
     });
-  }, [requisitionOrder]);
+  }, [requisitionOrder, isEditMode]);
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    const fetchTransfer = async () => {
+      setLoading(true);
+      try {
+        const res = await axios.get(API_ROUTES.TRANSFER_BY_ID(transferId), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const transfer = res.data;
+        setFromType(transfer.from || 'store');
+        setToType(transfer.to || 'store');
+        setFromId(String(transfer.fromId || ''));
+        setToId(String(transfer.toId || ''));
+        setShippingCost(transfer.shipping_cost || 0);
+        setNote(transfer.note || '');
+        setStatus(transfer.status || 'processing');
+        setItems(
+          (transfer.transferItems || []).map((item) => ({
+            id: item.itemId,
+            name: item.selectedName || `Item ${item.itemId}`,
+            itemType: item.item,
+            quantity: item.quantity || 1,
+            selectedQuantity: item.selectedQuantity || item.quantity || 1,
+            selectedName: item.selectedName || `Item ${item.itemId}`,
+            defaultUnit: item.selectedUnit || 'unit',
+            selectedUnit: item.selectedUnit || 'unit',
+            conversionMultiplier: 1,
+            alternativeNames: [],
+            alternativeUnits: [],
+            stock: item.quantity || 0,
+            batches: item.batchNumber
+              ? [{ batchNumber: item.batchNumber, expiryDate: item.expiryDate, quantity: item.quantity }]
+              : [],
+            batchNumber: item.batchNumber || null,
+            expiryDate: item.expiryDate || null,
+            batchAvailable: item.quantity || 1,
+            receivedQuantity: item.receivedQuantity || 0,
+          }))
+        );
+      } catch (error) {
+        console.error('Error fetching transfer:', error);
+        alert(error.response?.data?.error || 'Failed to load transfer');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTransfer();
+  }, [isEditMode, transferId, token]);
 
   useEffect(() => {
     const dataMap = {
@@ -171,6 +234,13 @@ const AddTransfer = () => {
       {
         ...item,
         quantity: 1,
+        selectedQuantity: 1,
+        selectedName: item.name,
+        defaultUnit: item.defaultUnit || "unit",
+        selectedUnit: item.defaultUnit || "unit",
+        conversionMultiplier: 1,
+        alternativeNames: Array.isArray(item.alternativeNames) ? item.alternativeNames : [],
+        alternativeUnits: toAltUnits(item.alternativeUnits),
         batchNumber: firstBatch?.batchNumber || null,
         expiryDate: firstBatch?.expiryDate || null,
         batchAvailable: firstBatch?.quantity || item.stock || 0,
@@ -184,8 +254,41 @@ const AddTransfer = () => {
     setItems((prev) =>
       prev.map((item, i) => {
         if (i !== index) return item;
-        const nextQty = parseFloat(quantity) || 1;
-        return { ...item, quantity: Math.max(1, Math.min(nextQty, item.batchAvailable || nextQty)) };
+        const nextSelected = parseFloat(quantity) || 1;
+        const nextActual = nextSelected * (item.conversionMultiplier || 1);
+        const clampedActual = Math.max(1, Math.min(nextActual, item.batchAvailable || nextActual));
+        return {
+          ...item,
+          selectedQuantity: nextSelected,
+          quantity: clampedActual,
+        };
+      })
+    );
+  };
+
+  const handleSelectedNameChange = (index, value) => {
+    setItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, selectedName: value || item.name } : item))
+    );
+  };
+
+  const handleSelectedUnitChange = (index, value) => {
+    setItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== index) return item;
+        const base = item.defaultUnit || "unit";
+        if (!value || value === base) {
+          const qty = item.selectedQuantity || 1;
+          return { ...item, selectedUnit: base, conversionMultiplier: 1, quantity: qty };
+        }
+        const found = (item.alternativeUnits || []).find((u) => u.unitname === value);
+        const multiplier = found?.multiplier || 1;
+        return {
+          ...item,
+          selectedUnit: value,
+          conversionMultiplier: multiplier,
+          quantity: (item.selectedQuantity || 1) * multiplier,
+        };
       })
     );
   };
@@ -248,13 +351,22 @@ const AddTransfer = () => {
     formData.append('items', JSON.stringify(items));
     
     try {
-      await axios.post(API_ROUTES.TRANSFERS, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (requisitionLink.requisitionSectionId) {
+      if (isEditMode) {
+        await axios.put(API_ROUTES.TRANSFER_BY_ID(transferId), formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      } else {
+        await axios.post(API_ROUTES.TRANSFERS, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      }
+      if (!isEditMode && requisitionLink.requisitionSectionId) {
         try {
           await axios.post(
             API_ROUTES.REQUISITION_SECTION_COMPLETE(requisitionLink.requisitionSectionId),
@@ -265,10 +377,10 @@ const AddTransfer = () => {
           // Non-blocking: transfer already created
         }
       }
-      alert('Transfer created successfully');
-      window.location.reload();
+      alert(isEditMode ? 'Transfer updated successfully' : 'Transfer created successfully');
+      navigate('/transfers');
     } catch (error) {
-      alert('Failed to create transfer');
+      alert(error.response?.data?.error || (isEditMode ? 'Failed to update transfer' : 'Failed to create transfer'));
       console.error('Submission error:', error);
     }
   };
@@ -319,7 +431,7 @@ const AddTransfer = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-gray-50 via-white to-indigo-50 p-4 md:p-6">
       {/* Header Section */}
       <div className="glass-card p-6 mb-6 border border-white/20 backdrop-blur-xl">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -329,7 +441,7 @@ const AddTransfer = () => {
             </div>
             <div>
               <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">
-                Create Transfer
+                {isEditMode ? 'Edit Transfer' : 'Create Transfer'}
               </h1>
               <p className="text-gray-600 mt-1">Transfer items between locations</p>
             </div>
@@ -343,14 +455,14 @@ const AddTransfer = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="space-y-6">
         {/* Left Column - Transfer Details */}
-        <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Locations Card */}
           <div className="glass-card p-6 border border-white/20 backdrop-blur-xl">
             <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
               <ArrowLeftRight className="mr-2 text-indigo-600" size={20} />
-              Transfer Locations
+              Transfer Details
             </h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -406,6 +518,17 @@ const AddTransfer = () => {
                 </div>
               </div>
             </div>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Document</label>
+              <div className="glass-input rounded-lg border border-white/30 bg-white/30 backdrop-blur-sm">
+                <input
+                  type="file"
+                  onChange={(e) => setDocument(e.target.files[0])}
+                  className="w-full p-2 rounded-lg border border-gray-300 outline-0"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Additional Details Card */}
@@ -441,32 +564,19 @@ const AddTransfer = () => {
                 >
                   <option value="processing">Processing</option>
                   <option value="pending">Pending</option>
-                  <option value="being_shipped">Being Shipped</option>
+                  <option value="on_the_way">On The Way</option>
+                  <option value="partial">Partial</option>
+                  <option value="not_received">Cancel</option>
+                  <option value="complete">Complete</option>
                 </select>
               </div>
+            </div>
 
-              <div>
+              <div className="mt-4 w-full">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Note</label>
-                <input
-                  type="text"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  className="w-full glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
-                  placeholder="Add a note (optional)"
-                />
+                <textarea value={note} onChange={(e) => setNote(e.target.value)}
+                  className="w-full glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"></textarea>
               </div>
-            </div>
-
-            <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Document</label>
-              <div className="glass-input rounded-lg border border-white/30 bg-white/30 backdrop-blur-sm">
-                <input
-                  type="file"
-                  onChange={(e) => setDocument(e.target.files[0])}
-                  className="w-full p-2 rounded-lg border border-gray-300 outline-0"
-                />
-              </div>
-            </div>
           </div>
         </div>
 
@@ -544,7 +654,6 @@ const AddTransfer = () => {
                   <thead>
                     <tr className="bg-gradient-to-r from-gray-50/50 to-gray-100/50 backdrop-blur-sm">
                       <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">Item Name</th>
-                      <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">Type</th>
                       <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">Batch</th>
                       <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">Quantity</th>
                       <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">Action</th>
@@ -557,25 +666,36 @@ const AddTransfer = () => {
                         className="border-t border-white/10 hover:bg-white/10 transition-all duration-200"
                       >
                         <td className="p-4">
-                          <div className="flex items-center">
-                            <div>
-                              {
-                                item.image ? item.image.startsWith('/uploads') ? (
-                                  <img src={ MEDIA_BASE_URL + item.image } alt={item.name} className="w-8 h-8 rounded-lg object-cover mr-3" />
-                                ) : (
-                                  <img src={ item.image } alt={item.name} className="w-8 h-8 rounded-lg object-cover mr-3" />
-                                ) : (
-                                  <Package size={16} className="mr-3 text-gray-400" />
-                                )
-                              }
+                          <div className="flex flex-col gap-3">
+                            <div className="flex">
+                              <div>
+                                {
+                                  item.image ? item.image.startsWith('/uploads') ? (
+                                    <img src={ MEDIA_BASE_URL + item.image } alt={item.name} className="w-8 h-8 rounded-lg object-cover mr-3" />
+                                  ) : (
+                                    <img src={ item.image } alt={item.name} className="w-8 h-8 rounded-lg object-cover mr-3" />
+                                  ) : (
+                                    <Package size={16} className="mr-3 text-gray-400" />
+                                  )
+                                }
+                              </div>
+                              <span className="text-gray-800 block">{item.name}</span>
                             </div>
-                            <span className="text-gray-800">{item.name}</span>
+                            <div>
+                              {item.alternativeNames?.length > 0 && (
+                                <select
+                                  value={item.selectedName || item.name}
+                                  onChange={(e) => handleSelectedNameChange(index, e.target.value)}
+                                  className="text-xs border border-gray-300 rounded px-2 py-1"
+                                >
+                                  <option value={item.name}>{item.name}</option>
+                                  {item.alternativeNames.map((n, ni) => (
+                                    <option key={`${item.id}-name-${ni}`} value={n}>{n}</option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
                           </div>
-                        </td>
-                        <td className="p-4">
-                          <span className="text-sm px-2 py-1 rounded-full bg-indigo-100 text-indigo-600">
-                            {item.itemType}
-                          </span>
                         </td>
                         <td className="p-4">
                           <select
@@ -594,12 +714,29 @@ const AddTransfer = () => {
                         <td className="p-4">
                           <input
                             type="number"
-                            value={item.quantity}
+                            value={item.selectedQuantity || item.quantity}
                             onChange={(e) => handleQuantityChange(index, e.target.value)}
                             className="w-32 glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
                             min="1"
                             max={item.batchAvailable || 1}
                           />
+                          <div className="mt-1">
+                            <select
+                              value={item.selectedUnit || item.defaultUnit || "unit"}
+                              onChange={(e) => handleSelectedUnitChange(index, e.target.value)}
+                              className="text-xs border border-gray-300 rounded px-2 py-1"
+                            >
+                              <option value={item.defaultUnit || "unit"}>{item.defaultUnit || "unit"}</option>
+                              {(item.alternativeUnits || []).map((u, ui) => (
+                                <option key={`${item.id}-unit-${ui}`} value={u.unitname}>{u.unitname}</option>
+                              ))}
+                            </select>
+                            {item.selectedUnit !== item.defaultUnit && (
+                              <div className="text-[11px] text-gray-500 mt-1">
+                                Actual qty: {Number(item.quantity || 0).toFixed(4)} {item.defaultUnit}
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="p-4">
                           <button
@@ -637,10 +774,12 @@ const AddTransfer = () => {
                   : 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white hover:opacity-90'
               }`}
             >
-              Create Transfer
+              {isEditMode ? 'Update Transfer' : 'Create Transfer'}
             </button>
             <p className="text-center text-sm text-gray-500 mt-3">
-              {items.length === 0 ? 'Add at least one item to create transfer' : `Ready to transfer ${items.length} items`}
+              {items.length === 0
+                ? 'Add at least one item to continue'
+                : (isEditMode ? `Ready to update ${items.length} items` : `Ready to transfer ${items.length} items`)}
             </p>
           </div>
         </div>

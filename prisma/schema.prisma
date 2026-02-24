@@ -16,6 +16,9 @@ model User {
   username    String   @unique
   name        String?
   password    String
+  sessionVersion Int   @default(0)
+  loginStartTime String? @db.VarChar(5)
+  loginEndTime   String? @db.VarChar(5)
   permissionId  Int?
   permission    Permission?  @relation(fields: [permissionId], references: [id])
   profile     Profile? @relation(fields: [profileId], references: [id])
@@ -112,6 +115,7 @@ model Accounts {
   entityAssignments EntityAccount[]
   purchase     Purchase[]
   expenses     Expense[]
+  repairOrders RepairOrder[]
 
   @@index([createdAt])
 }
@@ -444,9 +448,15 @@ model Material {
   materialRepairItem  MaterialRepairItem[]
   ScrapMaterial       ScrapMaterial[]
   purchaseShipmentItems PurchaseShipmentItem[]
+  purchaseReturnItems     PurchaseReturnItem[]
+  purchaseReturnCompensationItems PurchaseReturnCompensationItem[]
+  transferReceiptItems TransferReceiptItem[]
   warranties            UserWarranty[]
   requisitionItems      RequisitionItem[]
   requisitionSectionItems RequisitionSectionItem[]
+  stockAdjustments      StockAdjustment[]
+  repairOrderItems      RepairOrderItem[]
+  damageRecordItems     DamageRecordItem[]
 }
 
 model Unit {
@@ -537,8 +547,14 @@ model Product {
   productRepairItem       ProductRepairItem[]
   scrapProduct            ScrapProduct[]
   purchaseShipmentItems   PurchaseShipmentItem[]
+  purchaseReturnItems     PurchaseReturnItem[]
+  purchaseReturnCompensationItems PurchaseReturnCompensationItem[]
+  transferReceiptItems    TransferReceiptItem[]
   requisitionItems        RequisitionItem[]
   requisitionSectionItems RequisitionSectionItem[]
+  stockAdjustments        StockAdjustment[]
+  repairOrderItems        RepairOrderItem[]
+  damageRecordItems       DamageRecordItem[]
 }
 
 model ProductMaterial {
@@ -563,6 +579,7 @@ model Factory {
   productions Production[] // Added for relation
   factoryProducts FactoryProduct[]
   factoryMaterials FactoryMaterial[]
+  stockAdjustments StockAdjustment[]
 }
 model Production {
   id                      Int                      @id @default(autoincrement()) // Changed to Int
@@ -595,6 +612,7 @@ model Store {
   mobile                  String?
   storeMaterials          StoreMaterial[]
   storeProducts           StoreProduct[]
+  stockAdjustments        StockAdjustment[]
   
   //sales                   Sale[]
   //saleReturns             SaleReturn[]
@@ -605,6 +623,8 @@ model StoreMaterial {
   material_id Int
   stock       Float @default(0)
   avg_cost   Float?
+  sale_price Float?
+  alert_quantity Float?
   scrap      Float? @default(0)
   batchDetails Json?
   store    Store    @relation(fields: [store_id], references: [id])
@@ -618,6 +638,8 @@ model StoreProduct {
   product_id Int
   stock      Float @default(0)
   avg_cost  Float?
+  sale_price Float?
+  alert_quantity Float?
   scrap      Float? @default(0)
   batchDetails Json?
   store   Store   @relation(fields: [store_id], references: [id])
@@ -669,6 +691,7 @@ model Supplier {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   purchases Purchase[] @relation("SupplierPurchases")
+  purchaseReturns PurchaseReturn[]
 }
 
 model Purchase {
@@ -687,6 +710,7 @@ model Purchase {
   tax          Float?
   purchaseItems PurchaseItem[]
   purchaseShipments PurchaseShipment[]
+  purchaseReturns PurchaseReturn[]
   transactions Transactions[]
 
   accountId       Int?          
@@ -705,6 +729,9 @@ model PurchaseItem {
   productId  Int?
   product    Product?  @relation(fields: [productId], references: [id])
   itemType   String   @default("material") // "material" or "product"
+  selectedName String?
+  selectedUnit String?
+  selectedQuantity Float?
   batchNumber    String?
   expiryDate     DateTime?
   manufactureDate DateTime?
@@ -714,6 +741,7 @@ model PurchaseItem {
   totalPrice Float
   createdAt  DateTime @default(now())
   shipmentItems PurchaseShipmentItem[]
+  purchaseReturnItems PurchaseReturnItem[]
 
   @@unique([purchaseId, productId, materialId])
   @@index([productId])
@@ -756,6 +784,112 @@ model PurchaseShipmentItem {
   @@index([productId])
 }
 
+model PurchaseReturn {
+  id                    Int      @id @default(autoincrement())
+  reference             String   @unique
+  purchaseId            Int?
+  purchase              Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  returnType            String   @default("purchase_return") // purchase_return | damage_return
+  supplierId            Int?
+  supplier              Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  sourceType            String?
+  sourceId              Int?
+  totalReturnValue      Float    @default(0)
+  compensationType      String   @default("money") // money | items
+  compensationAmount    Float?
+  compensationStatus    String   @default("pending") // pending | partial | completed
+  note                  String?
+  createdById           Int?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  items                 PurchaseReturnItem[]
+  compensationShipments PurchaseReturnCompensationShipment[]
+  compensationPayments  PurchaseReturnPayment[]
+
+  @@index([purchaseId])
+  @@index([supplierId])
+  @@index([returnType])
+  @@index([createdAt])
+}
+
+model PurchaseReturnPayment {
+  id                Int      @id @default(autoincrement())
+  purchaseReturnId  Int
+  purchaseReturn    PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
+  amount            Float
+  paymentMethod     String   @default("cash")
+  note              String?
+  createdById       Int?
+  createdAt         DateTime @default(now())
+
+  @@index([purchaseReturnId])
+  @@index([createdAt])
+}
+
+model PurchaseReturnItem {
+  id                Int       @id @default(autoincrement())
+  purchaseReturnId  Int
+  purchaseReturn    PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
+  purchaseItemId    Int?
+  purchaseItem      PurchaseItem? @relation(fields: [purchaseItemId], references: [id], onDelete: SetNull)
+  itemType          String    @default("material")
+  materialId        Int?
+  material          Material? @relation(fields: [materialId], references: [id])
+  productId         Int?
+  product           Product?  @relation(fields: [productId], references: [id])
+  quantity          Float
+  unitPrice         Float
+  totalPrice        Float
+  isDamaged         Boolean   @default(false)
+  batchNumber       String?
+  expiryDate        DateTime?
+  manufactureDate   DateTime?
+  batchNotes        String?
+  createdAt         DateTime  @default(now())
+
+  @@index([purchaseReturnId])
+  @@index([purchaseItemId])
+  @@index([materialId])
+  @@index([productId])
+}
+
+model PurchaseReturnCompensationShipment {
+  id                Int       @id @default(autoincrement())
+  purchaseReturnId  Int
+  purchaseReturn    PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
+  reference         String?   @unique
+  destinationType   String?
+  destinationId     Int?
+  note              String?
+  receivedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  items             PurchaseReturnCompensationItem[]
+
+  @@index([purchaseReturnId])
+}
+
+model PurchaseReturnCompensationItem {
+  id                     Int       @id @default(autoincrement())
+  shipmentId             Int
+  shipment               PurchaseReturnCompensationShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  itemType               String    @default("material")
+  materialId             Int?
+  material               Material? @relation(fields: [materialId], references: [id])
+  productId              Int?
+  product                Product?  @relation(fields: [productId], references: [id])
+  quantity               Float
+  unitPrice              Float
+  batchNumber            String?
+  expiryDate             DateTime?
+  manufactureDate        DateTime?
+  batchNotes             String?
+  createdAt              DateTime  @default(now())
+
+  @@index([shipmentId])
+  @@index([materialId])
+  @@index([productId])
+}
+
 model Sale {
   id          Int          @id @default(autoincrement())
   reference   String       @unique
@@ -774,6 +908,19 @@ model Sale {
   grandTotal  Float
   paidAmount  Float        @default(0)
   paymentType String       @default("cash") // e.g. cash, card, mobile
+  createdById Int?
+  transactionStatus String @default("open") // open | closed
+  transactionClosedById Int?
+  transactionClosedAt DateTime?
+  editStatus String @default("closed") // open | closed
+  editGrantedToUserId Int?
+  editGrantedByUserId Int?
+  editOpenedAt DateTime?
+  editClosedAt DateTime?
+  editMaxCount Int?
+  editUsedCount Int @default(0)
+  editAccessDurationMinutes Int?
+  editExpiresAt DateTime?
   createdAt   DateTime     @default(now())
   saleItems   SaleItem[]
   warranties  UserWarranty[]
@@ -781,6 +928,7 @@ model Sale {
   isReturned  Boolean      @default(false)
   returnedAt  DateTime?
   transactions Transactions[]
+  editAccessRequests SaleEditAccessRequest[]
   
   @@index([shopId])
 }
@@ -793,6 +941,9 @@ model SaleItem {
   product    Product? @relation(fields: [productId], references: [id])
   materialId Int?
   material   Material? @relation(fields: [materialId], references: [id])
+  selectedName String?
+  selectedUnit String?
+  selectedQuantity Float?
   batchNumber String?
   expiryDate DateTime?
   warrantyDays Int?      @default(0)
@@ -850,6 +1001,7 @@ model Shop {
   // Relations
   shopProducts  ShopProduct[]
   shopMaterials ShopMaterial[]
+  stockAdjustments StockAdjustment[]
   sales         Sale[]
   saleReturns   SaleReturn[]
   
@@ -861,6 +1013,8 @@ model ShopProduct {
   product_id Int
   stock      Float @default(0)
   avg_cost  Float?
+  sale_price Float?
+  alert_quantity Float?
   scrap      Float? @default(0)
   batchDetails Json?
   shop    Shop    @relation(fields: [shop_id], references: [id])
@@ -874,6 +1028,8 @@ model ShopMaterial {
   material_id Int
   stock       Float @default(0)
   avg_cost   Float?
+  sale_price Float?
+  alert_quantity Float?
   scrap      Float? @default(0)
   batchDetails Json?
   shop     Shop     @relation(fields: [shop_id], references: [id])
@@ -903,6 +1059,7 @@ model Transfer {
   requisition   Requisition?      @relation(fields: [requisitionId], references: [id], onDelete: SetNull)
   requisitionSection RequisitionSection? @relation(fields: [requisitionSectionId], references: [id], onDelete: SetNull)
   transferItems TransferItem[]
+  receipts      TransferReceipt[]
 
   @@index([requisitionId])
   @@index([requisitionSectionId])
@@ -1024,11 +1181,50 @@ model TransferItem {
   transfer   Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
   item       String
   itemId     Int
+  selectedName String?
+  selectedUnit String?
+  selectedQuantity Float?
   batchNumber String?
   expiryDate DateTime?
   quantity   Float
   receivedQuantity   Float?
   avg_cost   Float?
+  receiptItems TransferReceiptItem[]
+}
+
+model TransferReceipt {
+  id          Int      @id @default(autoincrement())
+  transferId  Int
+  transfer    Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  reference   String   @unique
+  receiptType String   @default("receive") // receive | receive_with_missing | return_unreceived
+  status      String   @default("partial")
+  note        String?
+  createdById Int?
+  createdAt   DateTime @default(now())
+  items       TransferReceiptItem[]
+
+  @@index([transferId])
+  @@index([createdAt])
+}
+
+model TransferReceiptItem {
+  id             Int             @id @default(autoincrement())
+  receiptId      Int
+  receipt        TransferReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  transferItemId Int
+  transferItem   TransferItem    @relation(fields: [transferItemId], references: [id], onDelete: Cascade)
+  itemType       String
+  itemId         Int
+  productId      Int?
+  product        Product?        @relation(fields: [productId], references: [id])
+  materialId     Int?
+  material       Material?       @relation(fields: [materialId], references: [id])
+  quantity       Float
+  createdAt      DateTime        @default(now())
+
+  @@index([receiptId])
+  @@index([transferItemId])
 }
 
 model FactoryProduct {
@@ -1036,6 +1232,8 @@ model FactoryProduct {
   productId Int
   stock     Float @default(0)
   avg_cost Float?  
+  sale_price Float?
+  alert_quantity Float?
   scrap      Float? @default(0)
   batchDetails Json?
   factory   Factory @relation(fields: [factoryId], references: [id])
@@ -1049,12 +1247,43 @@ model FactoryMaterial {
   materialId Int
   stock      Float @default(0)
   avg_cost  Float? 
+  sale_price Float?
+  alert_quantity Float?
   scrap      Float? @default(0)
   batchDetails Json?
   factory  Factory  @relation(fields: [factoryId], references: [id])
   material Material @relation(fields: [materialId], references: [id])
 
   @@id([factoryId, materialId])
+}
+
+model StockAdjustment {
+  id             Int       @id @default(autoincrement())
+  place          String
+  storeId        Int?
+  store          Store?    @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  shopId         Int?
+  shop           Shop?     @relation(fields: [shopId], references: [id], onDelete: SetNull)
+  factoryId      Int?
+  factory        Factory?  @relation(fields: [factoryId], references: [id], onDelete: SetNull)
+  item           String
+  productId      Int?
+  product        Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  materialId     Int?
+  material       Material? @relation(fields: [materialId], references: [id], onDelete: SetNull)
+  previous_stock Float
+  after_edit     Float
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([place])
+  @@index([storeId])
+  @@index([shopId])
+  @@index([factoryId])
+  @@index([item])
+  @@index([productId])
+  @@index([materialId])
+  @@index([createdAt])
 }
 
 model Notification {
@@ -1302,6 +1531,109 @@ model DailyStockSnapshotItem {
   @@index([snapshotId])
   @@index([placeType, placeId])
   @@index([itemType, itemId])
+}
+
+model BusinessSettings {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
+}
+
+model SaleEditAccessRequest {
+  id               Int      @id @default(autoincrement())
+  saleId           Int
+  sale             Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  requesterUserId  Int
+  status           String   @default("pending") // pending | approved | rejected
+  message          String?
+  resolvedByUserId Int?
+  resolvedAt       DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([saleId, status])
+  @@index([requesterUserId, status])
+  @@index([createdAt])
+}
+
+model DamageRecord {
+  id        Int                @id @default(autoincrement())
+  reason    String
+  note      String
+  totalLoss Float
+  fromType  String
+  fromId    Int
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  items     DamageRecordItem[]
+
+  @@index([createdAt])
+}
+
+model DamageRecordItem {
+  id             Int          @id @default(autoincrement())
+  damageRecordId Int
+  itemType       String       @default("material")
+  productId      Int?
+  materialId     Int?
+  quantity       Float
+  lossPerUnit    Float
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  damageRecord   DamageRecord @relation(fields: [damageRecordId], references: [id], onDelete: Cascade)
+  product        Product?     @relation(fields: [productId], references: [id])
+  material       Material?    @relation(fields: [materialId], references: [id])
+
+  @@index([createdAt])
+  @@index([itemType, productId, materialId])
+}
+
+model RepairOrder {
+  id              Int      @id @default(autoincrement())
+  reference       String   @unique
+  destination     String
+  shippingCost    Float    @default(0)
+  document        String?
+  note            String?
+  status          String   @default("pending") // pending, in_progress, completed, failed
+  from            String   // store, shop, factory
+  fromId          Int
+  accountId       Int?
+  account         Accounts? @relation(fields: [accountId], references: [id])
+  createdById     Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  items           RepairOrderItem[]
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([from, fromId])
+}
+
+model RepairOrderItem {
+  id          Int      @id @default(autoincrement())
+  repairId    Int
+  repair      RepairOrder @relation(fields: [repairId], references: [id], onDelete: Cascade)
+  itemType    String   // product | material
+  productId   Int?
+  product     Product? @relation(fields: [productId], references: [id])
+  materialId  Int?
+  material    Material? @relation(fields: [materialId], references: [id])
+  quantity    Float
+  success     Float    @default(0)
+  fail        Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([repairId])
+  @@index([itemType])
+  @@index([productId])
+  @@index([materialId])
 }
 
 

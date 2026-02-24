@@ -130,7 +130,7 @@ export default function BankAccounts() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-gray-50 via-white to-blue-50 p-4 md:p-6">
       <div className="glass-card p-6 mb-6 border border-white/20 backdrop-blur-xl">
         <div className="flex items-center gap-4">
           <div className="glass-icon p-3 rounded-xl bg-gradient-to-r from-blue-500/10 to-indigo-500/10">
