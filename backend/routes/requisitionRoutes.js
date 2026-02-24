@@ -34,6 +34,24 @@ const canAccessRequisition = (scope, requisition) => {
   return false;
 };
 
+const getSectionDestination = (section) => {
+  if (!section) return { type: null, id: null, name: null };
+  if (section.shopId) return { type: "shop", id: section.shopId, name: section.shop?.name || null };
+  if (section.storeId) return { type: "store", id: section.storeId, name: section.store?.name || null };
+  if (section.factoryId) return { type: "factory", id: section.factoryId, name: section.factory?.name || null };
+  if (section.destinationType && section.destinationId) return { type: section.destinationType, id: section.destinationId, name: null };
+  return { type: null, id: null, name: null };
+};
+
+const mapDestinationToForeignKeys = (destinationType, destinationId) => {
+  const idNum = destinationId ? parseInt(destinationId, 10) : null;
+  return {
+    storeId: destinationType === "store" ? idNum : null,
+    shopId: destinationType === "shop" ? idNum : null,
+    factoryId: destinationType === "factory" ? idNum : null,
+  };
+};
+
 const recalculateRequisitionStatus = async (tx, requisitionId) => {
   const sections = await tx.requisitionSection.findMany({
     where: { requisitionId },
@@ -378,6 +396,9 @@ router.get("/orders/transfer", authenticateToken, async (req, res) => {
       },
       include: {
         requisition: true,
+        store: { select: { id: true, name: true } },
+        shop: { select: { id: true, name: true } },
+        factory: { select: { id: true, name: true } },
         items: { include: { product: { include: { materials: { include: { material: true } } } }, material: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -385,13 +406,22 @@ router.get("/orders/transfer", authenticateToken, async (req, res) => {
 
     const filtered = rows.filter((row) => {
       if (scope.isAdmin) return true;
-      if (row.destinationType === "shop") return scope.shops.has(row.destinationId || 0);
-      if (row.destinationType === "store") return scope.stores.has(row.destinationId || 0);
-      if (row.destinationType === "factory") return scope.factories.has(row.destinationId || 0);
+      const dest = getSectionDestination(row);
+      if (dest.type === "shop") return scope.shops.has(dest.id || 0);
+      if (dest.type === "store") return scope.stores.has(dest.id || 0);
+      if (dest.type === "factory") return scope.factories.has(dest.id || 0);
       return false;
     });
 
-    res.json(filtered);
+    res.json(filtered.map((row) => {
+      const dest = getSectionDestination(row);
+      return {
+        ...row,
+        destinationType: dest.type || row.destinationType || null,
+        destinationId: dest.id || row.destinationId || null,
+        destinationName: dest.name || null,
+      };
+    }));
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to fetch transfer orders" });
   }
@@ -407,6 +437,9 @@ router.get("/orders/production", authenticateToken, async (req, res) => {
       },
       include: {
         requisition: true,
+        store: { select: { id: true, name: true } },
+        shop: { select: { id: true, name: true } },
+        factory: { select: { id: true, name: true } },
         items: { include: { product: { include: { materials: { include: { material: true } } } }, material: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -414,11 +447,20 @@ router.get("/orders/production", authenticateToken, async (req, res) => {
 
     const filtered = rows.filter((row) => {
       if (scope.isAdmin) return true;
-      if (row.destinationType === "factory") return scope.factories.has(row.destinationId || 0);
+      const dest = getSectionDestination(row);
+      if (dest.type === "factory") return scope.factories.has(dest.id || 0);
       return false;
     });
 
-    res.json(filtered);
+    res.json(filtered.map((row) => {
+      const dest = getSectionDestination(row);
+      return {
+        ...row,
+        destinationType: dest.type || row.destinationType || null,
+        destinationId: dest.id || row.destinationId || null,
+        destinationName: dest.name || null,
+      };
+    }));
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to fetch production orders" });
   }
@@ -434,6 +476,9 @@ router.get("/orders/purchase", authenticateToken, async (req, res) => {
       },
       include: {
         requisition: true,
+        store: { select: { id: true, name: true } },
+        shop: { select: { id: true, name: true } },
+        factory: { select: { id: true, name: true } },
         items: { include: { product: { include: { materials: { include: { material: true } } } }, material: true } },
       },
       orderBy: { createdAt: "desc" },
@@ -441,13 +486,22 @@ router.get("/orders/purchase", authenticateToken, async (req, res) => {
 
     const filtered = rows.filter((row) => {
       if (scope.isAdmin) return true;
-      if (row.destinationType === "shop") return scope.shops.has(row.destinationId || 0);
-      if (row.destinationType === "store") return scope.stores.has(row.destinationId || 0);
-      if (row.destinationType === "factory") return scope.factories.has(row.destinationId || 0);
+      const dest = getSectionDestination(row);
+      if (dest.type === "shop") return scope.shops.has(dest.id || 0);
+      if (dest.type === "store") return scope.stores.has(dest.id || 0);
+      if (dest.type === "factory") return scope.factories.has(dest.id || 0);
       return false;
     });
 
-    res.json(filtered);
+    res.json(filtered.map((row) => {
+      const dest = getSectionDestination(row);
+      return {
+        ...row,
+        destinationType: dest.type || row.destinationType || null,
+        destinationId: dest.id || row.destinationId || null,
+        destinationName: dest.name || null,
+      };
+    }));
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to fetch purchase orders" });
   }
@@ -467,6 +521,9 @@ router.get("/:id", authenticateToken, async (req, res) => {
         sections: {
           include: {
             assignedBy: { select: { id: true, name: true } },
+            store: { select: { id: true, name: true } },
+            shop: { select: { id: true, name: true } },
+            factory: { select: { id: true, name: true } },
             items: { include: { product: true, material: true, requisitionItem: true } },
             transfers: true,
             productions: true,
@@ -558,6 +615,13 @@ router.post("/:id/sections", authenticateToken, async (req, res) => {
         const normalizedActionType = allowedActionTypes.includes(section.actionType)
           ? section.actionType
           : (requisition.requestType === "money" ? "approval" : "transfer_order");
+        const destinationType = normalizedActionType === "approval" || normalizedActionType === "rejected"
+          ? null
+          : (section.destinationType || null);
+        const destinationId = normalizedActionType === "approval" || normalizedActionType === "rejected"
+          ? null
+          : (section.destinationId ? parseInt(section.destinationId, 10) : null);
+        const destinationForeignKeys = mapDestinationToForeignKeys(destinationType, destinationId);
         const createdSection = await tx.requisitionSection.create({
           data: {
             requisitionId,
@@ -572,14 +636,12 @@ router.post("/:id/sections", authenticateToken, async (req, res) => {
                   ? "production_ordered"
                   : normalizedActionType === "purchase_order"
                     ? "purchase_ordered"
-                    : normalizedActionType === "rejected"
+                : normalizedActionType === "rejected"
                     ? "rejected"
                     : "approved",
-            destinationType: normalizedActionType === "approval" || normalizedActionType === "rejected" ? null : (section.destinationType || null),
-            destinationId:
-              normalizedActionType === "approval" || normalizedActionType === "rejected"
-                ? null
-                : (section.destinationId ? parseInt(section.destinationId, 10) : null),
+            destinationType,
+            destinationId,
+            ...destinationForeignKeys,
             assignedById: req.user?.userId || null,
           },
         });
@@ -650,6 +712,14 @@ router.post("/sections/:sectionId/action", authenticateToken, async (req, res) =
           status: status || existing.status,
           destinationType: destinationType === undefined ? existing.destinationType : destinationType,
           destinationId: destinationId === undefined ? existing.destinationId : (destinationId ? parseInt(destinationId, 10) : null),
+          ...(
+            destinationType !== undefined || destinationId !== undefined
+              ? mapDestinationToForeignKeys(
+                  destinationType === undefined ? existing.destinationType : destinationType,
+                  destinationId === undefined ? existing.destinationId : (destinationId ? parseInt(destinationId, 10) : null)
+                )
+              : {}
+          ),
           note: note === undefined ? existing.note : note,
         },
         include: { items: true },
@@ -674,11 +744,12 @@ router.post("/sections/:sectionId/complete", authenticateToken, async (req, res)
     });
     if (!section) return res.status(404).json({ error: "Section not found" });
     const scope = await buildScope(prisma, req.user?.userId || 0);
+    const sectionDestination = getSectionDestination(section);
     const allowed =
       scope.isAdmin ||
-      (section.destinationType === "shop" && scope.shops.has(section.destinationId || 0)) ||
-      (section.destinationType === "store" && scope.stores.has(section.destinationId || 0)) ||
-      (section.destinationType === "factory" && scope.factories.has(section.destinationId || 0));
+      (sectionDestination.type === "shop" && scope.shops.has(sectionDestination.id || 0)) ||
+      (sectionDestination.type === "store" && scope.stores.has(sectionDestination.id || 0)) ||
+      (sectionDestination.type === "factory" && scope.factories.has(sectionDestination.id || 0));
     if (!allowed) {
       return res.status(403).json({ error: "Forbidden" });
     }

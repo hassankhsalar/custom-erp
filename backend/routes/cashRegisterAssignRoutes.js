@@ -506,42 +506,104 @@ router.put('/unassign-all/:type/:id', async (req, res) => {
 router.put('/cash-register/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, reason } = req.body;
+    const { status } = req.body;
+    const userId = req.user?.userId;
 
-    if (!['active', 'inactive', 'maintenance'].includes(status)) {
-      return res.status(400).json({ error: 'Invalid status. Must be active, inactive, or maintenance' });
+    if (!['active', 'closed', 'inactive'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status. Must be active, closed, or inactive' });
     }
 
-    const cashRegister = await prisma.cashRegister.findUnique({
-      where: { id: parseInt(id) }
-    });
-
-    if (!cashRegister) {
-      return res.status(404).json({ error: 'Cash register not found' });
-    }
-
-    // If setting to inactive, check if it's assigned anywhere
-    if (status === 'inactive') {
-      const activeAssignments = await prisma.cashRegisterAssignment.findFirst({
-        where: {
-          cashRegisterId: parseInt(id),
-          isActive: true
-        }
+    const updated = await prisma.$transaction(async (tx) => {
+      const cashRegister = await tx.cashRegister.findUnique({
+        where: { id: parseInt(id) }
       });
+      if (!cashRegister) {
+        throw new Error('Cash register not found');
+      }
 
-      if (activeAssignments) {
-        return res.status(400).json({ 
-          error: 'Cannot set cash register to inactive while it is assigned to an entity. Please unassign it first.' 
+      const currentStatus = String(cashRegister.status || 'closed').toLowerCase();
+      if (currentStatus === status) return cashRegister;
+
+      if (currentStatus === 'inactive' && status === 'closed') {
+        return tx.cashRegister.update({
+          where: { id: parseInt(id) },
+          data: { status: 'closed', updatedAt: new Date() },
         });
       }
-    }
-
-    const updated = await prisma.cashRegister.update({
-      where: { id: parseInt(id) },
-      data: { 
-        status,
-        updatedAt: new Date()
+      if (currentStatus === 'inactive' && status === 'active') {
+        const activeShopAssignment = await tx.cashRegisterAssignment.findFirst({
+          where: { cashRegisterId: parseInt(id), isActive: true, entityType: 'shop' },
+          orderBy: { assignedAt: 'desc' },
+          select: { entityId: true },
+        });
+        await tx.cashRegisterRecord.create({
+          data: {
+            cashRegisterId: parseInt(id),
+            opening_at: new Date(),
+            starting_cash: Number(cashRegister.cash_in_hand || 0),
+            shopId: activeShopAssignment?.entityId || null,
+            userId: userId || 1,
+          },
+        });
+        return tx.cashRegister.update({
+          where: { id: parseInt(id) },
+          data: { status: 'active', last_opened: new Date(), updatedAt: new Date() },
+        });
       }
+      if (currentStatus === 'active' && status === 'inactive') {
+        throw new Error('Cannot deactivate an active cash register. Close it first.');
+      }
+
+      if (currentStatus === 'closed' && status === 'active') {
+        const activeShopAssignment = await tx.cashRegisterAssignment.findFirst({
+          where: { cashRegisterId: parseInt(id), isActive: true, entityType: 'shop' },
+          orderBy: { assignedAt: 'desc' },
+          select: { entityId: true },
+        });
+        await tx.cashRegisterRecord.create({
+          data: {
+            cashRegisterId: parseInt(id),
+            opening_at: new Date(),
+            starting_cash: Number(cashRegister.cash_in_hand || 0),
+            shopId: activeShopAssignment?.entityId || null,
+            userId: userId || 1,
+          },
+        });
+        return tx.cashRegister.update({
+          where: { id: parseInt(id) },
+          data: { status: 'active', last_opened: new Date(), updatedAt: new Date() },
+        });
+      }
+
+      if (currentStatus === 'active' && status === 'closed') {
+        const openRecord = await tx.cashRegisterRecord.findFirst({
+          where: { cashRegisterId: parseInt(id), closing_at: null },
+          orderBy: { opening_at: 'desc' },
+        });
+        if (openRecord) {
+          await tx.cashRegisterRecord.update({
+            where: { id: openRecord.id },
+            data: {
+              closing_at: new Date(),
+              ending_cash: Number(cashRegister.cash_in_hand || 0),
+              closedById: userId || openRecord.userId,
+            },
+          });
+        }
+        return tx.cashRegister.update({
+          where: { id: parseInt(id) },
+          data: { status: 'closed', last_closed: new Date(), updatedAt: new Date() },
+        });
+      }
+
+      if (currentStatus === 'closed' && status === 'inactive') {
+        return tx.cashRegister.update({
+          where: { id: parseInt(id) },
+          data: { status: 'inactive', updatedAt: new Date() },
+        });
+      }
+
+      return cashRegister;
     });
 
     res.json({

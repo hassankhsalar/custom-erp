@@ -16,7 +16,10 @@ import {
   ToggleRight,
   Activity,
   FileDigit,
-  ArrowDown01
+  ArrowDown01,
+  PlusCircle,
+  MinusCircle,
+  ArrowLeftRight
 } from "lucide-react";
 import { API_ROUTES } from "../../config";
 
@@ -26,29 +29,115 @@ export default function AllAccounts() {
   const [error, setError] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [searchQuery, setSearchQuery] = useState("");
+  const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [activeAccount, setActiveAccount] = useState(null);
+  const [actionForm, setActionForm] = useState({
+    amount: "",
+    note: "",
+    toAccountId: "",
+    payment_method: "cash",
+  });
+  const [actionLoading, setActionLoading] = useState(false);
   const token = localStorage.getItem('token');
 
-  useEffect(() => {
-    const fetchAccounts = async () => {
-      try {
-        const res = await fetch(API_ROUTES.ACCOUNTS, {
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                  },
-                });
-        if (!res.ok) throw new Error("Failed to fetch accounts");
-        const data = await res.json();
-        setAccounts(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchAccounts = async () => {
+    try {
+      const res = await fetch(API_ROUTES.ACCOUNTS, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!res.ok) throw new Error("Failed to fetch accounts");
+      const data = await res.json();
+      setAccounts(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchAccounts();
   }, []);
+
+  const resetActionForm = () => {
+    setActionForm({
+      amount: "",
+      note: "",
+      toAccountId: "",
+      payment_method: "cash",
+    });
+  };
+
+  const openActionModal = (type, account) => {
+    setActiveAccount(account);
+    resetActionForm();
+    if (type === "deposit") setShowDepositModal(true);
+    if (type === "withdraw") setShowWithdrawModal(true);
+    if (type === "transfer") setShowTransferModal(true);
+  };
+
+  const closeAllActionModals = () => {
+    setShowDepositModal(false);
+    setShowWithdrawModal(false);
+    setShowTransferModal(false);
+    setActiveAccount(null);
+    resetActionForm();
+  };
+
+  const handleAccountActionSubmit = async (actionType) => {
+    if (!activeAccount) return;
+    setActionLoading(true);
+    setError("");
+    try {
+      const amount = parseFloat(actionForm.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error("Please enter a valid amount");
+      }
+
+      let url = "";
+      let payload = {
+        amount,
+        note: actionForm.note,
+        payment_method: actionForm.payment_method || "cash",
+      };
+
+      if (actionType === "deposit") {
+        url = API_ROUTES.ACCOUNT_DEPOSIT(activeAccount.id);
+      } else if (actionType === "withdraw") {
+        url = API_ROUTES.ACCOUNT_WITHDRAW(activeAccount.id);
+      } else if (actionType === "transfer") {
+        if (!actionForm.toAccountId) throw new Error("Please select destination account");
+        url = API_ROUTES.ACCOUNT_TRANSFER(activeAccount.id);
+        payload = {
+          ...payload,
+          toAccountId: Number(actionForm.toAccountId),
+        };
+      }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Action failed");
+
+      closeAllActionModals();
+      await fetchAccounts();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const handleSort = (key) => {
     let direction = 'ascending';
@@ -350,6 +439,12 @@ export default function AllAccounts() {
                     </div>
                   </th>
                 ))}
+                <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">
+                  <div className="flex items-center gap-2">
+                    <FileDigit size={14} />
+                    <span className="font-semibold">Actions</span>
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -424,6 +519,31 @@ export default function AllAccounts() {
                           </span>
                         </div>
                       </div>
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openActionModal("deposit", item)}
+                        className="glass-icon-button p-1.5 rounded hover:bg-emerald-100/60 transition-colors"
+                        title="Deposit"
+                      >
+                        <PlusCircle size={18} className="text-emerald-600" />
+                      </button>
+                      <button
+                        onClick={() => openActionModal("withdraw", item)}
+                        className="glass-icon-button p-1.5 rounded hover:bg-red-100/60 transition-colors"
+                        title="Withdraw"
+                      >
+                        <MinusCircle size={18} className="text-red-600" />
+                      </button>
+                      <button
+                        onClick={() => openActionModal("transfer", item)}
+                        className="glass-icon-button p-1.5 rounded hover:bg-blue-100/60 transition-colors"
+                        title="Transfer"
+                      >
+                        <ArrowLeftRight size={18} className="text-blue-600" />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -545,6 +665,82 @@ export default function AllAccounts() {
                   {filteredAccounts.filter(a => a.status === 'inactive').length}
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(showDepositModal || showWithdrawModal || showTransferModal) && activeAccount && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="glass-card w-full max-w-md p-6 border border-white/20 backdrop-blur-xl">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+              {showDepositModal ? "Account Deposit" : showWithdrawModal ? "Account Withdraw" : "Account Transfer"}
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Account: <span className="font-medium">{activeAccount.name}</span>
+            </p>
+            <div className="space-y-3">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={actionForm.amount}
+                onChange={(e) => setActionForm((prev) => ({ ...prev, amount: e.target.value }))}
+                placeholder="Amount"
+                className="glass-input w-full px-3 py-2 rounded-lg border border-gray-300"
+              />
+              {showTransferModal && (
+                <select
+                  value={actionForm.toAccountId}
+                  onChange={(e) => setActionForm((prev) => ({ ...prev, toAccountId: e.target.value }))}
+                  className="glass-input w-full px-3 py-2 rounded-lg border border-gray-300"
+                >
+                  <option value="">Select destination account</option>
+                  {accounts
+                    .filter((a) => a.id !== activeAccount.id)
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({a.account_number})
+                      </option>
+                    ))}
+                </select>
+              )}
+              <select
+                value={actionForm.payment_method}
+                onChange={(e) => setActionForm((prev) => ({ ...prev, payment_method: e.target.value }))}
+                className="glass-input w-full px-3 py-2 rounded-lg border border-gray-300"
+              >
+                <option value="cash">Cash</option>
+                <option value="bank">Bank</option>
+                <option value="card">Card</option>
+                <option value="transfer">Transfer</option>
+              </select>
+              <textarea
+                rows="3"
+                value={actionForm.note}
+                onChange={(e) => setActionForm((prev) => ({ ...prev, note: e.target.value }))}
+                placeholder="Note (optional)"
+                className="glass-input w-full px-3 py-2 rounded-lg border border-gray-300"
+              />
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={closeAllActionModals}
+                className="px-4 py-2 rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={actionLoading}
+                onClick={() =>
+                  handleAccountActionSubmit(
+                    showDepositModal ? "deposit" : showWithdrawModal ? "withdraw" : "transfer"
+                  )
+                }
+                className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {actionLoading ? "Processing..." : "Submit"}
+              </button>
             </div>
           </div>
         </div>

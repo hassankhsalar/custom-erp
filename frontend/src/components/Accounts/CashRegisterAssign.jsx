@@ -87,7 +87,7 @@ export default function CashRegisterAssign() {
     assignmentPercentage: 0
   });
   const [viewMode, setViewMode] = useState("entities"); // "entities" or "registers"
-  const [statusFilter, setStatusFilter] = useState("all"); // all, active, inactive, maintenance
+  const [statusFilter, setStatusFilter] = useState("all"); // all, active, inactive, closed
   const [showUnassignModal, setShowUnassignModal] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [unassignReason, setUnassignReason] = useState("");
@@ -547,7 +547,7 @@ export default function CashRegisterAssign() {
     switch (status) {
       case "active": return "bg-emerald-100 text-emerald-800 border-emerald-200";
       case "inactive": return "bg-red-100 text-red-800 border-red-200";
-      case "maintenance": return "bg-amber-100 text-amber-800 border-amber-200";
+      case "closed": return "bg-amber-100 text-amber-800 border-amber-200";
       default: return "bg-gray-100 text-gray-800 border-gray-200";
     }
   };
@@ -557,7 +557,7 @@ export default function CashRegisterAssign() {
     switch (status) {
       case "active": return <CheckCircle size={14} className="text-emerald-600" />;
       case "inactive": return <XCircle size={14} className="text-red-600" />;
-      case "maintenance": return <Wrench size={14} className="text-amber-600" />;
+      case "closed": return <Wrench size={14} className="text-amber-600" />;
       default: return <Clock size={14} className="text-gray-600" />;
     }
   };
@@ -1329,14 +1329,14 @@ export default function CashRegisterAssign() {
                               <div className={`glass-icon p-2 rounded-lg ${
                                 assignment.cashRegister.status === 'active'
                                   ? 'bg-emerald-500/10'
-                                  : assignment.cashRegister.status === 'maintenance'
+                                  : assignment.cashRegister.status === 'closed'
                                   ? 'bg-amber-500/10'
                                   : 'bg-red-500/10'
                               }`}>
                                 <Calculator className={
                                   assignment.cashRegister.status === 'active'
                                     ? 'text-emerald-600'
-                                    : assignment.cashRegister.status === 'maintenance'
+                                    : assignment.cashRegister.status === 'closed'
                                     ? 'text-amber-600'
                                     : 'text-red-600'
                                 } size={20} />
@@ -1392,11 +1392,11 @@ export default function CashRegisterAssign() {
                                   </li>
                                   <li>
                                     <button
-                                      onClick={() => handleUpdateStatus(assignment.cashRegister.id, 'maintenance')}
+                                      onClick={() => handleUpdateStatus(assignment.cashRegister.id, 'closed')}
                                       className="text-amber-600 hover:bg-amber-50"
                                     >
                                       <Wrench size={16} />
-                                      Set to Maintenance
+                                      Close Cash
                                     </button>
                                   </li>
                                 </ul>
@@ -1500,7 +1500,7 @@ export default function CashRegisterAssign() {
                     <option value="all">All Status</option>
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
-                    <option value="maintenance">Maintenance</option>
+                    <option value="closed">Closed</option>
                   </select>
                 </div>
                 <div className="glass-tag px-3 py-1.5 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
@@ -1547,7 +1547,7 @@ export default function CashRegisterAssign() {
                         <div className={`glass-icon p-2 rounded-lg ${getCashRegisterStatusColor(cashRegister.status).replace('border-', 'bg-').replace(' text-', '/10 ')}`}>
                           <Calculator size={20} className={
                             cashRegister.status === 'active' ? 'text-emerald-600' :
-                            cashRegister.status === 'maintenance' ? 'text-amber-600' :
+                            cashRegister.status === 'closed' ? 'text-amber-600' :
                             'text-red-600'
                           } />
                         </div>
@@ -1638,9 +1638,9 @@ export default function CashRegisterAssign() {
                         )}
                         {cashRegister.status === 'active' && (
                           <button
-                            onClick={() => handleUpdateStatus(cashRegister.id, 'maintenance')}
+                            onClick={() => handleUpdateStatus(cashRegister.id, 'closed')}
                             className="glass-icon-button p-2 rounded-lg hover:bg-amber-100/50 transition-colors"
-                            title="Set to Maintenance"
+                            title="Close Cash"
                           >
                             <Wrench size={16} className="text-amber-600" />
                           </button>

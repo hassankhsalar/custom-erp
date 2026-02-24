@@ -4,6 +4,7 @@ const bcrypt = require("bcryptjs");
 const prisma = new PrismaClient();
 const router = express.Router();
 const cache = require('../cachingService');
+const LOCATION_ASSOCIATES = new Set(['store', 'shop', 'factory']);
 
 const TIME_24H_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -35,9 +36,64 @@ const canManageUserSessions = (user) => {
   return perms.includes("user_logout");
 };
 
+const hasPermission = (user, permission) => {
+  if (!user || !user.permission) return false;
+  const role = String(user.permission.name || "").toLowerCase();
+  if (role === "admin" || role === "superadmin") return true;
+  const perms = Array.isArray(user.permission.permissions) ? user.permission.permissions : [];
+  return perms.includes(permission);
+};
+
+const requirePermission = async (req, res, permission) => {
+  const currentUser = await getCurrentUserWithPermission(req.user?.userId);
+  if (!hasPermission(currentUser, permission)) {
+    res.status(403).json({ error: "Forbidden" });
+    return null;
+  }
+  return currentUser;
+};
+
+const toRoleLabel = (permissionName) => {
+  const p = String(permissionName || '').toLowerCase();
+  if (p === 'admin' || p === 'superadmin') return 'ADMIN';
+  return 'USER';
+};
+
+const buildLocationMaps = async () => {
+  const [stores, shops, factories] = await Promise.all([
+    prisma.store.findMany({ select: { id: true, name: true } }),
+    prisma.shop.findMany({ select: { id: true, name: true } }),
+    prisma.factory.findMany({ select: { id: true, name: true } }),
+  ]);
+  return {
+    store: new Map(stores.map((x) => [x.id, x.name])),
+    shop: new Map(shops.map((x) => [x.id, x.name])),
+    factory: new Map(factories.map((x) => [x.id, x.name])),
+  };
+};
+
+const mapUserForManagement = (user, locationMaps) => {
+  const locations = (user.userAssociate || [])
+    .filter((a) => LOCATION_ASSOCIATES.has(a.associateName))
+    .map((a) => ({
+      type: a.associateName,
+      id: a.associateId,
+      name: locationMaps?.[a.associateName]?.get(a.associateId) || `Unknown ${a.associateName}`,
+    }));
+
+  return {
+    ...user,
+    role: toRoleLabel(user.permission?.name),
+    permissions: { locations },
+  };
+};
+
 // Create new user
 router.post("/", async (req, res) => {
   try {
+    const currentUser = await requirePermission(req, res, "user_create");
+    if (!currentUser) return;
+
     const { email, username, name, password, permissionId } = req.body;
 
     // Validate required fields
@@ -84,13 +140,16 @@ router.post("/", async (req, res) => {
         username,
         name,
         password: hashedPassword,
-        permissionId: permissionId ? parseInt(permissionId) : null
+        permissionId: permissionId ? parseInt(permissionId) : null,
+        isActive: true,
       },
       select: {
         id: true,
         email: true,
         username: true,
         name: true,
+        isActive: true,
+        bypassGlobalAccessWindow: true,
         permission: {
           select: {
             id: true,
@@ -118,8 +177,11 @@ router.post("/", async (req, res) => {
 // Update user
 router.put("/:id", async (req, res) => {
   try {
+    const currentUser = await requirePermission(req, res, "user_edit");
+    if (!currentUser) return;
+
     const { id } = req.params;
-    const { name, email, username, permissionId, loginStartTime, loginEndTime } = req.body;
+    const { name, email, username, permissionId, loginStartTime, loginEndTime, role, permissions, isActive, bypassGlobalAccessWindow } = req.body;
 
     // Validate required fields
     if (!name || !email) {
@@ -159,18 +221,32 @@ router.put("/:id", async (req, res) => {
     //   return res.status(400).json({ error: "Username already exists" });
     // }
 
-    // Check if permission exists if provided
+    let resolvedPermissionId = existingUser.permissionId;
     if (permissionId !== undefined) {
       if (permissionId === null) {
-        // Allow null to remove permission
+        resolvedPermissionId = null;
       } else {
         const permission = await prisma.permission.findUnique({
           where: { id: parseInt(permissionId) }
         });
-        
         if (!permission) {
           return res.status(400).json({ error: "Permission not found" });
         }
+        resolvedPermissionId = permission.id;
+      }
+    } else if (typeof role === "string") {
+      if (role.toUpperCase() === "ADMIN") {
+        const adminPermission = await prisma.permission.findFirst({
+          where: { name: { in: ["admin", "superadmin"] } },
+          orderBy: { id: "asc" }
+        });
+        if (adminPermission) resolvedPermissionId = adminPermission.id;
+      } else if (role.toUpperCase() === "USER") {
+        const userPermission = await prisma.permission.findFirst({
+          where: { name: { in: ["default", "user", "manager", "cashier", "store_keeper"] } },
+          orderBy: { id: "asc" }
+        });
+        if (userPermission) resolvedPermissionId = userPermission.id;
       }
     }
 
@@ -181,16 +257,54 @@ router.put("/:id", async (req, res) => {
     }
 
     // Update user
-    const updatedUser = await prisma.user.update({
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: parseInt(id) },
+        data: {
+          name,
+          email,
+          username,
+          permissionId: resolvedPermissionId,
+          isActive: typeof isActive === "boolean" ? isActive : existingUser.isActive,
+          bypassGlobalAccessWindow: typeof bypassGlobalAccessWindow === "boolean" ? bypassGlobalAccessWindow : existingUser.bypassGlobalAccessWindow,
+          loginStartTime: normalizedStartTime !== null || loginStartTime === null || loginStartTime === "" ? normalizedStartTime : existingUser.loginStartTime,
+          loginEndTime: normalizedEndTime !== null || loginEndTime === null || loginEndTime === "" ? normalizedEndTime : existingUser.loginEndTime,
+        },
+      });
+
+      const incomingLocations = Array.isArray(permissions?.locations) ? permissions.locations : null;
+      if (incomingLocations) {
+        await tx.userAssociate.deleteMany({
+          where: {
+            userId: parseInt(id),
+            associateName: { in: ["store", "shop", "factory"] },
+          },
+        });
+
+        const createRows = [];
+        for (const loc of incomingLocations) {
+          const type = String(loc?.type || "").toLowerCase();
+          const associateId = parseInt(loc?.id, 10);
+          if (!LOCATION_ASSOCIATES.has(type) || !associateId) continue;
+          createRows.push({
+            userId: parseInt(id),
+            associateName: type,
+            associateId,
+          });
+        }
+
+        if (createRows.length) {
+          await tx.userAssociate.createMany({
+            data: createRows,
+            skipDuplicates: true,
+          });
+        }
+      }
+    });
+
+    const locationMaps = await buildLocationMaps();
+    const updatedUser = await prisma.user.findUnique({
       where: { id: parseInt(id) },
-      data: {
-        name,
-        email,
-        username,
-        permissionId: permissionId !== undefined ? (permissionId ? parseInt(permissionId) : null) : existingUser.permissionId,
-        loginStartTime: normalizedStartTime !== null || loginStartTime === null || loginStartTime === "" ? normalizedStartTime : existingUser.loginStartTime,
-        loginEndTime: normalizedEndTime !== null || loginEndTime === null || loginEndTime === "" ? normalizedEndTime : existingUser.loginEndTime,
-      },
       select: {
         id: true,
         email: true,
@@ -206,8 +320,16 @@ router.put("/:id", async (req, res) => {
         profile: true,
         loginStartTime: true,
         loginEndTime: true,
+        isActive: true,
+        bypassGlobalAccessWindow: true,
         createdAt: true,
-        updatedAt: true
+        updatedAt: true,
+        userAssociate: {
+          select: {
+            associateName: true,
+            associateId: true,
+          },
+        },
       }
     });
 
@@ -215,7 +337,7 @@ router.put("/:id", async (req, res) => {
 
     res.json({
       message: "User updated successfully",
-      user: updatedUser
+      user: mapUserForManagement(updatedUser, locationMaps)
     });
 
   } catch (err) {
@@ -232,6 +354,10 @@ router.put("/:id", async (req, res) => {
 // Get all users (for user management page)
 router.get("/", async (req, res) => {
   try {
+    const currentUser = await requirePermission(req, res, "user_read");
+    if (!currentUser) return;
+
+    const locationMaps = await buildLocationMaps();
     const users = await prisma.user.findMany({
       select: {
         id: true,
@@ -248,15 +374,23 @@ router.get("/", async (req, res) => {
         profile: true,
         loginStartTime: true,
         loginEndTime: true,
+        isActive: true,
+        bypassGlobalAccessWindow: true,
         createdAt: true,
-        updatedAt: true
+        updatedAt: true,
+        userAssociate: {
+          select: {
+            associateName: true,
+            associateId: true,
+          },
+        },
       },
       orderBy: {
         createdAt: 'desc'
       }
     });
 
-    res.json(users);
+    res.json(users.map((u) => mapUserForManagement(u, locationMaps)));
   } catch (err) {
     console.error("Get users error:", err);
     res.status(500).json({ error: err.message });
@@ -266,6 +400,9 @@ router.get("/", async (req, res) => {
 // Get user by ID
 router.get("/:id", async (req, res, next) => {
   try {
+    const currentUser = await requirePermission(req, res, "user_read");
+    if (!currentUser) return;
+
     const { id } = req.params;
     if (!/^\d+$/.test(id)) {
       return next();
@@ -294,8 +431,16 @@ router.get("/:id", async (req, res, next) => {
         profile: true,
         loginStartTime: true,
         loginEndTime: true,
+        isActive: true,
+        bypassGlobalAccessWindow: true,
         createdAt: true,
-        updatedAt: true
+        updatedAt: true,
+        userAssociate: {
+          select: {
+            associateName: true,
+            associateId: true,
+          },
+        },
       }
     });
 
@@ -303,8 +448,10 @@ router.get("/:id", async (req, res, next) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    cache.set(cacheKey, user);
-    res.json(user);
+    const locationMaps = await buildLocationMaps();
+    const mapped = mapUserForManagement(user, locationMaps);
+    cache.set(cacheKey, mapped);
+    res.json(mapped);
   } catch (err) {
     console.error("Get user error:", err);
     res.status(500).json({ error: err.message });
@@ -314,6 +461,9 @@ router.get("/:id", async (req, res, next) => {
 // Delete user
 router.delete("/:id", async (req, res) => {
   try {
+    const currentUser = await requirePermission(req, res, "user_delete");
+    if (!currentUser) return;
+
     const { id } = req.params;
 
     await prisma.user.delete({
@@ -331,6 +481,61 @@ router.delete("/:id", async (req, res) => {
     }
     
     res.status(500).json({ error: "Failed to delete user: " + err.message });
+  }
+});
+
+router.patch("/:id/active", async (req, res) => {
+  try {
+    const currentUser = await requirePermission(req, res, "user_activate_deactivate");
+    if (!currentUser) return;
+
+    const id = parseInt(req.params.id, 10);
+    const isActive = Boolean(req.body?.isActive);
+    const updated = await prisma.user.update({
+      where: { id },
+      data: {
+        isActive,
+        sessionVersion: isActive ? undefined : { increment: 1 },
+      },
+      select: {
+        id: true,
+        isActive: true,
+      },
+    });
+    cache.del(`user_${id}`);
+    res.json({ message: "User status updated", user: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to update user status" });
+  }
+});
+
+router.get("/access-window/global", async (req, res) => {
+  try {
+    const currentUser = await requirePermission(req, res, "user_edit");
+    if (!currentUser) return;
+    const row = await prisma.businessSettings.findUnique({ where: { key: "global_access_window" } });
+    res.json(row?.value || { enabled: false, windows: [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to fetch global access window" });
+  }
+});
+
+router.put("/access-window/global", async (req, res) => {
+  try {
+    const currentUser = await requirePermission(req, res, "user_edit");
+    if (!currentUser) return;
+    const value = req.body?.value;
+    if (!value || typeof value !== "object") {
+      return res.status(400).json({ error: "value object is required" });
+    }
+    const saved = await prisma.businessSettings.upsert({
+      where: { key: "global_access_window" },
+      update: { value },
+      create: { key: "global_access_window", value },
+    });
+    res.json(saved.value);
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Failed to save global access window" });
   }
 });
 

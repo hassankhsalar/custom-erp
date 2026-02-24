@@ -1,6 +1,13 @@
 const jwt = require("jsonwebtoken");
 
 const LOGIN_WINDOW_ERROR = "Login is not allowed at this time.";
+const GLOBAL_WINDOW_ERROR = "System access is restricted at this time.";
+const INACTIVE_USER_ERROR = "Your account is deactivated. Please contact an administrator.";
+
+let globalAccessCache = {
+  loadedAt: 0,
+  value: { enabled: false, windows: [] },
+};
 
 const parseTimeToMinutes = (timeValue) => {
   if (!timeValue || typeof timeValue !== "string") return null;
@@ -23,6 +30,61 @@ const isWithinAllowedLoginWindow = (user, now = new Date()) => {
   }
 
   return nowMinutes >= startMinutes || nowMinutes <= endMinutes;
+};
+
+const parseDateValue = (value) => {
+  if (!value) return null;
+  const dt = new Date(value);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+};
+
+const normalizeGlobalConfig = (value) => {
+  if (!value || typeof value !== "object") return { enabled: false, windows: [] };
+  const enabled = Boolean(value.enabled);
+  const windows = Array.isArray(value.windows)
+    ? value.windows
+        .map((w) => ({
+          start: parseDateValue(w?.start),
+          end: parseDateValue(w?.end),
+        }))
+        .filter((w) => w.start && w.end && w.end >= w.start)
+    : [];
+  return { enabled, windows };
+};
+
+const getGlobalAccessConfig = async (prisma) => {
+  const now = Date.now();
+  if (now - globalAccessCache.loadedAt < 30 * 1000) {
+    return globalAccessCache.value;
+  }
+
+  const row = await prisma.businessSettings.findUnique({
+    where: { key: "global_access_window" },
+    select: { value: true },
+  });
+  globalAccessCache = {
+    loadedAt: now,
+    value: normalizeGlobalConfig(row?.value),
+  };
+  return globalAccessCache.value;
+};
+
+const isBlockedByGlobalWindow = (config, now = new Date()) => {
+  if (!config?.enabled) return false;
+  return (config.windows || []).some((w) => now >= w.start && now <= w.end);
+};
+
+const getAccessBlockReason = async ({ prisma, user, now = new Date() }) => {
+  if (!user) return "Unauthorized";
+  if (user.isActive === false) return INACTIVE_USER_ERROR;
+  if (!isWithinAllowedLoginWindow(user, now)) return LOGIN_WINDOW_ERROR;
+
+  const permissionName = String(user.permission?.name || "").toLowerCase();
+  const isAdmin = permissionName === "admin" || permissionName === "superadmin";
+  if (isAdmin || user.bypassGlobalAccessWindow) return null;
+  const globalConfig = await getGlobalAccessConfig(prisma);
+  if (isBlockedByGlobalWindow(globalConfig, now)) return GLOBAL_WINDOW_ERROR;
+  return null;
 };
 
 const createSessionTracker = ({ io, prisma, jwtSecret }) => {
@@ -109,8 +171,9 @@ const createSessionTracker = ({ io, prisma, jwtSecret }) => {
       if ((user.sessionVersion || 0) !== tokenSessionVersion) {
         return next(new Error("Session expired"));
       }
-      if (!isWithinAllowedLoginWindow(user)) {
-        return next(new Error(LOGIN_WINDOW_ERROR));
+      const blockReason = await getAccessBlockReason({ prisma, user });
+      if (blockReason) {
+        return next(new Error(blockReason));
       }
 
       socket.user = {
@@ -185,6 +248,9 @@ const createSessionTracker = ({ io, prisma, jwtSecret }) => {
           sessionVersion: true,
           loginStartTime: true,
           loginEndTime: true,
+          isActive: true,
+          bypassGlobalAccessWindow: true,
+          permission: { select: { name: true } },
         },
       });
 
@@ -213,9 +279,10 @@ const createSessionTracker = ({ io, prisma, jwtSecret }) => {
           continue;
         }
 
-        if (!isWithinAllowedLoginWindow(dbUser)) {
+        const blockReason = await getAccessBlockReason({ prisma, user: dbUser });
+        if (blockReason) {
           connectedSocket.emit("session:force-logout", {
-            reason: LOGIN_WINDOW_ERROR,
+            reason: blockReason,
             at: new Date().toISOString(),
           });
           connectedSocket.disconnect(true);
@@ -248,5 +315,8 @@ module.exports = {
   createSessionTracker,
   parseTimeToMinutes,
   isWithinAllowedLoginWindow,
+  getAccessBlockReason,
   LOGIN_WINDOW_ERROR,
+  GLOBAL_WINDOW_ERROR,
+  INACTIVE_USER_ERROR,
 };

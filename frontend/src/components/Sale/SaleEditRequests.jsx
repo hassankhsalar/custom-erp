@@ -7,8 +7,7 @@ export default function SaleEditRequests() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("pending");
   const [actionLoadingId, setActionLoadingId] = useState(null);
-  const [approveMaxCount, setApproveMaxCount] = useState("");
-  const [approveDurationMinutes, setApproveDurationMinutes] = useState("");
+  const [approveLimitsByRequest, setApproveLimitsByRequest] = useState({});
 
   const fetchRows = async (status = statusFilter) => {
     setLoading(true);
@@ -37,12 +36,13 @@ export default function SaleEditRequests() {
     setActionLoadingId(requestId);
     try {
       const token = localStorage.getItem("token");
+      const rowLimits = approveLimitsByRequest[requestId] || {};
       const payload = {};
-      if (String(approveMaxCount).trim() !== "") {
-        payload.maxEditCount = Number(approveMaxCount);
+      if (String(rowLimits.maxEditCount ?? "").trim() !== "") {
+        payload.maxEditCount = Number(rowLimits.maxEditCount);
       }
-      if (String(approveDurationMinutes).trim() !== "") {
-        payload.accessDurationMinutes = Number(approveDurationMinutes);
+      if (String(rowLimits.accessDurationMinutes ?? "").trim() !== "") {
+        payload.accessDurationMinutes = Number(rowLimits.accessDurationMinutes);
       }
       const res = await fetch(API_ROUTES.SHOP_SALES_EDIT_REQUEST_APPROVE(requestId), {
         method: "POST",
@@ -54,6 +54,11 @@ export default function SaleEditRequests() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to approve request");
+      setApproveLimitsByRequest((prev) => {
+        const next = { ...prev };
+        delete next[requestId];
+        return next;
+      });
       await fetchRows(statusFilter);
     } catch (err) {
       alert(err.message);
@@ -115,24 +120,6 @@ export default function SaleEditRequests() {
             <option value="rejected">Rejected</option>
             <option value="all">All</option>
           </select>
-          <input
-            type="number"
-            min="1"
-            step="1"
-            value={approveMaxCount}
-            onChange={(e) => setApproveMaxCount(e.target.value)}
-            placeholder="Approve with count (e.g. 2)"
-            className="px-3 py-2 border rounded bg-white text-sm"
-          />
-          <input
-            type="number"
-            min="1"
-            step="1"
-            value={approveDurationMinutes}
-            onChange={(e) => setApproveDurationMinutes(e.target.value)}
-            placeholder="Approve with minutes (e.g. 5)"
-            className="px-3 py-2 border rounded bg-white text-sm"
-          />
         </div>
       </div>
 
@@ -167,7 +154,44 @@ export default function SaleEditRequests() {
                 <td className="p-3">{new Date(row.createdAt).toLocaleString()}</td>
                 <td className="p-3">
                   {row.status === "pending" ? (
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={approveLimitsByRequest[row.id]?.maxEditCount ?? ""}
+                          onChange={(e) =>
+                            setApproveLimitsByRequest((prev) => ({
+                              ...prev,
+                              [row.id]: {
+                                ...(prev[row.id] || {}),
+                                maxEditCount: e.target.value,
+                              },
+                            }))
+                          }
+                          placeholder="Count"
+                          className="w-20 px-2 py-1 text-xs border rounded bg-white"
+                        />
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={approveLimitsByRequest[row.id]?.accessDurationMinutes ?? ""}
+                          onChange={(e) =>
+                            setApproveLimitsByRequest((prev) => ({
+                              ...prev,
+                              [row.id]: {
+                                ...(prev[row.id] || {}),
+                                accessDurationMinutes: e.target.value,
+                              },
+                            }))
+                          }
+                          placeholder="Minutes"
+                          className="w-24 px-2 py-1 text-xs border rounded bg-white"
+                        />
+                      </div>
+                      <div className="flex gap-2">
                       <button
                         onClick={() => handleApprove(row.id)}
                         disabled={actionLoadingId === row.id}
@@ -184,6 +208,7 @@ export default function SaleEditRequests() {
                         <XCircle size={14} />
                         Reject
                       </button>
+                      </div>
                     </div>
                   ) : (
                     <span className="text-gray-500 text-xs">No actions</span>

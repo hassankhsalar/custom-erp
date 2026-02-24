@@ -222,6 +222,8 @@ const Sidebar = () => {
         { name: 'Account List', path: '/allaccounts', icon: <TableProperties size={16} />, permissionKey: 'account_read' },
         { name: 'Assign Account', path: '/assignaccount', icon: <TableProperties size={16} />, permissionKey: ['account_create', 'account_assign'] },
         { name: 'Assign CashRegister', path: '/cashregisterassign', icon: <TableProperties size={16} />, permissionKey: ['cash_register_create', 'cash_register_assign'] },
+        { name: 'Cash Register List', path: '/cashregister-list', icon: <TableProperties size={16} />, permissionKey: 'cash_register_read' },
+        { name: 'Cash Register Records', path: '/cash-register-records', icon: <TableProperties size={16} />, permissionKey: 'cash_register_read' },
         { name: 'Add CashRegister', path: '/addcashregister', icon: <TableProperties size={16} />, permissionKey: 'cash_register_create' },
         { name: 'Bank Accounts', path: '/bank-accounts', icon: <TableProperties size={16} />, permissionKey: ['bank_account_read', 'bank_account_create'] },
         { name: 'General Ledger', path: '/accounts/general-ledger', icon: <TableProperties size={16} />, permissionKey: 'general_ledger_report' },

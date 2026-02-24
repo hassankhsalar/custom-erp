@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
-import { Users, UserPlus, Edit, Trash2, Save, X, Building, Store, ShoppingCart, Plus, Minus, Key, Shield, Mail, User as UserIcon, LogOut, Clock } from 'lucide-react';
+import { Users, UserPlus, Edit, Trash2, Save, X, Building, Store, ShoppingCart, Plus, Minus, ToggleLeft, ToggleRight, Key, Shield, Mail, User as UserIcon, LogOut, Clock } from 'lucide-react';
 import { useAuth } from '../../App';
 
 const AllUser = () => {
@@ -23,16 +23,26 @@ const AllUser = () => {
     email: '',
     loginStartTime: '',
     loginEndTime: '',
-    role: 'USER',
+    isActive: true,
+    bypassGlobalAccessWindow: false,
+    permissionId: '',
     permissions: {
       locations: []
     }
   });
+  const [permissionOptions, setPermissionOptions] = useState([]);
+  const [globalAccessWindow, setGlobalAccessWindow] = useState({ enabled: false, windows: [] });
+  const [globalWindowSaving, setGlobalWindowSaving] = useState(false);
   const [updateLoading, setUpdateLoading] = useState(false);
   const canManageSessions = currentUser?.permission?.name === 'admin'
     || currentUser?.permission?.name === 'superadmin'
     || (Array.isArray(currentUser?.permission?.permissions)
       && currentUser.permission.permissions.includes('user_logout'));
+  const permissionList = Array.isArray(currentUser?.permission?.permissions) ? currentUser.permission.permissions : [];
+  const isAdmin = ['admin', 'superadmin'].includes((currentUser?.permission?.name || '').toLowerCase());
+  const canEditUsers = isAdmin || permissionList.includes('user_edit');
+  const canDeleteUsers = isAdmin || permissionList.includes('user_delete');
+  const canToggleUsers = isAdmin || permissionList.includes('user_activate_deactivate');
   const activeSessionByUserId = activeSessions.reduce((acc, session) => {
     acc[session.userId] = session;
     return acc;
@@ -44,6 +54,8 @@ const AllUser = () => {
   useEffect(() => {
     fetchUsers();
     fetchLocations();
+    fetchPermissions();
+    fetchGlobalAccessWindow();
   }, []);
 
   useEffect(() => {
@@ -87,11 +99,40 @@ const AllUser = () => {
         axios.get(API_ROUTES.SHOPS, { headers: { Authorization: `Bearer ${token}` } })
       ]);
 
-      setFactories(factoriesRes.data || []);
+      setFactories(factoriesRes.data?.factories || factoriesRes.data || []);
       setStores(storesRes.data.stores || storesRes.data || []);
-      setShops(shopsRes.data || []);
+      setShops(shopsRes.data?.shops || shopsRes.data || []);
     } catch (error) {
       console.error('Error fetching locations:', error);
+    }
+  };
+
+  const fetchPermissions = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(API_ROUTES.PERMISSIONS, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setPermissionOptions(Array.isArray(res.data) ? res.data : []);
+    } catch (error) {
+      console.error('Error fetching permissions:', error);
+      setPermissionOptions([]);
+    }
+  };
+
+  const fetchGlobalAccessWindow = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(API_ROUTES.USER_GLOBAL_ACCESS_WINDOW, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const value = res.data || { enabled: false, windows: [] };
+      setGlobalAccessWindow({
+        enabled: !!value.enabled,
+        windows: Array.isArray(value.windows) ? value.windows : [],
+      });
+    } catch (error) {
+      console.error('Error fetching global access window:', error);
     }
   };
 
@@ -132,14 +173,30 @@ const AllUser = () => {
   };
 
   const openEditModal = (user) => {
+    const fallbackLocations = Array.isArray(user.userAssociate)
+      ? user.userAssociate
+          .filter((a) => ['factory', 'store', 'shop'].includes(a.associateName))
+          .map((a) => ({
+            type: a.associateName,
+            id: a.associateId,
+            name: `${a.associateName} #${a.associateId}`,
+          }))
+      : [];
+
     setSelectedUser(user);
     setEditForm({
       name: user.name || '',
       email: user.email || '',
       loginStartTime: user.loginStartTime || '',
       loginEndTime: user.loginEndTime || '',
-      role: user.role || 'USER',
-      permissions: user.permissions || { locations: [] }
+      isActive: user.isActive !== false,
+      bypassGlobalAccessWindow: !!user.bypassGlobalAccessWindow,
+      permissionId: user.permission?.id || '',
+      permissions: {
+        locations: getLocationPermissions(user.permissions).length
+          ? getLocationPermissions(user.permissions)
+          : fallbackLocations,
+      }
     });
     setEditModalOpen(true);
   };
@@ -152,7 +209,9 @@ const AllUser = () => {
       email: '',
       loginStartTime: '',
       loginEndTime: '',
-      role: 'USER',
+      isActive: true,
+      bypassGlobalAccessWindow: false,
+      permissionId: '',
       permissions: { locations: [] }
     });
   };
@@ -175,13 +234,7 @@ const AllUser = () => {
           {
             type: 'factory',
             id: null,
-            name: '',
-            permissions: {
-              create: false,
-              read: false,
-              update: false,
-              delete: false
-            }
+            name: ''
           }
         ]
       }
@@ -241,27 +294,6 @@ const AllUser = () => {
     });
   };
 
-  const handleLocationPermissionChange = (index, permission, checked) => {
-    setEditForm(prev => {
-      const updatedLocations = [...(prev.permissions.locations || [])];
-      updatedLocations[index] = {
-        ...updatedLocations[index],
-        permissions: {
-          ...updatedLocations[index].permissions,
-          [permission]: checked
-        }
-      };
-      
-      return {
-        ...prev,
-        permissions: {
-          ...prev.permissions,
-          locations: updatedLocations
-        }
-      };
-    });
-  };
-
   const handleUpdateUser = async (e) => {
     e.preventDefault();
     if (!selectedUser) return;
@@ -272,7 +304,10 @@ const AllUser = () => {
       const token = localStorage.getItem('token');
       const response = await axios.put(
         `${API_ROUTES.USERS}/${selectedUser.id}`,
-        editForm,
+        {
+          ...editForm,
+          permissionId: editForm.permissionId ? Number(editForm.permissionId) : null,
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -290,6 +325,7 @@ const AllUser = () => {
   };
 
   const handleDeleteUser = async (userId) => {
+    if (!canDeleteUsers) return;
     if (!window.confirm('Are you sure you want to delete this user?')) {
       return;
     }
@@ -304,6 +340,23 @@ const AllUser = () => {
     } catch (error) {
       console.error('Error deleting user:', error);
       alert(error.response?.data?.error || 'Failed to delete user');
+    }
+  };
+
+  const handleActiveToggle = async (user) => {
+    if (!canToggleUsers) return;
+    try {
+      const token = localStorage.getItem('token');
+      const nextState = !(user.isActive !== false);
+      await axios.patch(
+        API_ROUTES.USER_SET_ACTIVE(user.id),
+        { isActive: nextState },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, isActive: nextState } : u)));
+    } catch (error) {
+      console.error('Error updating active status:', error);
+      alert(error.response?.data?.error || 'Failed to update user active status');
     }
   };
 
@@ -334,11 +387,49 @@ const AllUser = () => {
   };
 
   const getLocationPermissions = (permissions) => {
-    return permissions?.locations || [];
+    return Array.isArray(permissions?.locations) ? permissions.locations : [];
+  };
+
+  const addGlobalWindow = () => {
+    setGlobalAccessWindow((prev) => ({
+      ...prev,
+      windows: [...(prev.windows || []), { start: '', end: '' }],
+    }));
+  };
+
+  const removeGlobalWindow = (index) => {
+    setGlobalAccessWindow((prev) => ({
+      ...prev,
+      windows: (prev.windows || []).filter((_, i) => i !== index),
+    }));
+  };
+
+  const changeGlobalWindow = (index, field, value) => {
+    setGlobalAccessWindow((prev) => ({
+      ...prev,
+      windows: (prev.windows || []).map((w, i) => (i === index ? { ...w, [field]: value } : w)),
+    }));
+  };
+
+  const saveGlobalAccessWindow = async () => {
+    try {
+      setGlobalWindowSaving(true);
+      const token = localStorage.getItem('token');
+      await axios.put(
+        API_ROUTES.USER_GLOBAL_ACCESS_WINDOW,
+        { value: globalAccessWindow },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } catch (error) {
+      console.error('Error saving global access window:', error);
+      alert(error.response?.data?.error || 'Failed to save global access window');
+    } finally {
+      setGlobalWindowSaving(false);
+    }
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 p-6">
       <div className="glass-card p-8 text-center">
         <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         <p className="mt-4 text-gray-600">Loading users...</p>
@@ -347,16 +438,16 @@ const AllUser = () => {
   );
 
   return (
-    <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-gray-50 via-white to-blue-50 p-4 md:p-6">
+    <div className="min-h-screen rounded-t-2xl bg-linear-to-br from-gray-50 via-white to-blue-50 p-4 md:p-6">
       {/* Header Section */}
       <div className="glass-card p-6 mb-6 border border-white/20 backdrop-blur-xl">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center">
-            <div className="glass-icon p-3 rounded-xl mr-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+            <div className="glass-icon p-3 rounded-xl mr-4 bg-linear-to-r from-blue-500/10 to-purple-500/10">
               <Users className="text-blue-600" size={28} />
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <h1 className="text-2xl md:text-3xl font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 User Management
               </h1>
               <p className="text-gray-600 mt-1">Manage user permissions and access</p>
@@ -364,7 +455,7 @@ const AllUser = () => {
           </div>
           <Link 
             to="/users/create" 
-            className="glass-button group bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 px-6 rounded-xl flex items-center transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25"
+            className="group bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 px-6 rounded-xl flex items-center transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25"
           >
             <UserPlus size={20} className="mr-2 group-hover:scale-110 transition-transform" />
             Add New User
@@ -401,12 +492,75 @@ const AllUser = () => {
         </div>
       )}
 
+      {canEditUsers && (
+        <div className="glass-card p-6 mb-6 border border-white/20 backdrop-blur-xl">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-800 flex items-center">
+              <Clock size={18} className="mr-2 text-blue-600" />
+              Global Access Time Limit
+            </h2>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={!!globalAccessWindow.enabled}
+                  onChange={(e) => setGlobalAccessWindow((prev) => ({ ...prev, enabled: e.target.checked }))}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500/50"
+                />
+                Enabled
+              </label>
+              <button
+                type="button"
+                onClick={saveGlobalAccessWindow}
+                disabled={globalWindowSaving}
+                className="bg-linear-to-r from-blue-500 to-blue-600 text-white px-4 py-2 rounded-lg"
+              >
+                {globalWindowSaving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {(globalAccessWindow.windows || []).map((w, idx) => (
+              <div key={idx} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+                <input
+                  type="datetime-local"
+                  value={w.start || ''}
+                  onChange={(e) => changeGlobalWindow(idx, 'start', e.target.value)}
+                  className="glass-input w-full p-3 rounded-lg border border-gray-200 bg-white/50"
+                />
+                <input
+                  type="datetime-local"
+                  value={w.end || ''}
+                  onChange={(e) => changeGlobalWindow(idx, 'end', e.target.value)}
+                  className="glass-input w-full p-3 rounded-lg border border-gray-200 bg-white/50"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeGlobalWindow(idx)}
+                  className="glass-icon-button p-2 rounded-lg bg-linear-to-r from-red-500/10 to-red-600/10 text-red-600 w-fit"
+                >
+                  <Minus size={18} />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addGlobalWindow}
+              className="bg-linear-to-r from-indigo-500 to-purple-600 text-white px-4 py-2 rounded-lg inline-flex items-center"
+            >
+              <Plus size={16} className="mr-2" />
+              Add Global Block Window
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Users Table */}
       <div className="glass-card overflow-hidden border border-white/20 backdrop-blur-xl">
         <div className="overflow-x-auto">
           <table className="min-w-full">
             <thead>
-              <tr className="bg-gradient-to-r from-gray-50/50 to-gray-100/50 backdrop-blur-sm">
+              <tr className="bg-linear-to-r from-gray-50/50 to-gray-100/50 backdrop-blur-sm">
                 <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700 uppercase tracking-wider border-b border-white/20">
                   <div className="flex items-center">
                     <UserIcon size={16} className="mr-2" />
@@ -444,7 +598,7 @@ const AllUser = () => {
                   <tr key={user.id} className="hover:bg-white/10 transition-colors duration-200">
                     <td className="px-6 py-4">
                       <div className="flex items-center">
-                        <div className="glass-icon-sm p-2 rounded-lg mr-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+                        <div className="glass-icon-sm p-2 rounded-lg mr-3 bg-linear-to-r from-blue-500/10 to-purple-500/10">
                           <UserIcon size={16} className="text-blue-600" />
                         </div>
                         <div>
@@ -459,27 +613,36 @@ const AllUser = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-                        user.role === 'ADMIN' 
-                          ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-700 border border-purple-200/50' 
-                          : 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-700 border border-green-200/50'
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full capitalize text-xs font-semibold ${
+                        ['admin', 'superadmin'].includes((user.permission?.name || '').toLowerCase())
+                          ? 'bg-linear-to-r from-purple-500/20 to-pink-500/20 text-purple-700 border border-purple-200/50' 
+                          : 'bg-linear-to-r from-green-500/20 to-emerald-500/20 text-green-700 border border-green-200/50'
                       }`}>
-                        {user.role === 'ADMIN' && <Shield size={12} className="mr-1" />}
-                        {user.role}
+                        {['admin', 'superadmin'].includes((user.permission?.name || '').toLowerCase()) && <Shield size={12} className="mr-1" />}
+                        {user.permission?.name || '-'}
                       </span>
+                      <div className="mt-2">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                          user.isActive === false ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {user.isActive === false ? 'Deactivated' : 'Active'}
+                        </span>
+                        {user.bypassGlobalAccessWindow === true &&
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-lime-100 text-lime-700`}>
+                          {user.bypassGlobalAccessWindow === true ? 'Whitelisted' : ''}
+                        </span>
+                        }
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
                       {locationPermissions.length > 0 ? (
                         <div className="space-y-2">
                           {locationPermissions.map((location, index) => (
-                            <div key={index} className="flex items-center glass-tag px-3 py-1.5 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
-                              <div className="glass-icon-xs p-1.5 rounded-md mr-2 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+                            <div key={index} className="flex items-center glass-tag px-3 py-1.5 rounded-lg bg-white/50 backdrop-blur-sm border border-gray-200">
+                              <div className="glass-icon-xs p-1.5 rounded-md mr-2 bg-linear-to-r from-blue-500/10 to-purple-500/10">
                                 {getLocationIcon(location.type)}
                               </div>
                               <span className="font-medium">{location.name}</span>
-                              <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100/50 text-gray-600">
-                                {Object.keys(location.permissions || {}).filter(p => location.permissions[p]).join(', ')}
-                              </span>
                             </div>
                           ))}
                         </div>
@@ -492,26 +655,44 @@ const AllUser = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-2">
-                        <button 
-                          onClick={() => openEditModal(user)}
-                          className="glass-icon-button p-2 rounded-lg bg-gradient-to-r from-blue-500/10 to-blue-600/10 hover:from-blue-500/20 hover:to-blue-600/20 text-blue-600 hover:text-blue-700 transition-all duration-200"
-                          title="Edit User"
-                        >
-                          <Edit size={18} />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteUser(user.id)}
-                          className="glass-icon-button p-2 rounded-lg bg-gradient-to-r from-red-500/10 to-red-600/10 hover:from-red-500/20 hover:to-red-600/20 text-red-600 hover:text-red-700 transition-all duration-200"
-                          title="Delete User"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                        {canEditUsers && (
+                          <button 
+                            onClick={() => openEditModal(user)}
+                            className="glass-icon-button p-2 rounded-lg bg-linear-to-r from-blue-500/10 to-blue-600/10 hover:from-blue-500/20 hover:to-blue-600/20 text-blue-600 hover:text-blue-700 transition-all duration-200"
+                            title="Edit User"
+                          >
+                            <Edit size={18} />
+                          </button>
+                        )}
+                        {canDeleteUsers && (
+                          <button 
+                            onClick={() => handleDeleteUser(user.id)}
+                            className="glass-icon-button p-2 rounded-lg bg-linear-to-r from-red-500/10 to-red-600/10 hover:from-red-500/20 hover:to-red-600/20 text-red-600 hover:text-red-700 transition-all duration-200"
+                            title="Delete User"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        )}
+                        {canToggleUsers && (
+                          <button
+                            type="button"
+                            onClick={() => handleActiveToggle(user)}
+                            className={`glass-icon-button p-2 rounded-lg transition-all duration-200 ${
+                              user.isActive === false
+                                ? 'bg-gradient-to-r from-emerald-500/10 to-green-600/10 hover:from-emerald-500/20 hover:to-green-600/20 text-emerald-700'
+                                : 'bg-gradient-to-r from-amber-500/10 to-orange-600/10 hover:from-amber-500/20 hover:to-orange-600/20 text-amber-700'
+                            }`}
+                            title={user.isActive === false ? 'Activate User' : 'Deactivate User'}
+                          >
+                            {user.isActive === false ? <ToggleLeft size={20} className="text-gray-700" /> : <ToggleRight size={20} className="text-emerald-500" />}
+                          </button>
+                        )}
                         {canManageSessions && activeSessionByUserId[user.id] && (
                           <button
                             type="button"
                             onClick={() => handleForceLogout(user.id)}
                             disabled={forceLogoutUserId === user.id}
-                            className="glass-icon-button p-2 rounded-lg bg-gradient-to-r from-orange-500/10 to-red-500/10 hover:from-orange-500/20 hover:to-red-500/20 text-orange-700 hover:text-red-700 transition-all duration-200 disabled:opacity-50"
+                            className="glass-icon-button p-2 rounded-lg bg-linear-to-r from-orange-500/10 to-red-500/10 hover:from-orange-500/20 hover:to-red-500/20 text-orange-700 hover:text-red-700 transition-all duration-200 disabled:opacity-50"
                             title="Force Logout Active User"
                           >
                             <LogOut size={18} />
@@ -542,11 +723,11 @@ const AllUser = () => {
               {/* Modal Header */}
               <div className="flex justify-between items-center mb-6 pb-4 border-b border-white/20">
                 <div className="flex items-center">
-                  <div className="glass-icon p-3 rounded-xl mr-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+                  <div className="glass-icon p-3 rounded-xl mr-4 bg-linear-to-r from-blue-500/10 to-purple-500/10">
                     <Edit className="text-blue-600" size={24} />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    <h2 className="text-2xl font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                       Edit User
                     </h2>
                     <p className="text-gray-600 text-sm">Update user details and permissions</p>
@@ -563,7 +744,7 @@ const AllUser = () => {
               {/* Form */}
               <form onSubmit={handleUpdateUser} className="space-y-8">
                 {/* Basic Information */}
-                <div className="glass-section p-6 rounded-xl border border-white/20 bg-gradient-to-br from-white/30 to-white/10">
+                <div className="glass-section p-6 rounded-xl border border-white/20 bg-linear-to-br from-white/30 to-white/10">
                   <h3 className="text-lg font-semibold mb-4 flex items-center text-gray-800">
                     <UserIcon size={20} className="mr-2 text-blue-600" />
                     Basic Information
@@ -576,7 +757,7 @@ const AllUser = () => {
                         name="name"
                         value={editForm.name}
                         onChange={handleEditInputChange}
-                        className="glass-input w-full p-3 rounded-lg border border-white/30 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                        className="glass-input w-full p-3 rounded-lg border border-gray-200 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
                         required
                       />
                     </div>
@@ -587,21 +768,45 @@ const AllUser = () => {
                         name="email"
                         value={editForm.email}
                         onChange={handleEditInputChange}
-                        className="glass-input w-full p-3 rounded-lg border border-white/30 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                        className="glass-input w-full p-3 rounded-lg border border-gray-200 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
                         required
                       />
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2 text-gray-700">Role</label>
                       <select
-                        name="role"
-                        value={editForm.role}
+                        name="permissionId"
+                        value={editForm.permissionId}
                         onChange={handleEditInputChange}
-                        className="glass-input w-full p-3 rounded-lg border border-white/30 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                        className="glass-input w-full p-3 rounded-lg border border-gray-200 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
                       >
-                        <option value="USER">User</option>
-                        <option value="ADMIN">Admin</option>
+                        <option value="">Select role</option>
+                        {permissionOptions.map((perm) => (
+                          <option key={perm.id} value={perm.id}>
+                            {perm.name}
+                          </option>
+                        ))}
                       </select>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        id="isActive"
+                        type="checkbox"
+                        checked={!!editForm.isActive}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, isActive: e.target.checked }))}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500/50"
+                      />
+                      <label htmlFor="isActive" className="text-sm font-medium text-gray-700">User Active</label>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        id="bypassGlobalAccessWindow"
+                        type="checkbox"
+                        checked={!!editForm.bypassGlobalAccessWindow}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, bypassGlobalAccessWindow: e.target.checked }))}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500/50"
+                      />
+                      <label htmlFor="bypassGlobalAccessWindow" className="text-sm font-medium text-gray-700">Whitelist From Global Access Window</label>
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-2 text-gray-700">Login Start Time</label>
@@ -610,7 +815,7 @@ const AllUser = () => {
                         name="loginStartTime"
                         value={editForm.loginStartTime}
                         onChange={handleEditInputChange}
-                        className="glass-input w-full p-3 rounded-lg border border-white/30 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                        className="glass-input w-full p-3 rounded-lg border border-gray-200 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
                       />
                     </div>
                     <div>
@@ -620,14 +825,14 @@ const AllUser = () => {
                         name="loginEndTime"
                         value={editForm.loginEndTime}
                         onChange={handleEditInputChange}
-                        className="glass-input w-full p-3 rounded-lg border border-white/30 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                        className="glass-input w-full p-3 rounded-lg border border-gray-200 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
                       />
                     </div>
                   </div>
                 </div>
 
                 {/* Location Permissions */}
-                <div className="glass-section p-6 rounded-xl border border-white/20 bg-gradient-to-br from-white/30 to-white/10">
+                <div className="glass-section p-6 rounded-xl border border-white/20 bg-linear-to-br from-white/30 to-white/10">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
                     <div>
                       <h3 className="text-lg font-semibold flex items-center text-gray-800">
@@ -639,7 +844,7 @@ const AllUser = () => {
                     <button
                       type="button"
                       onClick={addLocationPermission}
-                      className="glass-button mt-4 md:mt-0 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2.5 rounded-lg flex items-center transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25"
+                      className="mt-4 md:mt-0 bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2.5 rounded-lg flex items-center transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25"
                     >
                       <Plus size={18} className="mr-2" />
                       Add Location
@@ -648,7 +853,7 @@ const AllUser = () => {
                   
                   {(!editForm.permissions.locations || editForm.permissions.locations.length === 0) ? (
                     <div className="text-center py-8">
-                      <div className="glass-icon p-4 rounded-full inline-flex mb-4 bg-gradient-to-r from-gray-100/50 to-gray-200/50">
+                      <div className="glass-icon p-4 rounded-full inline-flex mb-4 bg-linear-to-r from-gray-100/50 to-gray-200/50">
                         <Key className="text-gray-400" size={24} />
                       </div>
                       <p className="text-gray-500">No location permissions assigned</p>
@@ -657,10 +862,10 @@ const AllUser = () => {
                   ) : (
                     <div className="space-y-4">
                       {editForm.permissions.locations.map((location, index) => (
-                        <div key={index} className="glass-card-inner p-4 rounded-xl border border-white/30 bg-white/40 backdrop-blur-sm">
+                        <div key={index} className="glass-card-inner p-4 rounded-xl border border-gray-200 bg-white/40 backdrop-blur-sm">
                           <div className="flex justify-between items-start mb-4">
                             <div className="flex items-center">
-                              <div className="glass-icon-sm p-2 rounded-lg mr-3 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+                              <div className="glass-icon-sm p-2 rounded-lg mr-3 bg-linear-to-r from-blue-500/10 to-purple-500/10">
                                 {getLocationIcon(location.type)}
                               </div>
                               <div>
@@ -684,7 +889,7 @@ const AllUser = () => {
                               <select
                                 value={location.type}
                                 onChange={(e) => handleLocationChange(index, 'type', e.target.value)}
-                                className="glass-input w-full p-3 rounded-lg border border-white/30 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                                className="glass-input w-full p-3 rounded-lg border border-gray-300 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
                               >
                                 <option value="factory">Factory</option>
                                 <option value="store">Store</option>
@@ -697,7 +902,7 @@ const AllUser = () => {
                               <select
                                 value={location.id || ''}
                                 onChange={(e) => handleLocationChange(index, 'id', e.target.value)}
-                                className="glass-input w-full p-3 rounded-lg border border-white/30 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                                className="glass-input w-full p-3 rounded-lg border border-gray-300 bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
                               >
                                 <option value="">Select {location.type}</option>
                                 {getLocationOptions(location.type).map(loc => (
@@ -709,25 +914,12 @@ const AllUser = () => {
                             </div>
                           </div>
 
-                          {/* Location-specific Permissions */}
                           {location.id && (
                             <div className="glass-section-inner p-4 rounded-lg border border-white/20 bg-white/30 mt-4">
                               <label className="block text-sm font-semibold mb-3 text-gray-800">
-                                Permissions for <span className="text-blue-600">{location.name}</span>
+                                Assigned Location: <span className="text-blue-600">{location.name}</span>
                               </label>
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                {['create', 'read', 'update', 'delete'].map(permission => (
-                                  <label key={permission} className="glass-checkbox flex items-center p-3 rounded-lg border border-white/30 bg-white/40 hover:bg-white/60 transition-colors cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={location.permissions[permission] || false}
-                                      onChange={(e) => handleLocationPermissionChange(index, permission, e.target.checked)}
-                                      className="mr-3 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500/50"
-                                    />
-                                    <span className="text-sm font-medium capitalize text-gray-700">{permission}</span>
-                                  </label>
-                                ))}
-                              </div>
+                              <p className="text-sm text-gray-600">This user will be associated with this location.</p>
                             </div>
                           )}
                         </div>
@@ -741,19 +933,19 @@ const AllUser = () => {
                   <button
                     type="button"
                     onClick={closeEditModal}
-                    className="glass-button px-6 py-3 border border-gray-300/50 text-gray-700 rounded-lg hover:bg-gray-50/50 transition-all duration-300"
+                    className="px-6 py-3 border border-gray-300/50 text-gray-700 rounded-lg hover:bg-gray-50/50 transition-all duration-300"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={updateLoading}
-                    className="glass-button px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-gray-700 rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25 flex items-center justify-center"
+                    className="px-6 py-3 text-white bg-linear-to-r from-blue-500 to-blue-600 text-gray-700 rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25 flex items-center justify-center"
                   >
                     <Save size={18} className="mr-2" />
                     {updateLoading ? (
                       <>
-                        <span className="inline-block animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></span>
+                        <span className="inline-block animate-spin text-white rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></span>
                         Updating...
                       </>
                     ) : 'Update User'}
