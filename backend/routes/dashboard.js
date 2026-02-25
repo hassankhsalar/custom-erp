@@ -1,6 +1,7 @@
 const express = require("express");
-const { PrismaClient } = require("@prisma/client");
+const { PrismaClient, Prisma } = require("@prisma/client");
 const { buildScope, ensureHasAnyScope, buildLocationOrFilter, buildTransferOrFilter } = require("../utils/associateScope");
+const { on } = require("node-cache");
 const prisma = new PrismaClient();
 const router = express.Router();
 
@@ -8,6 +9,7 @@ const router = express.Router();
 router.get("/", async (req, res) => {
   try {
     const { range = 'month' } = req.query;
+    const now = new Date();
     
     // Calculate date ranges
     const dateRanges = {
@@ -17,8 +19,9 @@ router.get("/", async (req, res) => {
       year: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
     };
 
-    const startDate = dateRanges[range];
-    const previousStartDate = new Date(startDate.getTime() - (startDate.getTime() - new Date().getTime()));
+    const startDate = dateRanges[range] || dateRanges.month;
+    const durationMs = now.getTime() - startDate.getTime();
+    const previousStartDate = new Date(startDate.getTime() - durationMs);
 
     const userId = req.user?.userId;
     const scope = userId ? await buildScope(prisma, userId) : { isAdmin: true, shops: new Set(), stores: new Set(), factories: new Set() };
@@ -39,7 +42,8 @@ router.get("/", async (req, res) => {
       topProducts,
       lowStockItems,
       recentActivities,
-      shopPerformance
+      shopPerformance,
+      monthlyRevenue
     ] = await Promise.all([
       // Current period sales count
       prisma.sale.count({
@@ -76,13 +80,15 @@ router.get("/", async (req, res) => {
       // Transfer data
       getTransferData(transferScopeWhere),
       // Top products
-      getTopProducts(startDate, saleScopeWhere),
+      getTopProducts(startDate, scope),
       // Low stock items
       getLowStockItems(scope),
       // Recent activities
       getRecentActivities(saleScopeWhere, purchaseScopeWhere, transferScopeWhere),
       // Shop performance (since sales are only in shops)
-      getShopPerformance(startDate, scope)
+      getShopPerformance(startDate, scope),
+      // Monthly revenue chart data
+      getMonthlyRevenue(scope)
     ]);
 
     // Calculate KPIs with trends
@@ -118,7 +124,7 @@ router.get("/", async (req, res) => {
         }
       },
       sales: {
-        monthlyRevenue: await getMonthlyRevenue(saleScopeWhere),
+        monthlyRevenue,
         topProducts
       },
       inventory: {
@@ -160,7 +166,6 @@ function buildSaleScopeWhere(scope) {
   if (!scope || scope.isAdmin) return {};
   const ors = [];
   if (scope.shops.size > 0) ors.push({ shopId: { in: Array.from(scope.shops) } });
-  if (scope.stores.size > 0) ors.push({ storeId: { in: Array.from(scope.stores) } });
   if (ors.length === 0) {
     return { id: -1 };
   }
@@ -175,45 +180,22 @@ function buildIdWhere(scope, field, set) {
 
 // Helper functions
 async function getInventoryData(scope) {
-  const storeWhere = buildIdWhere(scope, "store_id", scope?.stores);
-  const shopWhere = buildIdWhere(scope, "shop_id", scope?.shops);
-  const factoryWhere = buildIdWhere(scope, "factoryId", scope?.factories);
 
-  const [storeProducts, storeMaterials, shopProducts, shopMaterials, factoryProducts, factoryMaterials] = await Promise.all([
-    prisma.storeProduct.findMany({
-      where: storeWhere,
-      include: { product: true }
-    }),
-    prisma.storeMaterial.findMany({
-      where: storeWhere,
-      include: { material: true }
-    }),
-    prisma.shopProduct.findMany({
-      where: shopWhere,
-      include: { product: true }
-    }),
-    prisma.shopMaterial.findMany({
-      where: shopWhere,
-      include: { material: true }
-    }),
-    prisma.FactoryProduct.findMany({
-      where: factoryWhere,
-      include: { product: true }
-    }),
-    prisma.FactoryMaterial.findMany({
-      where: factoryWhere,
-      include: { material: true }
-    })
+  const storeIds = scope?.isAdmin ? null : Array.from(scope?.stores || []);
+  const shopIds = scope?.isAdmin ? null : Array.from(scope?.shops || []);
+  const factoryIds = scope?.isAdmin ? null : Array.from(scope?.factories || []);
+
+  const sumExpr = Prisma.raw("COALESCE(SUM(stock * COALESCE(avg_cost, 0)), 0) AS total");
+  const tableSums = await Promise.all([
+    queryInventoryValue("StoreProduct", "store_id", storeIds, sumExpr),
+    queryInventoryValue("StoreMaterial", "store_id", storeIds, sumExpr),
+    queryInventoryValue("ShopProduct", "shop_id", shopIds, sumExpr),
+    queryInventoryValue("ShopMaterial", "shop_id", shopIds, sumExpr),
+    queryInventoryValue("FactoryProduct", "factoryId", factoryIds, sumExpr),
+    queryInventoryValue("FactoryMaterial", "factoryId", factoryIds, sumExpr),
   ]);
 
-  // Calculate total inventory value across stores and shops
-  const totalValue = 
-    storeProducts.reduce((sum, sp) => sum + (sp.stock * (sp.avg_cost || 0)), 0) +
-    storeMaterials.reduce((sum, sm) => sum + (sm.stock * (sm.avg_cost || 0)), 0) +
-    shopProducts.reduce((sum, sp) => sum + (sp.stock * (sp.avg_cost || 0)), 0) +
-    shopMaterials.reduce((sum, sm) => sum + (sm.stock * (sm.avg_cost || 0)), 0)+
-    factoryProducts.reduce((sum, sp) => sum + (sp.stock * (sp.avg_cost || 0)), 0) +
-    factoryMaterials.reduce((sum, sm) => sum + (sm.stock * (sm.avg_cost || 0)), 0);
+  const totalValue = tableSums.reduce((sum, val) => sum + val, 0);
 
   const byCategory = [
     { category: 'Construction Materials', value: totalValue * 0.48 },
@@ -222,6 +204,25 @@ async function getInventoryData(scope) {
   ];
 
   return { totalValue, byCategory };
+}
+
+async function queryInventoryValue(tableName, idColumn, ids, sumExpr) {
+  try {
+    if (Array.isArray(ids) && ids.length === 0) return 0;
+    const idCol = Prisma.raw(`\`${idColumn}\``);
+    const table = Prisma.raw(`\`${tableName}\``);
+    const whereClause =
+      Array.isArray(ids) && ids.length > 0
+        ? Prisma.sql`WHERE ${idCol} IN (${Prisma.join(ids)})`
+        : Prisma.empty;
+    const rows = await prisma.$queryRaw(
+      Prisma.sql`SELECT ${sumExpr} FROM ${table} ${whereClause}`
+    );
+    return Number(rows?.[0]?.total || 0);
+  } catch (error) {
+    console.error(`Inventory aggregate failed for ${tableName}:`, error.message || error);
+    return 0;
+  }
 }
 
 async function getTransferData(transferWhere) {
@@ -234,8 +235,8 @@ async function getTransferData(transferWhere) {
   const statusOverview = {
     processing: 0,
     pending: 0,
-    being_shipped: 0,
-    transferred: 0,
+    on_the_way: 0,
+    complete: 0,
     not_received: 0,
     total: 0
   };
@@ -250,58 +251,81 @@ async function getTransferData(transferWhere) {
   return { statusOverview, pendingCount };
 }
 
-async function getTopProducts(startDate, saleScopeWhere) {
+async function getTopProducts(startDate, scope) {
   try {
-    // First get sales in the date range
-    const salesInRange = await prisma.sale.findMany({
-      where: { ...saleScopeWhere, createdAt: { gte: startDate } },
-      select: { id: true }
-    });
-    
-    const saleIds = salesInRange.map(sale => sale.id);
-
-    if (saleIds.length === 0) {
+    if (!scope?.isAdmin && (!scope?.shops || scope.shops.size === 0)) {
       return [];
     }
+    const shopFilter = scope?.isAdmin
+      ? Prisma.empty
+      : Prisma.sql` AND s.shopId IN (${Prisma.join(Array.from(scope.shops))})`;
 
-    // Then get sale items for those sales
-    const saleItems = await prisma.saleItem.findMany({
-      where: {
-        saleId: { in: saleIds }
-      },
-      include: {
-        product: true,
-        material: true
-      }
-    });
+    const [topProductsRaw, topMaterialsRaw] = await Promise.all([
+      prisma.$queryRaw(
+        Prisma.sql`
+          SELECT
+            si.productId AS id,
+            COALESCE(SUM(si.quantity), 0) AS sales,
+            COALESCE(SUM(si.totalPrice), 0) AS revenue
+          FROM \`SaleItem\` si
+          INNER JOIN \`Sale\` s ON s.id = si.saleId
+          WHERE si.productId IS NOT NULL
+            AND s.createdAt >= ${startDate}
+            ${shopFilter}
+          GROUP BY si.productId
+          ORDER BY revenue DESC
+          LIMIT 5
+        `
+      ),
+      prisma.$queryRaw(
+        Prisma.sql`
+          SELECT
+            si.materialId AS id,
+            COALESCE(SUM(si.quantity), 0) AS sales,
+            COALESCE(SUM(si.totalPrice), 0) AS revenue
+          FROM \`SaleItem\` si
+          INNER JOIN \`Sale\` s ON s.id = si.saleId
+          WHERE si.materialId IS NOT NULL
+            AND s.createdAt >= ${startDate}
+            ${shopFilter}
+          GROUP BY si.materialId
+          ORDER BY revenue DESC
+          LIMIT 5
+        `
+      )
+    ]);
 
-    // Group by product manually
-    const productSales = {};
-    saleItems.forEach(item => {
-      const productId = item.productId;
-      if (!productSales[productId]) {
-        productSales[productId] = {
-          product: item.productId ? item.product : item.material,
-          totalQuantity: 0,
-          totalRevenue: 0
-        };
-      }
-      productSales[productId].totalQuantity += item.quantity;
-      productSales[productId].totalRevenue += item.totalPrice;
-    });
+    const productIds = topProductsRaw.map((row) => Number(row.id)).filter(Boolean);
+    const materialIds = topMaterialsRaw.map((row) => Number(row.id)).filter(Boolean);
+    const [productNames, materialNames] = await Promise.all([
+      productIds.length
+        ? prisma.product.findMany({ where: { id: { in: productIds } }, select: { id: true, name: true } })
+        : Promise.resolve([]),
+      materialIds.length
+        ? prisma.material.findMany({ where: { id: { in: materialIds } }, select: { id: true, name: true } })
+        : Promise.resolve([]),
+    ]);
+    const productNameMap = new Map(productNames.map((row) => [row.id, row.name]));
+    const materialNameMap = new Map(materialNames.map((row) => [row.id, row.name]));
 
-    // Convert to array and sort by revenue
-    const topProducts = Object.entries(productSales)
-      .map(([productId, data]) => ({
-        id: parseInt(productId),
-        name: data.product?.name || 'Unknown Product',
-        sales: data.totalQuantity,
-        revenue: data.totalRevenue
-      }))
+    const rows = [
+      ...topProductsRaw.map((row) => ({
+        id: Number(row.id || 0),
+        name: productNameMap.get(Number(row.id)) || "Unknown Product",
+        sales: Number(row.sales || 0),
+        revenue: Number(row.revenue || 0),
+      })),
+      ...topMaterialsRaw.map((row) => ({
+        id: Number(row.id || 0),
+        name: materialNameMap.get(Number(row.id)) || "Unknown Material",
+        sales: Number(row.sales || 0),
+        revenue: Number(row.revenue || 0),
+      })),
+    ]
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5);
 
-    return topProducts;
+    return rows;
   } catch (error) {
     console.error("Error in getTopProducts:", error);
     return [];
@@ -311,26 +335,47 @@ async function getTopProducts(startDate, saleScopeWhere) {
 async function getLowStockItems(scope) {
   const storeWhere = buildIdWhere(scope, "store_id", scope?.stores);
   const shopWhere = buildIdWhere(scope, "shop_id", scope?.shops);
+  const factoryWhere = buildIdWhere(scope, "factoryId", scope?.factories);
 
-  const [lowStoreProducts, lowStoreMaterials, lowShopProducts, lowShopMaterials] = await Promise.all([
+  const [lowStoreProducts, lowStoreMaterials, lowShopProducts, lowShopMaterials, lowFactoryProducts, lowFactoryMaterials] = await Promise.all([
     // Low stock in stores
     prisma.storeProduct.findMany({
       where: { ...storeWhere, stock: { lt: 10 } },
-      include: { product: true, store: true }
+      orderBy: { stock: "asc" },
+      take: 10,
+      select: { product_id: true, stock: true, product: { select: { name: true, alert_quantity: true } }, store: { select: { name: true } } }
     }),
     prisma.storeMaterial.findMany({
       where: { ...storeWhere, stock: { lt: 50 } },
-      include: { material: true, store: true }
+      orderBy: { stock: "asc" },
+      take: 10,
+      select: { material_id: true, stock: true, material: { select: { name: true, alert_quantity: true } }, store: { select: { name: true } } }
     }),
     // Low stock in shops
     prisma.shopProduct.findMany({
       where: { ...shopWhere, stock: { lt: 5 } },
-      include: { product: true, shop: true }
+      orderBy: { stock: "asc" },
+      take: 10,
+      select: { product_id: true, stock: true, product: { select: { name: true, alert_quantity: true } }, shop: { select: { name: true } } }
     }),
     prisma.shopMaterial.findMany({
       where: { ...shopWhere, stock: { lt: 25 } },
-      include: { material: true, shop: true }
-    })
+      orderBy: { stock: "asc" },
+      take: 10,
+      select: { material_id: true, stock: true, material: { select: { name: true, alert_quantity: true } }, shop: { select: { name: true } } }
+    }),
+    prisma.factoryProduct.findMany({
+      where: { ...factoryWhere, stock: { lt: 10 } },
+      orderBy: { stock: "asc" },
+      take: 10,
+      select: { productId: true, stock: true, product: { select: { name: true, alert_quantity: true } }, factory: { select: { name: true } } }
+    }),
+    prisma.factoryMaterial.findMany({
+      where: { ...factoryWhere, stock: { lt: 50 } },
+      orderBy: { stock: "asc" },
+      take: 10,
+      select: { materialId: true, stock: true, material: { select: { name: true, alert_quantity: true } }, factory: { select: { name: true } } }
+    }),
   ]);
 
   const lowStockItems = [
@@ -365,10 +410,28 @@ async function getLowStockItems(scope) {
       location: sm.shop?.name,
       current: sm.stock,
       min: sm.material?.alert_quantity || 0
+    })),
+    ...lowFactoryProducts.map(fp => ({
+      id: `factory-product-${fp.productId}`,
+      name: fp.product?.name,
+      type: 'product',
+      location: fp.factory?.name,
+      current: fp.stock,
+      min: fp.product?.alert_quantity || 0
+    })),
+    ...lowFactoryMaterials.map(fm => ({
+      id: `factory-material-${fm.materialId}`,
+      name: fm.material?.name,
+      type: 'material',
+      location: fm.factory?.name,
+      current: fm.stock,
+      min: fm.material?.alert_quantity || 0
     }))
   ];
 
-  return lowStockItems.slice(0, 5);
+  return lowStockItems
+    .sort((a, b) => Number(a.current || 0) - Number(b.current || 0))
+    .slice(0, 5);
 }
 
 async function getRecentActivities(saleScopeWhere, purchaseScopeWhere, transferScopeWhere) {
@@ -377,26 +440,27 @@ async function getRecentActivities(saleScopeWhere, purchaseScopeWhere, transferS
       where: saleScopeWhere,
       take: 5,
       orderBy: { createdAt: 'desc' },
-      include: { 
-        shop: true,
-        saleItems: {
-          include: {
-            product: true
-          }
-        }
+      select: {
+        createdAt: true,
+        grandTotal: true,
+        shop: { select: { name: true } },
       }
     }),
     prisma.transfer.findMany({
       where: transferScopeWhere,
       take: 5,
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      select: {
+        createdAt: true,
+        reference: true,
+      }
     }),
 
     prisma.purchase.findMany({
       where: purchaseScopeWhere,
       take: 3,
       orderBy: { createdAt: 'desc' },
-      include: { supplier: true }
+      select: { createdAt: true, grandTotal: true, supplier: { select: { name: true } } }
     })
   ]);
 
@@ -406,123 +470,137 @@ async function getRecentActivities(saleScopeWhere, purchaseScopeWhere, transferS
       description: `Sale at ${sale.shop?.name || 'Unknown Shop'}`,
       amount: sale.grandTotal,
       time: formatTimeAgo(sale.createdAt),
-      items: sale.saleItems.length
+      timestamp: sale.createdAt,
     })),
     ...recentTransfers.map(transfer => ({
       type: 'transfer',
       description: `Transfer ${transfer.reference}`,
       amount: 0,
       time: formatTimeAgo(transfer.createdAt),
-      items: transfer.totalItems
+      timestamp: transfer.createdAt,
     })),
     ...recentPurchases.map(purchase => ({
       type: 'purchase',
       description: `Purchase from ${purchase.supplier?.name}`,
       amount: purchase.grandTotal,
       time: formatTimeAgo(purchase.createdAt),
-      items: 'Materials'
+      timestamp: purchase.createdAt,
     }))
   ];
 
-  return activities.sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 5);
+  return activities
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    .slice(0, 5)
+    .map(({ timestamp, ...rest }) => rest);
 }
 
 async function getShopPerformance(startDate, scope) {
   try {
-    if (!scope || scope.isAdmin) {
-      // continue
-    } else if (scope.shops.size === 0) {
+    if (!scope?.isAdmin && scope.shops.size === 0) {
       return [];
     }
-
-    const shopWhere = !scope || scope.isAdmin
-      ? { shopId: { not: null }, createdAt: { gte: startDate } }
-      : { shopId: { in: Array.from(scope.shops) }, createdAt: { gte: startDate } };
-
-    const shopSales = await prisma.sale.groupBy({
-      by: ['shopId'],
-      where: shopWhere,
-      _sum: { grandTotal: true },
-      _count: { id: true }
-    });
-
-    const shopsWithDetails = await Promise.all(
-      shopSales.map(async (sale) => {
-        const shop = await prisma.shop.findUnique({
-          where: { id: sale.shopId }
-        });
-        return {
-          id: sale.shopId,
-          name: shop?.name || 'Unknown Shop',
-          sales: sale._count.id,
-          revenue: sale._sum.grandTotal || 0,
-          efficiency: Math.floor(Math.random() * 10) + 85
-        };
-      })
+    const shopFilter = scope?.isAdmin
+      ? Prisma.empty
+      : Prisma.sql` AND s.shopId IN (${Prisma.join(Array.from(scope.shops))})`;
+    const rows = await prisma.$queryRaw(
+      Prisma.sql`
+        SELECT
+          s.shopId AS id,
+          COALESCE(sh.name, 'Unknown Shop') AS name,
+          COUNT(*) AS sales,
+          COALESCE(SUM(s.grandTotal), 0) AS revenue
+        FROM \`Sale\` s
+        LEFT JOIN \`Shop\` sh ON sh.id = s.shopId
+        WHERE s.shopId IS NOT NULL
+          AND s.createdAt >= ${startDate}
+          ${shopFilter}
+        GROUP BY s.shopId, sh.name
+        ORDER BY revenue DESC
+      `
     );
 
-    return shopsWithDetails;
+    return rows.map((row) => ({
+      id: Number(row.id || 0),
+      name: row.name || "Unknown Shop",
+      sales: Number(row.sales || 0),
+      revenue: Number(row.revenue || 0),
+      efficiency: Math.floor(Math.random() * 10) + 85,
+    }));
   } catch (error) {
     console.error("Error in getShopPerformance:", error);
     return [];
   }
 }
 
-async function getMonthlyRevenue(saleScopeWhere) {
+async function getMonthlyRevenue(scope) {
   try {
     const now = new Date();
     const startMonth = new Date(now.getFullYear(), now.getMonth() - 5, 1);
     const endDate = now;
+    if (!scope?.isAdmin && (!scope?.shops || scope.shops.size === 0)) {
+      return buildEmptyMonthlySeries(startMonth);
+    }
 
-    const sales = await prisma.sale.findMany({
-      where: {
-        ...saleScopeWhere,
-        createdAt: { gte: startMonth, lte: endDate }
-      },
-      select: {
-        grandTotal: true,
-        createdAt: true
-      }
-    });
-
-    // Group by month
-    const monthlyData = {};
-    sales.forEach(sale => {
-      const date = new Date(sale.createdAt);
-      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      if (!monthlyData[key]) {
-        monthlyData[key] = { revenue: 0, sales: 0 };
-      }
-      monthlyData[key].revenue += sale.grandTotal;
-      monthlyData[key].sales += 1;
-    });
+    const table = Prisma.raw("`Sale`");
+    const scopedRows = scope?.isAdmin
+      ? await prisma.$queryRaw(
+          Prisma.sql`
+            SELECT DATE_FORMAT(createdAt, '%Y-%m') AS ym,
+                   COALESCE(SUM(grandTotal), 0) AS revenue,
+                   COUNT(*) AS sales
+            FROM ${table}
+            WHERE createdAt >= ${startMonth} AND createdAt <= ${endDate}
+            GROUP BY DATE_FORMAT(createdAt, '%Y-%m')
+          `
+        )
+      : await prisma.$queryRaw(
+          Prisma.sql`
+            SELECT DATE_FORMAT(createdAt, '%Y-%m') AS ym,
+                   COALESCE(SUM(grandTotal), 0) AS revenue,
+                   COUNT(*) AS sales
+            FROM ${table}
+            WHERE createdAt >= ${startMonth}
+              AND createdAt <= ${endDate}
+              AND shopId IN (${Prisma.join(Array.from(scope.shops))})
+            GROUP BY DATE_FORMAT(createdAt, '%Y-%m')
+          `
+        );
+    const monthlyData = new Map(
+      scopedRows.map((row) => [row.ym, { revenue: Number(row.revenue || 0), sales: Number(row.sales || 0) }])
+    );
 
     const months = [];
     for (let i = 0; i < 6; i += 1) {
       const d = new Date(startMonth.getFullYear(), startMonth.getMonth() + i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const entry = monthlyData.get(key);
       months.push({
         month: d.toLocaleString('default', { month: 'short' }),
-        revenue: monthlyData[key]?.revenue || 0,
-        sales: monthlyData[key]?.sales || 0
+        revenue: entry?.revenue || 0,
+        sales: entry?.sales || 0
       });
     }
+
     return months;
   } catch (error) {
     console.error("Error in getMonthlyRevenue:", error);
-    const fallbackMonths = [];
     const now = new Date();
     const startMonth = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-    for (let i = 0; i < 6; i += 1) {
-      const d = new Date(startMonth.getFullYear(), startMonth.getMonth() + i, 1);
-      fallbackMonths.push({
-        month: d.toLocaleString('default', { month: 'short' }),
-        revenue: 0,
-        sales: 0
-      });
-    }
-    return fallbackMonths;
+    return buildEmptyMonthlySeries(startMonth);
   }
+}
+
+function buildEmptyMonthlySeries(startMonth) {
+  const fallbackMonths = [];
+  for (let i = 0; i < 6; i += 1) {
+    const d = new Date(startMonth.getFullYear(), startMonth.getMonth() + i, 1);
+    fallbackMonths.push({
+      month: d.toLocaleString('default', { month: 'short' }),
+      revenue: 0,
+      sales: 0
+    });
+  }
+  return fallbackMonths;
 }
 
 function formatNumber(num) {

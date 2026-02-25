@@ -117,20 +117,6 @@ const Sidebar = () => {
       ]
     },
     {
-      name: 'Products',
-      icon: <Box color='white' size={18} />,
-      color: 'from-pink-500 to-rose-500',
-      bgColor: 'bg-gradient-to-r from-pink-50 to-rose-100/50',
-      textColor: 'text-pink-700',
-      permissionKey: ['product_read', 'product_create'],
-      subItems: [
-        { name: 'All Products', path: '/products/all', icon: <Box size={16} />, permissionKey: 'product_read' },
-        { name: 'Create Product', path: '/products/create', icon: <Package size={16} />, permissionKey: 'product_create' }
-      ]
-    },
-
-    
-    {
       name: 'Repair',
       icon: <Wrench color='white' size={18} />,
       color: 'from-cyan-500 to-blue-500',
@@ -159,6 +145,18 @@ const Sidebar = () => {
       ] 
     },
 
+    {
+      name: 'Products',
+      icon: <Box color='white' size={18} />,
+      color: 'from-pink-500 to-rose-500',
+      bgColor: 'bg-gradient-to-r from-pink-50 to-rose-100/50',
+      textColor: 'text-pink-700',
+      permissionKey: ['product_read', 'product_create'],
+      subItems: [
+        { name: 'All Products', path: '/products/all', icon: <Box size={16} />, permissionKey: 'product_read' },
+        { name: 'Create Product', path: '/products/create', icon: <Package size={16} />, permissionKey: 'product_create' }
+      ]
+    },
     {
       name: 'Materials',
       icon: <Layers color='white' size={18} />,
