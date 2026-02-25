@@ -56,6 +56,7 @@ export const API_ROUTES = {
 
   // Shop POS routes
   SHOP_SALES: `${API_BASE_URL}/shop-sales`,
+  SHOP_SALES_OVERVIEW: `${API_BASE_URL}/shop-sales/overview`,
   SHOP_WARRANTIES: `${API_BASE_URL}/shop-sales/warranties`,
   SHOP_WARRANTY_BY_ID: (id) => `${API_BASE_URL}/shop-sales/warranties/${id}`,
   SHOP_WARRANTY_CLAIMS: (id) => `${API_BASE_URL}/shop-sales/warranties/${id}/claims`,

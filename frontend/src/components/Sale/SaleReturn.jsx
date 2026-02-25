@@ -37,6 +37,7 @@ export default function SaleReturn() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [sortConfig, setSortConfig] = useState({
     key: null,
     direction: "ascending",
@@ -79,9 +80,10 @@ export default function SaleReturn() {
     if (!token) return;
 
     setLoading(true);
+    const searchParam = appliedSearch ? `&search=${encodeURIComponent(appliedSearch)}` : "";
     // Updated to include pagination params
     fetch(
-      `${API_ROUTES.SHOP_SALES}/return-eligible?shopId=${selectedShop}&page=${currentPage}&limit=${itemsPerPage}`,
+      `${API_ROUTES.SHOP_SALES}/return-eligible?shopId=${selectedShop}&page=${currentPage}&limit=${itemsPerPage}${searchParam}`,
       {
         headers: { Authorization: `Bearer ${token}` },
       },
@@ -112,33 +114,11 @@ export default function SaleReturn() {
         setError("Failed to load sales: " + err.message);
         setLoading(false);
       });
-  }, [selectedShop, currentPage, itemsPerPage]);
+  }, [selectedShop, currentPage, itemsPerPage, appliedSearch]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedShop]);
-
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredSales(sales);
-      return;
-    }
-
-    const query = searchQuery.toLowerCase().trim();
-    const filtered = sales.filter(
-      (sale) =>
-        sale.reference?.toLowerCase().includes(query) ||
-        sale.shop?.name?.toLowerCase().includes(query) ||
-        sale.customer?.name?.toLowerCase().includes(query) ||
-        sale.paymentType?.toLowerCase().includes(query) ||
-        sale.grandTotal?.toString().includes(query) ||
-        new Date(sale.createdAt)
-          .toLocaleDateString()
-          .toLowerCase()
-          .includes(query),
-    );
-    setFilteredSales(filtered);
-  }, [searchQuery, sales]);
 
   const handleSort = (key) => {
     let direction = "ascending";
@@ -217,8 +197,15 @@ export default function SaleReturn() {
     setSearchQuery(e.target.value);
   };
 
+  const handleSearch = () => {
+    setCurrentPage(1);
+    setAppliedSearch(searchQuery.trim());
+  };
+
   const clearSearch = () => {
     setSearchQuery("");
+    setAppliedSearch("");
+    setCurrentPage(1);
   };
 
   // Helper function to calculate warranty status
@@ -287,7 +274,7 @@ const handleSelectSale = async (sale) => {
         const warrantyStatus = getWarrantyStatus(
           { 
             type: item.productId ? "product" : "material", 
-            warrantyDays: item.product?.warranty || 0 
+            warrantyDays: item.product?.warranty ?? item.product?.defaultWarrantyDays ?? 0 
           }, 
           sale.originalSale.createdAt
         );
@@ -306,7 +293,7 @@ const handleSelectSale = async (sale) => {
           unitPrice: item.unitPrice,
           totalPrice: 0,
           maxReturnable: maxReturnable,
-          warrantyDays: item.product?.warranty || 0,
+          warrantyDays: item.product?.warranty ?? item.product?.defaultWarrantyDays ?? 0,
           warrantyStatus: warrantyStatus, // Store the warranty status
           saleDate: sale.originalSale.createdAt
         };
@@ -320,7 +307,7 @@ const handleSelectSale = async (sale) => {
         const warrantyStatus = getWarrantyStatus(
           { 
             type: item.productId ? "product" : "material", 
-            warrantyDays: item.product?.warranty || 0 
+            warrantyDays: item.product?.warranty ?? item.product?.defaultWarrantyDays ?? 0 
           }, 
           sale.originalSale.createdAt
         );
@@ -339,7 +326,7 @@ const handleSelectSale = async (sale) => {
           unitPrice: item.unitPrice,
           totalPrice: 0,
           maxReturnable: item.quantity,
-          warrantyDays: item.product?.warranty || 0,
+          warrantyDays: item.product?.warranty ?? item.product?.defaultWarrantyDays ?? 0,
           warrantyStatus: warrantyStatus, // Store the warranty status
           saleDate: sale.originalSale.createdAt
         };
@@ -355,7 +342,7 @@ const handleSelectSale = async (sale) => {
       const warrantyStatus = getWarrantyStatus(
         { 
           type: item.productId ? "product" : "material", 
-          warrantyDays: item.product?.warranty || 0 
+          warrantyDays: item.product?.warranty ?? item.product?.defaultWarrantyDays ?? 0 
         }, 
         sale.originalSale.createdAt
       );
@@ -374,7 +361,7 @@ const handleSelectSale = async (sale) => {
         unitPrice: item.unitPrice,
         totalPrice: 0,
         maxReturnable: item.quantity,
-        warrantyDays: item.product?.warranty || 0,
+        warrantyDays: item.product?.warranty ?? item.product?.defaultWarrantyDays ?? 0,
         warrantyStatus: warrantyStatus, // Store the warranty status
         saleDate: sale.originalSale.createdAt
       };
@@ -492,7 +479,7 @@ const handleSelectSale = async (sale) => {
 
       // Refresh the current page
       const refreshRes = await fetch(
-        `${API_ROUTES.SHOP_SALES}/return-eligible?shopId=${selectedShop}&page=${currentPage}&limit=${itemsPerPage}`,
+        `${API_ROUTES.SHOP_SALES}/return-eligible?shopId=${selectedShop}&page=${currentPage}&limit=${itemsPerPage}${appliedSearch ? `&search=${encodeURIComponent(appliedSearch)}` : ""}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         },
@@ -512,6 +499,7 @@ const handleSelectSale = async (sale) => {
       setSelectedSale(null);
       setItems([]);
       setSearchQuery("");
+      setAppliedSearch("");
     } catch (err) {
       console.error("Return error:", err);
       setError("❌ " + err.message);
@@ -608,6 +596,7 @@ const handleSelectSale = async (sale) => {
               setSelectedSale(null);
               setItems([]);
               setSearchQuery("");
+              setAppliedSearch("");
             }}
           >
             <option value="">Select a Shop</option>
@@ -664,7 +653,7 @@ const handleSelectSale = async (sale) => {
               </h3>
               <div className="flex items-center gap-3">
                 <span className="text-sm text-gray-600">
-                  Showing {filteredSales.length} of {totalSales} non-returned
+                  Showing {sales.length} of {totalSales} non-returned
                   sale(s)
                 </span>
                 {loading && (
@@ -676,35 +665,46 @@ const handleSelectSale = async (sale) => {
               </div>
             </div>
 
-            <div className="relative w-full md:w-80">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search size={18} className="text-gray-400" />
+            <div className="flex w-full md:w-[28rem] gap-2">
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search size={18} className="text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search by reference, customer, amount..."
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSearch();
+                  }}
+                  className="glass-input w-full pl-10 pr-10 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={clearSearch}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center glass-icon-button p-1 rounded"
+                  >
+                    <X size={18} className="text-gray-400 hover:text-gray-600" />
+                  </button>
+                )}
               </div>
-              <input
-                type="text"
-                placeholder="Search by reference, customer, amount..."
-                value={searchQuery}
-                onChange={handleSearchChange}
-                className="glass-input w-full pl-10 pr-10 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
-              />
-              {searchQuery && (
-                <button
-                  onClick={clearSearch}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center glass-icon-button p-1 rounded"
-                >
-                  <X size={18} className="text-gray-400 hover:text-gray-600" />
-                </button>
-              )}
+              <button
+                onClick={handleSearch}
+                className="px-4 py-2.5 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 transition-all duration-300"
+              >
+                <Search size={18} className="text-gray-400" />
+              </button>
             </div>
           </div>
 
           {/* Search Results Info */}
-          {searchQuery && (
+          {appliedSearch && (
             <div className="glass-tag inline-flex items-center px-4 py-2 rounded-lg mb-4 bg-white/50 backdrop-blur-sm border border-white/30">
               <Search size={14} className="mr-2 text-gray-500" />
               <span className="text-sm text-gray-700">
-                Found {filteredSales.length} sale(s) matching "
-                <span className="font-semibold">{searchQuery}</span>"
+                Found {totalSales} sale(s) matching "
+                <span className="font-semibold">{appliedSearch}</span>"
               </span>
               <button
                 onClick={clearSearch}
@@ -825,13 +825,13 @@ const handleSelectSale = async (sale) => {
               </div>
             )}
 
-            {sales.length > 0 && filteredSales.length === 0 && searchQuery && (
+            {sales.length === 0 && appliedSearch && !loading && (
               <div className="text-center py-12">
                 <div className="glass-icon p-4 rounded-full inline-flex mb-4 bg-gradient-to-r from-gray-100/50 to-gray-200/50">
                   <Search className="text-gray-400" size={32} />
                 </div>
                 <p className="text-gray-500 text-lg font-medium">
-                  No sales found matching "{searchQuery}"
+                  No sales found matching "{appliedSearch}"
                 </p>
                 <button
                   onClick={clearSearch}

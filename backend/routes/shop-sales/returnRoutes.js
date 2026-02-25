@@ -1,3 +1,5 @@
+const { Prisma } = require("@prisma/client");
+
 function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScope }) {
   const { createNotification } = require("../../utils/notificationHelper");
   // Get sale return by ID - FIXED VERSION
@@ -64,7 +66,7 @@ function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScop
   // Get return-eligible sales for a shop with pagination (UPDATED)
   router.get("/return-eligible", async (req, res) => {
     try {
-      const { shopId, page = 1, limit = 10 } = req.query;
+      const { shopId, page = 1, limit = 10, search = "" } = req.query;
 
       if (!shopId) {
         return res.status(400).json({ error: "Shop ID is required" });
@@ -82,101 +84,146 @@ function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScop
         return res.status(403).json({ error: "You don't have access to this shop" });
       }
 
-      const pageInt = parseInt(page);
-      const limitInt = parseInt(limit);
+      const pageInt = Math.max(1, parseInt(page, 10) || 1);
+      const limitInt = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
       const skip = (pageInt - 1) * limitInt;
+      const normalizedSearch = String(search || "").trim();
+      const likeQuery = `%${normalizedSearch}%`;
+      const searchFilter = normalizedSearch
+        ? Prisma.sql`AND (
+            s.reference LIKE ${likeQuery}
+            OR COALESCE(c.name, '') LIKE ${likeQuery}
+            OR COALESCE(c.mobile, '') LIKE ${likeQuery}
+            OR CAST(s.grandTotal AS CHAR) LIKE ${likeQuery}
+          )`
+        : Prisma.empty;
 
-      const allSales = await prisma.sale.findMany({
-        where: {
-          shopId: shopIdInt,
-        },
-        include: {
-          saleItems: true,
-          saleReturns: {
-            include: {
-              returnItems: true
-            }
-          }
-        }
-      });
+      const totalCountRows = await prisma.$queryRaw`
+        SELECT COUNT(*) AS totalCount FROM (
+          SELECT s.id
+          FROM Sale s
+          INNER JOIN SaleItem si ON si.saleId = s.id
+          LEFT JOIN (
+            SELECT
+              sr.saleId AS saleId,
+              sri.productId AS productId,
+              sri.materialId AS materialId,
+              SUM(sri.quantity) AS returnedQty
+            FROM SaleReturn sr
+            INNER JOIN SaleReturnItem sri ON sri.saleReturnId = sr.id
+            WHERE sr.shopId = ${shopIdInt}
+            GROUP BY sr.saleId, sri.productId, sri.materialId
+          ) r ON r.saleId = s.id
+             AND (
+               (si.productId IS NOT NULL AND r.productId = si.productId)
+               OR
+               (si.materialId IS NOT NULL AND r.materialId = si.materialId)
+             )
+          LEFT JOIN Customer c ON c.id = s.customerId
+          WHERE s.shopId = ${shopIdInt}
+            AND COALESCE(r.returnedQty, 0) < si.quantity
+            ${searchFilter}
+          GROUP BY s.id
+        ) eligible`;
+      const totalCount = Number(totalCountRows?.[0]?.totalCount || 0);
 
-      const eligibleSales = allSales.filter((sale) => {
-        const returnedQuantities = {};
+      const eligibleSaleRows = await prisma.$queryRaw`
+        SELECT
+          s.id AS id,
+          MAX(s.createdAt) AS createdAt
+        FROM Sale s
+        INNER JOIN SaleItem si ON si.saleId = s.id
+        LEFT JOIN (
+          SELECT
+            sr.saleId AS saleId,
+            sri.productId AS productId,
+            sri.materialId AS materialId,
+            SUM(sri.quantity) AS returnedQty
+          FROM SaleReturn sr
+          INNER JOIN SaleReturnItem sri ON sri.saleReturnId = sr.id
+          WHERE sr.shopId = ${shopIdInt}
+          GROUP BY sr.saleId, sri.productId, sri.materialId
+        ) r ON r.saleId = s.id
+           AND (
+             (si.productId IS NOT NULL AND r.productId = si.productId)
+             OR
+             (si.materialId IS NOT NULL AND r.materialId = si.materialId)
+           )
+        LEFT JOIN Customer c ON c.id = s.customerId
+        WHERE s.shopId = ${shopIdInt}
+          AND COALESCE(r.returnedQty, 0) < si.quantity
+          ${searchFilter}
+        GROUP BY s.id
+        ORDER BY MAX(s.createdAt) DESC
+        LIMIT ${limitInt} OFFSET ${skip}`;
 
-        if (sale.saleReturns && sale.saleReturns.length > 0) {
-          for (const saleReturn of sale.saleReturns) {
-            for (const returnItem of saleReturn.returnItems) {
-              const key = returnItem.productId
-                ? `product-${returnItem.productId}`
-                : `material-${returnItem.materialId}`;
-              if (!returnedQuantities[key]) returnedQuantities[key] = 0;
-              returnedQuantities[key] += returnItem.quantity;
-            }
-          }
-        }
-
-        for (const saleItem of sale.saleItems) {
-          const key = saleItem.productId
-            ? `product-${saleItem.productId}`
-            : `material-${saleItem.materialId}`;
-          const returnedQty = returnedQuantities[key] || 0;
-          if (returnedQty < saleItem.quantity) return true;
-        }
-        return false;
-      });
-
-      const totalCount = eligibleSales.length;
-      const paginatedSales = eligibleSales.slice(skip, skip + limitInt);
-
-      const salesWithDetails = await prisma.sale.findMany({
-        where: {
-          id: { in: paginatedSales.map((s) => s.id) }
-        },
-        include: {
-          shop: {
-            select: {
-              id: true,
-              name: true,
-              shop_keeper: true,
+      const saleIds = eligibleSaleRows.map((row) => Number(row.id)).filter(Boolean);
+      let salesWithDetails = [];
+      if (saleIds.length > 0) {
+        const idOrder = new Map(saleIds.map((id, idx) => [id, idx]));
+        const rows = await prisma.sale.findMany({
+          where: { id: { in: saleIds } },
+          include: {
+            shop: {
+              select: {
+                id: true,
+                name: true,
+                shop_keeper: true,
+              },
             },
-          },
-          saleItems: {
-            include: {
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                  barcode: true,
-                  sale_price: true,
+            saleItems: {
+              include: {
+                product: {
+                  select: {
+                    id: true,
+                    name: true,
+                    barcode: true,
+                    sale_price: true,
+                    defaultWarrantyDays: true,
+                  },
+                },
+                material: {
+                  select: {
+                    id: true,
+                    name: true,
+                    barcode: true,
+                    unit: true,
+                    sale_price: true,
+                  },
                 },
               },
-              material: {
-                select: {
-                  id: true,
-                  name: true,
-                  barcode: true,
-                  unit: true,
-                  sale_price: true,
-                },
+            },
+            customer: {
+              select: {
+                id: true,
+                name: true,
+                mobile: true,
+                email: true,
               },
             },
           },
-          customer: {
-            select: {
-              id: true,
-              name: true,
-              mobile: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
+        });
+        salesWithDetails = rows.sort((a, b) => (idOrder.get(a.id) ?? 0) - (idOrder.get(b.id) ?? 0));
+      }
+
+      const normalizedSales = salesWithDetails.map((sale) => ({
+        ...sale,
+        saleItems: (sale.saleItems || []).map((si) => ({
+          ...si,
+          product: si.product
+            ? {
+                ...si.product,
+                warranty:
+                  si.product.warranty ??
+                  si.product.defaultWarrantyDays ??
+                  0,
+              }
+            : si.product,
+        })),
+      }));
 
       res.json({
-        sales: salesWithDetails,
+        sales: normalizedSales,
         pagination: {
           currentPage: pageInt,
           totalPages: Math.ceil(totalCount / limitInt),
@@ -228,7 +275,7 @@ function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScop
                   select: {
                     id: true,
                     name: true,
-                    warranty: true,
+                    defaultWarrantyDays: true,
                   }
                 },
                 material: true
@@ -297,7 +344,7 @@ function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScop
           }
 
           if (returnItem.type === "product") {
-            const productWarrantyDays = originalItem.product?.warranty || 0;
+            const productWarrantyDays = originalItem.product?.defaultWarrantyDays || 0;
             if (productWarrantyDays > 0 && daysSinceSale > productWarrantyDays) {
               throw new Error(
                 `Cannot return product "${originalItem.product?.name}" (ID: ${returnItem.itemId}) as it is outside warranty period. ` +

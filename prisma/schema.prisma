@@ -987,6 +987,10 @@ model Sale {
   editAccessRequests SaleEditAccessRequest[]
   
   @@index([shopId])
+  @@index([createdAt])
+  @@index([customerId])
+  @@index([shopId, createdAt])
+  @@index([customerId, createdAt])
 }
 
 model SaleItem {
