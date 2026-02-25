@@ -37,6 +37,19 @@ async function safeDelete(model) {
   await prisma[model].deleteMany();
 }
 
+function randomDate() {
+
+  const start = new Date('2023-01-01T00:00:00');
+  const end = new Date('2026-02-25T23:59:59');
+
+  // Convert dates to their millisecond timestamps
+  const startTime = start.getTime();
+  const endTime = end.getTime();
+  const randomTime = startTime + Math.random() * (endTime - startTime);
+
+  return new Date(randomTime);
+}
+
 async function main() {
   console.log('Cleaning up existing data...');
   const cleanupOrder = [
@@ -565,6 +578,7 @@ async function main() {
         supplierId: pick(suppliers).id,
         destinationType,
         destinationId,
+        createdAt: randomDate(),
         grandTotal: Number(total.toFixed(2)),
         shippingCost: 0,
         shippingStatus: 'received',
@@ -612,8 +626,8 @@ async function main() {
     });
   }
 
-  console.log('Seeding sales (4000)...');
-  for (let i = 0; i < 4000; i += 1) {
+  console.log('Seeding sales (1000000)...');
+  for (let i = 0; i < 10000000; i += 1) {
     const shop = pick(shops);
     const itemsCount = randInt(1, 3);
     const saleItems = [];
@@ -659,6 +673,7 @@ async function main() {
     const paidAmount = Number((totalAmount * randFloat(0.7, 1)).toFixed(2));
     const bankAccount = (paymentType === 'bank' || paymentType === 'card') ? pick(bankAccounts) : null;
 
+
     const sale = await prisma.sale.create({
       data: {
         reference: `SAL-${String(i + 1).padStart(6, '0')}`,
@@ -670,6 +685,7 @@ async function main() {
         total_cost: Number(totalCost.toFixed(2)),
         paymentType,
         paidAmount,
+        createdAt: randomDate(),
         bankAccountId: bankAccount ? bankAccount.id : null,
         bankName: bankAccount ? bankAccount.name : null,
         saleItems: { create: saleItems },
@@ -696,9 +712,9 @@ async function main() {
     }
   }
 
-  console.log('Seeding transfers (6000)...');
-  const transferStatuses = ['processing', 'pending', 'being_shipped', 'transferred', 'not_received'];
-  for (let i = 0; i < 6000; i += 1) {
+  console.log('Seeding transfers (3000)...');
+  const transferStatuses = ['processing', 'pending', 'on_the_way', 'complete', 'not_received'];
+  for (let i = 0; i < 3000; i += 1) {
     const fromType = pick(['store', 'shop', 'factory']);
     let toType = pick(['store', 'shop', 'factory']);
     while (toType === fromType) {
@@ -754,8 +770,14 @@ async function main() {
         reference: `TRF-${String(i + 1).padStart(6, '0')}`,
         from: fromType,
         fromId,
+        fromStoreId: fromType === 'store' ? fromId : null,
+        fromShopId: fromType === 'shop' ? fromId : null,
+        fromFactoryId: fromType === 'factory' ? fromId : null,
         to: toType,
         toId,
+        toStoreId: toType === 'store' ? toId : null,
+        toShopId: toType === 'shop' ? toId : null,
+        toFactoryId: toType === 'factory' ? toId : null,
         shipping_cost: randFloat(0, 2000, 2),
         status,
         note: `Transfer ${i + 1}`,
@@ -812,8 +834,86 @@ async function main() {
     await prisma.production.create({ data: production });
   }
 
-  console.log('Seeding combined damage records (120)...');
-  for (let i = 0; i < 120; i += 1) {
+  console.log('Seeding expense categories and expenses...');
+  const expenseCategoryNames = [
+    'Office Supplies',
+    'Transport',
+    'Utilities',
+    'Maintenance',
+    'Rent',
+    'Internet',
+    'Salary Disbursement',
+    'Miscellaneous',
+  ];
+  await prisma.expenseCategory.createMany({
+    data: expenseCategoryNames.map((name) => ({ name })),
+    skipDuplicates: true,
+  });
+  const expenseCategories = await prisma.expenseCategory.findMany();
+
+  for (let i = 0; i < 2000; i += 1) {
+    await prisma.expense.create({
+      data: {
+        categoryId: pick(expenseCategories).id,
+        accountId: pick(accounts).id,
+        amount: randFloat(100, 20000, 2),
+        date: new Date(Date.now() - randInt(1, 365) * 24 * 60 * 60 * 1000),
+        description: `Seeded expense #${i + 1}`,
+        createdById: pick(userList).id,
+      },
+    });
+  }
+
+  console.log('Seeding requisitions (1000)...');
+  for (let i = 0; i < 1000; i += 1) {
+    const requesterType = pick(['store', 'shop', 'factory']);
+    const requesterId =
+      requesterType === 'store'
+        ? pick(stores).id
+        : requesterType === 'shop'
+          ? pick(shops).id
+          : pick(factories).id;
+
+    const itemsCount = randInt(1, 4);
+    const requisitionItems = [];
+    for (let j = 0; j < itemsCount; j += 1) {
+      const itemType = pick(['product', 'material']);
+      if (itemType === 'product') {
+        requisitionItems.push({
+          itemType: 'product',
+          productId: pick(products).id,
+          materialId: null,
+          requestedQty: randFloat(1, 30, 2),
+          note: `Seeded requisition item ${j + 1}`,
+        });
+      } else {
+        requisitionItems.push({
+          itemType: 'material',
+          productId: null,
+          materialId: pick(materials).id,
+          requestedQty: randFloat(1, 50, 2),
+          note: `Seeded requisition item ${j + 1}`,
+        });
+      }
+    }
+
+    await prisma.requisition.create({
+      data: {
+        reference: `REQ-${String(i + 1).padStart(6, '0')}`,
+        title: `Seeded Requisition ${i + 1}`,
+        note: `Auto-generated requisition ${i + 1}`,
+        requestType: 'items',
+        status: pick(['pending', 'approved', 'in_process', 'segmented']),
+        requesterType,
+        requesterId,
+        requesterUserId: pick(userList).id,
+        items: { create: requisitionItems },
+      },
+    });
+  }
+
+  console.log('Seeding combined damage records (300)...');
+  for (let i = 0; i < 300; i += 1) {
     const fromType = pick(['store', 'shop', 'factory']);
     const fromId =
       fromType === 'store'
@@ -858,14 +958,17 @@ async function main() {
         note: `Seeded damage record ${i + 1}`,
         fromType,
         fromId,
+        storeId: fromType === 'store' ? fromId : null,
+        shopId: fromType === 'shop' ? fromId : null,
+        factoryId: fromType === 'factory' ? fromId : null,
         totalLoss: Number(totalLoss.toFixed(2)),
         items: { create: items },
       },
     });
   }
 
-  console.log('Seeding combined repair orders (120)...');
-  for (let i = 0; i < 120; i += 1) {
+  console.log('Seeding combined repair orders (300)...');
+  for (let i = 0; i < 300; i += 1) {
     const fromType = pick(['store', 'shop', 'factory']);
     const fromId =
       fromType === 'store'
@@ -938,6 +1041,9 @@ async function main() {
   console.log(`Created ${await prisma.production.count()} productions`);
   console.log(`Created ${await prisma.sale.count()} sales`);
   console.log(`Created ${await prisma.transfer.count()} transfers`);
+  console.log(`Created ${await prisma.requisition.count()} requisitions`);
+  console.log(`Created ${await prisma.expenseCategory.count()} expense categories`);
+  console.log(`Created ${await prisma.expense.count()} expenses`);
   console.log(`Created ${await prisma.notification.count()} notifications`);
   console.log(`Created ${await prisma.damageRecord.count()} damage records`);
   console.log(`Created ${await prisma.repairOrder.count()} repair orders`);

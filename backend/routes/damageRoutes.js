@@ -8,6 +8,11 @@ const router = express.Router();
 
 const normalizeFromType = (value) => String(value || "").trim().toLowerCase();
 const normalizeItemType = (value) => String(value || "").trim().toLowerCase();
+const buildSourceForeignKeys = (fromType, fromId) => ({
+  storeId: fromType === "store" ? fromId : null,
+  shopId: fromType === "shop" ? fromId : null,
+  factoryId: fromType === "factory" ? fromId : null,
+});
 
 const getProductWhere = (fromType, fromId, productId) => {
   if (fromType === "store") return { store_id_product_id: { store_id: fromId, product_id: productId } };
@@ -246,6 +251,9 @@ const ensureAvailability = async (tx, fromType, fromId, items) => {
 };
 
 const includeConfig = {
+  store: { select: { id: true, name: true } },
+  shop: { select: { id: true, name: true } },
+  factory: { select: { id: true, name: true } },
   items: {
     include: {
       product: { select: { id: true, name: true, barcode: true, unit: true } },
@@ -297,6 +305,7 @@ router.post("/", async (req, res) => {
         data: {
           fromType,
           fromId,
+          ...buildSourceForeignKeys(fromType, fromId),
           reason,
           note,
           totalLoss,
@@ -357,8 +366,17 @@ router.get("/", async (req, res) => {
       prisma.damageRecord.count(),
     ]);
 
+    const recordsWithSourceName = records.map((row) => ({
+      ...row,
+      sourceName:
+        row.store?.name ||
+        row.shop?.name ||
+        row.factory?.name ||
+        `${row.fromType} #${row.fromId}`,
+    }));
+
     res.json({
-      records,
+      records: recordsWithSourceName,
       currentPage: page,
       totalPages: Math.ceil(totalItems / limit),
       totalItems,
@@ -378,7 +396,14 @@ router.get("/:id", async (req, res) => {
       include: includeConfig,
     });
     if (!record) return res.status(404).json({ error: "Damage record not found" });
-    return res.json(record);
+    return res.json({
+      ...record,
+      sourceName:
+        record.store?.name ||
+        record.shop?.name ||
+        record.factory?.name ||
+        `${record.fromType} #${record.fromId}`,
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message || "Failed to fetch damage record" });
   }
@@ -431,6 +456,7 @@ router.put("/:id", async (req, res) => {
         data: {
           fromType,
           fromId,
+          ...buildSourceForeignKeys(fromType, fromId),
           reason,
           note,
           totalLoss,

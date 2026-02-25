@@ -114,7 +114,7 @@ export default function DamageRecordList() {
                         {new Date(row.createdAt).toLocaleDateString()}
                       </div>
                     </td>
-                    <td className="px-4 py-3">{row.fromType} #{row.fromId}</td>
+                    <td className="px-4 py-3">{row.sourceName || `${row.fromType} #${row.fromId}`}</td>
                     <td className="px-4 py-3">{Array.isArray(row.items) ? row.items.length : 0}</td>
                     <td className="px-4 py-3 text-right">
                       <span className="inline-flex items-center gap-1 text-red-600 font-semibold">
@@ -166,7 +166,7 @@ export default function DamageRecordList() {
               <button onClick={() => setSelected(null)} className="px-2 py-1 rounded border text-sm">Close</button>
             </div>
             <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-              <div><span className="text-gray-500">Source:</span> {selected.fromType} #{selected.fromId}</div>
+              <div><span className="text-gray-500">Source:</span> {selected.sourceName || `${selected.fromType} #${selected.fromId}`}</div>
               <div><span className="text-gray-500">Date:</span> {new Date(selected.createdAt).toLocaleString()}</div>
               <div><span className="text-gray-500">Reason:</span> {selected.reason}</div>
               <div><span className="text-gray-500">Total Loss:</span> {Number(selected.totalLoss || 0).toFixed(2)}</div>
