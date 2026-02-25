@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 const router = express.Router();
 const { createTransaction } = require('../utils/transactionHelper');
 const { createNotification } = require('../utils/notificationHelper');
-const { parseDateOnly, mergeIncomingBatch, decrementBatch } = require('../utils/batchDetails');
+const { parseDateOnly, mergeIncomingBatch, decrementBatch, getAvailableBatches } = require('../utils/batchDetails');
 
 // Generate unique reference for transactions
 const generateTransactionReference = () => {
@@ -1846,7 +1846,7 @@ router.get('/:id/shipments', async (req, res) => {
     const { dueAmount } = calculatePurchaseStatus(purchase);
     
     // Check if payment exceeds due amount
-    if (paymentAmount > dueAmount) {
+    if ( (paymentAmount.toFixed(2) - dueAmount.toFixed(2)) > 0.001 ) {
       return res.status(400).json({ 
         error: `Payment amount ($${paymentAmount.toFixed(2)}) exceeds due amount ($${dueAmount.toFixed(2)})` 
       });
@@ -2798,6 +2798,7 @@ router.get('/returns/damage-items', async (req, res) => {
       barcode: row.product?.barcode || null,
       availableQuantity: parseFloat(row.scrap || 0),
       unitPrice: parseFloat(row.product?.cost || row.avg_cost || 0),
+      batches: getAvailableBatches(row.batchDetails),
     }));
     const materials = materialRows.map((row) => ({
       itemType: "material",
@@ -2806,6 +2807,7 @@ router.get('/returns/damage-items', async (req, res) => {
       barcode: row.material?.barcode || null,
       availableQuantity: parseFloat(row.scrap || 0),
       unitPrice: parseFloat(row.material?.unit_cost || row.avg_cost || 0),
+      batches: getAvailableBatches(row.batchDetails),
     }));
 
     res.json({
@@ -2818,6 +2820,84 @@ router.get('/returns/damage-items', async (req, res) => {
   } catch (error) {
     if (error.status === 403) return res.status(403).json({ error: "Forbidden" });
     res.status(500).json({ error: error.message || "Failed to fetch damage items" });
+  }
+});
+
+router.get('/returns/source-items', async (req, res) => {
+  try {
+    const sourceType = String(req.query.sourceType || req.query.type || "").toLowerCase();
+    const sourceId = parseInt(req.query.sourceId || req.query.branchId || req.query.id, 10);
+    if (!["store", "shop", "factory"].includes(sourceType)) {
+      return res.status(400).json({ error: "sourceType must be store, shop, or factory" });
+    }
+    if (!sourceId) {
+      return res.status(400).json({ error: "sourceId is required" });
+    }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, sourceType, sourceId);
+
+    let productRows = [];
+    let materialRows = [];
+
+    if (sourceType === 'store') {
+      productRows = await prisma.storeProduct.findMany({
+        where: { store_id: sourceId, stock: { gt: 0 } },
+        include: { product: true }
+      });
+      materialRows = await prisma.storeMaterial.findMany({
+        where: { store_id: sourceId, stock: { gt: 0 } },
+        include: { material: true }
+      });
+    } else if (sourceType === 'shop') {
+      productRows = await prisma.shopProduct.findMany({
+        where: { shop_id: sourceId, stock: { gt: 0 } },
+        include: { product: true }
+      });
+      materialRows = await prisma.shopMaterial.findMany({
+        where: { shop_id: sourceId, stock: { gt: 0 } },
+        include: { material: true }
+      });
+    } else {
+      productRows = await prisma.factoryProduct.findMany({
+        where: { factoryId: sourceId, stock: { gt: 0 } },
+        include: { product: true }
+      });
+      materialRows = await prisma.factoryMaterial.findMany({
+        where: { factoryId: sourceId, stock: { gt: 0 } },
+        include: { material: true }
+      });
+    }
+
+    const products = productRows.map((row) => ({
+      itemType: "product",
+      id: row.product_id ?? row.productId,
+      name: row.product?.name || "-",
+      barcode: row.product?.barcode || null,
+      availableQuantity: parseFloat(row.stock || 0),
+      unitPrice: parseFloat(row.product?.cost || row.avg_cost || 0),
+      batches: getAvailableBatches(row.batchDetails),
+    }));
+    const materials = materialRows.map((row) => ({
+      itemType: "material",
+      id: row.material_id ?? row.materialId,
+      name: row.material?.name || "-",
+      barcode: row.material?.barcode || null,
+      availableQuantity: parseFloat(row.stock || 0),
+      unitPrice: parseFloat(row.material?.unit_cost || row.avg_cost || 0),
+      batches: getAvailableBatches(row.batchDetails),
+    }));
+
+    res.json({
+      sourceType,
+      sourceId,
+      items: [...products, ...materials],
+      products,
+      materials,
+    });
+  } catch (error) {
+    if (error.status === 403) return res.status(403).json({ error: "Forbidden" });
+    res.status(500).json({ error: error.message || "Failed to fetch source items" });
   }
 });
 

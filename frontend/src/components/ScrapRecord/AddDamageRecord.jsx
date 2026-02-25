@@ -78,7 +78,18 @@ export default function AddDamageRecord() {
   }, [search, branchItems]);
 
   const addItem = (item) => {
-    if (items.some((x) => x.itemType === item.itemType && Number(x.itemId) === Number(item.itemId))) return;
+    const firstBatch = Array.isArray(item.batches) && item.batches.length > 0 ? item.batches[0] : null;
+    if (
+      items.some(
+        (x) =>
+          x.itemType === item.itemType &&
+          Number(x.itemId) === Number(item.itemId) &&
+          String(x.batchNumber || "") === String(firstBatch?.batchNumber || "") &&
+          String(x.expiryDate || "") === String(firstBatch?.expiryDate || "")
+      )
+    ) {
+      return;
+    }
     setItems((prev) => [
       ...prev,
       {
@@ -86,6 +97,9 @@ export default function AddDamageRecord() {
         itemId: item.itemId,
         name: item.name,
         availableQuantity: Number(item.availableQuantity || 0),
+        batches: Array.isArray(item.batches) ? item.batches : [],
+        batchNumber: firstBatch?.batchNumber || "",
+        expiryDate: firstBatch?.expiryDate || "",
         quantity: 1,
         lossPerUnit: Number(item.lossPerUnit || 0),
       },
@@ -106,7 +120,15 @@ export default function AddDamageRecord() {
     if (!fromType || !fromId || !reason.trim()) return setMessage("Source and reason are required.");
     if (!items.length) return setMessage("Select at least one item.");
 
-    const over = items.find((row) => Number(row.quantity || 0) <= 0 || Number(row.quantity || 0) > Number(row.availableQuantity || 0));
+    const over = items.find((row) => {
+      const selectedBatch = (row.batches || []).find(
+        (batch) =>
+          String(batch.batchNumber || "") === String(row.batchNumber || "") &&
+          String(batch.expiryDate || "") === String(row.expiryDate || "")
+      );
+      const maxQty = selectedBatch ? Number(selectedBatch.quantity || 0) : Number(row.availableQuantity || 0);
+      return Number(row.quantity || 0) <= 0 || Number(row.quantity || 0) > maxQty;
+    });
     if (over) return setMessage(`Invalid quantity for ${over.name}`);
 
     const payload = {
@@ -119,6 +141,8 @@ export default function AddDamageRecord() {
         itemId: Number(row.itemId),
         quantity: Number(row.quantity),
         lossPerUnit: Number(row.lossPerUnit || 0),
+        batchNumber: row.batchNumber || null,
+        expiryDate: row.expiryDate || null,
       })),
     };
 
@@ -204,18 +228,36 @@ export default function AddDamageRecord() {
           <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 space-y-4">
             <div className="space-y-2 max-h-80 overflow-auto rounded-xl border border-white/60 bg-white/70 p-3">
             {items.map((row, idx) => (
-              <div key={`${row.itemType}-${row.itemId}`} className="grid grid-cols-12 gap-2 items-center rounded-lg border border-gray-200 p-2">
-                <div className="col-span-5 text-sm">
+              <div key={`${row.itemType}-${row.itemId}-${row.batchNumber || "none"}-${row.expiryDate || "none"}`} className="grid grid-cols-12 gap-2 items-center rounded-lg border border-gray-200 p-2">
+                <div className="col-span-4 text-sm">
                   {row.name}
                   <div className="text-xs text-gray-500">{row.itemType} | max {row.availableQuantity}</div>
                 </div>
+                <select
+                  value={`${row.batchNumber || ""}||${row.expiryDate || ""}`}
+                  onChange={(e) => {
+                    const [batchNumber, expiryDate] = String(e.target.value || "").split("||");
+                    setItems((prev) => prev.map((x, i) => i === idx ? { ...x, batchNumber: batchNumber || "", expiryDate: expiryDate || "" } : x));
+                  }}
+                  className="col-span-3 rounded border border-gray-200 px-2 py-1.5 text-sm"
+                >
+                  <option value="||">No batch</option>
+                  {(row.batches || []).map((batch) => (
+                    <option
+                      key={`${batch.batchNumber}-${batch.expiryDate || "none"}`}
+                      value={`${batch.batchNumber || ""}||${batch.expiryDate || ""}`}
+                    >
+                      {`${batch.batchNumber} | Exp: ${batch.expiryDate || "N/A"} | Qty: ${Number(batch.quantity || 0)}`}
+                    </option>
+                  ))}
+                </select>
                 <input
                   type="number"
                   min="0"
                   step="0.01"
                   value={row.quantity}
                   onChange={(e) => setItems((prev) => prev.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))}
-                  className="col-span-3 rounded border border-gray-200 px-2 py-1.5 text-sm"
+                  className="col-span-2 rounded border border-gray-200 px-2 py-1.5 text-sm"
                   placeholder="Qty"
                 />
                 <input
@@ -224,7 +266,7 @@ export default function AddDamageRecord() {
                   step="0.01"
                   value={row.lossPerUnit}
                   onChange={(e) => setItems((prev) => prev.map((x, i) => i === idx ? { ...x, lossPerUnit: e.target.value } : x))}
-                  className="col-span-3 rounded border border-gray-200 px-2 py-1.5 text-sm"
+                  className="col-span-2 rounded border border-gray-200 px-2 py-1.5 text-sm"
                   placeholder="Loss/unit"
                 />
                 <button type="button" onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))} className="col-span-1 p-2 rounded border hover:bg-red-50 text-red-600">

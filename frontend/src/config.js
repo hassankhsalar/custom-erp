@@ -37,6 +37,7 @@ export const API_ROUTES = {
   PURCHASE_RETURN_BY_ID: (id) => `${API_BASE_URL}/purchases/returns/${id}`,
   PURCHASE_RETURN_PAYMENTS: (id) => `${API_BASE_URL}/purchases/returns/${id}/payments`,
   PURCHASE_RETURN_DAMAGE_ITEMS: (sourceType, sourceId) => `${API_BASE_URL}/purchases/returns/damage-items?sourceType=${encodeURIComponent(sourceType)}&sourceId=${encodeURIComponent(sourceId)}`,
+  PURCHASE_RETURN_SOURCE_ITEMS: (sourceType, sourceId) => `${API_BASE_URL}/purchases/returns/source-items?sourceType=${encodeURIComponent(sourceType)}&sourceId=${encodeURIComponent(sourceId)}`,
   PURCHASE_RETURNS: (id) => `${API_BASE_URL}/purchases/${id}/returns`,
   PURCHASE_DAMAGE_RETURNS: (id) => `${API_BASE_URL}/purchases/${id}/damage-returns`,
   PURCHASE_RETURN_COMP_SHIPMENTS: (returnId) => `${API_BASE_URL}/purchases/returns/${returnId}/compensation-shipments`,

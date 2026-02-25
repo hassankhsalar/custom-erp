@@ -1,17 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Factory, Package, Plus, ShoppingBag, Store, Trash2, Truck, Undo2 } from "lucide-react";
+import { AlertTriangle, Factory, Package, ShoppingBag, Store, Trash2, Truck, Undo2 } from "lucide-react";
 import { API_ROUTES } from "../../config";
 
-const blankItem = () => ({
-  uniqueId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-  itemType: "",
-  itemId: "",
-  name: "",
-  quantity: "1",
-  unitPrice: "",
-});
-
-const lineKey = (itemType, id) => `${itemType}:${id}`;
+const lineKey = (itemType, id, batchNumber = "", expiryDate = "") =>
+  `${itemType}:${id}:${batchNumber || ""}:${expiryDate || ""}`;
 
 const locationIcon = (type) => {
   if (type === "store") return <Store size={14} />;
@@ -26,8 +18,7 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
   const searchInputRef = useRef(null);
 
   const [suppliers, setSuppliers] = useState([]);
-  const [materials, setMaterials] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [sourceItems, setSourceItems] = useState([]);
   const [damageItems, setDamageItems] = useState([]);
   const [sourceType, setSourceType] = useState("store");
   const [sourceId, setSourceId] = useState("");
@@ -99,14 +90,10 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
   useEffect(() => {
     Promise.all([
       fetch(API_ROUTES.SUPPLIERS, { headers }).then((r) => r.json()),
-      fetch(API_ROUTES.MATERIALS_ALL, { headers }).then((r) => r.json()),
-      fetch(API_ROUTES.PRODUCTS_ALL, { headers }).then((r) => r.json()),
       fetchReturns(),
     ])
-      .then(([suppliersData, materialsData, productsData]) => {
+      .then(([suppliersData]) => {
         setSuppliers(Array.isArray(suppliersData) ? suppliersData : []);
-        setMaterials(materialsData?.materials || materialsData || []);
-        setProducts(productsData?.products || productsData || []);
       })
       .catch(() => setMessage("Failed to load initial data"));
   }, [isDamage]);
@@ -122,6 +109,19 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
         setSourceId("");
       });
   }, [sourceType]);
+
+  useEffect(() => {
+    if (isDamage || !sourceType || !sourceId) {
+      setSourceItems([]);
+      return;
+    }
+    fetch(API_ROUTES.PURCHASE_RETURN_SOURCE_ITEMS(sourceType, sourceId), { headers })
+      .then((res) => res.json())
+      .then((data) => {
+        setSourceItems(Array.isArray(data?.items) ? data.items : []);
+      })
+      .catch(() => setSourceItems([]));
+  }, [isDamage, sourceType, sourceId]);
 
   useEffect(() => {
     if (!isDamage || !sourceType || !sourceId) {
@@ -153,7 +153,7 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
     const mapped = returnItems
       .filter((item) => item.itemType && item.itemId && Number(item.quantity) > 0 && Number(item.unitPrice) > 0)
       .map((item) => ({
-        key: lineKey(item.itemType, Number(item.itemId)),
+        key: lineKey(item.itemType, Number(item.itemId), item.batchNumber, item.expiryDate),
         itemType: item.itemType,
         productId: item.itemType === "product" ? Number(item.itemId) : null,
         materialId: item.itemType === "material" ? Number(item.itemId) : null,
@@ -176,8 +176,8 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
     let showResults = false;
 
     if (value.length > 0) {
-      if (isDamage) {
-        results = damageItems
+      const availableRows = isDamage ? damageItems : sourceItems;
+      results = availableRows
           .filter((item) =>
             String(item.name || "").toLowerCase().includes(lower) ||
             (item.barcode && String(item.barcode).toLowerCase().includes(lower))
@@ -188,36 +188,8 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
             name: item.name,
             unitPrice: Number(item.unitPrice || 0),
             availableQuantity: Number(item.availableQuantity || 0),
+            batches: Array.isArray(item.batches) ? item.batches : [],
           }));
-      } else {
-        const filteredMaterials = materials
-          .filter((m) =>
-            String(m.name || "").toLowerCase().includes(lower) ||
-            (Array.isArray(m.alternative_names) && m.alternative_names.some((n) => String(n || "").toLowerCase().includes(lower))) ||
-            (m.barcode && String(m.barcode).toLowerCase().includes(lower))
-          )
-          .map((m) => ({
-            type: "material",
-            id: m.id,
-            name: m.name,
-            unitPrice: Number(m.unit_cost || 0),
-          }));
-
-        const filteredProducts = products
-          .filter((p) =>
-            String(p.name || "").toLowerCase().includes(lower) ||
-            (Array.isArray(p.alternative_names) && p.alternative_names.some((n) => String(n || "").toLowerCase().includes(lower))) ||
-            (p.barcode && String(p.barcode).toLowerCase().includes(lower))
-          )
-          .map((p) => ({
-            type: "product",
-            id: p.id,
-            name: p.name,
-            unitPrice: Number(p.cost || 0),
-          }));
-
-        results = [...filteredMaterials, ...filteredProducts];
-      }
       showResults = true;
     }
 
@@ -229,6 +201,7 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
   };
 
   const handleItemSelect = (selected) => {
+    const firstBatch = Array.isArray(selected.batches) && selected.batches.length > 0 ? selected.batches[0] : null;
     setReturnItems((prev) => [
       ...prev,
       {
@@ -239,6 +212,9 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
         quantity: "1",
         unitPrice: String(selected.unitPrice || 0),
         availableQuantity: selected.availableQuantity ?? null,
+        batches: selected.batches || [],
+        batchNumber: firstBatch?.batchNumber || "",
+        expiryDate: firstBatch?.expiryDate || "",
       },
     ]);
 
@@ -259,6 +235,8 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
         quantity: Number(i.quantity),
         unitPrice: Number(i.unitPrice),
         isDamaged: isDamage,
+        batchNumber: i.batchNumber || null,
+        expiryDate: i.expiryDate || null,
       }));
 
   const handleCreateReturn = async () => {
@@ -267,15 +245,24 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
     if (!sourceId) return setMessage("Select source location.");
     if (!items.length) return setMessage("Add at least one valid return item.");
 
-    if (isDamage) {
-      const overLimit = returnItems.find((item) =>
+    const overLimit = returnItems.find((item) => {
+      const selectedBatch = (item.batches || []).find(
+        (batch) =>
+          String(batch.batchNumber || "") === String(item.batchNumber || "") &&
+          String(batch.expiryDate || "") === String(item.expiryDate || "")
+      );
+      const baseLimit = Number(item.availableQuantity || 0);
+      const limit = selectedBatch
+        ? Math.min(baseLimit || Number(selectedBatch.quantity || 0), Number(selectedBatch.quantity || 0))
+        : baseLimit;
+      return (
         item.availableQuantity !== null &&
         item.availableQuantity !== undefined &&
-        Number(item.quantity || 0) > Number(item.availableQuantity || 0)
+        Number(item.quantity || 0) > limit
       );
-      if (overLimit) {
-        return setMessage(`Quantity exceeds damaged stock for ${overLimit.name}`);
-      }
+    });
+    if (overLimit) {
+      return setMessage(`Quantity exceeds available stock for ${overLimit.name}`);
     }
 
     const payload = {
@@ -437,7 +424,7 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
               value={searchState.searchTerm}
               onChange={(e) => handleSearchInputChange(e.target.value)}
               onFocus={() => setSearchState((prev) => ({ ...prev, showSearchResults: prev.searchTerm.length > 0 }))}
-              placeholder={isDamage ? "Search damaged/scrap items only" : "Search products/materials by name, alternative name, barcode"}
+              placeholder={isDamage ? "Search damaged/scrap items only" : "Search source products/materials by name or barcode"}
               className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2"
             />
             {searchState.showSearchResults && searchState.filteredResults.length > 0 && (
@@ -454,6 +441,9 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
                     {isDamage && (
                       <span className="ml-2 text-xs text-rose-600">damaged: {Number(result.availableQuantity || 0)}</span>
                     )}
+                    {!isDamage && (
+                      <span className="ml-2 text-xs text-blue-600">stock: {Number(result.availableQuantity || 0)}</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -464,12 +454,40 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
             <div className="font-semibold text-gray-800 flex items-center gap-2"><Package size={16} /> Selected Return Items</div>
             {returnItems.map((item, idx) => (
               <div key={item.uniqueId} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
-                <div className="md:col-span-5 text-sm text-gray-800">{item.name} <span className="text-xs text-gray-500">({item.itemType})</span></div>
+                <div className="md:col-span-4 text-sm text-gray-800">{item.name} <span className="text-xs text-gray-500">({item.itemType})</span></div>
+                <select
+                  value={`${item.batchNumber || ""}||${item.expiryDate || ""}`}
+                  onChange={(e) => {
+                    const [batchNumber, expiryDate] = String(e.target.value || "").split("||");
+                    setReturnItems((prev) =>
+                      prev.map((x, i) =>
+                        i === idx
+                          ? {
+                              ...x,
+                              batchNumber: batchNumber || "",
+                              expiryDate: expiryDate || "",
+                            }
+                          : x
+                      )
+                    );
+                  }}
+                  className="md:col-span-3 rounded-lg border border-gray-200 bg-white px-2 py-2"
+                >
+                  <option value="||">No batch</option>
+                  {(item.batches || []).map((batch) => (
+                    <option
+                      key={`${batch.batchNumber}-${batch.expiryDate || "none"}`}
+                      value={`${batch.batchNumber || ""}||${batch.expiryDate || ""}`}
+                    >
+                      {`${batch.batchNumber} | Exp: ${batch.expiryDate || "N/A"} | Qty: ${Number(batch.quantity || 0)}`}
+                    </option>
+                  ))}
+                </select>
                 {isDamage && (
                   <div className="md:col-span-1 text-xs text-rose-600">damaged: {Number(item.availableQuantity || 0)}</div>
                 )}
-                <input type="number" min="0" step="0.01" value={item.quantity} onChange={(e) => setReturnItems((prev) => prev.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} className={`${isDamage ? "md:col-span-2" : "md:col-span-3"} rounded-lg border border-gray-200 bg-white px-2 py-2`} placeholder="Return qty" />
-                <input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(e) => setReturnItems((prev) => prev.map((x, i) => i === idx ? { ...x, unitPrice: e.target.value } : x))} className="md:col-span-3 rounded-lg border border-gray-200 bg-white px-2 py-2" placeholder="Unit price" />
+                <input type="number" min="0" step="0.01" value={item.quantity} onChange={(e) => setReturnItems((prev) => prev.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} className={`${isDamage ? "md:col-span-2" : "md:col-span-2"} rounded-lg border border-gray-200 bg-white px-2 py-2`} placeholder="Return qty" />
+                <input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(e) => setReturnItems((prev) => prev.map((x, i) => i === idx ? { ...x, unitPrice: e.target.value } : x))} className="md:col-span-2 rounded-lg border border-gray-200 bg-white px-2 py-2" placeholder="Unit price" />
                 <button onClick={() => setReturnItems((prev) => prev.filter((_, i) => i !== idx))} className="md:col-span-1 rounded-lg border border-red-200 text-red-600 px-2 py-2"><Trash2 size={14} /></button>
               </div>
             ))}
