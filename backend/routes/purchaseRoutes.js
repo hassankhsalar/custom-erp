@@ -1795,16 +1795,19 @@ router.get('/:id/shipments', async (req, res) => {
   router.post('/:id/payments', async (req, res) => {
     try {
     const purchaseId = parseInt(req.params.id);
+    const actingUserId = parseInt(req.user?.userId, 10);
     
     if (isNaN(purchaseId)) {
       return res.status(400).json({ error: 'Invalid purchase ID' });
+    }
+    if (!actingUserId) {
+      return res.status(401).json({ error: 'Unauthorized user context missing' });
     }
 
     const { 
       amount, 
       payment_method, 
       accountId, 
-      createdById,
       bankAccountId,
       cashRegisterId,
       note,
@@ -1812,13 +1815,14 @@ router.get('/:id/shipments', async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!amount || !payment_method || !accountId || !createdById) {
+    if (!amount || !payment_method || !accountId) {
       return res.status(400).json({ 
-        error: 'Amount, payment method, account ID, and user ID are required' 
+        error: 'Amount, payment method, and account ID are required' 
       });
     }
 
     const paymentAmount = parseFloat(amount);
+    const parsedAccountId = parseInt(accountId);
     
     if (paymentAmount <= 0) {
       return res.status(400).json({ error: 'Payment amount must be greater than 0' });
@@ -1835,11 +1839,19 @@ router.get('/:id/shipments', async (req, res) => {
 
     // Get account to update balance
     const account = await prisma.accounts.findUnique({
-      where: { id: parseInt(accountId) }
+      where: { id: parsedAccountId }
     });
 
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
+    }
+
+    const actor = await prisma.user.findUnique({
+      where: { id: actingUserId },
+      select: { id: true }
+    });
+    if (!actor) {
+      return res.status(401).json({ error: 'Authenticated user not found' });
     }
 
     // Calculate due amount
@@ -1869,7 +1881,7 @@ router.get('/:id/shipments', async (req, res) => {
       const newAccountBalance = (parseFloat(account.balance) || 0) - paymentAmount;
       
       await prisma.accounts.update({
-        where: { id: parseInt(accountId) },
+        where: { id: parsedAccountId },
         data: {
           balance: newAccountBalance
         }
@@ -1886,10 +1898,10 @@ router.get('/:id/shipments', async (req, res) => {
       // Create transaction record
       const transaction = await createTransaction(prisma, {
         reference: generateTransactionReference(),
-        createdById: parseInt(createdById),
+        createdById: actingUserId,
         cashRegisterId: cashRegisterId ? parseInt(cashRegisterId) : null,
         bankAccountId: bankAccountRecord ? bankAccountRecord.id : (bankAccountId ? parseInt(bankAccountId) : null),
-        accountId: parseInt(accountId),
+        accountId: parsedAccountId,
         purchaseId: purchaseId,
         purpose: purpose,
         added_to_account: false,

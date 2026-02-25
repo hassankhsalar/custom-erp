@@ -367,7 +367,6 @@ export default function AllPurchase() {
           amount: amount,
           payment_method: paymentMethod,
           accountId: selectedAccount,
-          createdById: 1,
           note: paymentNote,
           purpose: 'Purchase Payment'
         }),
