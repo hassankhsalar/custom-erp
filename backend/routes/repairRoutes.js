@@ -4,6 +4,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { createTransaction } = require("../utils/transactionHelper");
+const { createNotification } = require("../utils/notificationHelper");
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -262,6 +263,13 @@ router.post("/", upload.single("document"), async (req, res) => {
       return { repair: created, transaction };
     });
 
+    await createNotification(prisma, {
+      title: `Repair created (${result.repair?.reference || result.repair?.id})`,
+      description: `A new repair request ${result.repair?.reference || result.repair?.id} was created.`,
+      forRole: "admin",
+      link: "/repairs/list"
+    });
+
     res.status(201).json({ message: "Repair request created successfully", ...result });
   } catch (error) {
     res.status(400).json({ error: error.message || "Failed to create repair request" });
@@ -384,6 +392,13 @@ router.patch("/:id/status", async (req, res) => {
         where: { id },
         include: { items: { include: { product: true, material: true } }, account: true },
       });
+    });
+
+    await createNotification(prisma, {
+      title: `Repair receive update (${result?.reference || result?.id})`,
+      description: `Repair ${result?.reference || result?.id} status updated to ${result?.status}.`,
+      forRole: "admin",
+      link: "/repairs/list"
     });
 
     res.json({ message: "Repair status updated successfully", repair: result });

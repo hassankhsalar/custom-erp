@@ -1,5 +1,7 @@
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
+const { decrementBatch, getAvailableBatches, mergeIncomingBatch, parseDateOnly } = require("../utils/batchDetails");
+const { createNotification } = require("../utils/notificationHelper");
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -41,6 +43,8 @@ const validateAndNormalizeItems = (items) => {
     const itemId = parseInt(raw.itemId ?? (itemType === "product" ? raw.productId : raw.materialId), 10);
     const quantity = Number(raw.quantity || 0);
     const lossPerUnit = Number(raw.lossPerUnit || 0);
+    const batchNumber = raw.batchNumber ? String(raw.batchNumber).trim() : null;
+    const expiryDate = raw.expiryDate ? parseDateOnly(raw.expiryDate) : null;
 
     if (!["product", "material"].includes(itemType)) {
       const error = new Error("itemType must be product or material");
@@ -63,7 +67,7 @@ const validateAndNormalizeItems = (items) => {
       throw error;
     }
 
-    return { itemType, itemId, quantity, lossPerUnit };
+    return { itemType, itemId, quantity, lossPerUnit, batchNumber, expiryDate };
   });
 };
 
@@ -92,6 +96,7 @@ const fetchBranchItems = async (fromType, fromId) => {
       unit: row.product?.unit || "unit",
       availableQuantity: Number(row.stock || 0),
       lossPerUnit: Number(row.avg_cost || row.product?.cost || 0),
+      batches: getAvailableBatches(row.batchDetails),
     }));
 
   const materials = materialRows
@@ -104,30 +109,64 @@ const fetchBranchItems = async (fromType, fromId) => {
       unit: row.material?.unit || "unit",
       availableQuantity: Number(row.stock || 0),
       lossPerUnit: Number(row.avg_cost || row.material?.unit_cost || 0),
+      batches: getAvailableBatches(row.batchDetails),
     }));
 
   return [...products, ...materials];
 };
 
-const updateBranchDamage = async (tx, fromType, fromId, itemType, itemId, operation, quantity) => {
+const updateBranchDamage = async (tx, fromType, fromId, itemType, itemId, operation, quantity, batchInfo = null) => {
   const qty = Number(quantity || 0);
   if (!qty) return;
   const stockField = operation === "add" ? { increment: qty } : { decrement: qty };
   const scrapField = operation === "add" ? { decrement: qty } : { increment: qty };
 
+  const selectedBatchNumber = batchInfo?.batchNumber ? String(batchInfo.batchNumber).trim() : "";
+  const selectedExpiryDate = parseDateOnly(batchInfo?.expiryDate);
+
   if (itemType === "product") {
     const model = fromType === "store" ? tx.storeProduct : fromType === "shop" ? tx.shopProduct : tx.factoryProduct;
+    const where = getProductWhere(fromType, fromId, itemId);
+    const existing = selectedBatchNumber
+      ? await model.findUnique({ where, select: { batchDetails: true } })
+      : null;
+    const data = { stock: stockField, scrap: scrapField };
+    if (selectedBatchNumber) {
+      data.batchDetails =
+        operation === "add"
+          ? mergeIncomingBatch(existing?.batchDetails, {
+              batchNumber: selectedBatchNumber,
+              expiryDate: selectedExpiryDate,
+              quantity: qty,
+            })
+          : decrementBatch(existing?.batchDetails, { batchNumber: selectedBatchNumber, expiryDate: selectedExpiryDate }, qty);
+    }
     await model.update({
-      where: getProductWhere(fromType, fromId, itemId),
-      data: { stock: stockField, scrap: scrapField },
+      where,
+      data,
     });
     return;
   }
 
   const model = fromType === "store" ? tx.storeMaterial : fromType === "shop" ? tx.shopMaterial : tx.factoryMaterial;
+  const where = getMaterialWhere(fromType, fromId, itemId);
+  const existing = selectedBatchNumber
+    ? await model.findUnique({ where, select: { batchDetails: true } })
+    : null;
+  const data = { stock: stockField, scrap: scrapField };
+  if (selectedBatchNumber) {
+    data.batchDetails =
+      operation === "add"
+        ? mergeIncomingBatch(existing?.batchDetails, {
+            batchNumber: selectedBatchNumber,
+            expiryDate: selectedExpiryDate,
+            quantity: qty,
+          })
+        : decrementBatch(existing?.batchDetails, { batchNumber: selectedBatchNumber, expiryDate: selectedExpiryDate }, qty);
+  }
   await model.update({
-    where: getMaterialWhere(fromType, fromId, itemId),
-    data: { stock: stockField, scrap: scrapField },
+    where,
+    data,
   });
 };
 
@@ -143,12 +182,29 @@ const ensureAvailability = async (tx, fromType, fromId, items) => {
       const model = fromType === "store" ? tx.storeProduct : fromType === "shop" ? tx.shopProduct : tx.factoryProduct;
       const branchRow = await model.findUnique({
         where: getProductWhere(fromType, fromId, item.itemId),
-        select: { stock: true },
+        select: { stock: true, batchDetails: true },
       });
       if (!branchRow || Number(branchRow.stock || 0) < item.quantity) {
         const error = new Error(`Insufficient stock for product ${product.name}`);
         error.status = 400;
         throw error;
+      }
+      if (item.batchNumber) {
+        const selected = getAvailableBatches(branchRow.batchDetails).find(
+          (entry) =>
+            entry.batchNumber === item.batchNumber &&
+            String(entry.expiryDate || "") === String(item.expiryDate || "")
+        );
+        if (!selected) {
+          const error = new Error(`Selected batch not found for product ${product.name}`);
+          error.status = 400;
+          throw error;
+        }
+        if (Number(selected.quantity || 0) < item.quantity) {
+          const error = new Error(`Insufficient selected batch stock for product ${product.name}`);
+          error.status = 400;
+          throw error;
+        }
       }
       continue;
     }
@@ -162,12 +218,29 @@ const ensureAvailability = async (tx, fromType, fromId, items) => {
     const model = fromType === "store" ? tx.storeMaterial : fromType === "shop" ? tx.shopMaterial : tx.factoryMaterial;
     const branchRow = await model.findUnique({
       where: getMaterialWhere(fromType, fromId, item.itemId),
-      select: { stock: true },
+      select: { stock: true, batchDetails: true },
     });
     if (!branchRow || Number(branchRow.stock || 0) < item.quantity) {
       const error = new Error(`Insufficient stock for material ${material.name}`);
       error.status = 400;
       throw error;
+    }
+    if (item.batchNumber) {
+      const selected = getAvailableBatches(branchRow.batchDetails).find(
+        (entry) =>
+          entry.batchNumber === item.batchNumber &&
+          String(entry.expiryDate || "") === String(item.expiryDate || "")
+      );
+      if (!selected) {
+        const error = new Error(`Selected batch not found for material ${material.name}`);
+        error.status = 400;
+        throw error;
+      }
+      if (Number(selected.quantity || 0) < item.quantity) {
+        const error = new Error(`Insufficient selected batch stock for material ${material.name}`);
+        error.status = 400;
+        throw error;
+      }
     }
   }
 };
@@ -241,9 +314,25 @@ router.post("/", async (req, res) => {
       });
 
       for (const item of items) {
-        await updateBranchDamage(tx, fromType, fromId, item.itemType, item.itemId, "subtract", item.quantity);
+        await updateBranchDamage(
+          tx,
+          fromType,
+          fromId,
+          item.itemType,
+          item.itemId,
+          "subtract",
+          item.quantity,
+          { batchNumber: item.batchNumber, expiryDate: item.expiryDate }
+        );
       }
       return created;
+    });
+
+    await createNotification(prisma, {
+      title: `Damage record created (#${record.id})`,
+      description: `A damage record was created for ${record.fromType} #${record.fromId} with total loss ${record.totalLoss}.`,
+      forRole: "admin",
+      link: "/damage-records/list"
     });
 
     res.status(201).json(record);
@@ -360,7 +449,16 @@ router.put("/:id", async (req, res) => {
       });
 
       for (const item of items) {
-        await updateBranchDamage(tx, fromType, fromId, item.itemType, item.itemId, "subtract", item.quantity);
+        await updateBranchDamage(
+          tx,
+          fromType,
+          fromId,
+          item.itemType,
+          item.itemId,
+          "subtract",
+          item.quantity,
+          { batchNumber: item.batchNumber, expiryDate: item.expiryDate }
+        );
       }
       return updated;
     });

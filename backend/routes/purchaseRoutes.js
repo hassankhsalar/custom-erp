@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 const router = express.Router();
 const { createTransaction } = require('../utils/transactionHelper');
 const { createNotification } = require('../utils/notificationHelper');
-const { parseDateOnly, mergeIncomingBatch, decrementBatch } = require('../utils/batchDetails');
+const { parseDateOnly, mergeIncomingBatch, decrementBatch, getAvailableBatches } = require('../utils/batchDetails');
 
 // Generate unique reference for transactions
 const generateTransactionReference = () => {
@@ -377,6 +377,13 @@ router.post("/", async (req, res) => {
       }
 
       return { purchase, purchaseItems };
+    });
+
+    await createNotification(prisma, {
+      title: `Purchase created (${result.purchase.reference || result.purchase.id})`,
+      description: `A new purchase ${result.purchase.reference || result.purchase.id} was created.`,
+      forRole: "admin",
+      link: "/purchase/all"
     });
 
     res.status(201).json({
@@ -1569,6 +1576,13 @@ router.put('/:id', async (req, res) => {
         });
       }
 
+      await createNotification(tx, {
+        title: `Purchase updated (${updatedPurchase.reference || updatedPurchase.id})`,
+        description: `Purchase ${updatedPurchase.reference || updatedPurchase.id} was edited.`,
+        forRole: "admin",
+        link: "/purchase/all"
+      });
+
       return tx.purchase.findUnique({
         where: { id: purchaseId },
         include: {
@@ -1726,6 +1740,13 @@ router.post('/:id/shipments', async (req, res) => {
         data: { shippingStatus: newShippingStatus }
       });
 
+      await createNotification(tx, {
+        title: `Purchase shipment received (${purchase.reference || purchase.id})`,
+        description: `A shipment was added to purchase ${purchase.reference || purchase.id}.`,
+        forRole: "admin",
+        link: "/purchase/all"
+      });
+
       return { shipment, shippingStatus: newShippingStatus };
     });
 
@@ -1795,16 +1816,19 @@ router.get('/:id/shipments', async (req, res) => {
   router.post('/:id/payments', async (req, res) => {
     try {
     const purchaseId = parseInt(req.params.id);
+    const actingUserId = parseInt(req.user?.userId, 10);
     
     if (isNaN(purchaseId)) {
       return res.status(400).json({ error: 'Invalid purchase ID' });
+    }
+    if (!actingUserId) {
+      return res.status(401).json({ error: 'Unauthorized user context missing' });
     }
 
     const { 
       amount, 
       payment_method, 
       accountId, 
-      createdById,
       bankAccountId,
       cashRegisterId,
       note,
@@ -1812,13 +1836,14 @@ router.get('/:id/shipments', async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!amount || !payment_method || !accountId || !createdById) {
+    if (!amount || !payment_method || !accountId) {
       return res.status(400).json({ 
-        error: 'Amount, payment method, account ID, and user ID are required' 
+        error: 'Amount, payment method, and account ID are required' 
       });
     }
 
     const paymentAmount = parseFloat(amount);
+    const parsedAccountId = parseInt(accountId);
     
     if (paymentAmount <= 0) {
       return res.status(400).json({ error: 'Payment amount must be greater than 0' });
@@ -1835,18 +1860,26 @@ router.get('/:id/shipments', async (req, res) => {
 
     // Get account to update balance
     const account = await prisma.accounts.findUnique({
-      where: { id: parseInt(accountId) }
+      where: { id: parsedAccountId }
     });
 
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
     }
 
+    const actor = await prisma.user.findUnique({
+      where: { id: actingUserId },
+      select: { id: true }
+    });
+    if (!actor) {
+      return res.status(401).json({ error: 'Authenticated user not found' });
+    }
+
     // Calculate due amount
     const { dueAmount } = calculatePurchaseStatus(purchase);
     
     // Check if payment exceeds due amount
-    if (paymentAmount > dueAmount) {
+    if ( (paymentAmount.toFixed(2) - dueAmount.toFixed(2)) > 0.001 ) {
       return res.status(400).json({ 
         error: `Payment amount ($${paymentAmount.toFixed(2)}) exceeds due amount ($${dueAmount.toFixed(2)})` 
       });
@@ -1869,7 +1902,7 @@ router.get('/:id/shipments', async (req, res) => {
       const newAccountBalance = (parseFloat(account.balance) || 0) - paymentAmount;
       
       await prisma.accounts.update({
-        where: { id: parseInt(accountId) },
+        where: { id: parsedAccountId },
         data: {
           balance: newAccountBalance
         }
@@ -1886,10 +1919,10 @@ router.get('/:id/shipments', async (req, res) => {
       // Create transaction record
       const transaction = await createTransaction(prisma, {
         reference: generateTransactionReference(),
-        createdById: parseInt(createdById),
+        createdById: actingUserId,
         cashRegisterId: cashRegisterId ? parseInt(cashRegisterId) : null,
         bankAccountId: bankAccountRecord ? bankAccountRecord.id : (bankAccountId ? parseInt(bankAccountId) : null),
-        accountId: parseInt(accountId),
+        accountId: parsedAccountId,
         purchaseId: purchaseId,
         purpose: purpose,
         added_to_account: false,
@@ -1917,6 +1950,13 @@ router.get('/:id/shipments', async (req, res) => {
     });
 
     const { dueAmount: updatedDueAmount, status } = calculatePurchaseStatus(updatedPurchase);
+
+    await createNotification(prisma, {
+      title: `Purchase payment (${updatedPurchase.reference || updatedPurchase.id})`,
+      description: `Payment of ${paymentAmount} was added to purchase ${updatedPurchase.reference || updatedPurchase.id}.`,
+      forRole: "admin",
+      link: "/purchase/all"
+    });
 
     res.json({
       success: true,
@@ -2382,6 +2422,15 @@ const createStandalonePurchaseOrDamageReturn = async (req, res, returnType) => {
       });
     });
 
+    if (returnType === "damage_return") {
+      await createNotification(prisma, {
+        title: `Damage return created (${result.reference || result.id})`,
+        description: `A standalone damage return ${result.reference || result.id} was created.`,
+        forRole: "admin",
+        link: "/purchase/all"
+      });
+    }
+
     res.status(201).json({
       success: true,
       message: `${returnType === "damage_return" ? "Damage return" : "Purchase return"} created successfully`,
@@ -2644,6 +2693,15 @@ const createPurchaseOrDamageReturn = async (req, res, returnType) => {
       return updatedReturn;
     });
 
+    if (returnType === "damage_return") {
+      await createNotification(prisma, {
+        title: `Damage return created (${result.reference || result.id})`,
+        description: `A purchase-linked damage return ${result.reference || result.id} was created.`,
+        forRole: "admin",
+        link: "/purchase/all"
+      });
+    }
+
     res.status(201).json({
       success: true,
       message: `${returnType === 'damage_return' ? 'Damage return' : 'Purchase return'} created successfully`,
@@ -2798,6 +2856,7 @@ router.get('/returns/damage-items', async (req, res) => {
       barcode: row.product?.barcode || null,
       availableQuantity: parseFloat(row.scrap || 0),
       unitPrice: parseFloat(row.product?.cost || row.avg_cost || 0),
+      batches: getAvailableBatches(row.batchDetails),
     }));
     const materials = materialRows.map((row) => ({
       itemType: "material",
@@ -2806,6 +2865,7 @@ router.get('/returns/damage-items', async (req, res) => {
       barcode: row.material?.barcode || null,
       availableQuantity: parseFloat(row.scrap || 0),
       unitPrice: parseFloat(row.material?.unit_cost || row.avg_cost || 0),
+      batches: getAvailableBatches(row.batchDetails),
     }));
 
     res.json({
@@ -2818,6 +2878,84 @@ router.get('/returns/damage-items', async (req, res) => {
   } catch (error) {
     if (error.status === 403) return res.status(403).json({ error: "Forbidden" });
     res.status(500).json({ error: error.message || "Failed to fetch damage items" });
+  }
+});
+
+router.get('/returns/source-items', async (req, res) => {
+  try {
+    const sourceType = String(req.query.sourceType || req.query.type || "").toLowerCase();
+    const sourceId = parseInt(req.query.sourceId || req.query.branchId || req.query.id, 10);
+    if (!["store", "shop", "factory"].includes(sourceType)) {
+      return res.status(400).json({ error: "sourceType must be store, shop, or factory" });
+    }
+    if (!sourceId) {
+      return res.status(400).json({ error: "sourceId is required" });
+    }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, sourceType, sourceId);
+
+    let productRows = [];
+    let materialRows = [];
+
+    if (sourceType === 'store') {
+      productRows = await prisma.storeProduct.findMany({
+        where: { store_id: sourceId, stock: { gt: 0 } },
+        include: { product: true }
+      });
+      materialRows = await prisma.storeMaterial.findMany({
+        where: { store_id: sourceId, stock: { gt: 0 } },
+        include: { material: true }
+      });
+    } else if (sourceType === 'shop') {
+      productRows = await prisma.shopProduct.findMany({
+        where: { shop_id: sourceId, stock: { gt: 0 } },
+        include: { product: true }
+      });
+      materialRows = await prisma.shopMaterial.findMany({
+        where: { shop_id: sourceId, stock: { gt: 0 } },
+        include: { material: true }
+      });
+    } else {
+      productRows = await prisma.factoryProduct.findMany({
+        where: { factoryId: sourceId, stock: { gt: 0 } },
+        include: { product: true }
+      });
+      materialRows = await prisma.factoryMaterial.findMany({
+        where: { factoryId: sourceId, stock: { gt: 0 } },
+        include: { material: true }
+      });
+    }
+
+    const products = productRows.map((row) => ({
+      itemType: "product",
+      id: row.product_id ?? row.productId,
+      name: row.product?.name || "-",
+      barcode: row.product?.barcode || null,
+      availableQuantity: parseFloat(row.stock || 0),
+      unitPrice: parseFloat(row.product?.cost || row.avg_cost || 0),
+      batches: getAvailableBatches(row.batchDetails),
+    }));
+    const materials = materialRows.map((row) => ({
+      itemType: "material",
+      id: row.material_id ?? row.materialId,
+      name: row.material?.name || "-",
+      barcode: row.material?.barcode || null,
+      availableQuantity: parseFloat(row.stock || 0),
+      unitPrice: parseFloat(row.material?.unit_cost || row.avg_cost || 0),
+      batches: getAvailableBatches(row.batchDetails),
+    }));
+
+    res.json({
+      sourceType,
+      sourceId,
+      items: [...products, ...materials],
+      products,
+      materials,
+    });
+  } catch (error) {
+    if (error.status === 403) return res.status(403).json({ error: "Forbidden" });
+    res.status(500).json({ error: error.message || "Failed to fetch source items" });
   }
 });
 

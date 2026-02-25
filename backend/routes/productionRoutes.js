@@ -3,6 +3,7 @@ const { PrismaClient } = require('@prisma/client');
 const jwt = require('jsonwebtoken');
 const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associateScope');
 const { mergeIncomingBatch, parseDateOnly } = require('../utils/batchDetails');
+const { createNotification } = require('../utils/notificationHelper');
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -127,6 +128,13 @@ router.post('/', authenticateToken, async (req, res) => {
       return newProduction;
     }, {
       timeout: 15000,
+    });
+
+    await createNotification(prisma, {
+      title: `Production created (${result.reference || result.id})`,
+      description: `A new production order ${result.reference || result.id} was created.`,
+      forRole: 'admin',
+      link: '/productions/all'
     });
 
     res.status(201).json(result);
@@ -335,6 +343,15 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
       return updatedProduction;
     });
+
+    if (status === 'production_done') {
+      await createNotification(prisma, {
+        title: `Production completed (${result.reference || result.id})`,
+        description: `Production ${result.reference || result.id} was marked as production_done.`,
+        forRole: 'admin',
+        link: '/productions/all'
+      });
+    }
 
     res.json(result);
   } catch (error) {
@@ -563,6 +580,15 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
 
       return updatedProduction;
     });
+
+    if (status === 'production_done') {
+      await createNotification(prisma, {
+        title: `Production completed (${result.reference || result.id})`,
+        description: `Production ${result.reference || result.id} was marked as production_done.`,
+        forRole: 'admin',
+        link: '/productions/all'
+      });
+    }
 
     res.json(result);
   } catch (error) {

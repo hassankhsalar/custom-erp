@@ -32,6 +32,7 @@ import EditProduction from "./components/Productions/EditProduction";
 import AllPurchase from "./components/Purchase/AllPurchase";
 import AllPurchaseReturns from "./components/Purchase/AllPurchaseReturns";
 import NewPurchase from "./components/Purchase/NewPurchase";
+import EditPurchase from "./components/Purchase/EditPurchase";
 import AllSupplier from "./components/Purchase/AllSupplier";
 import AddSupplier from "./components/Purchase/AddSupplier";
 import PurchaseReturnPage from "./components/Purchase/PurchaseReturnPage";
@@ -336,6 +337,9 @@ function App() {
             </Route>
             <Route element={<PermissionRoute requiredPermission="purchases_create" />}>
               <Route path="/purchase/new" element={<NewPurchase />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="purchases_edit" />}>
+              <Route path="/purchase/edit/:id" element={<EditPurchase />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="purchases_create" />}>
               <Route path="/purchase/return" element={<PurchaseReturnPage mode="purchase_return" />} />

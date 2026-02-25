@@ -4,6 +4,7 @@ const prisma = new PrismaClient();
 const router = express.Router();
 const { generateMonthlySalaries } = require("../services/salaryCron");
 const { createTransaction } = require("../utils/transactionHelper");
+const { createNotification } = require("../utils/notificationHelper");
 const SALARY_STATUSES = ["generated", "created", "approve", "approved", "paid"];
 
 const userHasPermission = async (userId, permission) => {
@@ -654,6 +655,15 @@ router.put("/payroll/:id", async (req, res) => {
 
       return updatedSalary;
     });
+
+    if (finalStatus === "paid") {
+      await createNotification(prisma, {
+        title: `Salary disbursed (${result.month}/${result.year})`,
+        description: `Salary payment was completed for ${result.user?.name || result.user?.username || `user #${result.userId}`}.`,
+        forRole: "admin",
+        link: "/hrm/payroll"
+      });
+    }
 
     res.json(result);
   } catch (err) {

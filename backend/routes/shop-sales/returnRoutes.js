@@ -1,4 +1,5 @@
 function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScope }) {
+  const { createNotification } = require("../../utils/notificationHelper");
   // Get sale return by ID - FIXED VERSION
   router.get("/returns/:id", async (req, res) => {
     console.log(`GET /returns/${req.params.id} called`);
@@ -447,6 +448,13 @@ function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScop
         }
 
         return { saleReturn, allItemsFullyReturned, daysSinceSale };
+      });
+
+      await createNotification(prisma, {
+        title: `Sale return created (${result.saleReturn.reference || result.saleReturn.id})`,
+        description: `A ${result.allItemsFullyReturned ? "full" : "partial"} shop sale return was processed.`,
+        forRole: "admin",
+        link: "/shop-sales/returns"
       });
 
       res.status(201).json({

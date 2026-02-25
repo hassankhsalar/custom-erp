@@ -8,9 +8,11 @@ import {
   Filter, Settings, User, Clock, Shield, Edit,
   X
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
 
 export default function AllPurchase() {
+  const navigate = useNavigate();
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -235,25 +237,7 @@ export default function AllPurchase() {
   };
 
   const handleEditPurchase = (purchase) => {
-    setSelectedPurchase(purchase);
-    setEditItems((purchase.purchaseItems || []).map((item) => ({
-      purchaseItemId: item.id,
-      itemType: item.itemType,
-      productId: item.productId,
-      materialId: item.materialId,
-      name: item.itemType === "product" ? item.product?.name : item.material?.name,
-      quantity: Number(item.quantity || 0),
-      unitPrice: Number(item.unitPrice || 0),
-      receivedQuantity: Number(item.quantity || 0),
-      batchNumber: item.batchNumber || "",
-      expiryDate: item.expiryDate ? new Date(item.expiryDate).toISOString().slice(0, 10) : "",
-    })));
-    setEditShippingCost(Number(purchase.shippingCost || 0));
-    setEditDiscount(Number(purchase.discount || 0));
-    setEditTax(Number(purchase.tax || 0));
-    setEditAdditionalPayment(0);
-    setEditPaymentMethod("cash");
-    setEditModalOpen(true);
+    navigate(`/purchase/edit/${purchase.id}`);
     setActiveDropdown(null);
   };
 
@@ -365,7 +349,7 @@ export default function AllPurchase() {
       return;
     }
 
-    if (amount > dueAmount) {
+    if ( (amount.toFixed(2) - dueAmount.toFixed(2)) > 0.001) {
       alert(`Payment amount ($${amount.toFixed(2)}) exceeds due amount ($${dueAmount.toFixed(2)})`);
       return;
     }
@@ -383,7 +367,6 @@ export default function AllPurchase() {
           amount: amount,
           payment_method: paymentMethod,
           accountId: selectedAccount,
-          createdById: 1,
           note: paymentNote,
           purpose: 'Purchase Payment'
         }),

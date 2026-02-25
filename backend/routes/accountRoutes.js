@@ -3,6 +3,7 @@ const { PrismaClient } = require('@prisma/client');
 const router = express.Router();
 const prisma = new PrismaClient();
 const crypto = require('crypto');
+const { createNotification } = require('../utils/notificationHelper');
 
 const toAmount = (value) => {
   const parsed = parseFloat(value);
@@ -178,6 +179,13 @@ router.post('/:id/deposit', async (req, res) => {
       return { account: updated, transaction: trx };
     });
 
+    await createNotification(prisma, {
+      title: `Account deposit (${result.account.name || result.account.id})`,
+      description: `An account deposit of ${amount} was made to ${result.account.name || `account #${result.account.id}`}.`,
+      forRole: 'admin',
+      link: '/accounts/list'
+    });
+
     return res.json({ success: true, ...result });
   } catch (error) {
     return res.status(400).json({ error: error.message });
@@ -223,6 +231,13 @@ router.post('/:id/withdraw', async (req, res) => {
       });
 
       return { account: updated, transaction: trx };
+    });
+
+    await createNotification(prisma, {
+      title: `Account withdraw (${result.account.name || result.account.id})`,
+      description: `An account withdrawal of ${amount} was made from ${result.account.name || `account #${result.account.id}`}.`,
+      forRole: 'admin',
+      link: '/accounts/list'
     });
 
     return res.json({ success: true, ...result });

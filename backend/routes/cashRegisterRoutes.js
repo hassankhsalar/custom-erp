@@ -3,6 +3,7 @@ const { PrismaClient } = require('@prisma/client');
 const router = express.Router();
 const prisma = new PrismaClient();
 const crypto = require('crypto');
+const { createNotification } = require('../utils/notificationHelper');
 
 const toAmount = (value) => {
   const parsed = parseFloat(value);
@@ -320,6 +321,13 @@ router.post('/:id/add-cash', async (req, res) => {
       return { cashRegister: updatedRegister, account: updatedAccount, depositLog, transaction };
     });
 
+    await createNotification(prisma, {
+      title: `Cash register deposit (${result.cashRegister.name || result.cashRegister.id})`,
+      description: `Cash register deposit of ${amount} was recorded for ${result.cashRegister.name || `register #${result.cashRegister.id}`}.`,
+      forRole: 'admin',
+      link: '/accounts/cash-register/list'
+    });
+
     res.json({ success: true, message: `Added ${amount} to cash register`, ...result });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -395,6 +403,13 @@ router.post('/:id/withdraw-cash', async (req, res) => {
       ]);
 
       return { cashRegister: updatedRegister, account: updatedAccount, withdrawLog, transaction };
+    });
+
+    await createNotification(prisma, {
+      title: `Cash register withdraw (${result.cashRegister.name || result.cashRegister.id})`,
+      description: `Cash register withdrawal of ${amount} was recorded for ${result.cashRegister.name || `register #${result.cashRegister.id}`}.`,
+      forRole: 'admin',
+      link: '/accounts/cash-register/list'
     });
 
     res.json({ success: true, message: `Withdrew ${amount} from cash register`, ...result });
@@ -499,6 +514,15 @@ router.put('/:id/status', async (req, res) => {
 
       return { noOp: true, message: 'Transition ignored by policy', cashRegister };
     });
+
+    if (!result.noOp && (targetStatus === 'active' || targetStatus === 'closed')) {
+      await createNotification(prisma, {
+        title: `Cash register ${targetStatus === 'active' ? 'opened' : 'closed'} (${result.cashRegister.name || result.cashRegister.id})`,
+        description: `Cash register ${result.cashRegister.name || `#${result.cashRegister.id}`} is now ${targetStatus}.`,
+        forRole: 'admin',
+        link: '/accounts/cash-register/list'
+      });
+    }
 
     return res.json({ success: true, ...result });
   } catch (error) {

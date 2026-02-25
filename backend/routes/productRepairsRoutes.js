@@ -5,6 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { createTransaction } = require('../utils/transactionHelper');
+const { createNotification } = require('../utils/notificationHelper');
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -187,6 +188,13 @@ router.post('/', upload.single('document'), async (req, res) => {
       }
 
       return { productRepair, repairItems, transaction, updatedAccount };
+    });
+
+    await createNotification(prisma, {
+      title: `Repair created (#${result.productRepair.id})`,
+      description: `A product repair request was created for ${result.productRepair.destination}.`,
+      forRole: 'admin',
+      link: '/repairs/list'
     });
 
     res.status(201).json({
@@ -486,6 +494,13 @@ router.patch('/:id/status', async (req, res) => {
       }
 
       return updatedRepair;
+    });
+
+    await createNotification(prisma, {
+      title: `Repair receive update (#${result.id})`,
+      description: `Product repair #${result.id} status updated to ${result.status}.`,
+      forRole: 'admin',
+      link: '/repairs/list'
     });
 
     res.json({

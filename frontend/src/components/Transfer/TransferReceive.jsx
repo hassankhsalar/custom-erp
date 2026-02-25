@@ -34,7 +34,7 @@ const getStatusColor = (status) => {
       return "bg-gradient-to-r from-blue-500 to-cyan-500";
     case "partial":
       return "bg-gradient-to-r from-yellow-500 to-amber-500";
-    case "complete":
+    case "receive":
       return "bg-gradient-to-r from-emerald-500 to-green-500";
     case "not_received":
     case "cancel":
