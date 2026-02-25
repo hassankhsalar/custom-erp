@@ -803,14 +803,8 @@ router.get("/", async (req, res) => {
       dateTo,
     });
 
-    let endTime1 = new Date();
-    console.log(`Time taken to build query: ${endTime1.getTime() - startTime.getTime()}ms`);
-
     // Get total count for pagination
     const totalCount = await prisma.sale.count({ where });
-
-    let endTime2 = new Date();
-    console.log(`Time taken to fetch total count: ${endTime2.getTime() - endTime1.getTime()}ms`);
 
     // Get paginated sales with a lean payload
     const sales = await prisma.sale.findMany({
@@ -847,8 +841,6 @@ router.get("/", async (req, res) => {
       take,
     });
 
-    let endTime = new Date();
-    console.log(`Time taken to fetch sales: ${endTime.getTime() - startTime.getTime()}ms`);
     res.json({
       sales,
       pagination: {

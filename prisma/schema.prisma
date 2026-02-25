@@ -988,7 +988,6 @@ model Sale {
   
   @@index([shopId])
   @@index([createdAt])
-  @@index([customerId])
   @@index([shopId, createdAt])
   @@index([customerId, createdAt])
 }

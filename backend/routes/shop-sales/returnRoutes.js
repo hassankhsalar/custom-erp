@@ -63,167 +63,90 @@ function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScop
     }
   });
 
-  // Get return-eligible sales for a shop with pagination (UPDATED)
+  // Get return-eligible sales with pagination + server-side filtering/sorting
   router.get("/return-eligible", async (req, res) => {
     try {
-      const { shopId, page = 1, limit = 10, search = "" } = req.query;
-
-      if (!shopId) {
-        return res.status(400).json({ error: "Shop ID is required" });
-      }
-
-      const shopIdInt = parseInt(shopId);
-      if (isNaN(shopIdInt)) {
-        return res.status(400).json({ error: "Invalid Shop ID" });
-      }
-
-      try {
-        const scope = await buildScope(prisma, req.user?.userId || 0);
-        ensureIdScope(scope, "shop", shopIdInt);
-      } catch (scopeError) {
-        return res.status(403).json({ error: "You don't have access to this shop" });
-      }
+      const {
+        page = 1,
+        limit = 10,
+        shopId,
+        customer = "",
+        dateFrom,
+        dateTo,
+        sortBy = "createdAt",
+        sortDir = "desc",
+      } = req.query;
 
       const pageInt = Math.max(1, parseInt(page, 10) || 1);
-      const limitInt = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
+      const limitInt = Math.min(200, Math.max(1, parseInt(limit, 10) || 10));
       const skip = (pageInt - 1) * limitInt;
-      const normalizedSearch = String(search || "").trim();
-      const likeQuery = `%${normalizedSearch}%`;
-      const searchFilter = normalizedSearch
-        ? Prisma.sql`AND (
-            s.reference LIKE ${likeQuery}
-            OR COALESCE(c.name, '') LIKE ${likeQuery}
-            OR COALESCE(c.mobile, '') LIKE ${likeQuery}
-            OR CAST(s.grandTotal AS CHAR) LIKE ${likeQuery}
-          )`
-        : Prisma.empty;
-
-      const totalCountRows = await prisma.$queryRaw`
-        SELECT COUNT(*) AS totalCount FROM (
-          SELECT s.id
-          FROM Sale s
-          INNER JOIN SaleItem si ON si.saleId = s.id
-          LEFT JOIN (
-            SELECT
-              sr.saleId AS saleId,
-              sri.productId AS productId,
-              sri.materialId AS materialId,
-              SUM(sri.quantity) AS returnedQty
-            FROM SaleReturn sr
-            INNER JOIN SaleReturnItem sri ON sri.saleReturnId = sr.id
-            WHERE sr.shopId = ${shopIdInt}
-            GROUP BY sr.saleId, sri.productId, sri.materialId
-          ) r ON r.saleId = s.id
-             AND (
-               (si.productId IS NOT NULL AND r.productId = si.productId)
-               OR
-               (si.materialId IS NOT NULL AND r.materialId = si.materialId)
-             )
-          LEFT JOIN Customer c ON c.id = s.customerId
-          WHERE s.shopId = ${shopIdInt}
-            AND COALESCE(r.returnedQty, 0) < si.quantity
-            ${searchFilter}
-          GROUP BY s.id
-        ) eligible`;
-      const totalCount = Number(totalCountRows?.[0]?.totalCount || 0);
-
-      const eligibleSaleRows = await prisma.$queryRaw`
-        SELECT
-          s.id AS id,
-          MAX(s.createdAt) AS createdAt
-        FROM Sale s
-        INNER JOIN SaleItem si ON si.saleId = s.id
-        LEFT JOIN (
-          SELECT
-            sr.saleId AS saleId,
-            sri.productId AS productId,
-            sri.materialId AS materialId,
-            SUM(sri.quantity) AS returnedQty
-          FROM SaleReturn sr
-          INNER JOIN SaleReturnItem sri ON sri.saleReturnId = sr.id
-          WHERE sr.shopId = ${shopIdInt}
-          GROUP BY sr.saleId, sri.productId, sri.materialId
-        ) r ON r.saleId = s.id
-           AND (
-             (si.productId IS NOT NULL AND r.productId = si.productId)
-             OR
-             (si.materialId IS NOT NULL AND r.materialId = si.materialId)
-           )
-        LEFT JOIN Customer c ON c.id = s.customerId
-        WHERE s.shopId = ${shopIdInt}
-          AND COALESCE(r.returnedQty, 0) < si.quantity
-          ${searchFilter}
-        GROUP BY s.id
-        ORDER BY MAX(s.createdAt) DESC
-        LIMIT ${limitInt} OFFSET ${skip}`;
-
-      const saleIds = eligibleSaleRows.map((row) => Number(row.id)).filter(Boolean);
-      let salesWithDetails = [];
-      if (saleIds.length > 0) {
-        const idOrder = new Map(saleIds.map((id, idx) => [id, idx]));
-        const rows = await prisma.sale.findMany({
-          where: { id: { in: saleIds } },
-          include: {
-            shop: {
-              select: {
-                id: true,
-                name: true,
-                shop_keeper: true,
-              },
-            },
-            saleItems: {
-              include: {
-                product: {
-                  select: {
-                    id: true,
-                    name: true,
-                    barcode: true,
-                    sale_price: true,
-                    defaultWarrantyDays: true,
-                  },
-                },
-                material: {
-                  select: {
-                    id: true,
-                    name: true,
-                    barcode: true,
-                    unit: true,
-                    sale_price: true,
-                  },
-                },
-              },
-            },
-            customer: {
-              select: {
-                id: true,
-                name: true,
-                mobile: true,
-                email: true,
-              },
-            },
-          },
-        });
-        salesWithDetails = rows.sort((a, b) => (idOrder.get(a.id) ?? 0) - (idOrder.get(b.id) ?? 0));
+      const scope = await buildScope(prisma, req.user?.userId || 0);
+      if (!scope.isAdmin && scope.shops.size === 0) {
+        return res.status(403).json({ error: "Forbidden" });
       }
 
-      const normalizedSales = salesWithDetails.map((sale) => ({
-        ...sale,
-        saleItems: (sale.saleItems || []).map((si) => ({
-          ...si,
-          product: si.product
-            ? {
-                ...si.product,
-                warranty:
-                  si.product.warranty ??
-                  si.product.defaultWarrantyDays ??
-                  0,
-              }
-            : si.product,
-        })),
-      }));
+      const shopIdInt = shopId ? parseInt(shopId, 10) : null;
+      if (shopId && Number.isNaN(shopIdInt)) {
+        return res.status(400).json({ error: "Invalid shopId" });
+      }
+      if (shopIdInt) {
+        ensureIdScope(scope, "shop", shopIdInt);
+      }
+
+      const where = {
+        isReturned: false,
+        ...(scope.isAdmin ? { shopId: { not: null } } : { shopId: { in: Array.from(scope.shops) } }),
+      };
+
+      if (shopIdInt) {
+        where.shopId = shopIdInt;
+      }
+
+      const normalizedCustomer = String(customer || "").trim();
+      if (normalizedCustomer) {
+        where.customer = {
+          OR: [
+            { name: { contains: normalizedCustomer, mode: "insensitive" } },
+            { mobile: { contains: normalizedCustomer, mode: "insensitive" } },
+          ],
+        };
+      }
+
+      const dFrom = dateFrom ? new Date(dateFrom) : null;
+      const dTo = dateTo ? new Date(dateTo) : null;
+      if ((dFrom && !Number.isNaN(dFrom.getTime())) || (dTo && !Number.isNaN(dTo.getTime()))) {
+        where.createdAt = {};
+        if (dFrom && !Number.isNaN(dFrom.getTime())) where.createdAt.gte = dFrom;
+        if (dTo && !Number.isNaN(dTo.getTime())) where.createdAt.lte = dTo;
+      }
+
+      const sortableFields = new Set(["createdAt", "grandTotal", "reference", "paidAmount", "totalAmount"]);
+      const finalSortBy = sortableFields.has(String(sortBy || "")) ? String(sortBy) : "createdAt";
+      const finalSortDir = String(sortDir || "").toLowerCase() === "asc" ? "asc" : "desc";
+
+      const [totalCount, sales] = await Promise.all([
+        prisma.sale.count({ where }),
+        prisma.sale.findMany({
+          where,
+          select: {
+            id: true,
+            reference: true,
+            createdAt: true,
+            grandTotal: true,
+            totalAmount: true,
+            paidAmount: true,
+            paymentType: true,
+            shop: { select: { id: true, name: true } },
+            customer: { select: { id: true, name: true, mobile: true } },
+          },
+          orderBy: { [finalSortBy]: finalSortDir },
+          skip,
+          take: limitInt,
+        }),
+      ]);
 
       res.json({
-        sales: normalizedSales,
+        sales,
         pagination: {
           currentPage: pageInt,
           totalPages: Math.ceil(totalCount / limitInt),

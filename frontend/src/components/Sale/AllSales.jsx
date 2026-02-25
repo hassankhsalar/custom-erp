@@ -73,8 +73,11 @@ export default function AllSales() {
 
   useEffect(() => {
     fetchSales();
-    fetchOverview();
   }, [currentPage, itemsPerPage, sortConfig, appliedFilters]);
+
+  useEffect(() => {
+    fetchOverview();
+  }, [appliedFilters]);
 
   const getQueryParams = () => {
     const params = new URLSearchParams();
@@ -547,17 +550,6 @@ export default function AllSales() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-gray-50 to-blue-50 p-6">
-        <div className="glass-card p-8 text-center max-w-md mx-auto mt-10">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-          <p className="mt-4 text-gray-600">Loading sales data...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-gray-50 via-white to-emerald-50 p-4 md:p-6">
       {/* Header Section */}
@@ -718,7 +710,7 @@ export default function AllSales() {
 
       {/* Pagination Controls */}
       {totalCount > 0 && (
-        <div className="p-4 mt-4 border border-white/20 backdrop-blur-xl">
+        <div className=" p-4 mt-4 border border-white/20 backdrop-blur-xl">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               {/* Items per page selector */}
@@ -791,7 +783,7 @@ export default function AllSales() {
                     <button
                       key={pageNum}
                       onClick={() => goToPage(pageNum)}
-                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                      className={`h-8 min-w-8 p-2 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
                         currentPage === pageNum
                           ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white"
                           : "hover:bg-white/50 text-gray-700"
@@ -874,7 +866,16 @@ export default function AllSales() {
               </tr>
             </thead>
             <tbody>
-              {currentItems.map((item, index) => {
+              {loading ? (
+                <tr>
+                  <td colSpan={tableHeaders.length} className="p-8">
+                    <div className="glass-card p-8 text-center max-w-md mx-auto">
+                      <div className="inline-block animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
+                      <p className="mt-4 text-gray-600">Loading sales data...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : currentItems.map((item, index) => {
                 const sale = sales[index];
                 return (
                   <tr
@@ -1026,7 +1027,7 @@ export default function AllSales() {
             </tbody>
           </table>
 
-          {!sales?.length && (
+          {!loading && !sales?.length && (
             <div className="text-center py-12">
               <div className="glass-icon p-4 rounded-full inline-flex mb-4 bg-gradient-to-r from-gray-100/50 to-gray-200/50">
                 <ClipboardList className="text-gray-400" size={32} />
@@ -1113,7 +1114,7 @@ export default function AllSales() {
                     <button
                       key={pageNum}
                       onClick={() => goToPage(pageNum)}
-                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                      className={`h-8 min-w-8 p-2 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
                         currentPage === pageNum
                           ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white"
                           : "hover:bg-white/50 text-gray-700"
