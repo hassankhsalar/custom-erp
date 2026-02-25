@@ -263,6 +263,12 @@ const includeConfig = {
   },
 };
 
+const parseDamageDate = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
 router.get("/branch-items", async (req, res) => {
   try {
     const fromType = normalizeFromType(req.query.fromType);
@@ -355,15 +361,35 @@ router.get("/", async (req, res) => {
     const page = Math.max(1, parseInt(req.query.page || "1", 10));
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || "20", 10)));
     const skip = (page - 1) * limit;
+    const fromType = String(req.query.fromType || "").trim().toLowerCase();
+    const fromId = Number.parseInt(req.query.fromId || "", 10);
+    const reason = String(req.query.reason || "").trim();
+    const dateFrom = parseDamageDate(req.query.dateFrom);
+    const dateTo = parseDamageDate(req.query.dateTo);
+    const sortBy = String(req.query.sortBy || "createdAt");
+    const sortDir = String(req.query.sortDir || "desc").toLowerCase() === "asc" ? "asc" : "desc";
+
+    const where = {};
+    if (["store", "shop", "factory"].includes(fromType)) where.fromType = fromType;
+    if (Number.isInteger(fromId) && fromId > 0) where.fromId = fromId;
+    if (reason) where.reason = { contains: reason, mode: "insensitive" };
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) where.createdAt.gte = dateFrom;
+      if (dateTo) where.createdAt.lte = dateTo;
+    }
+    const allowedSort = new Set(["createdAt", "totalLoss", "id"]);
+    const orderBy = { [allowedSort.has(sortBy) ? sortBy : "createdAt"]: sortDir };
 
     const [records, totalItems] = await Promise.all([
       prisma.damageRecord.findMany({
+        where,
         skip,
         take: limit,
         include: includeConfig,
-        orderBy: { createdAt: "desc" },
+        orderBy,
       }),
-      prisma.damageRecord.count(),
+      prisma.damageRecord.count({ where }),
     ]);
 
     const recordsWithSourceName = records.map((row) => ({
@@ -383,6 +409,43 @@ router.get("/", async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to fetch damage records" });
+  }
+});
+
+router.get("/overview", async (req, res) => {
+  try {
+    const fromType = String(req.query.fromType || "").trim().toLowerCase();
+    const fromId = Number.parseInt(req.query.fromId || "", 10);
+    const reason = String(req.query.reason || "").trim();
+    const dateFrom = parseDamageDate(req.query.dateFrom);
+    const dateTo = parseDamageDate(req.query.dateTo);
+
+    const where = {};
+    if (["store", "shop", "factory"].includes(fromType)) where.fromType = fromType;
+    if (Number.isInteger(fromId) && fromId > 0) where.fromId = fromId;
+    if (reason) where.reason = { contains: reason, mode: "insensitive" };
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) where.createdAt.gte = dateFrom;
+      if (dateTo) where.createdAt.lte = dateTo;
+    }
+
+    const [count, aggregate] = await Promise.all([
+      prisma.damageRecord.count({ where }),
+      prisma.damageRecord.aggregate({
+        where,
+        _sum: { totalLoss: true },
+      }),
+    ]);
+
+    const totalLoss = Number(aggregate?._sum?.totalLoss || 0);
+    res.json({
+      totalRecords: count,
+      totalLoss,
+      averageLoss: count > 0 ? totalLoss / count : 0,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Failed to fetch damage overview" });
   }
 });
 

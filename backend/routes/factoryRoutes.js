@@ -5,6 +5,10 @@ const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associa
 
 const prisma = new PrismaClient();
 const STOCK_EPSILON = 1e-9;
+const parsePositiveInt = (value, fallback) => {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
 const toNullableNumber = (value) => {
   if (value === undefined || value === null || value === "") return null;
   const n = parseFloat(value);
@@ -141,6 +145,106 @@ router.get('/inventory/:factoryId', async (req, res) => {
     }
     console.error('Error fetching factory inventory:', error);
     res.status(500).json({ error: 'Failed to fetch factory inventory' });
+  }
+});
+
+router.get('/inventory/:factoryId/list', async (req, res) => {
+  const { factoryId } = req.params;
+  const page = parsePositiveInt(req.query.page, 1);
+  const limit = Math.min(parsePositiveInt(req.query.limit, 20), 200);
+  const search = String(req.query.search || '').trim().toLowerCase();
+  const filterType = String(req.query.filterType || 'all').toLowerCase();
+  const category = String(req.query.category || '').trim().toLowerCase();
+  const brand = String(req.query.brand || '').trim().toLowerCase();
+  const unit = String(req.query.unit || '').trim().toLowerCase();
+  const sortBy = String(req.query.sortBy || 'name');
+  const sortDir = String(req.query.sortDir || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc';
+  try {
+    const scope = await buildScope(prisma, req.user.userId);
+    ensureIdScope(scope, 'factory', parseInt(factoryId));
+
+    const factoryMaterials = await prisma.factoryMaterial.findMany({
+      where: { factoryId: parseInt(factoryId) },
+      include: { material: { select: { id: true, name: true, unit: true, unit_cost: true, sale_price: true, alert_quantity: true, description: true, brand: true, barcode: true } } }
+    });
+    const factoryProducts = await prisma.factoryProduct.findMany({
+      where: { factoryId: parseInt(factoryId) },
+      include: { product: { select: { id: true, name: true, sale_price: true, wholesale_price: true, cost: true, alert_quantity: true, description: true, category: true, barcode: true } } }
+    });
+
+    const materials = factoryMaterials.map((fm) => ({
+      id: fm.material.id,
+      name: fm.material.name,
+      type: 'material',
+      stock: Number(fm.stock || 0),
+      avg_cost: Number(fm.avg_cost || 0),
+      alert_quantity: fm.alert_quantity ?? fm.material.alert_quantity,
+      scrap: Number(fm.scrap || 0),
+      unit: fm.material.unit,
+      unit_cost: fm.material.unit_cost,
+      sale_price: fm.sale_price ?? fm.material.sale_price,
+      description: fm.material.description,
+      brand: fm.material.brand,
+      barcode: fm.material.barcode,
+      batchDetails: fm.batchDetails
+    }));
+    const products = factoryProducts.map((fp) => ({
+      id: fp.product.id,
+      name: fp.product.name,
+      type: 'product',
+      stock: Number(fp.stock || 0),
+      avg_cost: Number(fp.avg_cost || 0),
+      alert_quantity: fp.alert_quantity ?? fp.product.alert_quantity,
+      scrap: Number(fp.scrap || 0),
+      unit: 'pcs',
+      unit_cost: fp.product.cost,
+      sale_price: fp.sale_price ?? fp.product.sale_price,
+      wholesale_price: fp.product.wholesale_price,
+      description: fp.product.description,
+      category: fp.product.category,
+      barcode: fp.product.barcode,
+      batchDetails: fp.batchDetails
+    }));
+
+    let rows = [...materials, ...products];
+    if (filterType !== 'all') rows = rows.filter((x) => x.type === filterType);
+    if (search) {
+      rows = rows.filter((x) => String(x.name || '').toLowerCase().includes(search) || String(x.barcode || '').toLowerCase().includes(search) || String(x.category || '').toLowerCase().includes(search) || String(x.brand || '').toLowerCase().includes(search));
+    }
+    if (category) rows = rows.filter((x) => String(x.category || '').toLowerCase().includes(category));
+    if (brand) rows = rows.filter((x) => String(x.brand || '').toLowerCase().includes(brand));
+    if (unit) rows = rows.filter((x) => String(x.unit || '').toLowerCase().includes(unit));
+
+    const normalizedSortBy =
+      sortBy === 'damage' ? 'scrap' :
+      sortBy === 'cost' ? 'avg_cost' :
+      sortBy;
+
+    rows.sort((a, b) => {
+      const av = a?.[normalizedSortBy];
+      const bv = b?.[normalizedSortBy];
+      if (av === undefined && bv === undefined) return 0;
+      if (av === undefined) return sortDir === 'asc' ? -1 : 1;
+      if (bv === undefined) return sortDir === 'asc' ? 1 : -1;
+      if (typeof av === 'number' && typeof bv === 'number') return sortDir === 'asc' ? av - bv : bv - av;
+      return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+    });
+
+    const totalCount = rows.length;
+    const start = (page - 1) * limit;
+    const items = rows.slice(start, start + limit);
+    res.json({
+      items,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / limit)),
+      }
+    });
+  } catch (error) {
+    if (error.status === 403) return res.json({ items: [], pagination: { page: 1, limit, totalCount: 0, totalPages: 1 } });
+    res.status(500).json({ error: 'Failed to fetch factory inventory list' });
   }
 });
 

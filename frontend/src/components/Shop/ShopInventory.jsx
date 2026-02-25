@@ -41,8 +41,10 @@ const ShopInventory = () => {
   // Table states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('all'); // 'all', 'material', 'product'
+  const [totalItems, setTotalItems] = useState(0);
+  const [serverTotalPages, setServerTotalPages] = useState(1);
+  const [filters, setFilters] = useState({ searchTerm: '', filterType: 'all', sortBy: 'name', sortDir: 'asc', category: '', brand: '', unit: '' });
+  const [appliedFilters, setAppliedFilters] = useState({ searchTerm: '', filterType: 'all', sortBy: 'name', sortDir: 'asc', category: '', brand: '', unit: '' });
 
   // Load shops on component mount
   useEffect(() => {
@@ -52,9 +54,16 @@ const ShopInventory = () => {
   // Load inventory when shop is selected
   useEffect(() => {
     if (selectedShop) {
-      fetchInventory(selectedShop);
+      fetchInventory(selectedShop, 1);
+      fetchSummary(selectedShop);
     }
-  }, [selectedShop]);
+  }, [selectedShop, itemsPerPage]);
+
+  useEffect(() => {
+    if (selectedShop) {
+      fetchInventory(selectedShop, currentPage);
+    }
+  }, [currentPage]);
 
   const fetchShops = async () => {
     try {
@@ -87,100 +96,54 @@ const ShopInventory = () => {
     }
   };
 
-  const fetchInventory = async (shopId) => {
+  const fetchInventory = async (shopId, page = 1, filterOverrides = appliedFilters) => {
     setLoading(true);
     setError(null);
     try {
-      console.log(`Fetching inventory for shop ${shopId}...`);
-      
-      // Fetch shop details with products and materials
-      const response = await fetch(API_ROUTES.SHOP_BY_ID(shopId), {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(itemsPerPage),
+        search: filterOverrides.searchTerm || '',
+        filterType: filterOverrides.filterType || 'all',
+        sortBy: filterOverrides.sortBy || 'name',
+        sortDir: filterOverrides.sortDir || 'asc',
+        category: filterOverrides.category || '',
+        brand: filterOverrides.brand || '',
+        unit: filterOverrides.unit || '',
+      });
+      const response = await fetch(`${API_ROUTES.SHOP_INVENTORY_LIST(shopId)}?${params.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
-      
       const data = await response.json();
-      console.log('Shop data fetched:', data);
-      
-      // Transform shop products
-      const products = (data.shopProducts || []).map(sp => ({
-        id: sp.product.id,
-        name: sp.product.name,
-        type: 'product',
-        stock: sp.stock || 0,
-        avg_cost: sp.avg_cost,
-        scrap: sp.scrap || 0,
-        unit: 'pcs',
-        unit_cost: sp.unit_cost,
-        sale_price: sp.sale_price ?? sp.product.sale_price,
-        alert_quantity: sp.alert_quantity ?? sp.product.alert_quantity ?? 10,
-        description: sp.product.description,
-        category: sp.product.category,
-        barcode: sp.product.barcode,
-        batchDetails: sp.batchDetails
-      }));
-
-      // Transform shop materials
-      const materials = (data.shopMaterials || []).map(sm => ({
-        id: sm.material.id,
-        name: sm.material.name,
-        type: 'material',
-        stock: sm.stock || 0,
-        avg_cost: sm.avg_cost,
-        scrap: sm.scrap || 0,
-        unit: sm.material.unit,
-        unit_cost: sm.material.unit_cost,
-        sale_price: sm.sale_price ?? sm.material.sale_price,
-        alert_quantity: sm.alert_quantity ?? sm.material.alert_quantity ?? 10,
-        description: sm.material.description,
-        brand: sm.material.brand,
-        barcode: sm.material.barcode,
-        batchDetails: sm.batchDetails
-      }));
-
-      const inventoryData = [...materials, ...products];
-      setInventory(inventoryData);
-
-      // Calculate summary
-      const summaryData = {
-        materials: {
-          count: materials.length,
-          totalStock: materials.reduce((sum, m) => sum + m.stock, 0),
-          totalScrap: materials.reduce((sum, m) => sum + m.scrap, 0)
-        },
-        products: {
-          count: products.length,
-          totalStock: products.reduce((sum, p) => sum + p.stock, 0),
-          totalScrap: products.reduce((sum, p) => sum + p.scrap, 0)
-        },
-        lowStock: {
-          materials: materials.filter(m => m.stock <= (Number(m.alert_quantity) || 10)).map(m => ({
-            name: m.name,
-            stock: m.stock,
-            unit: m.unit
-          })),
-          products: products.filter(p => p.stock <= (Number(p.alert_quantity) || 10)).map(p => ({
-            name: p.name,
-            stock: p.stock,
-            unit: 'pcs'
-          }))
-        }
-      };
-
-      setSummary(summaryData);
-      
+      setInventory(data.items || []);
+      setTotalItems(Number(data.pagination?.totalCount || 0));
+      setServerTotalPages(Number(data.pagination?.totalPages || 1));
+      setCurrentPage(Number(data.pagination?.page || page));
     } catch (err) {
       console.error('Error fetching inventory:', err);
       setError(`Failed to load inventory: ${err.message}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSummary = async (shopId) => {
+    try {
+      const response = await fetch(API_ROUTES.SHOP_INVENTORY_SUMMARY(shopId), {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('Failed to fetch summary');
+      const data = await response.json();
+      setSummary(data);
+    } catch (err) {
+      setSummary(null);
     }
   };
 
@@ -191,7 +154,8 @@ const ShopInventory = () => {
 
   const handleRefresh = () => {
     if (selectedShop) {
-      fetchInventory(selectedShop);
+      fetchInventory(selectedShop, currentPage);
+      fetchSummary(selectedShop);
     }
   };
 
@@ -243,7 +207,8 @@ const ShopInventory = () => {
         throw new Error(data.error || 'Failed to update inventory item');
       }
 
-      await fetchInventory(selectedShop);
+      await fetchInventory(selectedShop, currentPage);
+      await fetchSummary(selectedShop);
       closeEditModal();
     } catch (err) {
       setError(err.message || 'Failed to update inventory item');
@@ -252,25 +217,11 @@ const ShopInventory = () => {
     }
   };
 
-  // Filter inventory based on search and type
-  const filteredInventory = inventory.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (item.barcode && item.barcode.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                         (item.category && item.category.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                         (item.brand && item.brand.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesType = filterType === 'all' || item.type === filterType;
-    return matchesSearch && matchesType;
-  });
-
-  // Pagination
-  const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
-  const paginatedInventory = filteredInventory.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const filteredInventory = inventory;
+  const paginatedInventory = filteredInventory;
 
   const nextPage = () => {
-    if (currentPage < totalPages) {
+    if (currentPage < serverTotalPages) {
       setCurrentPage(currentPage + 1);
     }
   };
@@ -282,7 +233,7 @@ const ShopInventory = () => {
   };
 
   const goToPage = (page) => {
-    if (page >= 1 && page <= totalPages) {
+    if (page >= 1 && page <= serverTotalPages) {
       setCurrentPage(page);
     }
   };
@@ -329,6 +280,62 @@ const ShopInventory = () => {
     a.download = `shop-inventory-${selectedShop}.csv`;
     a.click();
   };
+
+  const handleApplyFilters = () => {
+    const next = { ...filters };
+    setAppliedFilters(next);
+    setCurrentPage(1);
+    if (selectedShop) fetchInventory(selectedShop, 1, next);
+  };
+
+  const handleClearFilters = () => {
+    const cleared = { searchTerm: '', filterType: 'all', sortBy: 'name', sortDir: 'asc', category: '', brand: '', unit: '' };
+    setFilters(cleared);
+    setAppliedFilters(cleared);
+    setCurrentPage(1);
+    if (selectedShop) fetchInventory(selectedShop, 1, cleared);
+  };
+
+  const renderPagination = () => (
+    <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl p-4 mt-4">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Show:</span>
+            <select value={itemsPerPage} onChange={(e) => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }} className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30">
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+            <span className="text-sm text-gray-600">per page</span>
+          </div>
+          <div className="text-sm text-gray-700">
+            Showing <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
+            <span className="font-semibold">{Math.min(currentPage * itemsPerPage, totalItems)}</span>{" "}
+            of <span className="font-semibold">{totalItems}</span> items
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => goToPage(1)} disabled={currentPage === 1} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"><ChevronsLeft size={16} className="text-gray-600" /></button>
+          <button onClick={prevPage} disabled={currentPage === 1} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"><ChevronLeft size={16} className="text-gray-600" /></button>
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.min(5, serverTotalPages) }, (_, i) => {
+              let pageNum;
+              if (serverTotalPages <= 5) pageNum = i + 1;
+              else if (currentPage <= 3) pageNum = i + 1;
+              else if (currentPage >= serverTotalPages - 2) pageNum = serverTotalPages - 4 + i;
+              else pageNum = currentPage - 2 + i;
+              return <button key={pageNum} onClick={() => goToPage(pageNum)} className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${currentPage === pageNum ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white" : "hover:bg-white/50 text-gray-700"}`}>{pageNum}</button>;
+            })}
+          </div>
+          <button onClick={nextPage} disabled={currentPage === serverTotalPages} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"><ChevronRight size={16} className="text-gray-600" /></button>
+          <button onClick={() => goToPage(serverTotalPages)} disabled={currentPage === serverTotalPages} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"><ChevronsRight size={16} className="text-gray-600" /></button>
+        </div>
+      </div>
+    </div>
+  );
 
   // Get shop name by ID
   const getShopName = () => {
@@ -475,29 +482,27 @@ const ShopInventory = () => {
 
         {/* Search and Filters */}
         <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
-          <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex flex-col gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
                 placeholder="Search by name, barcode, or category..."
-                value={searchTerm}
+                value={filters.searchTerm}
                 onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
+                  setFilters((prev) => ({ ...prev, searchTerm: e.target.value }));
                 }}
                 className="w-full pl-10 pr-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
               />
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => {
-                  setFilterType('all');
-                  setCurrentPage(1);
+                  setFilters((prev) => ({ ...prev, filterType: 'all' }));
                 }}
                 className={`px-4 py-2 rounded-xl font-medium transition-colors duration-300 ${
-                  filterType === 'all'
+                  filters.filterType === 'all'
                     ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white'
                     : 'bg-white/60 hover:bg-white/80 text-gray-700'
                 }`}
@@ -506,11 +511,10 @@ const ShopInventory = () => {
               </button>
               <button
                 onClick={() => {
-                  setFilterType('material');
-                  setCurrentPage(1);
+                  setFilters((prev) => ({ ...prev, filterType: 'material' }));
                 }}
                 className={`px-4 py-2 rounded-xl font-medium transition-colors duration-300 ${
-                  filterType === 'material'
+                  filters.filterType === 'material'
                     ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white'
                     : 'bg-white/60 hover:bg-white/80 text-gray-700'
                 }`}
@@ -519,17 +523,61 @@ const ShopInventory = () => {
               </button>
               <button
                 onClick={() => {
-                  setFilterType('product');
-                  setCurrentPage(1);
+                  setFilters((prev) => ({ ...prev, filterType: 'product' }));
                 }}
                 className={`px-4 py-2 rounded-xl font-medium transition-colors duration-300 ${
-                  filterType === 'product'
+                  filters.filterType === 'product'
                     ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white'
                     : 'bg-white/60 hover:bg-white/80 text-gray-700'
                 }`}
               >
                 Products
               </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-2">
+              <select
+                value={filters.sortBy}
+                onChange={(e) => setFilters((prev) => ({ ...prev, sortBy: e.target.value }))}
+                className="px-3 py-2 bg-white/80 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+              >
+                <option value="name">Sort: Name</option>
+                <option value="stock">Sort: Stock</option>
+                <option value="damage">Sort: Damage</option>
+                <option value="cost">Sort: Cost</option>
+              </select>
+              <select
+                value={filters.sortDir}
+                onChange={(e) => setFilters((prev) => ({ ...prev, sortDir: e.target.value }))}
+                className="px-3 py-2 bg-white/80 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+              >
+                <option value="asc">Asc</option>
+                <option value="desc">Desc</option>
+              </select>
+              <input
+                type="text"
+                placeholder="Category"
+                value={filters.category}
+                onChange={(e) => setFilters((prev) => ({ ...prev, category: e.target.value }))}
+                className="px-3 py-2 bg-white/80 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+              />
+              <input
+                type="text"
+                placeholder="Brand"
+                value={filters.brand}
+                onChange={(e) => setFilters((prev) => ({ ...prev, brand: e.target.value }))}
+                className="px-3 py-2 bg-white/80 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+              />
+              <input
+                type="text"
+                placeholder="Unit"
+                value={filters.unit}
+                onChange={(e) => setFilters((prev) => ({ ...prev, unit: e.target.value }))}
+                className="px-3 py-2 bg-white/80 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+              />
+              <div className="flex gap-2">
+                <button onClick={handleApplyFilters} className="flex-1 px-4 py-2 rounded-xl font-medium bg-gradient-to-r from-orange-500 to-amber-500 text-white">Apply</button>
+                <button onClick={handleClearFilters} className="flex-1 px-4 py-2 rounded-xl font-medium bg-white/60 hover:bg-white/80 text-gray-700">Clear</button>
+              </div>
             </div>
           </div>
         </div>
@@ -551,6 +599,7 @@ const ShopInventory = () => {
             </div>
           ) : (
             <>
+              {filteredInventory.length > 0 && renderPagination()}
               <div className="overflow-x-auto rounded-xl border border-white/60">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-100/80">
@@ -676,131 +725,7 @@ const ShopInventory = () => {
               </div>
 
               {/* Pagination Controls */}
-              {filteredInventory.length > 0 && (
-                <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl p-4 mt-4">
-                  <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      {/* Items per page selector */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">Show:</span>
-                        <select
-                          value={itemsPerPage}
-                          onChange={(e) => {
-                            setItemsPerPage(Number(e.target.value));
-                            setCurrentPage(1);
-                          }}
-                          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30"
-                        >
-                          <option value="5">5</option>
-                          <option value="10">10</option>
-                          <option value="20">20</option>
-                          <option value="50">50</option>
-                          <option value="100">100</option>
-                        </select>
-                        <span className="text-sm text-gray-600">per page</span>
-                      </div>
-
-                      {/* Page info */}
-                      <div className="text-sm text-gray-700">
-                        Showing <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
-                        <span className="font-semibold">
-                          {Math.min(currentPage * itemsPerPage, filteredInventory.length)}
-                        </span>{" "}
-                        of <span className="font-semibold">{filteredInventory.length}</span> items
-                      </div>
-                    </div>
-
-                    {/* Pagination buttons */}
-                    <div className="flex items-center gap-2">
-                      {/* First page */}
-                      <button
-                        onClick={() => goToPage(1)}
-                        disabled={currentPage === 1}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="First page"
-                      >
-                        <ChevronsLeft size={16} className="text-gray-600" />
-                      </button>
-
-                      {/* Previous page */}
-                      <button
-                        onClick={prevPage}
-                        disabled={currentPage === 1}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="Previous page"
-                      >
-                        <ChevronLeft size={16} className="text-gray-600" />
-                      </button>
-
-                      {/* Page numbers */}
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                          let pageNum;
-                          if (totalPages <= 5) {
-                            pageNum = i + 1;
-                          } else if (currentPage <= 3) {
-                            pageNum = i + 1;
-                          } else if (currentPage >= totalPages - 2) {
-                            pageNum = totalPages - 4 + i;
-                          } else {
-                            pageNum = currentPage - 2 + i;
-                          }
-
-                          return (
-                            <button
-                              key={pageNum}
-                              onClick={() => goToPage(pageNum)}
-                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                                currentPage === pageNum
-                                  ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white"
-                                  : "hover:bg-white/50 text-gray-700"
-                              }`}
-                            >
-                              {pageNum}
-                            </button>
-                          );
-                        })}
-
-                        {totalPages > 5 && currentPage < totalPages - 2 && (
-                          <>
-                            <span className="mx-1 text-gray-400">...</span>
-                            <button
-                              onClick={() => goToPage(totalPages)}
-                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                                currentPage === totalPages
-                                  ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white"
-                                  : "hover:bg-white/50 text-gray-700"
-                              }`}
-                            >
-                              {totalPages}
-                            </button>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Next page */}
-                      <button
-                        onClick={nextPage}
-                        disabled={currentPage === totalPages}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="Next page"
-                      >
-                        <ChevronRight size={16} className="text-gray-600" />
-                      </button>
-
-                      {/* Last page */}
-                      <button
-                        onClick={() => goToPage(totalPages)}
-                        disabled={currentPage === totalPages}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="Last page"
-                      >
-                        <ChevronsRight size={16} className="text-gray-600" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {filteredInventory.length > 0 && renderPagination()}
             </>
           )}
         </div>

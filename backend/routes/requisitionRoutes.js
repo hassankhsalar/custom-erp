@@ -27,6 +27,47 @@ const getLocationName = async (type, id) => {
   return null;
 };
 
+const buildLocationNameMap = async (rows) => {
+  const shopIds = new Set();
+  const storeIds = new Set();
+  const factoryIds = new Set();
+
+  for (const row of rows || []) {
+    const id = Number(row?.requesterId || 0);
+    if (!id) continue;
+    if (row.requesterType === "shop") shopIds.add(id);
+    if (row.requesterType === "store") storeIds.add(id);
+    if (row.requesterType === "factory") factoryIds.add(id);
+  }
+
+  const [shops, stores, factories] = await Promise.all([
+    shopIds.size
+      ? prisma.shop.findMany({
+          where: { id: { in: Array.from(shopIds) } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+    storeIds.size
+      ? prisma.store.findMany({
+          where: { id: { in: Array.from(storeIds) } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+    factoryIds.size
+      ? prisma.factory.findMany({
+          where: { id: { in: Array.from(factoryIds) } },
+          select: { id: true, name: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const map = new Map();
+  for (const row of shops) map.set(`shop:${row.id}`, row.name);
+  for (const row of stores) map.set(`store:${row.id}`, row.name);
+  for (const row of factories) map.set(`factory:${row.id}`, row.name);
+  return map;
+};
+
 const canAccessRequisition = (scope, requisition) => {
   if (scope.isAdmin) return true;
   if (requisition.requesterType === "shop" && scope.shops.has(requisition.requesterId)) return true;
@@ -325,14 +366,26 @@ router.get("/", authenticateToken, async (req, res) => {
       search = "",
       status = "",
       requesterType = "",
+      requesterId = "",
+      dateFrom = "",
+      dateTo = "",
       sortBy = "createdAt",
       sortDirection = "desc",
     } = req.query;
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
+    const startDate = dateFrom ? new Date(dateFrom) : null;
+    const endDate = dateTo ? new Date(dateTo) : null;
+    const createdAtFilter = {};
+    if (startDate && !Number.isNaN(startDate.getTime())) createdAtFilter.gte = startDate;
+    if (endDate && !Number.isNaN(endDate.getTime())) createdAtFilter.lte = endDate;
+
+    const parsedRequesterId = requesterId ? parseInt(requesterId, 10) : null;
     const baseWhere = {
       ...(status ? { status } : {}),
       ...(requesterType ? { requesterType } : {}),
+      ...(parsedRequesterId ? { requesterId: parsedRequesterId } : {}),
+      ...(Object.keys(createdAtFilter).length ? { createdAt: createdAtFilter } : {}),
       ...(search
         ? {
             OR: [
@@ -373,12 +426,11 @@ router.get("/", authenticateToken, async (req, res) => {
       prisma.requisition.count({ where }),
     ]);
 
-    const enriched = await Promise.all(
-      rows.map(async (row) => ({
-        ...row,
-        requesterName: await getLocationName(row.requesterType, row.requesterId),
-      }))
-    );
+    const locationNameMap = await buildLocationNameMap(rows);
+    const enriched = rows.map((row) => ({
+      ...row,
+      requesterName: locationNameMap.get(`${row.requesterType}:${row.requesterId}`) || null,
+    }));
 
     res.json({
       data: enriched,
@@ -391,6 +443,78 @@ router.get("/", authenticateToken, async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to fetch requisitions" });
+  }
+});
+
+router.get("/overview", authenticateToken, async (req, res) => {
+  try {
+    const {
+      search = "",
+      status = "",
+      requesterType = "",
+      requesterId = "",
+      dateFrom = "",
+      dateTo = "",
+    } = req.query;
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    const startDate = dateFrom ? new Date(dateFrom) : null;
+    const endDate = dateTo ? new Date(dateTo) : null;
+    const createdAtFilter = {};
+    if (startDate && !Number.isNaN(startDate.getTime())) createdAtFilter.gte = startDate;
+    if (endDate && !Number.isNaN(endDate.getTime())) createdAtFilter.lte = endDate;
+
+    const parsedRequesterId = requesterId ? parseInt(requesterId, 10) : null;
+    const baseWhere = {
+      ...(status ? { status } : {}),
+      ...(requesterType ? { requesterType } : {}),
+      ...(parsedRequesterId ? { requesterId: parsedRequesterId } : {}),
+      ...(Object.keys(createdAtFilter).length ? { createdAt: createdAtFilter } : {}),
+      ...(search
+        ? {
+            OR: [
+              { reference: { contains: search } },
+              { title: { contains: search } },
+            ],
+          }
+        : {}),
+    };
+
+    const scopeFilter = scope.isAdmin
+      ? {}
+      : {
+          OR: [
+            { requesterType: "shop", requesterId: { in: Array.from(scope.shops) } },
+            { requesterType: "store", requesterId: { in: Array.from(scope.stores) } },
+            { requesterType: "factory", requesterId: { in: Array.from(scope.factories) } },
+            { requesterUserId: req.user?.userId || 0 },
+          ],
+        };
+
+    const where = {
+      AND: [scopeFilter, baseWhere],
+    };
+
+    const [totalCount, grouped] = await Promise.all([
+      prisma.requisition.count({ where }),
+      prisma.requisition.groupBy({
+        by: ["status"],
+        where,
+        _count: { id: true },
+      }),
+    ]);
+
+    const byStatus = grouped.reduce((acc, row) => {
+      acc[row.status || "unknown"] = Number(row._count?.id || 0);
+      return acc;
+    }, {});
+
+    res.json({
+      totalCount,
+      byStatus,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Failed to fetch requisition overview" });
   }
 });
 

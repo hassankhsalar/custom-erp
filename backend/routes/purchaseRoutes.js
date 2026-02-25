@@ -970,26 +970,77 @@ const normalizePurchaseItemsInput = (items = []) =>
       : parseFloat(item.quantity || 0),
   }));
 
-// GET all purchases with calculated due and status
+// GET all purchases with filtering, sorting, and calculated due/status
 router.get('/', async (req, res) => {
+  let usePagination = false;
+  let pageNumber = 1;
+  let limitNumber = 10;
   try {
-    const page = parseInt(req.query.page, 10);
-    const limit = parseInt(req.query.limit, 10);
-    const usePagination = Number.isFinite(page) || Number.isFinite(limit);
-    const pageNumber = Number.isFinite(page) && page > 0 ? page : 1;
-    const limitNumber = Number.isFinite(limit) && limit > 0 ? limit : 10;
+    const {
+      page,
+      limit,
+      search = '',
+      supplierId = '',
+      destinationType = '',
+      destinationId = '',
+      shippingStatus = '',
+      dateFrom = '',
+      dateTo = '',
+      sortBy = 'createdAt',
+      sortDirection = 'desc',
+    } = req.query;
+
+    const parsedPage = parseInt(page, 10);
+    const parsedLimit = parseInt(limit, 10);
+    usePagination = Number.isFinite(parsedPage) || Number.isFinite(parsedLimit);
+    pageNumber = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+    limitNumber = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 10;
     const skip = (pageNumber - 1) * limitNumber;
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     const locationFilter = buildLocationOrFilter(scope);
+    const queryWhere = {};
 
-    const totalCount = usePagination ? await prisma.purchase.count({
-      where: locationFilter
-    }) : null;
+    if (search && String(search).trim()) {
+      const q = String(search).trim();
+      queryWhere.OR = [
+        { reference: { contains: q } },
+        { supplier: { name: { contains: q } } },
+      ];
+    }
+    if (supplierId && Number.isFinite(parseInt(supplierId, 10))) {
+      queryWhere.supplierId = parseInt(supplierId, 10);
+    }
+    if (destinationType && ['store', 'shop', 'factory'].includes(String(destinationType))) {
+      queryWhere.destinationType = String(destinationType);
+    }
+    if (destinationId && Number.isFinite(parseInt(destinationId, 10))) {
+      queryWhere.destinationId = parseInt(destinationId, 10);
+    }
+    if (shippingStatus && String(shippingStatus).trim()) {
+      queryWhere.shippingStatus = String(shippingStatus).trim();
+    }
+    const startDate = dateFrom ? new Date(dateFrom) : null;
+    const endDate = dateTo ? new Date(dateTo) : null;
+    if ((startDate && !Number.isNaN(startDate.getTime())) || (endDate && !Number.isNaN(endDate.getTime()))) {
+      queryWhere.createdAt = {};
+      if (startDate && !Number.isNaN(startDate.getTime())) queryWhere.createdAt.gte = startDate;
+      if (endDate && !Number.isNaN(endDate.getTime())) queryWhere.createdAt.lte = endDate;
+    }
 
+    const andClauses = [];
+    if (locationFilter) andClauses.push(locationFilter);
+    if (Object.keys(queryWhere).length) andClauses.push(queryWhere);
+    const where = andClauses.length ? { AND: andClauses } : undefined;
+
+    const allowedSort = new Set(['createdAt', 'grandTotal', 'paidAmount', 'reference', 'shippingStatus']);
+    const finalSortBy = allowedSort.has(String(sortBy)) ? String(sortBy) : 'createdAt';
+    const finalSortDirection = String(sortDirection).toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+    const totalCount = usePagination ? await prisma.purchase.count({ where }) : null;
     const purchases = await prisma.purchase.findMany({
-      where: locationFilter,
-      orderBy: { createdAt: 'desc' },
+      where,
+      orderBy: { [finalSortBy]: finalSortDirection },
       skip: usePagination ? skip : undefined,
       take: usePagination ? limitNumber : undefined,
       include: {
@@ -1004,57 +1055,39 @@ router.get('/', async (req, res) => {
           orderBy: { createdAt: 'desc' },
           include: {
             account: true,
-            createdBy: {
-              select: {
-                id: true,
-                name: true,
-                email: true
-              }
-            }
+            createdBy: { select: { id: true, name: true, email: true } }
           }
         },
         account: true
-        // REMOVED: store, shop, factory - these don't exist as direct relations
       }
     });
 
-    // Fetch destination details for each purchase
     const purchasesWithDestinations = await Promise.all(
       purchases.map(async (purchase) => {
         let destination = null;
-        
-        // Fetch destination based on destinationType and destinationId
         if (purchase.destinationType && purchase.destinationId) {
-          switch (purchase.destinationType) {
-            case 'store':
-              destination = await prisma.store.findUnique({
-                where: { id: purchase.destinationId },
-                select: { id: true, name: true, address: true }
-              });
-              break;
-            case 'shop':
-              destination = await prisma.shop.findUnique({
-                where: { id: purchase.destinationId },
-                select: { id: true, name: true, address: true }
-              });
-              break;
-            case 'factory':
-              destination = await prisma.factory.findUnique({
-                where: { id: purchase.destinationId },
-                select: { id: true, name: true, address: true }
-              });
-              break;
+          if (purchase.destinationType === 'store') {
+            destination = await prisma.store.findUnique({
+              where: { id: purchase.destinationId },
+              select: { id: true, name: true, address: true }
+            });
+          } else if (purchase.destinationType === 'shop') {
+            destination = await prisma.shop.findUnique({
+              where: { id: purchase.destinationId },
+              select: { id: true, name: true, address: true }
+            });
+          } else if (purchase.destinationType === 'factory') {
+            destination = await prisma.factory.findUnique({
+              where: { id: purchase.destinationId },
+              select: { id: true, name: true, address: true }
+            });
           }
         }
 
         const { dueAmount, status } = calculatePurchaseStatus(purchase);
-        
         return {
           ...purchase,
-          destination: destination ? {
-            type: purchase.destinationType,
-            ...destination
-          } : null,
+          destination: destination ? { type: purchase.destinationType, ...destination } : null,
           dueAmount,
           status
         };
@@ -1062,14 +1095,13 @@ router.get('/', async (req, res) => {
     );
 
     if (usePagination) {
-      const totalPages = Math.ceil(totalCount / limitNumber);
       return res.json({
         data: purchasesWithDestinations,
         pagination: {
           page: pageNumber,
           limit: limitNumber,
           totalCount,
-          totalPages
+          totalPages: Math.ceil(totalCount / limitNumber)
         }
       });
     }
@@ -1081,17 +1113,103 @@ router.get('/', async (req, res) => {
       if (usePagination) {
         return res.json({
           data: [],
-          pagination: {
-            page: pageNumber,
-            limit: limitNumber,
-            totalCount: 0,
-            totalPages: 0
-          }
+          pagination: { page: pageNumber, limit: limitNumber, totalCount: 0, totalPages: 0 }
         });
       }
       return res.json([]);
     }
     res.status(500).json({ error: 'Failed to fetch purchases' });
+  }
+});
+
+router.get('/overview', async (req, res) => {
+  try {
+    const {
+      search = '',
+      supplierId = '',
+      destinationType = '',
+      destinationId = '',
+      shippingStatus = '',
+      dateFrom = '',
+      dateTo = '',
+    } = req.query;
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    const locationFilter = buildLocationOrFilter(scope);
+    const queryWhere = {};
+
+    if (search && String(search).trim()) {
+      const q = String(search).trim();
+      queryWhere.OR = [
+        { reference: { contains: q } },
+        { supplier: { name: { contains: q } } },
+      ];
+    }
+    if (supplierId && Number.isFinite(parseInt(supplierId, 10))) {
+      queryWhere.supplierId = parseInt(supplierId, 10);
+    }
+    if (destinationType && ['store', 'shop', 'factory'].includes(String(destinationType))) {
+      queryWhere.destinationType = String(destinationType);
+    }
+    if (destinationId && Number.isFinite(parseInt(destinationId, 10))) {
+      queryWhere.destinationId = parseInt(destinationId, 10);
+    }
+    if (shippingStatus && String(shippingStatus).trim()) {
+      queryWhere.shippingStatus = String(shippingStatus).trim();
+    }
+    const startDate = dateFrom ? new Date(dateFrom) : null;
+    const endDate = dateTo ? new Date(dateTo) : null;
+    if ((startDate && !Number.isNaN(startDate.getTime())) || (endDate && !Number.isNaN(endDate.getTime()))) {
+      queryWhere.createdAt = {};
+      if (startDate && !Number.isNaN(startDate.getTime())) queryWhere.createdAt.gte = startDate;
+      if (endDate && !Number.isNaN(endDate.getTime())) queryWhere.createdAt.lte = endDate;
+    }
+
+    const andClauses = [];
+    if (locationFilter) andClauses.push(locationFilter);
+    if (Object.keys(queryWhere).length) andClauses.push(queryWhere);
+    const where = andClauses.length ? { AND: andClauses } : undefined;
+
+    const [aggregate, grouped] = await Promise.all([
+      prisma.purchase.aggregate({
+        where,
+        _count: { id: true },
+        _sum: { grandTotal: true, paidAmount: true },
+      }),
+      prisma.purchase.groupBy({
+        by: ['shippingStatus'],
+        where,
+        _count: { id: true },
+      }),
+    ]);
+
+    const byShippingStatus = grouped.reduce((acc, row) => {
+      acc[row.shippingStatus || 'unknown'] = Number(row._count?.id || 0);
+      return acc;
+    }, {});
+
+    const totalAmount = Number(aggregate?._sum?.grandTotal || 0);
+    const totalPaid = Number(aggregate?._sum?.paidAmount || 0);
+    const totalDue = Math.max(0, totalAmount - totalPaid);
+
+    res.json({
+      totalCount: Number(aggregate?._count?.id || 0),
+      totalAmount,
+      totalPaid,
+      totalDue,
+      byShippingStatus,
+    });
+  } catch (error) {
+    if (error.status === 403) {
+      return res.json({
+        totalCount: 0,
+        totalAmount: 0,
+        totalPaid: 0,
+        totalDue: 0,
+        byShippingStatus: {},
+      });
+    }
+    res.status(500).json({ error: error.message || 'Failed to fetch purchase overview' });
   }
 });
 
