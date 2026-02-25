@@ -155,8 +155,33 @@ router.get('/', authenticateToken, async (req, res) => {
     if (!scope.isAdmin) {
       ensureTypeScope(scope, 'factory');
     }
+
+    const where = {};
+    if (!scope?.isAdmin) where.factoryId = { in: Array.from(scope.factories) };
+    if (req.query.status) where.status = String(req.query.status);
+    if (req.query.factoryId) {
+      const factoryId = parseInt(req.query.factoryId, 10);
+      if (Number.isFinite(factoryId) && factoryId > 0) {
+        where.factoryId = factoryId;
+      }
+    }
+    if (req.query.search) {
+      const q = String(req.query.search).trim();
+      if (q) where.reference = { contains: q };
+    }
+    const dateFrom = req.query.dateFrom ? new Date(req.query.dateFrom) : null;
+    const dateTo = req.query.dateTo ? new Date(req.query.dateTo) : null;
+    if ((dateFrom && !Number.isNaN(dateFrom.getTime())) || (dateTo && !Number.isNaN(dateTo.getTime()))) {
+      where.createdAt = {};
+      if (dateFrom && !Number.isNaN(dateFrom.getTime())) where.createdAt.gte = dateFrom;
+      if (dateTo && !Number.isNaN(dateTo.getTime())) where.createdAt.lte = dateTo;
+    }
+    const allowedSort = new Set(["createdAt", "reference", "status", "start_date", "estimated_end_date"]);
+    const sortBy = allowedSort.has(String(req.query.sortBy || "")) ? String(req.query.sortBy) : "createdAt";
+    const sortDir = String(req.query.sortDir || "desc").toLowerCase() === "asc" ? "asc" : "desc";
+
     const productions = await prisma.production.findMany({
-      ...(scope?.isAdmin ? {} : { where: { factoryId: { in: Array.from(scope.factories) } } }),
+      where,
       skip,
       take: limit,
       include: {
@@ -173,13 +198,11 @@ router.get('/', authenticateToken, async (req, res) => {
         }
       },
       orderBy: {
-        createdAt: 'desc',
+        [sortBy]: sortDir,
       },
     });
 
-    const totalProductions = await prisma.production.count({
-      ...(scope?.isAdmin ? {} : { where: { factoryId: { in: Array.from(scope.factories) } } })
-    });
+    const totalProductions = await prisma.production.count({ where });
 
     res.json({
       productions,
@@ -190,6 +213,49 @@ router.get('/', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error fetching productions:', error);
     res.status(500).json({ error: 'Failed to fetch productions' });
+  }
+});
+
+router.get('/overview', authenticateToken, async (req, res) => {
+  try {
+    const scope = await buildScope(prisma, req.user.userId);
+    if (!scope.isAdmin) ensureTypeScope(scope, 'factory');
+
+    const where = {};
+    if (!scope?.isAdmin) where.factoryId = { in: Array.from(scope.factories) };
+    if (req.query.status) where.status = String(req.query.status);
+    if (req.query.factoryId) {
+      const factoryId = parseInt(req.query.factoryId, 10);
+      if (Number.isFinite(factoryId) && factoryId > 0) where.factoryId = factoryId;
+    }
+    if (req.query.search) {
+      const q = String(req.query.search).trim();
+      if (q) where.reference = { contains: q };
+    }
+    const dateFrom = req.query.dateFrom ? new Date(req.query.dateFrom) : null;
+    const dateTo = req.query.dateTo ? new Date(req.query.dateTo) : null;
+    if ((dateFrom && !Number.isNaN(dateFrom.getTime())) || (dateTo && !Number.isNaN(dateTo.getTime()))) {
+      where.createdAt = {};
+      if (dateFrom && !Number.isNaN(dateFrom.getTime())) where.createdAt.gte = dateFrom;
+      if (dateTo && !Number.isNaN(dateTo.getTime())) where.createdAt.lte = dateTo;
+    }
+
+    const [totalCount, grouped] = await Promise.all([
+      prisma.production.count({ where }),
+      prisma.production.groupBy({
+        by: ["status"],
+        where,
+        _count: { id: true },
+      }),
+    ]);
+    const byStatus = grouped.reduce((acc, row) => {
+      acc[row.status || "unknown"] = Number(row._count?.id || 0);
+      return acc;
+    }, {});
+
+    res.json({ totalCount, byStatus });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch production overview' });
   }
 });
 

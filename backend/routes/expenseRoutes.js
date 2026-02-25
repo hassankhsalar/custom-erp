@@ -5,6 +5,55 @@ const router = express.Router();
 const { createTransaction } = require("../utils/transactionHelper");
 const { createNotification } = require("../utils/notificationHelper");
 
+const parsePositiveInt = (value, fallback) => {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const buildExpenseWhere = (query) => {
+  const where = {};
+  const search = String(query.search || "").trim();
+  const categoryId = query.categoryId ? parseInt(query.categoryId, 10) : null;
+  const accountId = query.accountId ? parseInt(query.accountId, 10) : null;
+  const salaryId = query.salaryId ? parseInt(query.salaryId, 10) : null;
+  const dateFrom = query.dateFrom ? new Date(query.dateFrom) : null;
+  const dateTo = query.dateTo ? new Date(query.dateTo) : null;
+
+  if (search) {
+    where.OR = [
+      { description: { contains: search } },
+      { category: { name: { contains: search } } },
+      { account: { account_name: { contains: search } } },
+      { salary: { user: { name: { contains: search } } } },
+      { salary: { user: { username: { contains: search } } } },
+    ];
+  }
+  if (Number.isFinite(categoryId)) where.categoryId = categoryId;
+  if (Number.isFinite(accountId)) where.accountId = accountId;
+  if (Number.isFinite(salaryId)) where.salaryId = salaryId;
+  if (dateFrom || dateTo) {
+    where.date = {};
+    if (dateFrom && !Number.isNaN(dateFrom.getTime())) where.date.gte = dateFrom;
+    if (dateTo && !Number.isNaN(dateTo.getTime())) where.date.lte = dateTo;
+  }
+  return where;
+};
+
+const getExpenseOrderBy = (sortBy, sortDir) => {
+  const direction = String(sortDir || "desc").toLowerCase() === "asc" ? "asc" : "desc";
+  switch (String(sortBy || "date")) {
+    case "amount":
+      return { amount: direction };
+    case "createdAt":
+      return { createdAt: direction };
+    case "category":
+      return { category: { name: direction } };
+    case "date":
+    default:
+      return { date: direction };
+  }
+};
+
 // Expense categories
 router.get("/categories", async (req, res) => {
   try {
@@ -49,11 +98,74 @@ router.delete("/categories/:id", async (req, res) => {
 // Expenses
 router.get("/", async (req, res) => {
   try {
-    const expenses = await prisma.expense.findMany({
-      include: { category: true, createdBy: true, salary: true, account: true },
-      orderBy: { date: "desc" }
+    const page = parsePositiveInt(req.query.page, 1);
+    const limit = Math.min(parsePositiveInt(req.query.limit, 20), 100);
+    const skip = (page - 1) * limit;
+    const where = buildExpenseWhere(req.query);
+    const orderBy = getExpenseOrderBy(req.query.sortBy, req.query.sortDir);
+
+    const [items, totalCount] = await Promise.all([
+      prisma.expense.findMany({
+        where,
+        include: { category: true, createdBy: true, salary: { include: { user: true } }, account: true },
+        orderBy,
+        skip,
+        take: limit,
+      }),
+      prisma.expense.count({ where }),
+    ]);
+
+    res.json({
+      items,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / limit)),
+      },
     });
-    res.json(expenses);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/overview", async (req, res) => {
+  try {
+    const where = buildExpenseWhere(req.query);
+    const [aggregate, totalCount, byCategoryRaw] = await Promise.all([
+      prisma.expense.aggregate({
+        where,
+        _sum: { amount: true },
+        _avg: { amount: true },
+      }),
+      prisma.expense.count({ where }),
+      prisma.expense.groupBy({
+        by: ["categoryId"],
+        where,
+        _count: { _all: true },
+      }),
+    ]);
+
+    const categoryIds = byCategoryRaw.map((x) => x.categoryId).filter((id) => Number.isFinite(id));
+    const categories = categoryIds.length
+      ? await prisma.expenseCategory.findMany({
+          where: { id: { in: categoryIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const categoryMap = new Map(categories.map((c) => [c.id, c.name]));
+    const byCategory = byCategoryRaw.map((row) => ({
+      categoryId: row.categoryId,
+      categoryName: categoryMap.get(row.categoryId) || "Unknown",
+      count: Number(row._count?._all || 0),
+    }));
+
+    res.json({
+      totalCount,
+      totalAmount: Number(aggregate._sum?.amount || 0),
+      averageAmount: Number(aggregate._avg?.amount || 0),
+      byCategory,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

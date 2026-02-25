@@ -282,6 +282,12 @@ const computeTransferSummary = (transferItems) => {
   };
 };
 
+const parseTransferDate = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
 const updateRequisitionStatusFromSections = async (requisitionId) => {
   if (!requisitionId) return;
   const sections = await prisma.requisitionSection.findMany({
@@ -308,16 +314,43 @@ const updateRequisitionStatusFromSections = async (requisitionId) => {
 
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { from, to, page = 1, limit = 10, search = '', status } = req.query;
+    const {
+      from,
+      fromId,
+      to,
+      toId,
+      page = 1,
+      limit = 10,
+      search = '',
+      status,
+      sortBy = "createdAt",
+      sortDir = "desc",
+      dateFrom,
+      dateTo
+    } = req.query;
     const pageNum = Math.max(1, parseInt(page) || 1);
     const pageSize = Math.max(1, Math.min(100, parseInt(limit) || 10));
     const normalizedStatus = status ? normalizeTransferStatus(status) : null;
+    const startDate = parseTransferDate(dateFrom);
+    const endDate = parseTransferDate(dateTo);
     const baseWhere = {};
     if (from) {
       baseWhere.from = from;
     }
+    if (fromId) {
+      const parsedFromId = parseInt(fromId, 10);
+      if (Number.isFinite(parsedFromId) && parsedFromId > 0) {
+        baseWhere.fromId = parsedFromId;
+      }
+    }
     if (to) {
       baseWhere.to = to;
+    }
+    if (toId) {
+      const parsedToId = parseInt(toId, 10);
+      if (Number.isFinite(parsedToId) && parsedToId > 0) {
+        baseWhere.toId = parsedToId;
+      }
     }
     if (search) {
       baseWhere.OR = [
@@ -328,12 +361,21 @@ router.get('/', authenticateToken, async (req, res) => {
     if (normalizedStatus && normalizedStatus !== 'all') {
       baseWhere.status = normalizedStatus;
     }
+    if (startDate || endDate) {
+      baseWhere.createdAt = {};
+      if (startDate) baseWhere.createdAt.gte = startDate;
+      if (endDate) baseWhere.createdAt.lte = endDate;
+    }
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     const scopeFilter = buildTransferOrFilter(scope);
     const where = Object.keys(baseWhere).length > 0
       ? (scopeFilter ? { AND: [scopeFilter, baseWhere] } : baseWhere)
       : (scopeFilter || {});
+
+    const allowedSortFields = new Set(["createdAt", "shipping_cost", "reference", "status"]);
+    const finalSortBy = allowedSortFields.has(String(sortBy)) ? String(sortBy) : "createdAt";
+    const finalSortDir = String(sortDir).toLowerCase() === "asc" ? "asc" : "desc";
 
     const [transfers, totalItems] = await prisma.$transaction([
       prisma.transfer.findMany({
@@ -367,7 +409,7 @@ router.get('/', authenticateToken, async (req, res) => {
             },
           },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [finalSortBy]: finalSortDir },
       }),
       prisma.transfer.count({ where }),
     ]);
@@ -433,6 +475,77 @@ router.get('/', authenticateToken, async (req, res) => {
       });
     }
     res.status(500).json({ error: error.message || "Failed to fetch transfers" });
+  }
+});
+
+router.get('/overview', authenticateToken, async (req, res) => {
+  try {
+    const { from, fromId, to, toId, search = '', status, dateFrom, dateTo } = req.query;
+    const normalizedStatus = status ? normalizeTransferStatus(status) : null;
+    const startDate = parseTransferDate(dateFrom);
+    const endDate = parseTransferDate(dateTo);
+    const baseWhere = {};
+    if (from) baseWhere.from = from;
+    if (fromId) {
+      const parsedFromId = parseInt(fromId, 10);
+      if (Number.isFinite(parsedFromId) && parsedFromId > 0) {
+        baseWhere.fromId = parsedFromId;
+      }
+    }
+    if (to) baseWhere.to = to;
+    if (toId) {
+      const parsedToId = parseInt(toId, 10);
+      if (Number.isFinite(parsedToId) && parsedToId > 0) {
+        baseWhere.toId = parsedToId;
+      }
+    }
+    if (search) {
+      baseWhere.OR = [
+        { reference: { contains: search } },
+        { note: { contains: search } },
+      ];
+    }
+    if (normalizedStatus && normalizedStatus !== 'all') {
+      baseWhere.status = normalizedStatus;
+    }
+    if (startDate || endDate) {
+      baseWhere.createdAt = {};
+      if (startDate) baseWhere.createdAt.gte = startDate;
+      if (endDate) baseWhere.createdAt.lte = endDate;
+    }
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    const scopeFilter = buildTransferOrFilter(scope);
+    const where = Object.keys(baseWhere).length > 0
+      ? (scopeFilter ? { AND: [scopeFilter, baseWhere] } : baseWhere)
+      : (scopeFilter || {});
+
+    const [totalCount, grouped, shippingCost] = await Promise.all([
+      prisma.transfer.count({ where }),
+      prisma.transfer.groupBy({
+        by: ["status"],
+        where,
+        _count: { id: true },
+      }),
+      prisma.transfer.aggregate({
+        where,
+        _sum: { shipping_cost: true },
+      }),
+    ]);
+
+    const byStatus = grouped.reduce((acc, row) => {
+      acc[row.status || "unknown"] = Number(row._count?.id || 0);
+      return acc;
+    }, {});
+
+    res.json({
+      totalCount,
+      totalShippingCost: Number(shippingCost?._sum?.shipping_cost || 0),
+      byStatus,
+    });
+  } catch (error) {
+    console.error('Error fetching transfer overview:', error);
+    res.status(500).json({ error: 'Failed to fetch transfer overview' });
   }
 });
 

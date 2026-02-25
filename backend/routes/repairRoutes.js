@@ -286,15 +286,41 @@ router.get("/", async (req, res) => {
     const skip = (pageNumber - 1) * limitNumber;
 
     const where = {};
-    if (req.query.status) where.status = String(req.query.status);
-    if (req.query.fromType) where.from = String(req.query.fromType);
+    const search = String(req.query.search || "").trim();
+    const status = String(req.query.status || "").trim();
+    const fromType = String(req.query.fromType || "").trim();
+    const fromId = parseInt(req.query.fromId, 10);
+    const destination = String(req.query.destination || "").trim();
+    const dateFrom = req.query.dateFrom ? new Date(req.query.dateFrom) : null;
+    const dateTo = req.query.dateTo ? new Date(req.query.dateTo) : null;
+    const sortBy = String(req.query.sortBy || "createdAt");
+    const sortDir = String(req.query.sortDir || "desc").toLowerCase() === "asc" ? "asc" : "desc";
+
+    if (status) where.status = status;
+    if (fromType) where.from = fromType;
+    if (Number.isFinite(fromId) && fromId > 0) where.fromId = fromId;
+    if (destination) where.destination = { contains: destination };
+    if (search) {
+      where.OR = [
+        { reference: { contains: search } },
+        { destination: { contains: search } },
+      ];
+    }
+    if ((dateFrom && !Number.isNaN(dateFrom.getTime())) || (dateTo && !Number.isNaN(dateTo.getTime()))) {
+      where.createdAt = {};
+      if (dateFrom && !Number.isNaN(dateFrom.getTime())) where.createdAt.gte = dateFrom;
+      if (dateTo && !Number.isNaN(dateTo.getTime())) where.createdAt.lte = dateTo;
+    }
+
+    const allowedSort = new Set(["createdAt", "shippingCost", "reference", "status"]);
+    const finalSortBy = allowedSort.has(sortBy) ? sortBy : "createdAt";
 
     const totalItems = await prisma.repairOrder.count({ where });
     const repairs = await prisma.repairOrder.findMany({
       where,
       skip: usePagination ? skip : undefined,
       take: usePagination ? limitNumber : undefined,
-      orderBy: { createdAt: "desc" },
+      orderBy: { [finalSortBy]: sortDir },
       include: {
         account: true,
         items: { include: { product: true, material: true } },
@@ -316,6 +342,61 @@ router.get("/", async (req, res) => {
     res.json({ repairs });
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to fetch repairs" });
+  }
+});
+
+router.get("/overview", async (req, res) => {
+  try {
+    const where = {};
+    const search = String(req.query.search || "").trim();
+    const status = String(req.query.status || "").trim();
+    const fromType = String(req.query.fromType || "").trim();
+    const fromId = parseInt(req.query.fromId, 10);
+    const destination = String(req.query.destination || "").trim();
+    const dateFrom = req.query.dateFrom ? new Date(req.query.dateFrom) : null;
+    const dateTo = req.query.dateTo ? new Date(req.query.dateTo) : null;
+
+    if (status) where.status = status;
+    if (fromType) where.from = fromType;
+    if (Number.isFinite(fromId) && fromId > 0) where.fromId = fromId;
+    if (destination) where.destination = { contains: destination };
+    if (search) {
+      where.OR = [
+        { reference: { contains: search } },
+        { destination: { contains: search } },
+      ];
+    }
+    if ((dateFrom && !Number.isNaN(dateFrom.getTime())) || (dateTo && !Number.isNaN(dateTo.getTime()))) {
+      where.createdAt = {};
+      if (dateFrom && !Number.isNaN(dateFrom.getTime())) where.createdAt.gte = dateFrom;
+      if (dateTo && !Number.isNaN(dateTo.getTime())) where.createdAt.lte = dateTo;
+    }
+
+    const [aggregate, grouped] = await Promise.all([
+      prisma.repairOrder.aggregate({
+        where,
+        _count: { id: true },
+        _sum: { shippingCost: true },
+      }),
+      prisma.repairOrder.groupBy({
+        by: ["status"],
+        where,
+        _count: { id: true },
+      }),
+    ]);
+
+    const byStatus = grouped.reduce((acc, row) => {
+      acc[row.status || "unknown"] = Number(row._count?.id || 0);
+      return acc;
+    }, {});
+
+    res.json({
+      totalCount: Number(aggregate?._count?.id || 0),
+      totalShippingCost: Number(aggregate?._sum?.shippingCost || 0),
+      byStatus,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Failed to fetch repair overview" });
   }
 });
 

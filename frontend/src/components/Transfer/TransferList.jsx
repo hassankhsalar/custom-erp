@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { usePermission } from '../../hooks/usePermission';
 import { API_ROUTES } from '../../config';
@@ -39,36 +39,93 @@ const TransferList = ({ fromType, toType, title }) => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadMode, setLoadMode] = useState('filter');
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [fromFilter, setFromFilter] = useState(fromType || 'all');
+  const [fromLocationId, setFromLocationId] = useState('all');
   const [toFilter, setToFilter] = useState(toType || 'all');
-  const [selectedTransfers, setSelectedTransfers] = useState([]);
+  const [toLocationId, setToLocationId] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [appliedFilters, setAppliedFilters] = useState({
+    fromFilter: fromType || 'all',
+    fromLocationId: 'all',
+    toFilter: toType || 'all',
+    toLocationId: 'all',
+    statusFilter: 'all',
+    searchQuery: '',
+    dateFrom: '',
+    dateTo: '',
+  });
+  const [overview, setOverview] = useState({ totalCount: 0, byStatus: {}, totalShippingCost: 0 });
+  const [locationOptions, setLocationOptions] = useState({ shop: [], store: [], factory: [] });
+  const initializedRef = useRef(false);
+  const skipNextPageFetchRef = useRef(false);
 
   // Details Modal State
   const [detailsModal, setDetailsModal] = useState({ isOpen: false, data: null });
 
   useEffect(() => {
-    fetchTransfers();
-  }, [fromFilter, toFilter, currentPage, statusFilter, itemsPerPage]);
+    const fetchLocations = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const [shopsRes, storesRes, factoriesRes] = await Promise.all([
+          axios.get(API_ROUTES.SHOPS, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(API_ROUTES.STORES, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(API_ROUTES.FACTORIES, { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+        setLocationOptions({
+          shop: Array.isArray(shopsRes.data) ? shopsRes.data : [],
+          store: Array.isArray(storesRes.data) ? storesRes.data : [],
+          factory: Array.isArray(factoriesRes.data) ? factoriesRes.data : [],
+        });
+      } catch (_) {
+        setLocationOptions({ shop: [], store: [], factory: [] });
+      }
+    };
+    fetchLocations();
+  }, []);
 
-  const fetchTransfers = async () => {
+  const filterParams = useMemo(() => ({
+    from: appliedFilters.fromFilter !== 'all' ? appliedFilters.fromFilter : undefined,
+    fromId: appliedFilters.fromFilter !== 'all' && appliedFilters.fromLocationId !== 'all' ? appliedFilters.fromLocationId : undefined,
+    to: appliedFilters.toFilter !== 'all' ? appliedFilters.toFilter : undefined,
+    toId: appliedFilters.toFilter !== 'all' && appliedFilters.toLocationId !== 'all' ? appliedFilters.toLocationId : undefined,
+    status: appliedFilters.statusFilter !== 'all' ? appliedFilters.statusFilter : undefined,
+    search: appliedFilters.searchQuery.trim() || undefined,
+    dateFrom: appliedFilters.dateFrom || undefined,
+    dateTo: appliedFilters.dateTo || undefined,
+  }), [appliedFilters]);
+
+  const fetchOverview = async (params) => {
+    const token = localStorage.getItem('token');
+    const overviewRes = await axios.get(API_ROUTES.TRANSFERS_OVERVIEW, {
+      headers: { Authorization: `Bearer ${token}` },
+      params,
+    });
+    setOverview({
+      totalCount: Number(overviewRes.data?.totalCount || 0),
+      byStatus: overviewRes.data?.byStatus || {},
+      totalShippingCost: Number(overviewRes.data?.totalShippingCost || 0),
+    });
+  };
+
+  const fetchTransfers = async (mode = 'table', page = currentPage, limit = itemsPerPage, params = filterParams) => {
     setLoading(true);
+    setLoadMode(mode);
     setError(null);
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(API_ROUTES.TRANSFERS, {
         headers: { Authorization: `Bearer ${token}` },
         params: {
-          from: fromFilter !== 'all' ? fromFilter : undefined,
-          to: toFilter !== 'all' ? toFilter : undefined,
-          page: currentPage,
-          limit: itemsPerPage,
-          status: statusFilter !== 'all' ? statusFilter : undefined,
+          ...params,
+          page,
+          limit,
         },
       });
-      console.log(response.data);
       setTransfers(response.data.transfers);
       setTotalPages(response.data.totalPages);
       setTotalItems(response.data.totalItems);
@@ -81,10 +138,6 @@ const TransferList = ({ fromType, toType, title }) => {
     }
   };
 
-  const handlePageChange = (newPage) => {
-    setCurrentPage(newPage);
-  };
-
   const openDetailsModal = (transfer) => {
     setDetailsModal({ isOpen: true, data: transfer });
   };
@@ -93,8 +146,71 @@ const TransferList = ({ fromType, toType, title }) => {
     setDetailsModal({ isOpen: false, data: null });
   };
 
-  const handleRefresh = () => {
-    fetchTransfers();
+  useEffect(() => {
+    initializedRef.current = true;
+    skipNextPageFetchRef.current = currentPage !== 1;
+    setCurrentPage(1);
+    fetchTransfers('filter', 1, itemsPerPage, filterParams);
+    fetchOverview(filterParams).catch((error) => {
+      console.error('Error fetching transfer overview:', error);
+    });
+  }, [filterParams]);
+
+  useEffect(() => {
+    if (!initializedRef.current) return;
+    if (skipNextPageFetchRef.current) {
+      skipNextPageFetchRef.current = false;
+      return;
+    }
+    fetchTransfers('table', currentPage, itemsPerPage, filterParams);
+  }, [currentPage, itemsPerPage]);
+
+  const handleRefresh = async () => {
+    try {
+      await Promise.all([
+        fetchTransfers('table', currentPage, itemsPerPage, filterParams),
+        fetchOverview(filterParams),
+      ]);
+    } catch (error) {
+      console.error('Error refreshing transfers:', error);
+    }
+  };
+
+  const handleApplyFilters = () => {
+    setAppliedFilters({
+      fromFilter,
+      fromLocationId,
+      toFilter,
+      toLocationId,
+      statusFilter,
+      searchQuery,
+      dateFrom,
+      dateTo,
+    });
+    setCurrentPage(1);
+  };
+
+  const handleClearFilters = () => {
+    const empty = {
+      fromFilter: fromType || 'all',
+      fromLocationId: 'all',
+      toFilter: toType || 'all',
+      toLocationId: 'all',
+      statusFilter: 'all',
+      searchQuery: '',
+      dateFrom: '',
+      dateTo: '',
+    };
+    setFromFilter(empty.fromFilter);
+    setFromLocationId(empty.fromLocationId);
+    setToFilter(empty.toFilter);
+    setToLocationId(empty.toLocationId);
+    setStatusFilter(empty.statusFilter);
+    setSearchQuery(empty.searchQuery);
+    setDateFrom(empty.dateFrom);
+    setDateTo(empty.dateTo);
+    setAppliedFilters(empty);
+    setCurrentPage(1);
   };
 
   const handleDeleteTransfer = async (transferId) => {
@@ -106,25 +222,9 @@ const TransferList = ({ fromType, toType, title }) => {
       await axios.delete(API_ROUTES.TRANSFER_BY_ID(transferId), {
         headers: { Authorization: `Bearer ${token}` },
       });
-      fetchTransfers();
+      fetchTransfers('table', currentPage, itemsPerPage, filterParams);
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to delete transfer');
-    }
-  };
-
-  const handleTransferSelect = (transferId) => {
-    setSelectedTransfers(prev => 
-      prev.includes(transferId) 
-        ? prev.filter(id => id !== transferId)
-        : [...prev, transferId]
-    );
-  };
-
-  const handleSelectAll = () => {
-    if (selectedTransfers.length === transfers.length) {
-      setSelectedTransfers([]);
-    } else {
-      setSelectedTransfers(transfers.map(t => t.id));
     }
   };
 
@@ -242,9 +342,135 @@ const TransferList = ({ fromType, toType, title }) => {
   };
 
   // Calculate statistics
-  const processingTransfers = transfers.filter(t => t.status === 'processing').length;
-  const onTheWayTransfers = transfers.filter(t => t.status === 'being_shipped' || t.status === 'on_the_way').length;
-  const completedTransfers = transfers.filter(t => t.status === 'transfer_done' || t.status === 'transferred' || t.status === 'complete').length;
+  const processingTransfers = Number(overview.byStatus?.processing || 0) + Number(overview.byStatus?.pending || 0);
+  const onTheWayTransfers = Number(overview.byStatus?.on_the_way || 0);
+  const completedTransfers = Number(overview.byStatus?.complete || 0);
+  const renderPaginationControls = () => (
+    <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl p-4 mt-4">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Show:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+            <span className="text-sm text-gray-600">per page</span>
+          </div>
+
+          <div className="text-sm text-gray-700">
+            Showing <span className="font-semibold">{totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</span> to{" "}
+            <span className="font-semibold">{Math.min(currentPage * itemsPerPage, totalItems)}</span>{" "}
+            of <span className="font-semibold">{totalItems}</span> transfers
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => goToPage(1)}
+            disabled={currentPage === 1}
+            className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+            title="First page"
+          >
+            <ChevronsLeft size={16} className="text-gray-600" />
+          </button>
+
+          <button
+            onClick={prevPage}
+            disabled={currentPage === 1}
+            className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+            title="Previous page"
+          >
+            <ChevronLeft size={16} className="text-gray-600" />
+          </button>
+
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum;
+              if (totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (currentPage <= 3) {
+                pageNum = i + 1;
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
+              } else {
+                pageNum = currentPage - 2 + i;
+              }
+
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => goToPage(pageNum)}
+                  className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                    currentPage === pageNum
+                      ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                      : "hover:bg-white/50 text-gray-700"
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+
+            {totalPages > 5 && currentPage < totalPages - 2 && (
+              <>
+                <span className="mx-1 text-gray-400">...</span>
+                <button
+                  onClick={() => goToPage(totalPages)}
+                  className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                    currentPage === totalPages
+                      ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                      : "hover:bg-white/50 text-gray-700"
+                  }`}
+                >
+                  {totalPages}
+                </button>
+              </>
+            )}
+          </div>
+
+          <button
+            onClick={nextPage}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+            title="Next page"
+          >
+            <ChevronRight size={16} className="text-gray-600" />
+          </button>
+
+          <button
+            onClick={() => goToPage(totalPages)}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+            title="Last page"
+          >
+            <ChevronsRight size={16} className="text-gray-600" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (loading && loadMode === 'filter') {
+    return (
+      <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+        <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl p-10 text-center">
+          <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading transfers...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
@@ -322,25 +548,84 @@ const TransferList = ({ fromType, toType, title }) => {
         {/* Main Content */}
         <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
           {/* Filters Section */}
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
-            <div className="flex-1">
+          <div className="mb-6 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Search transfers by reference, note..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
-                />
+                <select
+                  value={fromFilter}
+                  onChange={(e) => {
+                    setFromFilter(e.target.value);
+                    setFromLocationId('all');
+                    setCurrentPage(1);
+                  }}
+                  className="appearance-none w-full pl-4 pr-10 py-3 bg-white/80 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                >
+                  <option value="all">From Type (All)</option>
+                  <option value="store">Store</option>
+                  <option value="shop">Shop</option>
+                  <option value="factory">Factory</option>
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
               </div>
-            </div>
-            <div className="flex gap-3">
+              <div className="relative">
+                <select
+                  value={fromLocationId}
+                  onChange={(e) => {
+                    setFromLocationId(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  disabled={fromFilter === 'all'}
+                  className="appearance-none w-full pl-4 pr-10 py-3 bg-white/80 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-60"
+                >
+                  <option value="all">{fromFilter === 'all' ? 'Select from type first' : 'All Locations'}</option>
+                  {(locationOptions[fromFilter] || []).map((loc) => (
+                    <option key={loc.id} value={loc.id}>{loc.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+              </div>
+              <div className="relative">
+                <select
+                  value={toFilter}
+                  onChange={(e) => {
+                    setToFilter(e.target.value);
+                    setToLocationId('all');
+                    setCurrentPage(1);
+                  }}
+                  className="appearance-none w-full pl-4 pr-10 py-3 bg-white/80 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                >
+                  <option value="all">To Type (All)</option>
+                  <option value="store">Store</option>
+                  <option value="shop">Shop</option>
+                  <option value="factory">Factory</option>
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+              </div>
+              <div className="relative">
+                <select
+                  value={toLocationId}
+                  onChange={(e) => {
+                    setToLocationId(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  disabled={toFilter === 'all'}
+                  className="appearance-none w-full pl-4 pr-10 py-3 bg-white/80 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-60"
+                >
+                  <option value="all">{toFilter === 'all' ? 'Select to type first' : 'All Locations'}</option>
+                  {(locationOptions[toFilter] || []).map((loc) => (
+                    <option key={loc.id} value={loc.id}>{loc.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+              </div>
               <div className="relative">
                 <select
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="appearance-none pl-4 pr-10 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 min-w-[160px]"
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="appearance-none w-full pl-4 pr-10 py-3 bg-white/80 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                 >
                   <option value="all">All Status</option>
                   <option value="processing">Processing</option>
@@ -352,73 +637,62 @@ const TransferList = ({ fromType, toType, title }) => {
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
               </div>
-              <div className="relative">
-                <select
-                  value={fromFilter}
-                  onChange={(e) => {
-                    setFromFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="appearance-none pl-4 pr-10 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 min-w-[140px]"
-                >
-                  <option value="all">From (All)</option>
-                  <option value="store">Store</option>
-                  <option value="shop">Shop</option>
-                  <option value="factory">Factory</option>
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
-              </div>
-              <div className="relative">
-                <select
-                  value={toFilter}
-                  onChange={(e) => {
-                    setToFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="appearance-none pl-4 pr-10 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 min-w-[140px]"
-                >
-                  <option value="all">To (All)</option>
-                  <option value="store">Store</option>
-                  <option value="shop">Shop</option>
-                  <option value="factory">Factory</option>
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
-              </div>
-              <button className="px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl hover:bg-white transition-colors duration-200 flex items-center gap-2">
-                <Filter className="w-5 h-5 text-gray-600" />
-                <span className="text-gray-700 text-sm font-medium">More Filters</span>
-              </button>
-              <button
-                onClick={handleRefresh}
-                className="p-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl hover:bg-white transition-colors duration-200"
-                title="Refresh"
-              >
-                <RefreshCw className="w-5 h-5 text-gray-600" />
-              </button>
             </div>
-          </div>
 
-          {/* Selected Actions Bar */}
-          {selectedTransfers.length > 0 && (
-            <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-xl flex items-center justify-between backdrop-blur-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
-                  <Package className="w-4 h-4 text-blue-600" />
-                </div>
-                <span className="text-blue-700 font-medium">
-                  {selectedTransfers.length} transfer{selectedTransfers.length !== 1 ? 's' : ''} selected
-                </span>
+            <div className="flex justify-between items-center gap-3">
+              <div className="relative md:grow ">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="text"
+                  placeholder="Search transfers by reference, note..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full pl-10 pr-4 py-3 bg-white/80 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+              </div>
+              <div>
+                <input
+                  type="datetime-local"
+                  value={dateFrom}
+                  onChange={(e) => {
+                    setDateFrom(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
               </div>
               <div className="flex gap-2">
-                <button className="px-3 py-2 bg-white/80 backdrop-blur-sm border border-blue-200 text-blue-700 rounded-lg hover:bg-white text-sm font-medium">
-                  Bulk Update
+                <input
+                  type="datetime-local"
+                  value={dateTo}
+                  onChange={(e) => {
+                    setDateTo(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+              </div>
+              <div className='flex items-center gap-4'>
+                <button
+                  onClick={handleApplyFilters}
+                  className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 transition-colors duration-200"
+                  title="Apply Filters"
+                >
+                  <Filter className="w-5 h-5" /> Filter
                 </button>
-                <button className="px-3 py-2 bg-red-50/80 backdrop-blur-sm border border-red-200 text-red-700 rounded-lg hover:bg-red-100 text-sm font-medium">
-                  Delete Selected
+                <button
+                  onClick={handleClearFilters}
+                  className="flex items-center gap-2 px-4 py-3 bg-white/80 backdrop-blur-sm border border-gray-300 rounded-xl hover:bg-white transition-colors duration-200 text-gray-700"
+                  title="Clear Filters"
+                >
+                  <X className="w-5 h-5" /> Clear
                 </button>
               </div>
             </div>
-          )}
+          </div>
 
           {/* Table Section */}
           {loading ? (
@@ -431,7 +705,7 @@ const TransferList = ({ fromType, toType, title }) => {
               <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
               <p className="text-red-700 font-medium mb-2">{error}</p>
               <button
-                onClick={fetchTransfers}
+                onClick={() => fetchTransfers('table', currentPage, itemsPerPage, filterParams)}
                 className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors duration-200 text-sm font-medium"
               >
                 Try Again
@@ -448,21 +722,15 @@ const TransferList = ({ fromType, toType, title }) => {
             </div>
           ) : (
             <>
+              {transfers.length > 0 && renderPaginationControls()}
+
               <div className="bg-white/50 backdrop-blur-sm rounded-xl border border-white/60 overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead className="bg-gradient-to-r from-gray-50/80 to-gray-100/80 backdrop-blur-sm border-b border-gray-200">
                       <tr>
-                        <th className="p-4">
-                          <input
-                            type="checkbox"
-                            checked={selectedTransfers.length === transfers.length && transfers.length > 0}
-                            onChange={handleSelectAll}
-                            className="w-4 h-4 text-blue-500 rounded border-gray-300 focus:ring-blue-400"
-                          />
-                        </th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Reference</th>
-                        <th className="p-4 text-left text-sm font-semibold text-gray-700">From → To</th>
+                        <th className="p-4 text-left text-sm font-semibold text-gray-700">From ? To</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Shipping Cost</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Items</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Status</th>
@@ -475,16 +743,8 @@ const TransferList = ({ fromType, toType, title }) => {
                         return (
                           <tr 
                             key={transfer.id} 
-                            className={`hover:bg-white/30 transition-colors duration-150 ${selectedTransfers.includes(transfer.id) ? 'bg-blue-50/30' : ''}`}
+                            className="hover:bg-white/30 transition-colors duration-150"
                           >
-                            <td className="p-4">
-                              <input
-                                type="checkbox"
-                                checked={selectedTransfers.includes(transfer.id)}
-                                onChange={() => handleTransferSelect(transfer.id)}
-                                className="w-4 h-4 text-blue-500 rounded border-gray-300 focus:ring-blue-400"
-                              />
-                            </td>
                             <td className="p-4">
                               <div>
                                 <div className="font-medium text-gray-900">{transfer.reference}</div>
@@ -627,132 +887,7 @@ const TransferList = ({ fromType, toType, title }) => {
                 </div>
               </div>
 
-              {/* Pagination Controls */}
-              {transfers.length > 0 && (
-                <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl p-4 mt-4">
-                  <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      {/* Items per page selector */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">Show:</span>
-                        <select
-                          value={itemsPerPage}
-                          onChange={(e) => {
-                            setItemsPerPage(Number(e.target.value));
-                            setCurrentPage(1);
-                          }}
-                          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                        >
-                          <option value="5">5</option>
-                          <option value="10">10</option>
-                          <option value="20">20</option>
-                          <option value="50">50</option>
-                          <option value="100">100</option>
-                        </select>
-                        <span className="text-sm text-gray-600">per page</span>
-                      </div>
-
-                      {/* Page info */}
-                      <div className="text-sm text-gray-700">
-                        Showing <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
-                        <span className="font-semibold">
-                          {Math.min(currentPage * itemsPerPage, transfers.length)}
-                        </span>{" "}
-                        of <span className="font-semibold">{totalItems}</span> transfers
-                      </div>
-                    </div>
-
-                    {/* Pagination buttons */}
-                    <div className="flex items-center gap-2">
-                      {/* First page */}
-                      <button
-                        onClick={() => goToPage(1)}
-                        disabled={currentPage === 1}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="First page"
-                      >
-                        <ChevronsLeft size={16} className="text-gray-600" />
-                      </button>
-
-                      {/* Previous page */}
-                      <button
-                        onClick={prevPage}
-                        disabled={currentPage === 1}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="Previous page"
-                      >
-                        <ChevronLeft size={16} className="text-gray-600" />
-                      </button>
-
-                      {/* Page numbers */}
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                          let pageNum;
-                          if (totalPages <= 5) {
-                            pageNum = i + 1;
-                          } else if (currentPage <= 3) {
-                            pageNum = i + 1;
-                          } else if (currentPage >= totalPages - 2) {
-                            pageNum = totalPages - 4 + i;
-                          } else {
-                            pageNum = currentPage - 2 + i;
-                          }
-
-                          return (
-                            <button
-                              key={pageNum}
-                              onClick={() => goToPage(pageNum)}
-                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                                currentPage === pageNum
-                                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                                  : "hover:bg-white/50 text-gray-700"
-                              }`}
-                            >
-                              {pageNum}
-                            </button>
-                          );
-                        })}
-
-                        {totalPages > 5 && currentPage < totalPages - 2 && (
-                          <>
-                            <span className="mx-1 text-gray-400">...</span>
-                            <button
-                              onClick={() => goToPage(totalPages)}
-                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                                currentPage === totalPages
-                                  ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-                                  : "hover:bg-white/50 text-gray-700"
-                              }`}
-                            >
-                              {totalPages}
-                            </button>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Next page */}
-                      <button
-                        onClick={nextPage}
-                        disabled={currentPage === totalPages}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="Next page"
-                      >
-                        <ChevronRight size={16} className="text-gray-600" />
-                      </button>
-
-                      {/* Last page */}
-                      <button
-                        onClick={() => goToPage(totalPages)}
-                        disabled={currentPage === totalPages}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="Last page"
-                      >
-                        <ChevronsRight size={16} className="text-gray-600" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {transfers.length > 0 && renderPaginationControls()}
             </>
           )}
         </div>
@@ -935,3 +1070,4 @@ const TransferList = ({ fromType, toType, title }) => {
 };
 
 export default TransferList;
+

@@ -1,6 +1,10 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { Fragment, useEffect, useState, useRef, useCallback } from "react";
 import { API_ROUTES } from "../../config";
 import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   DollarSign,
   TrendingUp,
   TrendingDown,
@@ -46,10 +50,22 @@ export default function Expenses() {
   //   description: "" 
   // });
   const [loading, setLoading] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [loadMode, setLoadMode] = useState("filter");
   const [searchQuery, setSearchQuery] = useState("");
   const [categorySearchQuery, setCategorySearchQuery] = useState("");
   const [dateFilter, setDateFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState("");
+  const [appliedDateFilter, setAppliedDateFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [appliedDateFrom, setAppliedDateFrom] = useState("");
+  const [appliedDateTo, setAppliedDateTo] = useState("");
+  const [appliedSortBy, setAppliedSortBy] = useState("newest");
   const [expandedExpenseId, setExpandedExpenseId] = useState(null);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [searchingCategories, setSearchingCategories] = useState(false);
@@ -61,14 +77,39 @@ export default function Expenses() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const token = localStorage.getItem("token");
 
-  const fetchExpenses = async () => {
+  const fetchExpenses = async (page = 1, mode = "table") => {
     setLoading(true);
+    setLoadMode(mode);
     try {
-      const res = await fetch(`${API_ROUTES.EXPENSES}`, {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(itemsPerPage),
+      });
+      if (appliedSearchQuery.trim()) params.set("search", appliedSearchQuery.trim());
+      if (appliedDateFrom) params.set("dateFrom", appliedDateFrom);
+      if (appliedDateTo) params.set("dateTo", appliedDateTo);
+      if (appliedSortBy === "newest") {
+        params.set("sortBy", "date");
+        params.set("sortDir", "desc");
+      } else if (appliedSortBy === "oldest") {
+        params.set("sortBy", "date");
+        params.set("sortDir", "asc");
+      } else if (appliedSortBy === "amount_high") {
+        params.set("sortBy", "amount");
+        params.set("sortDir", "desc");
+      } else if (appliedSortBy === "amount_low") {
+        params.set("sortBy", "amount");
+        params.set("sortDir", "asc");
+      }
+      const res = await fetch(`${API_ROUTES.EXPENSES}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      setExpenses(Array.isArray(data) ? data : []);
+      const rows = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+      setExpenses(rows);
+      setTotalCount(Number(data?.pagination?.totalCount || rows.length || 0));
+      setCurrentPage(Number(data?.pagination?.page || page));
+      setTotalPages(Math.max(1, Number(data?.pagination?.totalPages || 1)));
     } catch (error) {
       console.error("Error fetching expenses:", error);
     } finally {
@@ -105,11 +146,19 @@ export default function Expenses() {
   };
 
   useEffect(() => {
-    fetchExpenses();
     fetchCategories();
     fetchAccounts();
     fetchSalaries();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    fetchExpenses(1, "filter");
+  }, [appliedSearchQuery, appliedDateFilter, appliedDateFrom, appliedDateTo, appliedSortBy, itemsPerPage]);
+
+  useEffect(() => {
+    fetchExpenses(currentPage, "table");
+  }, [currentPage]);
 
   // Close category dropdown when clicking outside
   useEffect(() => {
@@ -273,47 +322,33 @@ export default function Expenses() {
 
   const { totalExpenses, topCategories, thisMonthExpenses, averageExpense } = calculateStatistics();
 
-  // Filter and sort expenses
-  const filteredExpenses = expenses.filter(expense => {
-    // Search filter
-    const matchesSearch = 
-      searchQuery === "" ||
-      expense.category?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      expense.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      expense.amount?.toString().includes(searchQuery) ||
-      new Date(expense.date).toLocaleDateString().toLowerCase().includes(searchQuery.toLowerCase());
-
-    // Date filter
-    const expenseDate = new Date(expense.date);
-    const today = new Date();
-    const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay()));
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    
-    const matchesDate = 
-      dateFilter === "all" ||
-      (dateFilter === "today" && expenseDate.toDateString() === new Date().toDateString()) ||
-      (dateFilter === "week" && expenseDate >= startOfWeek) ||
-      (dateFilter === "month" && expenseDate >= startOfMonth);
-
-    return matchesSearch && matchesDate;
-  }).sort((a, b) => {
-    // Sort logic
-    switch(sortBy) {
-      case "newest":
-        return new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date);
-      case "oldest":
-        return new Date(a.createdAt || a.date) - new Date(b.createdAt || b.date);
-      case "amount_high":
-        return parseFloat(b.amount) - parseFloat(a.amount);
-      case "amount_low":
-        return parseFloat(a.amount) - parseFloat(b.amount);
-      default:
-        return 0;
-    }
-  });
+  const filteredExpenses = expenses;
 
   const toggleExpenseDetails = (id) => {
     setExpandedExpenseId(expandedExpenseId === id ? null : id);
+  };
+
+  const handleApplyFilters = () => {
+    setAppliedSearchQuery(searchQuery);
+    setAppliedDateFilter(dateFilter);
+    setAppliedDateFrom(dateFrom);
+    setAppliedDateTo(dateTo);
+    setAppliedSortBy(sortBy);
+    setCurrentPage(1);
+  };
+
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setDateFilter("all");
+    setDateFrom("");
+    setDateTo("");
+    setSortBy("newest");
+    setAppliedSearchQuery("");
+    setAppliedDateFilter("all");
+    setAppliedDateFrom("");
+    setAppliedDateTo("");
+    setAppliedSortBy("newest");
+    setCurrentPage(1);
   };
 
   const selectCategory = (category) => {
@@ -349,6 +384,63 @@ export default function Expenses() {
       minimumFractionDigits: 2
     }).format(amount);
   };
+
+  const goToPage = (page) => {
+    if (page >= 1 && page <= totalPages) setCurrentPage(page);
+  };
+
+  const getPaginationItems = () => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (currentPage <= 4) return [1, 2, 3, 4, 5, "...", totalPages];
+    if (currentPage >= totalPages - 3) return [1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
+  };
+
+  const renderPagination = () => (
+    <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl p-4 mt-4">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Show:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+            </select>
+            <span className="text-sm text-gray-600">per page</span>
+          </div>
+          <div className="text-sm text-gray-700">
+            Showing <span className="font-semibold">{totalCount === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</span> to{" "}
+            <span className="font-semibold">{Math.min(currentPage * itemsPerPage, totalCount)}</span> of{" "}
+            <span className="font-semibold">{totalCount}</span> expenses
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => goToPage(1)} disabled={currentPage === 1} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"><ChevronsLeft size={16} className="text-gray-600" /></button>
+          <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"><ChevronLeft size={16} className="text-gray-600" /></button>
+          <div className="flex items-center gap-1">
+            {getPaginationItems().map((item, idx) =>
+              item === "..." ? (
+                <span key={`ellipsis-${idx}`} className="mx-1 text-gray-400">...</span>
+              ) : (
+                <button key={item} onClick={() => goToPage(item)} className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${currentPage === item ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white" : "hover:bg-white/50 text-gray-700"}`}>{item}</button>
+              )
+            )}
+          </div>
+          <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"><ChevronRight size={16} className="text-gray-600" /></button>
+          <button onClick={() => goToPage(totalPages)} disabled={currentPage === totalPages} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"><ChevronsRight size={16} className="text-gray-600" /></button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
@@ -436,7 +528,7 @@ export default function Expenses() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Records</p>
-                <p className="text-2xl font-bold text-purple-600">{expenses.length}</p>
+                <p className="text-2xl font-bold text-purple-600">{totalCount || expenses.length}</p>
               </div>
               <div className="p-3 bg-purple-100 rounded-xl">
                 <Hash size={24} className="text-purple-600" />
@@ -494,20 +586,10 @@ export default function Expenses() {
         <div className="grid grid-cols-1 gap-6 mb-6">
           {/* Expenses Table */}
           <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl">
-                  <FileText size={20} className="text-white" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-800">Expense History</h2>
-                  <p className="text-sm text-gray-600">All recorded expenses</p>
-                </div>
-              </div>
-              
-              <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col md:items-center gap-4 mb-6">
+              <div className="flex flex-col sm:flex-row w-full gap-3">
                 {/* Search */}
-                <div className="relative">
+                <div className="relative grow">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                   <input
                     type="text"
@@ -519,7 +601,7 @@ export default function Expenses() {
                 </div>
                 
                 {/* Filters */}
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <select
                     value={dateFilter}
                     onChange={(e) => setDateFilter(e.target.value)}
@@ -541,11 +623,37 @@ export default function Expenses() {
                     <option value="amount_high">Highest Amount</option>
                     <option value="amount_low">Lowest Amount</option>
                   </select>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="px-3 py-2.5 border border-white/40 bg-white/60 backdrop-blur-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-sm"
+                  />
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="px-3 py-2.5 border border-white/40 bg-white/60 backdrop-blur-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 text-sm"
+                  />
                 </div>
+              </div>
+              <div className="w-full flex justify-end">
+                <button
+                  onClick={handleApplyFilters}
+                  className="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl text-sm font-medium"
+                >
+                  Apply
+                </button>
+                <button
+                  onClick={handleClearFilters}
+                  className="px-4 py-2.5 border border-white/40 bg-white/60 rounded-xl text-sm font-medium text-gray-700"
+                >
+                  Clear
+                </button>
               </div>
             </div>
 
-            {loading ? (
+            {loading && loadMode === "filter" ? (
               <div className="flex items-center justify-center py-12">
                 <div className="flex flex-col items-center gap-4">
                   <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-600 rounded-full animate-spin"></div>
@@ -566,7 +674,13 @@ export default function Expenses() {
               </div>
             ) : (
               <>
+                {filteredExpenses.length > 0 && renderPagination()}
                 <div className="overflow-x-auto rounded-xl border border-white/60">
+                  {loading && loadMode === "table" ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="w-10 h-10 border-4 border-blue-500/30 border-t-blue-600 rounded-full animate-spin"></div>
+                    </div>
+                  ) : (
                   <table className="w-full text-sm">
                     <thead className="bg-gray-100/80">
                       <tr>
@@ -708,6 +822,7 @@ export default function Expenses() {
                       })}
                     </tbody>
                   </table>
+                  )}
                 </div>
                 
                 {/* Summary */}
@@ -715,9 +830,11 @@ export default function Expenses() {
                   <div className="mt-4 p-4 bg-gradient-to-r from-blue-50/50 to-cyan-50/50 rounded-xl border border-white/40">
                     <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                       <div className="text-sm text-gray-700">
-                        Showing <span className="font-semibold">{filteredExpenses.length}</span> of <span className="font-semibold">{expenses.length}</span> expense{expenses.length !== 1 ? 's' : ''}
-                        {searchQuery && ` matching "${searchQuery}"`}
-                        {dateFilter !== "all" && ` from ${dateFilter}`}
+                        Showing <span className="font-semibold">{filteredExpenses.length}</span> of <span className="font-semibold">{totalCount || expenses.length}</span> expense{(totalCount || expenses.length) !== 1 ? 's' : ''}
+                        {appliedSearchQuery && ` matching "${appliedSearchQuery}"`}
+                        {appliedDateFilter !== "all" && ` from ${appliedDateFilter}`}
+                        {appliedDateFrom && ` from ${appliedDateFrom}`}
+                        {appliedDateTo && ` to ${appliedDateTo}`}
                       </div>
                       <div className="text-right">
                         <div className="text-sm text-gray-600">Filtered Total:</div>
@@ -728,6 +845,7 @@ export default function Expenses() {
                     </div>
                   </div>
                 )}
+                {filteredExpenses.length > 0 && renderPagination()}
               </>
             )}
           </div>
@@ -908,8 +1026,5 @@ export default function Expenses() {
         </div>
       )}
     </div>
-    );
-  };
-
-// Add Fragment component
-const Fragment = ({ children }) => <>{children}</>;
+  );
+}

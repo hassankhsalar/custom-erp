@@ -19,6 +19,7 @@ export const API_ROUTES = {
   FACTORIES: `${API_BASE_URL}/factories`,
   FACTORY_INVENTORY_FACTORIES: `${API_BASE_URL}/factories/allfactories`,
   FACTORY_INVENTORY: (factoryId) => `${API_BASE_URL}/factories/inventory/${factoryId}`,
+  FACTORY_INVENTORY_LIST: (factoryId) => `${API_BASE_URL}/factories/inventory/${factoryId}/list`,
   FACTORY_INVENTORY_SUMMARY: (factoryId) => `${API_BASE_URL}/factories/inventory/${factoryId}/summary`,
   FACTORY_INVENTORY_ITEM_UPDATE: (factoryId) => `${API_BASE_URL}/factories/inventory/${factoryId}/item`,
 
@@ -26,10 +27,14 @@ export const API_ROUTES = {
 
 
   PRODUCTIONS: `${API_BASE_URL}/productions`,
+  PRODUCTIONS_OVERVIEW: `${API_BASE_URL}/productions/overview`,
   STORES: `${API_BASE_URL}/stores`,
+  STORE_INVENTORY_LIST: (id) => `${API_BASE_URL}/stores/${id}/inventory/list`,
+  STORE_INVENTORY_SUMMARY: (id) => `${API_BASE_URL}/stores/${id}/inventory/summary`,
   STORE_INVENTORY_ITEM_UPDATE: (storeId) => `${API_BASE_URL}/stores/inventory/${storeId}/item`,
   SALES: `${API_BASE_URL}/sales`,
   PURCHASES: `${API_BASE_URL}/purchases`,
+  PURCHASES_OVERVIEW: `${API_BASE_URL}/purchases/overview`,
   PURCHASE_BY_ID: (id) => `${API_BASE_URL}/purchases/${id}`,
   PURCHASE_DESTINATIONS: (type) => `${API_BASE_URL}/purchases/destinations/${type}`,
   PURCHASE_RETURNS_ALL: `${API_BASE_URL}/purchases/returns`,
@@ -51,11 +56,14 @@ export const API_ROUTES = {
   SHOPS: `${API_BASE_URL}/shops`,
   SHOPS_ALL: `${API_BASE_URL}/shops`,
   SHOP_BY_ID: (id) => `${API_BASE_URL}/shops/${id}`,
+  SHOP_INVENTORY_LIST: (id) => `${API_BASE_URL}/shops/${id}/inventory/list`,
+  SHOP_INVENTORY_SUMMARY: (id) => `${API_BASE_URL}/shops/${id}/inventory/summary`,
   SHOP_STOCK: (id) => `${API_BASE_URL}/shops/${id}/stock`,
   SHOP_INVENTORY_ITEM_UPDATE: (shopId) => `${API_BASE_URL}/shops/inventory/${shopId}/item`,
 
   // Shop POS routes
   SHOP_SALES: `${API_BASE_URL}/shop-sales`,
+  SHOP_SALES_OVERVIEW: `${API_BASE_URL}/shop-sales/overview`,
   SHOP_WARRANTIES: `${API_BASE_URL}/shop-sales/warranties`,
   SHOP_WARRANTY_BY_ID: (id) => `${API_BASE_URL}/shop-sales/warranties/${id}`,
   SHOP_WARRANTY_CLAIMS: (id) => `${API_BASE_URL}/shop-sales/warranties/${id}/claims`,
@@ -87,6 +95,9 @@ export const API_ROUTES = {
   CASHREGISTERASSIGN: `${API_BASE_URL}/cash-register-assign`,
   HRM: `${API_BASE_URL}/hrm`,
   EXPENSES: `${API_BASE_URL}/expenses`,
+  EXPENSES_OVERVIEW: `${API_BASE_URL}/expenses/overview`,
+  HRM_CLOCK_RECORDS_OVERVIEW: `${API_BASE_URL}/hrm/clock-records/overview`,
+  HRM_PAYROLL_OVERVIEW: `${API_BASE_URL}/hrm/payroll/overview`,
   REPORTS: `${API_BASE_URL}/reports`,
   REPORT_TRIAL_BALANCE: `${API_BASE_URL}/reports/trial-balance`,
   REPORT_CASH_BANK: `${API_BASE_URL}/reports/cash-bank`,
@@ -145,6 +156,7 @@ export const API_ROUTES = {
   SHOP_SALES_RETURNS_BACKUP: `${API_BASE_URL}/shop-sales/returns-list`,
   //transfer routes
   TRANSFERS: `${API_BASE_URL}/transfers`,
+  TRANSFERS_OVERVIEW: `${API_BASE_URL}/transfers/overview`,
   TRANSFER_BY_ID: (id) => `${API_BASE_URL}/transfers/${id}`,
   TRANSFER_STATUS: (id) => `${API_BASE_URL}/transfers/${id}/status`,
   TRANSFER_RECEIVE: (id) => `${API_BASE_URL}/transfers/${id}/receive`,
@@ -152,6 +164,7 @@ export const API_ROUTES = {
   TRANSFER_RECEIPTS: (id) => `${API_BASE_URL}/transfers/${id}/receipts`,
   TRANSFER_RETURN_UNRECEIVED: (id) => `${API_BASE_URL}/transfers/${id}/return-unreceived`,
   REQUISITIONS: `${API_BASE_URL}/requisitions`,
+  REQUISITIONS_OVERVIEW: `${API_BASE_URL}/requisitions/overview`,
   REQUISITION_PLACES: `${API_BASE_URL}/requisitions/places`,
   REQUISITION_ITEM_LOOKUP: `${API_BASE_URL}/requisitions/lookup/items`,
   REQUISITION_TRANSFER_ORDERS: `${API_BASE_URL}/requisitions/orders/transfer`,
@@ -171,6 +184,7 @@ export const API_ROUTES = {
 
   //scrap
   DAMAGE_RECORDS: `${API_BASE_URL}/damage-records`,
+  DAMAGE_RECORDS_OVERVIEW: `${API_BASE_URL}/damage-records/overview`,
   DAMAGE_RECORD_BY_ID: (id) => `${API_BASE_URL}/damage-records/${id}`,
   DAMAGE_BRANCH_ITEMS: (fromType, fromId) => `${API_BASE_URL}/damage-records/branch-items?fromType=${encodeURIComponent(fromType)}&fromId=${encodeURIComponent(fromId)}`,
   SCRAP_RECORDS: `${API_BASE_URL}/scrap-records`,
@@ -183,6 +197,7 @@ export const API_ROUTES = {
   // Add product repair routes
   PRODUCT_REPAIRS: `${API_BASE_URL}/product-repairs`,
   REPAIRS: `${API_BASE_URL}/repairs`,
+  REPAIRS_OVERVIEW: `${API_BASE_URL}/repairs/overview`,
   REPAIR_BY_ID: (id) => `${API_BASE_URL}/repairs/${id}`,
   REPAIR_STATUS: (id) => `${API_BASE_URL}/repairs/${id}/status`,
   REPAIR_DAMAGED_ITEMS: (sourceType, sourceId) => `${API_BASE_URL}/repairs/damaged-items?sourceType=${encodeURIComponent(sourceType)}&sourceId=${encodeURIComponent(sourceId)}`,

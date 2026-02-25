@@ -8,9 +8,15 @@ export default function AllSales() {
   const navigate = useNavigate();
   const { hasPermission } = usePermission();
   const canViewEditRequests = hasPermission("sales_open_close");
+  const canManageTransaction = hasPermission("sales_open_close");
+  const canEditSales = hasPermission(["sales_edit", "sales_edit_today", "sales_edit_any_day", "sales_update"]);
+  const canDeleteSales = hasPermission(["sales_delete", "sales_open_close"]);
+  const canGrantEditAccess = hasPermission("sales_open_close");
   const [sales, setSales] = useState([]);
-  const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'descending' });
+  const [sortConfig, setSortConfig] = useState({ key: "date", direction: "descending" });
   const [loading, setLoading] = useState(true);
+  const [overviewLoading, setOverviewLoading] = useState(true);
+  const [viewLoading, setViewLoading] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [selectedSale, setSelectedSale] = useState(null);
   const [viewModalOpen, setViewModalOpen] = useState(false);
@@ -39,12 +45,94 @@ export default function AllSales() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const [shops, setShops] = useState([]);
+  const [filters, setFilters] = useState({
+    dateFrom: "",
+    dateTo: "",
+    customer: "",
+    shopId: "",
+  });
+  const [appliedFilters, setAppliedFilters] = useState({
+    dateFrom: "",
+    dateTo: "",
+    customer: "",
+    shopId: "",
+  });
+  const [overview, setOverview] = useState({
+    totalRevenue: 0,
+    totalDiscount: 0,
+    averageSale: 0,
+    saleCount: 0,
+  });
+
+  useEffect(() => {
+    fetchBankAccounts();
+    fetchUsers();
+    fetchShops();
+  }, []);
 
   useEffect(() => {
     fetchSales();
-    fetchBankAccounts();
-    fetchUsers();
-  }, [currentPage, itemsPerPage]);
+  }, [currentPage, itemsPerPage, sortConfig, appliedFilters]);
+
+  useEffect(() => {
+    fetchOverview();
+  }, [appliedFilters]);
+
+  const getQueryParams = () => {
+    const params = new URLSearchParams();
+    params.set("page", String(currentPage));
+    params.set("limit", String(itemsPerPage));
+    params.set("sortBy", mapSortKeyToServer(sortConfig.key));
+    params.set("sortDir", sortConfig.direction === "ascending" ? "asc" : "desc");
+    if (appliedFilters.dateFrom) params.set("dateFrom", appliedFilters.dateFrom);
+    if (appliedFilters.dateTo) params.set("dateTo", appliedFilters.dateTo);
+    if (appliedFilters.customer.trim()) params.set("customer", appliedFilters.customer.trim());
+    if (appliedFilters.shopId) params.set("shopId", appliedFilters.shopId);
+    return params.toString();
+  };
+
+  const getOverviewQueryParams = () => {
+    const params = new URLSearchParams();
+    if (appliedFilters.dateFrom) params.set("dateFrom", appliedFilters.dateFrom);
+    if (appliedFilters.dateTo) params.set("dateTo", appliedFilters.dateTo);
+    if (appliedFilters.customer.trim()) params.set("customer", appliedFilters.customer.trim());
+    if (appliedFilters.shopId) params.set("shopId", appliedFilters.shopId);
+    return params.toString();
+  };
+
+  const fetchOverview = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    setOverviewLoading(true);
+    try {
+      const query = getOverviewQueryParams();
+      const url = query
+        ? `${API_ROUTES.SHOP_SALES_OVERVIEW}?${query}`
+        : API_ROUTES.SHOP_SALES_OVERVIEW;
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Failed to fetch overview");
+      const data = await response.json();
+      setOverview({
+        totalRevenue: Number(data.totalRevenue || 0),
+        totalDiscount: Number(data.totalDiscount || 0),
+        averageSale: Number(data.averageSale || 0),
+        saleCount: Number(data.saleCount || 0),
+      });
+    } catch (error) {
+      console.error("Error fetching sales overview:", error);
+      setOverview({
+        totalRevenue: 0,
+        totalDiscount: 0,
+        averageSale: 0,
+        saleCount: 0,
+      });
+    } finally {
+      setOverviewLoading(false);
+    }
+  };
 
   const fetchSales = async () => {
     const token = localStorage.getItem("token");
@@ -52,7 +140,7 @@ export default function AllSales() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_ROUTES.SHOP_SALES}?page=${currentPage}&limit=${itemsPerPage}`, {
+      const response = await fetch(`${API_ROUTES.SHOP_SALES}?${getQueryParams()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -70,6 +158,20 @@ export default function AllSales() {
       console.error("Error fetching sales:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchShops = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(API_ROUTES.SHOP_SALES_SHOPS, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed to fetch shops");
+      const data = await res.json();
+      setShops(Array.isArray(data) ? data : []);
+    } catch (_) {
+      setShops([]);
     }
   };
 
@@ -101,11 +203,30 @@ export default function AllSales() {
   };
 
   const handleSort = (key) => {
-    let direction = 'ascending';
-    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending';
+    let direction = "ascending";
+    if (sortConfig.key === key && sortConfig.direction === "ascending") {
+      direction = "descending";
     }
     setSortConfig({ key, direction });
+    setCurrentPage(1);
+  };
+
+  const mapSortKeyToServer = (key) => {
+    switch (key) {
+      case "reference":
+        return "reference";
+      case "total":
+        return "totalAmount";
+      case "discount":
+        return "discount";
+      case "grand total":
+        return "grandTotal";
+      case "paid":
+        return "paidAmount";
+      case "date":
+      default:
+        return "createdAt";
+    }
   };
 
   const formatSalesData = (sales) => {
@@ -137,36 +258,7 @@ export default function AllSales() {
     });
   };
 
-  // Apply sorting to the current page's data
-  const sortedData = sortConfig.key ? 
-    [...formatSalesData(sales)].sort((a, b) => {
-      if (sortConfig.key === 'date') {
-        const dateA = new Date(a.rawDate);
-        const dateB = new Date(b.rawDate);
-        return sortConfig.direction === 'ascending' ? dateA - dateB : dateB - dateA;
-      }
-
-      if (sortConfig.key === 'total' || sortConfig.key === 'discount' || sortConfig.key === 'grand total') {
-        const valueA = parseFloat(a[sortConfig.key].replace('$', '')) || 0;
-        const valueB = parseFloat(b[sortConfig.key].replace('$', '')) || 0;
-        return sortConfig.direction === 'ascending' ? valueA - valueB : valueB - valueA;
-      }
-
-      const aValue = a[sortConfig.key];
-      const bValue = b[sortConfig.key];
-      
-      if (aValue < bValue) {
-        return sortConfig.direction === 'ascending' ? -1 : 1;
-      }
-      if (aValue > bValue) {
-        return sortConfig.direction === 'ascending' ? 1 : -1;
-      }
-      return 0;
-    }) : 
-    formatSalesData(sales);
-
-  // Use sortedData for display
-  const currentItems = sortedData;
+  const currentItems = formatSalesData(sales);
 
   // Pagination controls
   const nextPage = () => {
@@ -191,10 +283,9 @@ export default function AllSales() {
     Object.keys(formatSalesData(sales)[0]).filter(key => key !== 'id' && key !== 'rawDate' && key !== 'customerObject') : 
     ['reference', 'shop', 'customer', 'total', 'discount', 'grand total', 'paid', 'date', 'actions'];
 
-  // Calculate summary statistics from current page sales
-  const totalRevenue = sales.reduce((sum, sale) => sum + (sale.grandTotal || 0), 0);
-  const totalDiscount = sales.reduce((sum, sale) => sum + (sale.discount || 0), 0);
-  const averageSale = sales.length > 0 ? totalRevenue / sales.length : 0;
+  const totalRevenue = overview.totalRevenue;
+  const totalDiscount = overview.totalDiscount;
+  const averageSale = overview.averageSale;
 
   const getColumnIcon = (key) => {
     switch(key) {
@@ -204,7 +295,7 @@ export default function AllSales() {
       case 'total': return <DollarSign size={14} className="mr-2" />;
       case 'discount': return <Tag size={14} className="mr-2" />;
       case 'grand total': return <TrendingUp size={14} className="mr-2" />;
-      case 'payment': return <CreditCard size={14} className="mr-2" />;
+      case 'paid': return <CreditCard size={14} className="mr-2" />;
       case 'date': return <Calendar size={14} className="mr-2" />;
       default: return <Tag size={14} className="mr-2" />;
     }
@@ -217,12 +308,30 @@ export default function AllSales() {
   };
 
   const handleView = async (sale) => {
-    setSelectedSale(sale);
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    setViewLoading(true);
     setActiveViewTab("items");
-    await fetchPaymentHistory(sale.id);
-    setViewModalOpen(true);
-    setActiveDropdown(null);
+    try {
+      const [detailsRes] = await Promise.all([
+        fetch(API_ROUTES.SHOP_SALES_DETAILS_BY_ID(sale.id), {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetchPaymentHistory(sale.id),
+      ]);
+      if (!detailsRes.ok) throw new Error("Failed to load sale details");
+      const detailData = await detailsRes.json();
+      setSelectedSale(detailData);
+      setViewModalOpen(true);
+    } catch (err) {
+      alert(err.message || "Failed to load sale details");
+    } finally {
+      setViewLoading(false);
+      setActiveDropdown(null);
+    }
   };
+
+  const sortableKeys = new Set(["reference", "total", "discount", "grand total", "paid", "date"]);
 
   const handleEdit = (sale) => {
     navigate(`/sale/edit/${sale.id}`);
@@ -259,8 +368,20 @@ export default function AllSales() {
     }
   };
 
+  const handleApplyFilters = () => {
+    setCurrentPage(1);
+    setAppliedFilters({ ...filters });
+  };
+
+  const handleClearFilters = () => {
+    const empty = { dateFrom: "", dateTo: "", customer: "", shopId: "" };
+    setFilters(empty);
+    setAppliedFilters(empty);
+    setCurrentPage(1);
+  };
+
   const handleOpenEditAccess = async (sale, userId) => {
-    if (!sale?.canGrantSaleEdit || !userId) return;
+    if (!canGrantEditAccess || !userId) return;
     setGrantLoading(true);
     try {
       const token = localStorage.getItem("token");
@@ -429,17 +550,6 @@ export default function AllSales() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-gray-50 to-blue-50 p-6">
-        <div className="glass-card p-8 text-center max-w-md mx-auto mt-10">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-          <p className="mt-4 text-gray-600">Loading sales data...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-gray-50 via-white to-emerald-50 p-4 md:p-6">
       {/* Header Section */}
@@ -458,13 +568,13 @@ export default function AllSales() {
           </div>
           <div className="flex items-center gap-2 glass-tag px-4 py-2 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
             {canViewEditRequests && (
-              <Link to="/sale/edit-requests" className="px-3 py-1 rounded border bg-white hover:bg-gray-50 text-xs">
+              <Link to="/sale/edit-requests" className="px-3 py-1 rounded bg-teal-600 text-white hover:bg-teal-800 text-xs transition-all">
                 Edit Requests
               </Link>
             )}
             <Filter size={16} className="text-emerald-600" />
             <span className="text-sm font-medium text-gray-700">
-              {sales.length} {sales.length === 1 ? 'Sale' : 'Sales'}
+              {totalCount} {totalCount === 1 ? 'Sale' : 'Sales'}
             </span>
           </div>
         </div>
@@ -472,11 +582,13 @@ export default function AllSales() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="glass-card p-6 border border-white/20 backdrop-blur-xl">
+        <div className="shadow-lg rounded-md p-6 border border-white/20 backdrop-blur-xl">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600 mb-1">Total Revenue</p>
-              <h3 className="text-2xl font-bold text-gray-900">${totalRevenue.toFixed(2)}</h3>
+              <h3 className="text-2xl font-bold text-gray-900">
+                {overviewLoading ? "..." : `$${totalRevenue.toFixed(2)}`}
+              </h3>
             </div>
             <div className="glass-icon p-3 rounded-xl bg-gradient-to-r from-emerald-500/10 to-emerald-600/10">
               <TrendingUp className="text-emerald-600" size={24} />
@@ -484,11 +596,13 @@ export default function AllSales() {
           </div>
         </div>
 
-        <div className="glass-card p-6 border border-white/20 backdrop-blur-xl">
+        <div className="shadow-lg rounded-md p-6 border border-white/20 backdrop-blur-xl">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600 mb-1">Total Discounts</p>
-              <h3 className="text-2xl font-bold text-gray-900">${totalDiscount.toFixed(2)}</h3>
+              <h3 className="text-2xl font-bold text-gray-900">
+                {overviewLoading ? "..." : `$${totalDiscount.toFixed(2)}`}
+              </h3>
             </div>
             <div className="glass-icon p-3 rounded-xl bg-gradient-to-r from-amber-500/10 to-amber-600/10">
               <Tag className="text-amber-600" size={24} />
@@ -496,11 +610,13 @@ export default function AllSales() {
           </div>
         </div>
 
-        <div className="glass-card p-6 border border-white/20 backdrop-blur-xl">
+        <div className="shadow-lg rounded-md p-6 border border-white/20 backdrop-blur-xl">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600 mb-1">Average Sale</p>
-              <h3 className="text-2xl font-bold text-gray-900">${averageSale.toFixed(2)}</h3>
+              <h3 className="text-2xl font-bold text-gray-900">
+                {overviewLoading ? "..." : `$${averageSale.toFixed(2)}`}
+              </h3>
             </div>
             <div className="glass-icon p-3 rounded-xl bg-gradient-to-r from-blue-500/10 to-blue-600/10">
               <DollarSign className="text-blue-600" size={24} />
@@ -509,201 +625,92 @@ export default function AllSales() {
         </div>
       </div>
 
-      {/* Sales Table */}
-      <div className="glass-card overflow-hidden border border-white/20 backdrop-blur-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gradient-to-r from-gray-50/50 to-gray-100/50 backdrop-blur-sm">
-                {tableHeaders.map((key) => (
-                  <th
-                    key={key}
-                    className="p-4 text-left font-medium text-gray-700 cursor-pointer border-b border-white/20"
-                  >
-                    <div className="flex items-center gap-2">
-                      {getColumnIcon(key)}
-                      <span className="font-semibold">
-                        {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}
-                      </span>
-                      {key !== 'actions' && (
-                        <ArrowUpDown
-                          onClick={() => handleSort(key)}
-                          className="glass-icon-button p-1.5 rounded-md hover:bg-gray-200/50 transition-colors cursor-pointer"
-                          size={16}
-                        />
-                      )}
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {currentItems.map((item, index) => {
-                const sale = sales.find(s => s.id === item.id);
-                return (
-                  <tr
-                    key={item.id}
-                    className={`border-t border-white/10 hover:bg-white/10 transition-all duration-200 ${
-                      index % 2 === 0 ? 'bg-white/5' : ''
-                    }`}
-                    >
-                    {tableHeaders.map((key) => (
-                      <td key={key} className="p-4">
-                        {key === 'actions' ? (
-                          <div className="relative dropdown-container">
-                            <button
-                              onClick={() => setActiveDropdown(activeDropdown === item.id ? null : item.id)}
-                              className="p-2 hover:bg-gray-100 rounded-lg transition"
-                            >
-                              <MoreVertical size={18} className="text-gray-600" />
-                            </button>
-
-                            {activeDropdown === item.id && (
-                              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-10">
-                                <div className="py-1">
-                                  <button
-                                    onClick={() => handleView(sale)}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition"
-                                  >
-                                    <Eye size={16} />
-                                    View Details
-                                  </button>
-
-                                {sales.find(s => s.id === item.id)?.canEdit && (
-                                  <button
-                                    onClick={() => handleEdit(sales.find(s => s.id === item.id))}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-600 transition"
-                                  >
-                                    <Edit size={16} />
-                                    Edit Sale
-                                  </button>
-                                )}
-
-                                {calculateDueAmount(sales.find(s => s.id === item.id)) > 0 && !sales.find(s => s.id === item.id)?.isTransactionClosed && (
-                                  <button
-                                    onClick={() => handleAddPayment(sales.find(s => s.id === item.id))}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-600 transition"
-                                  >
-                                    <CreditCard size={16} />
-                                    Add Payment
-                                  </button>
-                                )}
-
-                                {sales.find(s => s.id === item.id)?.canGrantSaleEdit && (
-                                  <button
-                                    onClick={() => openEditAccessModal(sales.find(s => s.id === item.id))}
-                                    disabled={lockActionLoading}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition disabled:opacity-50"
-                                  >
-                                    <User size={16} />
-                                    Open Edit For User
-                                  </button>
-                                )}
-
-                                {!sales.find(s => s.id === item.id)?.canEdit && (
-                                  <button
-                                    onClick={() => handleRequestEditAccess(sales.find(s => s.id === item.id))}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-violet-50 hover:text-violet-700 transition"
-                                  >
-                                    <Edit size={16} />
-                                    Request Edit Access
-                                  </button>
-                                )}
-
-                                {sales.find(s => s.id === item.id)?.isSaleEditOpen && (
-                                  <button
-                                    onClick={() => handleCloseEditAccess(sales.find(s => s.id === item.id))}
-                                    disabled={lockActionLoading}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-slate-50 hover:text-slate-700 transition disabled:opacity-50"
-                                  >
-                                    <XCircle size={16} />
-                                    Close Edit Access
-                                  </button>
-                                )}
-
-                                {sales.find(s => s.id === item.id)?.canCloseTransaction && !sales.find(s => s.id === item.id)?.isTransactionClosed && (
-                                  <button
-                                    onClick={() => handleSetTransactionStatus(sales.find(s => s.id === item.id), "closed")}
-                                    disabled={lockActionLoading}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition disabled:opacity-50"
-                                  >
-                                    <XCircle size={16} />
-                                    Close Transaction
-                                  </button>
-                                )}
-
-                                {sales.find(s => s.id === item.id)?.canCloseTransaction && sales.find(s => s.id === item.id)?.isTransactionClosed && (
-                                  <button
-                                    onClick={() => handleSetTransactionStatus(sales.find(s => s.id === item.id), "open")}
-                                    disabled={lockActionLoading}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition disabled:opacity-50"
-                                  >
-                                    <Edit size={16} />
-                                    Reopen Transaction
-                                  </button>
-                                )}
-
-                                  <div className="border-t my-1"></div>
-
-                                {sales.find(s => s.id === item.id)?.canDelete && (
-                                  <button
-                                    onClick={() => handleDelete(sales.find(s => s.id === item.id))}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
-                                  >
-                                    <Trash2 size={16} />
-                                    Delete Sale
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : key === 'customer' ? (
-                        <div className="flex items-center gap-2">
-                          <div>
-                            <p className="font-medium text-gray-800">{item.customer?.name}</p>
-                            <p className="text-sm text-gray-500">{item.customer?.mobile}</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className={`flex items-center ${
-                          key === 'total' || key === 'grand total' ? 'font-semibold text-gray-900' :
-                          key === 'discount' ? 'text-amber-600' :
-                          key === 'payment' ? 'font-medium text-blue-600' :
-                          'text-gray-700'
-                        }`}>
-                          {key === 'payment' && (
-                            <CreditCard size={12} className="mr-2 text-gray-400" />
-                          )}
-                          {key === 'date' && (
-                            <Calendar size={12} className="mr-2 text-gray-400" />
-                          )}
-                          {item[key]}
-                        </div>
-                      )}
-                    </td>
-                    ))}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-
-          {!sales?.length && (
-            <div className="text-center py-12">
-              <div className="glass-icon p-4 rounded-full inline-flex mb-4 bg-gradient-to-r from-gray-100/50 to-gray-200/50">
-                <ClipboardList className="text-gray-400" size={32} />
-              </div>
-              <p className="text-gray-500 text-lg font-medium">No sales data found</p>
-              <p className="text-gray-400 text-sm mt-1">Start making sales to see them here</p>
-            </div>
-          )}
+      <div className="glass-card p-5 mb-6 border border-white/20 backdrop-blur-xl">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">From</label>
+            <input
+              type="datetime-local"
+              value={filters.dateFrom}
+              onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">To</label>
+            <input
+              type="datetime-local"
+              value={filters.dateTo}
+              onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Customer</label>
+            <input
+              type="text"
+              value={filters.customer}
+              onChange={(e) => setFilters((prev) => ({ ...prev, customer: e.target.value }))}
+              placeholder="Name or mobile"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Shop</label>
+            <select
+              value={filters.shopId}
+              onChange={(e) => setFilters((prev) => ({ ...prev, shopId: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+            >
+              <option value="">All Shops</option>
+              {shops.map((shop) => (
+                <option key={shop.id} value={shop.id}>
+                  {shop.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Sort</label>
+            <select
+              value={`${sortConfig.key}|${sortConfig.direction}`}
+              onChange={(e) => {
+                const [key, direction] = e.target.value.split("|");
+                setSortConfig({ key, direction });
+                setCurrentPage(1);
+              }}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+            >
+              <option value="date|descending">Newest First</option>
+              <option value="date|ascending">Oldest First</option>
+              <option value="grand total|descending">Grand Total High-Low</option>
+              <option value="grand total|ascending">Grand Total Low-High</option>
+              <option value="discount|descending">Discount High-Low</option>
+              <option value="discount|ascending">Discount Low-High</option>
+              <option value="reference|ascending">Reference A-Z</option>
+              <option value="reference|descending">Reference Z-A</option>
+            </select>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-2">
+          <button
+            onClick={handleApplyFilters}
+            className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm hover:bg-emerald-700"
+          >
+            Apply
+          </button>
+          <button
+            onClick={handleClearFilters}
+            className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm hover:bg-gray-50"
+          >
+            Clear
+          </button>
         </div>
       </div>
 
       {/* Pagination Controls */}
       {totalCount > 0 && (
-        <div className="glass-card p-4 mt-4 border border-white/20 backdrop-blur-xl">
+        <div className=" p-4 mt-4 border border-white/20 backdrop-blur-xl">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               {/* Items per page selector */}
@@ -776,7 +783,7 @@ export default function AllSales() {
                     <button
                       key={pageNum}
                       onClick={() => goToPage(pageNum)}
-                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                      className={`h-8 min-w-8 p-2 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
                         currentPage === pageNum
                           ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white"
                           : "hover:bg-white/50 text-gray-700"
@@ -828,29 +835,332 @@ export default function AllSales() {
         </div>
       )}
 
-      {/* Footer Stats */}
-      {sales.length > 0 && (
-        <div className="glass-card p-4 mt-4 border border-white/20 backdrop-blur-xl">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="glass-tag px-3 py-1.5 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
-                <span className="text-sm font-medium text-gray-700">
-                  Showing <span className="text-emerald-600 font-bold">{currentItems.length}</span> of{" "}
-                  <span className="text-emerald-600 font-bold">{sortedData.length}</span> sales
-                </span>
+      {/* Sales Table */}
+      <div className=" overflow-hidden border border-white/20 backdrop-blur-xl">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gradient-to-r from-gray-50/50 to-gray-100/50 backdrop-blur-sm">
+                {tableHeaders.map((key) => (
+                  <th
+                    key={key}
+                    className={`p-4 text-left font-medium text-gray-700 border-b border-white/20 ${
+                      sortableKeys.has(key) ? "cursor-pointer" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {getColumnIcon(key)}
+                      <span className="font-semibold">
+                        {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}
+                      </span>
+                      {sortableKeys.has(key) && (
+                        <ArrowUpDown
+                          onClick={() => handleSort(key)}
+                          className="glass-icon-button p-1.5 rounded-md hover:bg-gray-200/50 transition-colors cursor-pointer"
+                          size={16}
+                        />
+                      )}
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={tableHeaders.length} className="p-8">
+                    <div className="glass-card p-8 text-center max-w-md mx-auto">
+                      <div className="inline-block animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
+                      <p className="mt-4 text-gray-600">Loading sales data...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : currentItems.map((item, index) => {
+                const sale = sales[index];
+                return (
+                  <tr
+                    key={item.id}
+                    className={`border-t border-white/10 hover:bg-white/10 transition-all duration-200 ${
+                      index % 2 === 0 ? 'bg-white/5' : ''
+                    }`}
+                    >
+                    {tableHeaders.map((key) => (
+                      <td key={key} className="p-4">
+                        {key === 'actions' ? (
+                          <div className="relative dropdown-container">
+                            <button
+                              onClick={() => setActiveDropdown(activeDropdown === item.id ? null : item.id)}
+                              className="p-2 hover:bg-gray-100 rounded-lg transition"
+                            >
+                              <MoreVertical size={18} className="text-gray-600" />
+                            </button>
+
+                            {activeDropdown === item.id && (
+                              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-10">
+                                <div className="py-1">
+                                  <button
+                                    onClick={() => handleView(sale)}
+                                    disabled={viewLoading}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition"
+                                  >
+                                    <Eye size={16} />
+                                    {viewLoading ? "Loading..." : "View Details"}
+                                  </button>
+
+                                {canEditSales && (
+                                  <button
+                                    onClick={() => handleEdit(sale)}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-600 transition"
+                                  >
+                                    <Edit size={16} />
+                                    Edit Sale
+                                  </button>
+                                )}
+
+                                {calculateDueAmount(sale) > 0 && sale?.transactionStatus !== "closed" && (
+                                  <button
+                                    onClick={() => handleAddPayment(sale)}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-600 transition"
+                                  >
+                                    <CreditCard size={16} />
+                                    Add Payment
+                                  </button>
+                                )}
+
+                                {canGrantEditAccess && (
+                                  <button
+                                    onClick={() => openEditAccessModal(sale)}
+                                    disabled={lockActionLoading}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition disabled:opacity-50"
+                                  >
+                                    <User size={16} />
+                                    Open Edit For User
+                                  </button>
+                                )}
+
+                                {!canEditSales && (
+                                  <button
+                                    onClick={() => handleRequestEditAccess(sale)}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-violet-50 hover:text-violet-700 transition"
+                                  >
+                                    <Edit size={16} />
+                                    Request Edit Access
+                                  </button>
+                                )}
+
+                                {canGrantEditAccess && sale?.editStatus === "open" && (
+                                  <button
+                                    onClick={() => handleCloseEditAccess(sale)}
+                                    disabled={lockActionLoading}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-slate-50 hover:text-slate-700 transition disabled:opacity-50"
+                                  >
+                                    <XCircle size={16} />
+                                    Close Edit Access
+                                  </button>
+                                )}
+
+                                {canManageTransaction && sale?.transactionStatus !== "closed" && (
+                                  <button
+                                    onClick={() => handleSetTransactionStatus(sale, "closed")}
+                                    disabled={lockActionLoading}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-red-50 hover:text-red-700 transition disabled:opacity-50"
+                                  >
+                                    <XCircle size={16} />
+                                    Close Transaction
+                                  </button>
+                                )}
+
+                                {canManageTransaction && sale?.transactionStatus === "closed" && (
+                                  <button
+                                    onClick={() => handleSetTransactionStatus(sale, "open")}
+                                    disabled={lockActionLoading}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 transition disabled:opacity-50"
+                                  >
+                                    <Edit size={16} />
+                                    Reopen Transaction
+                                  </button>
+                                )}
+
+                                  <div className="border-t my-1"></div>
+
+                                {canDeleteSales && (
+                                  <button
+                                    onClick={() => handleDelete(sale)}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
+                                  >
+                                    <Trash2 size={16} />
+                                    Delete Sale
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : key === 'customer' ? (
+                        <div className="flex items-center gap-2">
+                          <div>
+                            <p className="font-medium text-gray-800">{sale?.customer?.name || item.customer || "-"}</p>
+                            <p className="text-sm text-gray-500">{sale?.customer?.mobile || "-"}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className={`flex items-center ${
+                          key === 'total' || key === 'grand total' ? 'font-semibold text-gray-900' :
+                          key === 'discount' ? 'text-amber-600' :
+                          key === 'paid' ? 'font-medium text-blue-600' :
+                          'text-gray-700'
+                        }`}>
+                          {key === 'paid' && (
+                            <CreditCard size={12} className="mr-2 text-gray-400" />
+                          )}
+                          {key === 'date' && (
+                            <Calendar size={12} className="mr-2 text-gray-400" />
+                          )}
+                          {item[key]}
+                        </div>
+                      )}
+                    </td>
+                    ))}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+
+          {!loading && !sales?.length && (
+            <div className="text-center py-12">
+              <div className="glass-icon p-4 rounded-full inline-flex mb-4 bg-gradient-to-r from-gray-100/50 to-gray-200/50">
+                <ClipboardList className="text-gray-400" size={32} />
               </div>
-              <div className="glass-tag px-3 py-1.5 rounded-lg bg-white/50 backdrop-blur-sm border border-white/30">
-                <span className="text-sm font-medium text-gray-700">
-                  Sorted by: <span className="text-blue-600 font-medium">
-                    {sortConfig.key ? sortConfig.key.replace(/([A-Z])/g, ' $1') : 'Date'} 
-                    <span className="ml-1">{sortConfig.direction === 'ascending' ? '↑' : '↓'}</span>
-                  </span>
-                </span>
+              <p className="text-gray-500 text-lg font-medium">No sales data found</p>
+              <p className="text-gray-400 text-sm mt-1">Start making sales to see them here</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Pagination Controls */}
+      {totalCount > 0 && (
+        <div className=" p-4 mt-4 border border-white/20 backdrop-blur-xl">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              {/* Items per page selector */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">Show:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                >
+                  <option value="5">5</option>
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+                <span className="text-sm text-gray-600">per page</span>
+              </div>
+
+              {/* Page info */}
+              <div className="text-sm text-gray-700">
+                Showing <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
+                <span className="font-semibold">
+                  {Math.min(currentPage * itemsPerPage, totalCount)}
+                </span>{" "}
+                of <span className="font-semibold">{totalCount}</span> sales
               </div>
             </div>
-            <div className="text-sm text-gray-500">
-              Page <span className="font-semibold">{currentPage}</span> of{" "}
-              <span className="font-semibold">{totalPages}</span>
+
+            {/* Pagination buttons */}
+            <div className="flex items-center gap-2">
+              {/* First page */}
+              <button
+                onClick={() => goToPage(1)}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                title="First page"
+              >
+                <ChevronsLeft size={16} className="text-gray-600" />
+              </button>
+
+              {/* Previous page */}
+              <button
+                onClick={prevPage}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                title="Previous page"
+              >
+                <ChevronLeft size={16} className="text-gray-600" />
+              </button>
+
+              {/* Page numbers */}
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => goToPage(pageNum)}
+                      className={`h-8 min-w-8 p-2 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                        currentPage === pageNum
+                          ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white"
+                          : "hover:bg-white/50 text-gray-700"
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+
+                {totalPages > 5 && currentPage < totalPages - 2 && (
+                  <>
+                    <span className="mx-1 text-gray-400">...</span>
+                    <button
+                      onClick={() => goToPage(totalPages)}
+                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                        currentPage === totalPages
+                          ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white"
+                          : "hover:bg-white/50 text-gray-700"
+                      }`}
+                    >
+                      {totalPages}
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Next page */}
+              <button
+                onClick={nextPage}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                title="Next page"
+              >
+                <ChevronRight size={16} className="text-gray-600" />
+              </button>
+
+              {/* Last page */}
+              <button
+                onClick={() => goToPage(totalPages)}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                title="Last page"
+              >
+                <ChevronsRight size={16} className="text-gray-600" />
+              </button>
             </div>
           </div>
         </div>

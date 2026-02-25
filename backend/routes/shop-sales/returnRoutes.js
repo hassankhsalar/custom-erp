@@ -1,3 +1,5 @@
+const { Prisma } = require("@prisma/client");
+
 function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScope }) {
   const { createNotification } = require("../../utils/notificationHelper");
   // Get sale return by ID - FIXED VERSION
@@ -61,122 +63,90 @@ function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScop
     }
   });
 
-  // Get return-eligible sales for a shop with pagination (UPDATED)
+  // Get return-eligible sales with pagination + server-side filtering/sorting
   router.get("/return-eligible", async (req, res) => {
     try {
-      const { shopId, page = 1, limit = 10 } = req.query;
+      const {
+        page = 1,
+        limit = 10,
+        shopId,
+        customer = "",
+        dateFrom,
+        dateTo,
+        sortBy = "createdAt",
+        sortDir = "desc",
+      } = req.query;
 
-      if (!shopId) {
-        return res.status(400).json({ error: "Shop ID is required" });
-      }
-
-      const shopIdInt = parseInt(shopId);
-      if (isNaN(shopIdInt)) {
-        return res.status(400).json({ error: "Invalid Shop ID" });
-      }
-
-      try {
-        const scope = await buildScope(prisma, req.user?.userId || 0);
-        ensureIdScope(scope, "shop", shopIdInt);
-      } catch (scopeError) {
-        return res.status(403).json({ error: "You don't have access to this shop" });
-      }
-
-      const pageInt = parseInt(page);
-      const limitInt = parseInt(limit);
+      const pageInt = Math.max(1, parseInt(page, 10) || 1);
+      const limitInt = Math.min(200, Math.max(1, parseInt(limit, 10) || 10));
       const skip = (pageInt - 1) * limitInt;
+      const scope = await buildScope(prisma, req.user?.userId || 0);
+      if (!scope.isAdmin && scope.shops.size === 0) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
 
-      const allSales = await prisma.sale.findMany({
-        where: {
-          shopId: shopIdInt,
-        },
-        include: {
-          saleItems: true,
-          saleReturns: {
-            include: {
-              returnItems: true
-            }
-          }
-        }
-      });
+      const shopIdInt = shopId ? parseInt(shopId, 10) : null;
+      if (shopId && Number.isNaN(shopIdInt)) {
+        return res.status(400).json({ error: "Invalid shopId" });
+      }
+      if (shopIdInt) {
+        ensureIdScope(scope, "shop", shopIdInt);
+      }
 
-      const eligibleSales = allSales.filter((sale) => {
-        const returnedQuantities = {};
+      const where = {
+        isReturned: false,
+        ...(scope.isAdmin ? { shopId: { not: null } } : { shopId: { in: Array.from(scope.shops) } }),
+      };
 
-        if (sale.saleReturns && sale.saleReturns.length > 0) {
-          for (const saleReturn of sale.saleReturns) {
-            for (const returnItem of saleReturn.returnItems) {
-              const key = returnItem.productId
-                ? `product-${returnItem.productId}`
-                : `material-${returnItem.materialId}`;
-              if (!returnedQuantities[key]) returnedQuantities[key] = 0;
-              returnedQuantities[key] += returnItem.quantity;
-            }
-          }
-        }
+      if (shopIdInt) {
+        where.shopId = shopIdInt;
+      }
 
-        for (const saleItem of sale.saleItems) {
-          const key = saleItem.productId
-            ? `product-${saleItem.productId}`
-            : `material-${saleItem.materialId}`;
-          const returnedQty = returnedQuantities[key] || 0;
-          if (returnedQty < saleItem.quantity) return true;
-        }
-        return false;
-      });
+      const normalizedCustomer = String(customer || "").trim();
+      if (normalizedCustomer) {
+        where.customer = {
+          OR: [
+            { name: { contains: normalizedCustomer, mode: "insensitive" } },
+            { mobile: { contains: normalizedCustomer, mode: "insensitive" } },
+          ],
+        };
+      }
 
-      const totalCount = eligibleSales.length;
-      const paginatedSales = eligibleSales.slice(skip, skip + limitInt);
+      const dFrom = dateFrom ? new Date(dateFrom) : null;
+      const dTo = dateTo ? new Date(dateTo) : null;
+      if ((dFrom && !Number.isNaN(dFrom.getTime())) || (dTo && !Number.isNaN(dTo.getTime()))) {
+        where.createdAt = {};
+        if (dFrom && !Number.isNaN(dFrom.getTime())) where.createdAt.gte = dFrom;
+        if (dTo && !Number.isNaN(dTo.getTime())) where.createdAt.lte = dTo;
+      }
 
-      const salesWithDetails = await prisma.sale.findMany({
-        where: {
-          id: { in: paginatedSales.map((s) => s.id) }
-        },
-        include: {
-          shop: {
-            select: {
-              id: true,
-              name: true,
-              shop_keeper: true,
-            },
+      const sortableFields = new Set(["createdAt", "grandTotal", "reference", "paidAmount", "totalAmount"]);
+      const finalSortBy = sortableFields.has(String(sortBy || "")) ? String(sortBy) : "createdAt";
+      const finalSortDir = String(sortDir || "").toLowerCase() === "asc" ? "asc" : "desc";
+
+      const [totalCount, sales] = await Promise.all([
+        prisma.sale.count({ where }),
+        prisma.sale.findMany({
+          where,
+          select: {
+            id: true,
+            reference: true,
+            createdAt: true,
+            grandTotal: true,
+            totalAmount: true,
+            paidAmount: true,
+            paymentType: true,
+            shop: { select: { id: true, name: true } },
+            customer: { select: { id: true, name: true, mobile: true } },
           },
-          saleItems: {
-            include: {
-              product: {
-                select: {
-                  id: true,
-                  name: true,
-                  barcode: true,
-                  sale_price: true,
-                },
-              },
-              material: {
-                select: {
-                  id: true,
-                  name: true,
-                  barcode: true,
-                  unit: true,
-                  sale_price: true,
-                },
-              },
-            },
-          },
-          customer: {
-            select: {
-              id: true,
-              name: true,
-              mobile: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-      });
+          orderBy: { [finalSortBy]: finalSortDir },
+          skip,
+          take: limitInt,
+        }),
+      ]);
 
       res.json({
-        sales: salesWithDetails,
+        sales,
         pagination: {
           currentPage: pageInt,
           totalPages: Math.ceil(totalCount / limitInt),
@@ -228,7 +198,7 @@ function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScop
                   select: {
                     id: true,
                     name: true,
-                    warranty: true,
+                    defaultWarrantyDays: true,
                   }
                 },
                 material: true
@@ -297,7 +267,7 @@ function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScop
           }
 
           if (returnItem.type === "product") {
-            const productWarrantyDays = originalItem.product?.warranty || 0;
+            const productWarrantyDays = originalItem.product?.defaultWarrantyDays || 0;
             if (productWarrantyDays > 0 && daysSinceSale > productWarrantyDays) {
               throw new Error(
                 `Cannot return product "${originalItem.product?.name}" (ID: ${returnItem.itemId}) as it is outside warranty period. ` +

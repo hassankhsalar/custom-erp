@@ -29,17 +29,27 @@ import { API_ROUTES } from "../../config";
 
 export default function SaleReturn() {
   const [shops, setShops] = useState([]);
-  const [selectedShop, setSelectedShop] = useState("");
   const [sales, setSales] = useState([]);
-  const [filteredSales, setFilteredSales] = useState([]);
   const [selectedSale, setSelectedSale] = useState(null);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [filters, setFilters] = useState({
+    dateFrom: "",
+    dateTo: "",
+    customer: "",
+    shopId: "",
+  });
+  const [appliedFilters, setAppliedFilters] = useState({
+    dateFrom: "",
+    dateTo: "",
+    customer: "",
+    shopId: "",
+  });
   const [sortConfig, setSortConfig] = useState({
-    key: null,
-    direction: "ascending",
+    key: "date",
+    direction: "descending",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -50,6 +60,12 @@ export default function SaleReturn() {
   const [totalSales, setTotalSales] = useState(0);
 
   const navigate = useNavigate();
+  const selectedShop = filters.shopId;
+  const appliedSearch = appliedFilters.customer;
+  const searchQuery = filters.customer;
+  const setSelectedShop = (value) => {
+    setFilters((prev) => ({ ...prev, shopId: value }));
+  };
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -66,79 +82,56 @@ export default function SaleReturn() {
       .catch((err) => console.error("Error fetching shops:", err));
   }, [navigate]);
 
-  useEffect(() => {
-    if (!selectedShop) {
-      setSales([]);
-      setFilteredSales([]);
-      setTotalPages(0);
-      setTotalSales(0);
-      return;
+  const mapSortKeyToServer = (key) => {
+    switch (key) {
+      case "reference":
+        return "reference";
+      case "total":
+        return "grandTotal";
+      case "date":
+      default:
+        return "createdAt";
     }
+  };
 
+  const buildQuery = () => {
+    const params = new URLSearchParams();
+    params.set("page", String(currentPage));
+    params.set("limit", String(itemsPerPage));
+    params.set("sortBy", mapSortKeyToServer(sortConfig.key));
+    params.set("sortDir", sortConfig.direction === "ascending" ? "asc" : "desc");
+    if (appliedFilters.shopId) params.set("shopId", appliedFilters.shopId);
+    if (appliedFilters.customer.trim()) params.set("customer", appliedFilters.customer.trim());
+    if (appliedFilters.dateFrom) params.set("dateFrom", appliedFilters.dateFrom);
+    if (appliedFilters.dateTo) params.set("dateTo", appliedFilters.dateTo);
+    return params.toString();
+  };
+
+  const fetchSales = async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
     setLoading(true);
-    // Updated to include pagination params
-    fetch(
-      `${API_ROUTES.SHOP_SALES}/return-eligible?shopId=${selectedShop}&page=${currentPage}&limit=${itemsPerPage}`,
-      {
+    try {
+      const res = await fetch(`${API_ROUTES.SHOP_SALES}/return-eligible?${buildQuery()}`, {
         headers: { Authorization: `Bearer ${token}` },
-      },
-    )
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.json();
-      })
-      .then((data) => {
-        // Handle both array response (old) and object response with pagination (new)
-        if (Array.isArray(data)) {
-          setSales(data);
-          setFilteredSales(data);
-          setTotalPages(1);
-          setTotalSales(data.length);
-        } else {
-          setSales(data.sales);
-          setFilteredSales(data.sales);
-          setTotalPages(data.pagination.totalPages);
-          setTotalSales(data.pagination.totalCount);
-        }
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Error fetching sales:", err);
-        setError("Failed to load sales: " + err.message);
-        setLoading(false);
       });
-  }, [selectedShop, currentPage, itemsPerPage]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedShop]);
-
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredSales(sales);
-      return;
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const data = await res.json();
+      setSales(Array.isArray(data) ? data : (data.sales || []));
+      setTotalPages(data?.pagination?.totalPages || 0);
+      setTotalSales(data?.pagination?.totalCount || 0);
+    } catch (err) {
+      console.error("Error fetching sales:", err);
+      setError("Failed to load sales: " + err.message);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const query = searchQuery.toLowerCase().trim();
-    const filtered = sales.filter(
-      (sale) =>
-        sale.reference?.toLowerCase().includes(query) ||
-        sale.shop?.name?.toLowerCase().includes(query) ||
-        sale.customer?.name?.toLowerCase().includes(query) ||
-        sale.paymentType?.toLowerCase().includes(query) ||
-        sale.grandTotal?.toString().includes(query) ||
-        new Date(sale.createdAt)
-          .toLocaleDateString()
-          .toLowerCase()
-          .includes(query),
-    );
-    setFilteredSales(filtered);
-  }, [searchQuery, sales]);
+  useEffect(() => {
+    fetchSales();
+  }, [currentPage, itemsPerPage, sortConfig, appliedFilters]);
 
   const handleSort = (key) => {
     let direction = "ascending";
@@ -157,7 +150,6 @@ export default function SaleReturn() {
       customerObj: sale.customer,
       total: `$${sale.grandTotal?.toFixed(2)}`,
       date: new Date(sale.createdAt).toLocaleDateString(),
-      items: sale.saleItems?.length || 0,
       status: "Available for Return",
       rawDate: sale.createdAt,
       originalSale: sale,
@@ -165,7 +157,7 @@ export default function SaleReturn() {
   };
 
   const sortedData = sortConfig.key
-    ? [...formatSalesData(filteredSales)].sort((a, b) => {
+    ? [...formatSalesData(sales)].sort((a, b) => {
         if (sortConfig.key === "date") {
           const dateA = new Date(a.rawDate);
           const dateB = new Date(b.rawDate);
@@ -184,13 +176,6 @@ export default function SaleReturn() {
           return valueB - valueA;
         }
 
-        if (sortConfig.key === "items") {
-          if (sortConfig.direction === "ascending") {
-            return a.items - b.items;
-          }
-          return b.items - a.items;
-        }
-
         const aValue = a[sortConfig.key];
         const bValue = b[sortConfig.key];
 
@@ -202,23 +187,44 @@ export default function SaleReturn() {
         }
         return 0;
       })
-    : formatSalesData(filteredSales);
+    : formatSalesData(sales);
 
   const tableHeaders = [
     "reference",
     "customer",
     "total",
     "date",
-    "items",
     "status",
   ];
 
+  const handleApplyFilters = () => {
+    setCurrentPage(1);
+    setAppliedFilters({ ...filters });
+    setSelectedSale(null);
+    setItems([]);
+  };
+
+  const clearFilters = () => {
+    const empty = { dateFrom: "", dateTo: "", customer: "", shopId: "" };
+    setFilters(empty);
+    setAppliedFilters(empty);
+    setCurrentPage(1);
+    setSelectedSale(null);
+    setItems([]);
+  };
+
   const handleSearchChange = (e) => {
-    setSearchQuery(e.target.value);
+    setFilters((prev) => ({ ...prev, customer: e.target.value }));
+  };
+
+  const handleSearch = () => {
+    handleApplyFilters();
   };
 
   const clearSearch = () => {
-    setSearchQuery("");
+    setFilters((prev) => ({ ...prev, customer: "" }));
+    setAppliedFilters((prev) => ({ ...prev, customer: "" }));
+    setCurrentPage(1);
   };
 
   // Helper function to calculate warranty status
@@ -243,15 +249,25 @@ const getWarrantyStatus = (item, saleDate) => {
 };
 
 const handleSelectSale = async (sale) => {
-  setSelectedSale(sale.originalSale);
   setError("");
+  setDetailLoading(true);
   
   try {
-    // Fetch all returns for this sale to calculate already returned quantities
     const token = localStorage.getItem("token");
-    const returnsRes = await fetch(`${API_ROUTES.SHOP_SALES}/returns/sale/${sale.originalSale.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const [detailsRes, returnsRes] = await Promise.all([
+      fetch(API_ROUTES.SHOP_SALES_DETAILS_BY_ID(sale.originalSale.id), {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      fetch(`${API_ROUTES.SHOP_SALES}/returns/sale/${sale.originalSale.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    ]);
+
+    if (!detailsRes.ok) {
+      throw new Error("Failed to load sale details");
+    }
+    const saleDetails = await detailsRes.json();
+    setSelectedSale(saleDetails);
     
     if (returnsRes.ok) {
       const saleReturns = await returnsRes.json();
@@ -275,7 +291,7 @@ const handleSelectSale = async (sale) => {
       }
       
       // Create return items with maxReturnable calculated based on already returned quantities
-      const returnItems = sale.originalSale.saleItems.map((item) => {
+      const returnItems = saleDetails.saleItems.map((item) => {
         const key = item.productId 
           ? `product-${item.productId}` 
           : `material-${item.materialId}`;
@@ -287,9 +303,9 @@ const handleSelectSale = async (sale) => {
         const warrantyStatus = getWarrantyStatus(
           { 
             type: item.productId ? "product" : "material", 
-            warrantyDays: item.product?.warranty || 0 
+            warrantyDays: item.product?.warranty ?? item.product?.defaultWarrantyDays ?? 0 
           }, 
-          sale.originalSale.createdAt
+          saleDetails.createdAt
         );
         
         return {
@@ -306,23 +322,23 @@ const handleSelectSale = async (sale) => {
           unitPrice: item.unitPrice,
           totalPrice: 0,
           maxReturnable: maxReturnable,
-          warrantyDays: item.product?.warranty || 0,
+          warrantyDays: item.product?.warranty ?? item.product?.defaultWarrantyDays ?? 0,
           warrantyStatus: warrantyStatus, // Store the warranty status
-          saleDate: sale.originalSale.createdAt
+          saleDate: saleDetails.createdAt
         };
       });
       
       setItems(returnItems);
     } else {
       // Fallback to original behavior if returns fetch fails
-      const returnItems = sale.originalSale.saleItems.map((item) => {
+      const returnItems = saleDetails.saleItems.map((item) => {
         // Use the getWarrantyStatus helper function here too
         const warrantyStatus = getWarrantyStatus(
           { 
             type: item.productId ? "product" : "material", 
-            warrantyDays: item.product?.warranty || 0 
+            warrantyDays: item.product?.warranty ?? item.product?.defaultWarrantyDays ?? 0 
           }, 
-          sale.originalSale.createdAt
+          saleDetails.createdAt
         );
         
         return {
@@ -339,9 +355,9 @@ const handleSelectSale = async (sale) => {
           unitPrice: item.unitPrice,
           totalPrice: 0,
           maxReturnable: item.quantity,
-          warrantyDays: item.product?.warranty || 0,
+          warrantyDays: item.product?.warranty ?? item.product?.defaultWarrantyDays ?? 0,
           warrantyStatus: warrantyStatus, // Store the warranty status
-          saleDate: sale.originalSale.createdAt
+          saleDate: saleDetails.createdAt
         };
       });
       
@@ -350,14 +366,21 @@ const handleSelectSale = async (sale) => {
   } catch (err) {
     console.error("Error fetching sale returns:", err);
     // Fallback to original behavior
-    const returnItems = sale.originalSale.saleItems.map((item) => {
+    const token = localStorage.getItem("token");
+    const detailsRes = await fetch(API_ROUTES.SHOP_SALES_DETAILS_BY_ID(sale.originalSale.id), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!detailsRes.ok) throw new Error("Failed to load sale details");
+    const saleDetails = await detailsRes.json();
+    setSelectedSale(saleDetails);
+    const returnItems = saleDetails.saleItems.map((item) => {
       // Use the getWarrantyStatus helper function here too
       const warrantyStatus = getWarrantyStatus(
         { 
           type: item.productId ? "product" : "material", 
-          warrantyDays: item.product?.warranty || 0 
+          warrantyDays: item.product?.warranty ?? item.product?.defaultWarrantyDays ?? 0 
         }, 
-        sale.originalSale.createdAt
+        saleDetails.createdAt
       );
       
       return {
@@ -374,13 +397,15 @@ const handleSelectSale = async (sale) => {
         unitPrice: item.unitPrice,
         totalPrice: 0,
         maxReturnable: item.quantity,
-        warrantyDays: item.product?.warranty || 0,
+        warrantyDays: item.product?.warranty ?? item.product?.defaultWarrantyDays ?? 0,
         warrantyStatus: warrantyStatus, // Store the warranty status
-        saleDate: sale.originalSale.createdAt
+        saleDate: saleDetails.createdAt
       };
     });
     
     setItems(returnItems);
+  } finally {
+    setDetailLoading(false);
   }
 };
 
@@ -438,11 +463,6 @@ const handleSelectSale = async (sale) => {
   };
 
   const handleSubmit = async () => {
-    if (!selectedShop) {
-      setError("Please select a shop first.");
-      return;
-    }
-
     if (!selectedSale) {
       setError("Please select a sale first.");
       return;
@@ -490,28 +510,11 @@ const handleSelectSale = async (sale) => {
         `✅ ${data.message || "Return processed successfully!"}\nReference: ${data.return?.reference || "N/A"}\nAmount: $${(data.return?.totalAmount || totalAmount).toFixed(2)}\nShop: ${data.return?.shop?.name || selectedSale.shop?.name}`,
       );
 
-      // Refresh the current page
-      const refreshRes = await fetch(
-        `${API_ROUTES.SHOP_SALES}/return-eligible?shopId=${selectedShop}&page=${currentPage}&limit=${itemsPerPage}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-      const refreshData = await refreshRes.json();
-
-      if (Array.isArray(refreshData)) {
-        setSales(refreshData);
-        setFilteredSales(refreshData);
-      } else {
-        setSales(refreshData.sales);
-        setFilteredSales(refreshData.sales);
-        setTotalPages(refreshData.pagination.totalPages);
-        setTotalSales(refreshData.pagination.totalCount);
-      }
+      // Refresh current list with active filters
+      await fetchSales();
 
       setSelectedSale(null);
       setItems([]);
-      setSearchQuery("");
     } catch (err) {
       console.error("Return error:", err);
       setError("❌ " + err.message);
@@ -556,8 +559,6 @@ const handleSelectSale = async (sale) => {
         return <DollarSign size={14} className="mr-2" />;
       case "date":
         return <Calendar size={14} className="mr-2" />;
-      case "items":
-        return <Package size={14} className="mr-2" />;
       case "status":
         return <CheckCircle size={14} className="mr-2" />;
       default:
@@ -593,38 +594,72 @@ const handleSelectSale = async (sale) => {
         </div>
       </div>
 
-      {/* Shop Selection Card */}
+      {/* Filters */}
       <div className="glass-card p-6 mb-6 border border-white/20 backdrop-blur-xl">
         <h3 className="text-lg font-semibold mb-4 flex items-center text-gray-800">
           <Store size={20} className="mr-2 text-blue-600" />
-          Select Shop
+          Filters
         </h3>
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+          <div>
+            <label className="text-xs text-gray-600 mb-1 block">From</label>
+            <input
+              type="datetime-local"
+              className="glass-input w-full border border-white/30 bg-white/50 backdrop-blur-sm p-3 rounded-lg focus:outline-none"
+              value={filters.dateFrom}
+              onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-600 mb-1 block">To</label>
+            <input
+              type="datetime-local"
+              className="glass-input w-full border border-white/30 bg-white/50 backdrop-blur-sm p-3 rounded-lg focus:outline-none"
+              value={filters.dateTo}
+              onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-600 mb-1 block">Customer</label>
+            <input
+              type="text"
+              placeholder="Name or mobile"
+              className="glass-input w-full border border-white/30 bg-white/50 backdrop-blur-sm p-3 rounded-lg focus:outline-none"
+              value={filters.customer}
+              onChange={(e) => setFilters((prev) => ({ ...prev, customer: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-600 mb-1 block">Shop</label>
           <select
-            className="glass-input w-full md:w-80 border border-white/30 bg-white/50 backdrop-blur-sm p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent transition-all duration-300"
-            value={selectedShop}
+            className="glass-input w-full border border-white/30 bg-white/50 backdrop-blur-sm p-3 rounded-lg focus:outline-none"
+            value={filters.shopId}
             onChange={(e) => {
-              setSelectedShop(e.target.value);
-              setSelectedSale(null);
-              setItems([]);
-              setSearchQuery("");
+              setFilters((prev) => ({ ...prev, shopId: e.target.value }));
             }}
           >
-            <option value="">Select a Shop</option>
+            <option value="">All Shops</option>
             {shops.map((shop) => (
               <option key={shop.id} value={shop.id}>
                 {shop.name}
               </option>
             ))}
           </select>
-
-          {selectedShop && (
-            <div className="glass-tag px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500/10 to-blue-600/10 border border-blue-200/30">
-              <span className="text-sm font-medium text-blue-700">
-                Ready to process returns
-              </span>
-            </div>
-          )}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleApplyFilters}
+              className="px-4 py-2.5 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white"
+            >
+              Apply
+            </button>
+            <button
+              onClick={clearFilters}
+              className="px-4 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700"
+            >
+              Clear
+            </button>
+          </div>
         </div>
       </div>
 
@@ -653,9 +688,7 @@ const handleSelectSale = async (sale) => {
         </div>
       )}
 
-      {/* Sales Section - Only show when shop is selected */}
-      {selectedShop && (
-        <div className="glass-card p-6 mb-6 border border-white/20 backdrop-blur-xl">
+      <div className="glass-card p-6 mb-6 border border-white/20 backdrop-blur-xl">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
             <div>
               <h3 className="text-lg font-semibold flex items-center text-gray-800 mb-2">
@@ -664,7 +697,7 @@ const handleSelectSale = async (sale) => {
               </h3>
               <div className="flex items-center gap-3">
                 <span className="text-sm text-gray-600">
-                  Showing {filteredSales.length} of {totalSales} non-returned
+                  Showing {sales.length} of {totalSales} non-returned
                   sale(s)
                 </span>
                 {loading && (
@@ -676,35 +709,33 @@ const handleSelectSale = async (sale) => {
               </div>
             </div>
 
-            <div className="relative w-full md:w-80">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search size={18} className="text-gray-400" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search by reference, customer, amount..."
-                value={searchQuery}
-                onChange={handleSearchChange}
-                className="glass-input w-full pl-10 pr-10 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-transparent"
-              />
-              {searchQuery && (
-                <button
-                  onClick={clearSearch}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center glass-icon-button p-1 rounded"
-                >
-                  <X size={18} className="text-gray-400 hover:text-gray-600" />
-                </button>
-              )}
+            <div className="flex w-full md:w-72 gap-2">
+              <select
+                value={`${sortConfig.key}|${sortConfig.direction}`}
+                onChange={(e) => {
+                  const [key, direction] = e.target.value.split("|");
+                  setSortConfig({ key, direction });
+                  setCurrentPage(1);
+                }}
+                className="glass-input w-full py-2.5 rounded-lg focus:outline-none"
+              >
+                <option value="date|descending">Newest First</option>
+                <option value="date|ascending">Oldest First</option>
+                <option value="total|descending">Total High-Low</option>
+                <option value="total|ascending">Total Low-High</option>
+                <option value="reference|ascending">Reference A-Z</option>
+                <option value="reference|descending">Reference Z-A</option>
+              </select>
             </div>
           </div>
 
           {/* Search Results Info */}
-          {searchQuery && (
+          {appliedSearch && (
             <div className="glass-tag inline-flex items-center px-4 py-2 rounded-lg mb-4 bg-white/50 backdrop-blur-sm border border-white/30">
               <Search size={14} className="mr-2 text-gray-500" />
               <span className="text-sm text-gray-700">
-                Found {filteredSales.length} sale(s) matching "
-                <span className="font-semibold">{searchQuery}</span>"
+                Found {totalSales} sale(s) for customer filter "
+                <span className="font-semibold">{appliedSearch}</span>"
               </span>
               <button
                 onClick={clearSearch}
@@ -778,10 +809,6 @@ const handleSelectSale = async (sale) => {
                                 Available for Return
                               </span>
                             </div>
-                          ) : key === "items" ? (
-                            <div className="glass-tag px-3 py-1 rounded-full bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200/50">
-                              {item.items} items
-                            </div>
                           ) : key === "customer" ? (
                             <span>{item.customer}</span>
                           ) : (
@@ -825,13 +852,13 @@ const handleSelectSale = async (sale) => {
               </div>
             )}
 
-            {sales.length > 0 && filteredSales.length === 0 && searchQuery && (
+            {sales.length === 0 && appliedSearch && !loading && (
               <div className="text-center py-12">
                 <div className="glass-icon p-4 rounded-full inline-flex mb-4 bg-gradient-to-r from-gray-100/50 to-gray-200/50">
                   <Search className="text-gray-400" size={32} />
                 </div>
                 <p className="text-gray-500 text-lg font-medium">
-                  No sales found matching "{searchQuery}"
+                  No sales found matching "{appliedSearch}"
                 </p>
                 <button
                   onClick={clearSearch}
@@ -918,7 +945,7 @@ const handleSelectSale = async (sale) => {
                         <button
                           key={pageNum}
                           onClick={() => goToPage(pageNum)}
-                          className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                          className={`min-w-8 h-8 p-2 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
                             currentPage === pageNum
                               ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
                               : "hover:bg-white/50 text-gray-700"
@@ -970,7 +997,6 @@ const handleSelectSale = async (sale) => {
             </div>
           )}
         </div>
-      )}
 
       {/* Selected Sale Details */}
       {selectedSale && (

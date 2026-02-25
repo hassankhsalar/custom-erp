@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { 
   ArrowUpDown, Package, Truck, Building2, Calendar, 
   Store, ShoppingBag, Factory, MoreVertical, 
@@ -22,6 +22,30 @@ export default function AllPurchase() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
+  const [loadMode, setLoadMode] = useState("filter");
+  const [overview, setOverview] = useState({ totalCount: 0, totalAmount: 0, totalPaid: 0, totalDue: 0, byShippingStatus: {} });
+  const [suppliers, setSuppliers] = useState([]);
+  const [locationOptions, setLocationOptions] = useState({ store: [], shop: [], factory: [] });
+  const [filters, setFilters] = useState({
+    search: "",
+    supplierId: "",
+    destinationType: "",
+    destinationId: "",
+    shippingStatus: "",
+    dateFrom: "",
+    dateTo: "",
+  });
+  const [appliedFilters, setAppliedFilters] = useState({
+    search: "",
+    supplierId: "",
+    destinationType: "",
+    destinationId: "",
+    shippingStatus: "",
+    dateFrom: "",
+    dateTo: "",
+  });
+  const initializedRef = useRef(false);
+  const skipNextPageFetchRef = useRef(false);
   
   // Modal states
   const [viewModalOpen, setViewModalOpen] = useState(false);
@@ -62,18 +86,78 @@ export default function AllPurchase() {
   const [returnSubmitting, setReturnSubmitting] = useState(false);
   const token = localStorage.getItem('token');
 
-  useEffect(() => {
-    fetchPurchases();
-  }, [currentPage, itemsPerPage]);
+  const activeDestinationOptions = useMemo(
+    () => (filters.destinationType ? (locationOptions[filters.destinationType] || []) : []),
+    [filters.destinationType, locationOptions]
+  );
 
   useEffect(() => {
     fetchAccounts();
   }, []);
 
-  const fetchPurchases = async () => {
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        const [supplierRes, storesRes, shopsRes, factoriesRes] = await Promise.all([
+          fetch(API_ROUTES.SUPPLIERS, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(API_ROUTES.STORES, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(API_ROUTES.SHOPS, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(API_ROUTES.FACTORIES, { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+        const [supplierData, storesData, shopsData, factoriesData] = await Promise.all([
+          supplierRes.json().catch(() => []),
+          storesRes.json().catch(() => []),
+          shopsRes.json().catch(() => []),
+          factoriesRes.json().catch(() => []),
+        ]);
+        setSuppliers(Array.isArray(supplierData) ? supplierData : []);
+        setLocationOptions({
+          store: Array.isArray(storesData) ? storesData : [],
+          shop: Array.isArray(shopsData) ? shopsData : [],
+          factory: Array.isArray(factoriesData) ? factoriesData : [],
+        });
+      } catch {
+        setSuppliers([]);
+        setLocationOptions({ store: [], shop: [], factory: [] });
+      }
+    };
+    fetchFilterOptions();
+  }, [token]);
+
+  const getSortQuery = () => {
+    if (!sortConfig?.key) return { sortBy: "createdAt", sortDirection: "desc" };
+    const map = {
+      reference: "reference",
+      "grand total": "grandTotal",
+      date: "createdAt",
+      "shipping status": "shippingStatus",
+    };
+    return {
+      sortBy: map[sortConfig.key] || "createdAt",
+      sortDirection: sortConfig.direction === "ascending" ? "asc" : "desc",
+    };
+  };
+
+  const fetchPurchases = async (mode = "table", pageArg = currentPage, limitArg = itemsPerPage) => {
     setLoading(true);
+    setLoadMode(mode);
     try {
-      const res = await fetch(`${API_ROUTES.PURCHASES}?page=${currentPage}&limit=${itemsPerPage}`, {
+      const sort = getSortQuery();
+      const params = new URLSearchParams({
+        page: String(pageArg),
+        limit: String(limitArg),
+        sortBy: sort.sortBy,
+        sortDirection: sort.sortDirection,
+      });
+      if (appliedFilters.search.trim()) params.set("search", appliedFilters.search.trim());
+      if (appliedFilters.supplierId) params.set("supplierId", appliedFilters.supplierId);
+      if (appliedFilters.destinationType) params.set("destinationType", appliedFilters.destinationType);
+      if (appliedFilters.destinationId) params.set("destinationId", appliedFilters.destinationId);
+      if (appliedFilters.shippingStatus) params.set("shippingStatus", appliedFilters.shippingStatus);
+      if (appliedFilters.dateFrom) params.set("dateFrom", appliedFilters.dateFrom);
+      if (appliedFilters.dateTo) params.set("dateTo", appliedFilters.dateTo);
+
+      const res = await fetch(`${API_ROUTES.PURCHASES}?${params.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -103,6 +187,50 @@ export default function AllPurchase() {
       setLoading(false);
     }
   };
+
+  const fetchOverview = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (appliedFilters.search.trim()) params.set("search", appliedFilters.search.trim());
+      if (appliedFilters.supplierId) params.set("supplierId", appliedFilters.supplierId);
+      if (appliedFilters.destinationType) params.set("destinationType", appliedFilters.destinationType);
+      if (appliedFilters.destinationId) params.set("destinationId", appliedFilters.destinationId);
+      if (appliedFilters.shippingStatus) params.set("shippingStatus", appliedFilters.shippingStatus);
+      if (appliedFilters.dateFrom) params.set("dateFrom", appliedFilters.dateFrom);
+      if (appliedFilters.dateTo) params.set("dateTo", appliedFilters.dateTo);
+      const res = await fetch(`${API_ROUTES.PURCHASES_OVERVIEW}${params.toString() ? `?${params.toString()}` : ""}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed to fetch purchase overview");
+      setOverview({
+        totalCount: Number(data?.totalCount || 0),
+        totalAmount: Number(data?.totalAmount || 0),
+        totalPaid: Number(data?.totalPaid || 0),
+        totalDue: Number(data?.totalDue || 0),
+        byShippingStatus: data?.byShippingStatus || {},
+      });
+    } catch {
+      setOverview({ totalCount: 0, totalAmount: 0, totalPaid: 0, totalDue: 0, byShippingStatus: {} });
+    }
+  };
+
+  useEffect(() => {
+    initializedRef.current = true;
+    skipNextPageFetchRef.current = currentPage !== 1;
+    setCurrentPage(1);
+    fetchPurchases("filter", 1, itemsPerPage);
+    fetchOverview();
+  }, [appliedFilters, sortConfig]);
+
+  useEffect(() => {
+    if (!initializedRef.current) return;
+    if (skipNextPageFetchRef.current) {
+      skipNextPageFetchRef.current = false;
+      return;
+    }
+    fetchPurchases("table", currentPage, itemsPerPage);
+  }, [currentPage, itemsPerPage]);
 
   const fetchAccounts = async () => {
     try {
@@ -592,13 +720,33 @@ export default function AllPurchase() {
     }
   };
 
-  // Calculate statistics
-  const totalDueAmount = purchases.reduce((sum, p) => sum + calculateDueAmount(p), 0);
-  const totalPaidAmount = purchases.reduce((sum, p) => sum + (parseFloat(p.paidAmount) || 0), 0);
-  const totalGrandTotal = purchases.reduce((sum, p) => sum + (parseFloat(p.grandTotal) || 0), 0);
-  const pendingShipments = purchases.filter(p => p.shippingStatus !== 'received').length;
+  const handleApplyFilters = () => {
+    setAppliedFilters({ ...filters });
+    setCurrentPage(1);
+  };
 
-  if (loading) {
+  const handleClearFilters = () => {
+    const empty = {
+      search: "",
+      supplierId: "",
+      destinationType: "",
+      destinationId: "",
+      shippingStatus: "",
+      dateFrom: "",
+      dateTo: "",
+    };
+    setFilters(empty);
+    setAppliedFilters(empty);
+    setCurrentPage(1);
+  };
+
+  // Calculate statistics
+  const totalDueAmount = overview.totalDue;
+  const totalPaidAmount = overview.totalPaid;
+  const totalGrandTotal = overview.totalAmount;
+  const pendingShipments = Number(overview.byShippingStatus?.pending || 0) + Number(overview.byShippingStatus?.partial || 0);
+
+  if (loading && loadMode === "filter") {
     return (
       <div className="min-h-screen w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -618,7 +766,7 @@ export default function AllPurchase() {
           </div>
           <p className="text-red-500 text-lg font-medium mb-4">Error: {error}</p>
           <button
-            onClick={fetchPurchases}
+            onClick={() => fetchPurchases("table", currentPage, itemsPerPage)}
             className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:shadow-lg transition-all duration-300"
           >
             Try Again
@@ -656,7 +804,7 @@ export default function AllPurchase() {
             <div className="flex items-center gap-2 px-4 py-2 bg-white/50 backdrop-blur-sm rounded-xl border border-white/60">
               <Filter size={18} className="text-purple-600" />
               <span className="text-sm font-medium text-gray-700">
-                {totalCount} {totalCount === 1 ? 'Purchase' : 'Purchases'}
+                {overview.totalCount} {overview.totalCount === 1 ? 'Purchase' : 'Purchases'}
               </span>
             </div>
           </div>
@@ -715,6 +863,89 @@ export default function AllPurchase() {
 
         {/* Main Content */}
         <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
+          <div className="mb-6 grid grid-cols-1 md:grid-cols-7 gap-3">
+            <input
+              type="text"
+              value={filters.search}
+              onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+              placeholder="Search by ref or supplier..."
+              className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            />
+            <select
+              value={filters.supplierId}
+              onChange={(e) => setFilters((prev) => ({ ...prev, supplierId: e.target.value }))}
+              className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
+              <option value="">All Suppliers</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <select
+              value={filters.destinationType}
+              onChange={(e) => setFilters((prev) => ({ ...prev, destinationType: e.target.value, destinationId: "" }))}
+              className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
+              <option value="">All Destination Types</option>
+              <option value="store">Store</option>
+              <option value="shop">Shop</option>
+              <option value="factory">Factory</option>
+            </select>
+            <select
+              value={filters.destinationId}
+              onChange={(e) => setFilters((prev) => ({ ...prev, destinationId: e.target.value }))}
+              disabled={!filters.destinationType}
+              className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-60"
+            >
+              <option value="">{filters.destinationType ? "All Destinations" : "Select destination type first"}</option>
+              {activeDestinationOptions.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+            <select
+              value={filters.shippingStatus}
+              onChange={(e) => setFilters((prev) => ({ ...prev, shippingStatus: e.target.value }))}
+              className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
+              <option value="">All Shipping Status</option>
+              <option value="pending">Pending</option>
+              <option value="partial">Partial</option>
+              <option value="received">Received</option>
+            </select>
+            <input
+              type="datetime-local"
+              value={filters.dateFrom}
+              onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
+              className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            />
+            <input
+              type="datetime-local"
+              value={filters.dateTo}
+              onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
+              className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            />
+            <div className="md:col-span-7 flex justify-end gap-2">
+              <button
+                onClick={handleApplyFilters}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 transition-all duration-300"
+              >
+                Apply
+              </button>
+              <button
+                onClick={handleClearFilters}
+                className="px-4 py-2 rounded-xl bg-white/80 border border-white/60 text-gray-700 hover:bg-white transition-all duration-300"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {loading && loadMode === "table" && (
+            <div className="mb-4 flex items-center justify-center py-4">
+              <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin"></div>
+            </div>
+          )}
+
           {purchases.length === 0 ? (
             <div className="text-center py-12">
               <div className="p-4 bg-white/50 rounded-xl inline-block mb-4">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
@@ -9,6 +9,8 @@ import {
   Filter, 
   ChevronLeft, 
   ChevronRight, 
+  ChevronsLeft,
+  ChevronsRight,
   Factory, 
   Calendar, 
   Package, 
@@ -29,6 +31,29 @@ const AllProductions = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [loadMode, setLoadMode] = useState('filter');
+  const [overview, setOverview] = useState({ totalCount: 0, byStatus: {} });
+  const [factoryOptions, setFactoryOptions] = useState([]);
+  const [filters, setFilters] = useState({
+    search: '',
+    factoryId: '',
+    status: '',
+    dateFrom: '',
+    dateTo: '',
+    sortBy: 'createdAt',
+    sortDir: 'desc',
+  });
+  const [appliedFilters, setAppliedFilters] = useState({
+    search: '',
+    factoryId: '',
+    status: '',
+    dateFrom: '',
+    dateTo: '',
+    sortBy: 'createdAt',
+    sortDir: 'desc',
+  });
+  const initializedRef = useRef(false);
+  const skipNextPageFetchRef = useRef(false);
 
   // Modal states
   const [modal, setModal] = useState({ isOpen: false, type: null, data: null });
@@ -39,15 +64,22 @@ const AllProductions = () => {
   const [editableMaterials, setEditableMaterials] = useState([]);
   const [autoUnitCost, setAutoUnitCost] = useState(0);
 
-  useEffect(() => {
-    fetchProductions(currentPage);
-  }, [currentPage]);
-
-  const fetchProductions = async (page) => {
+  const fetchProductions = async (page, mode = 'table') => {
     try {
       setLoading(true);
+      setLoadMode(mode);
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_ROUTES.PRODUCTIONS}?page=${page}`, {
+      const params = new URLSearchParams({
+        page: String(page),
+        sortBy: appliedFilters.sortBy,
+        sortDir: appliedFilters.sortDir,
+      });
+      if (appliedFilters.search.trim()) params.set('search', appliedFilters.search.trim());
+      if (appliedFilters.factoryId) params.set('factoryId', appliedFilters.factoryId);
+      if (appliedFilters.status) params.set('status', appliedFilters.status);
+      if (appliedFilters.dateFrom) params.set('dateFrom', appliedFilters.dateFrom);
+      if (appliedFilters.dateTo) params.set('dateTo', appliedFilters.dateTo);
+      const response = await axios.get(`${API_ROUTES.PRODUCTIONS}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setProductions(response.data.productions);
@@ -61,6 +93,57 @@ const AllProductions = () => {
     }
   };
 
+  const fetchOverview = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      if (appliedFilters.search.trim()) params.set('search', appliedFilters.search.trim());
+      if (appliedFilters.factoryId) params.set('factoryId', appliedFilters.factoryId);
+      if (appliedFilters.status) params.set('status', appliedFilters.status);
+      if (appliedFilters.dateFrom) params.set('dateFrom', appliedFilters.dateFrom);
+      if (appliedFilters.dateTo) params.set('dateTo', appliedFilters.dateTo);
+      const response = await axios.get(`${API_ROUTES.PRODUCTIONS_OVERVIEW}${params.toString() ? `?${params.toString()}` : ''}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setOverview({
+        totalCount: Number(response.data?.totalCount || 0),
+        byStatus: response.data?.byStatus || {},
+      });
+    } catch {
+      setOverview({ totalCount: 0, byStatus: {} });
+    }
+  };
+
+  useEffect(() => {
+    const fetchFactories = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(API_ROUTES.FACTORIES, { headers: { Authorization: `Bearer ${token}` } });
+        setFactoryOptions(Array.isArray(res.data) ? res.data : []);
+      } catch {
+        setFactoryOptions([]);
+      }
+    };
+    fetchFactories();
+  }, []);
+
+  useEffect(() => {
+    initializedRef.current = true;
+    skipNextPageFetchRef.current = currentPage !== 1;
+    setCurrentPage(1);
+    fetchProductions(1, 'filter');
+    fetchOverview();
+  }, [appliedFilters]);
+
+  useEffect(() => {
+    if (!initializedRef.current) return;
+    if (skipNextPageFetchRef.current) {
+      skipNextPageFetchRef.current = false;
+      return;
+    }
+    fetchProductions(currentPage, 'table');
+  }, [currentPage]);
+
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this production?')) {
       try {
@@ -68,7 +151,8 @@ const AllProductions = () => {
         await axios.delete(`${API_ROUTES.PRODUCTIONS}/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        fetchProductions(currentPage);
+        fetchProductions(currentPage, 'table');
+        fetchOverview();
       } catch (error) {
         console.error('Error deleting production:', error);
       }
@@ -139,13 +223,34 @@ const AllProductions = () => {
         await axios.put(`${API_ROUTES.PRODUCTIONS}/${modal.data.id}/status`, payload, {
             headers: { Authorization: `Bearer ${token}` },
         });
-        fetchProductions(currentPage);
+        fetchProductions(currentPage, 'table');
+        fetchOverview();
         closeModal();
     } catch (error) {
         console.error('Error updating status:', error);
         alert('Failed to update status');
     }
   }
+
+  const handleApplyFilters = () => {
+    setAppliedFilters({ ...filters });
+    setCurrentPage(1);
+  };
+
+  const handleClearFilters = () => {
+    const empty = {
+      search: '',
+      factoryId: '',
+      status: '',
+      dateFrom: '',
+      dateTo: '',
+      sortBy: 'createdAt',
+      sortDir: 'desc',
+    };
+    setFilters(empty);
+    setAppliedFilters(empty);
+    setCurrentPage(1);
+  };
 
   const handleProductEdit = (index, field, value) => {
     setEditableProducts(prev => prev.map((p, i) => {
@@ -241,6 +346,69 @@ const AllProductions = () => {
     }
   };
 
+  const pendingCount = Number(overview.byStatus?.pending || 0);
+  const runningCount = Number(overview.byStatus?.running || 0);
+  const completedCount = Number(overview.byStatus?.production_done || 0);
+
+  const goToPage = (pageNum) => {
+    if (pageNum >= 1 && pageNum <= totalPages) setCurrentPage(pageNum);
+  };
+
+  const renderPaginationControls = () => (
+    <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl p-4 mt-4">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="text-sm text-gray-700">
+          Showing <span className="font-semibold">{totalProductions === 0 ? 0 : (currentPage - 1) * 20 + 1}</span> to{" "}
+          <span className="font-semibold">{Math.min(currentPage * 20, totalProductions)}</span> of{" "}
+          <span className="font-semibold">{totalProductions}</span> productions
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => goToPage(1)} disabled={currentPage === 1} className="p-2 rounded-lg disabled:opacity-40 border border-white/30">
+            <ChevronsLeft size={16} className="text-gray-600" />
+          </button>
+          <button onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} className="p-2 rounded-lg disabled:opacity-40 border border-white/30">
+            <ChevronLeft size={16} className="text-gray-600" />
+          </button>
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum;
+              if (totalPages <= 5) pageNum = i + 1;
+              else if (currentPage <= 3) pageNum = i + 1;
+              else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+              else pageNum = currentPage - 2 + i;
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => goToPage(pageNum)}
+                  className={`w-8 h-8 rounded-lg text-sm font-medium ${currentPage === pageNum ? "bg-gradient-to-r from-emerald-500 to-green-500 text-white" : "hover:bg-white/50 text-gray-700"}`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} className="p-2 rounded-lg disabled:opacity-40 border border-white/30">
+            <ChevronRight size={16} className="text-gray-600" />
+          </button>
+          <button onClick={() => goToPage(totalPages)} disabled={currentPage === totalPages} className="p-2 rounded-lg disabled:opacity-40 border border-white/30">
+            <ChevronsRight size={16} className="text-gray-600" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (loading && loadMode === 'filter') {
+    return (
+      <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+        <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl p-10 text-center">
+          <div className="w-12 h-12 border-4 border-emerald-100 border-t-emerald-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading productions...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
       {/* Background decorative elements */}
@@ -269,7 +437,7 @@ const AllProductions = () => {
             <div className="flex items-center gap-4">
               <div className="hidden md:block px-6 py-3 bg-white/60 backdrop-blur-sm rounded-xl border border-white/80">
                 <p className="text-sm font-medium text-gray-700">Total Productions</p>
-                <p className="text-2xl font-bold text-emerald-600">{totalProductions}</p>
+                <p className="text-2xl font-bold text-emerald-600">{overview.totalCount}</p>
               </div>
               
               <Link 
@@ -283,8 +451,101 @@ const AllProductions = () => {
           </div>
         </div>
 
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <div className="backdrop-blur-lg bg-gradient-to-br from-blue-50/60 to-cyan-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Pending</p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {pendingCount}
+                </p>
+              </div>
+              <div className="p-3 bg-blue-100 rounded-xl">
+                <Clock size={24} className="text-blue-600" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="backdrop-blur-lg bg-gradient-to-br from-cyan-50/60 to-emerald-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Running</p>
+                <p className="text-2xl font-bold text-cyan-600">
+                  {runningCount}
+                </p>
+              </div>
+              <div className="p-3 bg-cyan-100 rounded-xl">
+                <PlayCircle size={24} className="text-cyan-600" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="backdrop-blur-lg bg-gradient-to-br from-emerald-50/60 to-green-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Completed</p>
+                <p className="text-2xl font-bold text-emerald-600">
+                  {completedCount}
+                </p>
+              </div>
+              <div className="p-3 bg-emerald-100 rounded-xl">
+                <CheckCircle size={24} className="text-emerald-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+
         {/* Main Content */}
         <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-7 gap-3 mb-4">
+            <input
+              type="text"
+              value={filters.search}
+              onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+              placeholder="Search by reference..."
+              className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl"
+            />
+            <select
+              value={filters.factoryId}
+              onChange={(e) => setFilters((prev) => ({ ...prev, factoryId: e.target.value }))}
+              className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl"
+            >
+              <option value="">All Factories</option>
+              {factoryOptions.map((f) => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </select>
+            <select
+              value={filters.status}
+              onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+              className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl"
+            >
+              <option value="">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="running">Running</option>
+              <option value="production_done">Completed</option>
+            </select>
+            <input type="datetime-local" value={filters.dateFrom} onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl" />
+            <input type="datetime-local" value={filters.dateTo} onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl" />
+            <select value={filters.sortBy} onChange={(e) => setFilters((prev) => ({ ...prev, sortBy: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl">
+              <option value="createdAt">Sort by Created</option>
+              <option value="reference">Sort by Reference</option>
+              <option value="status">Sort by Status</option>
+              <option value="start_date">Sort by Start Date</option>
+              <option value="estimated_end_date">Sort by End Date</option>
+            </select>
+            <select value={filters.sortDir} onChange={(e) => setFilters((prev) => ({ ...prev, sortDir: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl">
+              <option value="desc">Desc</option>
+              <option value="asc">Asc</option>
+            </select>
+            <div className="md:col-span-7 flex justify-end gap-2">
+              <button onClick={handleApplyFilters} className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 text-white">Apply</button>
+              <button onClick={handleClearFilters} className="px-4 py-2 rounded-xl bg-white/80 border border-white/60 text-gray-700">Clear</button>
+            </div>
+          </div>
+
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="flex flex-col items-center gap-4">
@@ -294,6 +555,7 @@ const AllProductions = () => {
             </div>
           ) : (
             <>
+              {productions.length > 0 && renderPaginationControls()}
               <div className="overflow-x-auto rounded-xl border border-white/60">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-100/80">
@@ -421,93 +683,9 @@ const AllProductions = () => {
                 )}
               </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-6 pt-6 border-t border-white/50">
-                  <div className="text-sm text-gray-600">
-                    Showing {productions.length} productions
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 ${
-                        currentPage === 1 
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                          : 'bg-white/60 text-gray-700 hover:bg-white/80 hover:shadow-md'
-                      }`}
-                    >
-                      <ChevronLeft size={16} />
-                      Previous
-                    </button>
-                    
-                    <div className="px-4 py-2 bg-white/60 backdrop-blur-sm rounded-lg">
-                      <span className="font-semibold text-gray-800">Page {currentPage}</span>
-                      <span className="text-gray-500"> of {totalPages}</span>
-                    </div>
-                    
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                      disabled={currentPage === totalPages}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 ${
-                        currentPage === totalPages 
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                          : 'bg-white/60 text-gray-700 hover:bg-white/80 hover:shadow-md'
-                      }`}
-                    >
-                      Next
-                      <ChevronRight size={16} />
-                    </button>
-                  </div>
-                </div>
-              )}
+              {productions.length > 0 && renderPaginationControls()}
             </>
           )}
-        </div>
-
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="backdrop-blur-lg bg-gradient-to-br from-blue-50/60 to-cyan-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Pending</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {productions.filter(p => p.status === 'pending').length}
-                </p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <Clock size={24} className="text-blue-600" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="backdrop-blur-lg bg-gradient-to-br from-cyan-50/60 to-emerald-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Running</p>
-                <p className="text-2xl font-bold text-cyan-600">
-                  {productions.filter(p => p.status === 'running').length}
-                </p>
-              </div>
-              <div className="p-3 bg-cyan-100 rounded-xl">
-                <PlayCircle size={24} className="text-cyan-600" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="backdrop-blur-lg bg-gradient-to-br from-emerald-50/60 to-green-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Completed</p>
-                <p className="text-2xl font-bold text-emerald-600">
-                  {productions.filter(p => p.status === 'production_done').length}
-                </p>
-              </div>
-              <div className="p-3 bg-emerald-100 rounded-xl">
-                <CheckCircle size={24} className="text-emerald-600" />
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 

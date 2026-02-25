@@ -7,6 +7,17 @@ const { createTransaction } = require("../utils/transactionHelper");
 const { createNotification } = require("../utils/notificationHelper");
 const SALARY_STATUSES = ["generated", "created", "approve", "approved", "paid"];
 
+const parsePositiveInt = (value, fallback) => {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const parseDateSafe = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
 const userHasPermission = async (userId, permission) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -289,28 +300,143 @@ router.post("/clock-out", async (req, res) => {
 
 router.get("/clock-records", async (req, res) => {
   try {
-    const { userId, startDate, endDate } = req.query;
+    const { userId, startDate, endDate, search, status, sortBy, sortDir } = req.query;
+    const page = parsePositiveInt(req.query.page, 1);
+    const limit = Math.min(parsePositiveInt(req.query.limit, 20), 100);
+    const skip = (page - 1) * limit;
     const requesterId = req.user.userId;
     const canViewAll = await userHasPermission(requesterId, "approve_clock_in_out") || await userHasPermission(requesterId, "clock_in_out_manage");
 
     const where = {};
-    if (userId && (canViewAll || parseInt(userId) === requesterId)) {
-      where.userId = parseInt(userId);
+    if (userId && (canViewAll || parseInt(userId, 10) === requesterId)) {
+      where.userId = parseInt(userId, 10);
     } else if (!canViewAll) {
       where.userId = requesterId;
     }
-    if (startDate || endDate) {
+    const parsedStart = parseDateSafe(startDate);
+    const parsedEnd = parseDateSafe(endDate);
+    if (parsedStart || parsedEnd) {
       where.clockIn = {};
-      if (startDate) where.clockIn.gte = new Date(startDate);
-      if (endDate) where.clockIn.lte = new Date(endDate);
+      if (parsedStart) where.clockIn.gte = parsedStart;
+      if (parsedEnd) where.clockIn.lte = parsedEnd;
+    }
+    const searchValue = String(search || "").trim();
+    if (searchValue) {
+      where.OR = [
+        { user: { name: { contains: searchValue } } },
+        { user: { email: { contains: searchValue } } },
+        { user: { username: { contains: searchValue } } },
+      ];
+    }
+    if (String(status || "").trim()) {
+      const normalizedStatus = String(status).trim().toLowerCase();
+      if (normalizedStatus === "active") where.clockOut = null;
+      else if (normalizedStatus === "closed") where.status = "closed";
+      else where.status = normalizedStatus;
     }
 
-    const records = await prisma.clockInOut.findMany({
-      where,
-      include: { user: true, approvedBy: true },
-      orderBy: { clockIn: "desc" }
+    const allowedSortKeys = new Set(["clockIn", "clockOut", "status", "createdAt"]);
+    const sortKey = allowedSortKeys.has(String(sortBy || "")) ? String(sortBy) : "clockIn";
+    const direction = String(sortDir || "desc").toLowerCase() === "asc" ? "asc" : "desc";
+
+    const [items, totalCount, activeCount] = await Promise.all([
+      prisma.clockInOut.findMany({
+        where,
+        include: { user: true, approvedBy: true },
+        orderBy: { [sortKey]: direction },
+        skip,
+        take: limit,
+      }),
+      prisma.clockInOut.count({ where }),
+      prisma.clockInOut.count({
+        where: {
+          ...where,
+          clockOut: null,
+        },
+      }),
+    ]);
+
+    res.json({
+      items,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / limit)),
+      },
+      meta: {
+        activeCount,
+      },
     });
-    res.json(records);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/clock-records/overview", async (req, res) => {
+  try {
+    const { userId, startDate, endDate, search, status } = req.query;
+    const requesterId = req.user.userId;
+    const canViewAll = await userHasPermission(requesterId, "approve_clock_in_out") || await userHasPermission(requesterId, "clock_in_out_manage");
+
+    const where = {};
+    if (userId && (canViewAll || parseInt(userId, 10) === requesterId)) {
+      where.userId = parseInt(userId, 10);
+    } else if (!canViewAll) {
+      where.userId = requesterId;
+    }
+    const parsedStart = parseDateSafe(startDate);
+    const parsedEnd = parseDateSafe(endDate);
+    if (parsedStart || parsedEnd) {
+      where.clockIn = {};
+      if (parsedStart) where.clockIn.gte = parsedStart;
+      if (parsedEnd) where.clockIn.lte = parsedEnd;
+    }
+    const searchValue = String(search || "").trim();
+    if (searchValue) {
+      where.OR = [
+        { user: { name: { contains: searchValue } } },
+        { user: { email: { contains: searchValue } } },
+        { user: { username: { contains: searchValue } } },
+      ];
+    }
+    if (String(status || "").trim()) {
+      const normalizedStatus = String(status).trim().toLowerCase();
+      if (normalizedStatus === "active") where.clockOut = null;
+      else if (normalizedStatus === "closed") where.status = "closed";
+      else where.status = normalizedStatus;
+    }
+
+    const [totalCount, activeCount, uniqueUsersRaw, todayCount] = await Promise.all([
+      prisma.clockInOut.count({ where }),
+      prisma.clockInOut.count({
+        where: {
+          ...where,
+          clockOut: null,
+        },
+      }),
+      prisma.clockInOut.findMany({
+        where,
+        select: { userId: true },
+        distinct: ["userId"],
+      }),
+      prisma.clockInOut.count({
+        where: {
+          ...where,
+          clockIn: {
+            gte: new Date(new Date().setHours(0, 0, 0, 0)),
+            lte: new Date(new Date().setHours(23, 59, 59, 999)),
+          },
+        },
+      }),
+    ]);
+
+    res.json({
+      totalCount,
+      activeCount,
+      uniqueUsers: uniqueUsersRaw.length,
+      todayCount,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -558,15 +684,120 @@ router.get("/payroll", async (req, res) => {
   try {
     const month = req.query.month ? parseInt(req.query.month) : null;
     const year = req.query.year ? parseInt(req.query.year) : null;
+    const page = parsePositiveInt(req.query.page, 1);
+    const limit = Math.min(parsePositiveInt(req.query.limit, 20), 100);
+    const skip = (page - 1) * limit;
+    const status = String(req.query.status || "").trim().toLowerCase();
+    const search = String(req.query.search || "").trim();
+    const sortBy = String(req.query.sortBy || "year");
+    const sortDir = String(req.query.sortDir || "desc").toLowerCase() === "asc" ? "asc" : "desc";
+    const dateFrom = parseDateSafe(req.query.dateFrom);
+    const dateTo = parseDateSafe(req.query.dateTo);
     const where = {};
     if (month) where.month = month;
     if (year) where.year = year;
-    const salaries = await prisma.salary.findMany({
-      where,
-      include: { user: true },
-      orderBy: [{ year: "desc" }, { month: "desc" }]
+    if (status) where.status = status === "approved" ? "approve" : status;
+    if (search) {
+      where.OR = [
+        { user: { name: { contains: search } } },
+        { user: { email: { contains: search } } },
+        { user: { username: { contains: search } } },
+      ];
+    }
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) where.createdAt.gte = dateFrom;
+      if (dateTo) where.createdAt.lte = dateTo;
+    }
+
+    const allowedSort = new Set(["year", "month", "status", "gross", "net", "createdAt"]);
+    const orderByKey = allowedSort.has(sortBy) ? sortBy : "year";
+    const orderBy =
+      orderByKey === "year"
+        ? [{ year: sortDir }, { month: sortDir }]
+        : [{ [orderByKey]: sortDir }, { year: "desc" }, { month: "desc" }];
+
+    const [items, totalCount, aggregate] = await Promise.all([
+      prisma.salary.findMany({
+        where,
+        include: { user: true },
+        orderBy,
+        skip,
+        take: limit,
+      }),
+      prisma.salary.count({ where }),
+      prisma.salary.aggregate({
+        where,
+        _sum: { net: true, gross: true },
+      }),
+    ]);
+
+    res.json({
+      items,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages: Math.max(1, Math.ceil(totalCount / limit)),
+      },
+      totals: {
+        totalNet: Number(aggregate._sum?.net || 0),
+        totalGross: Number(aggregate._sum?.gross || 0),
+      },
     });
-    res.json(salaries);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/payroll/overview", async (req, res) => {
+  try {
+    const month = req.query.month ? parseInt(req.query.month) : null;
+    const year = req.query.year ? parseInt(req.query.year) : null;
+    const status = String(req.query.status || "").trim().toLowerCase();
+    const search = String(req.query.search || "").trim();
+    const dateFrom = parseDateSafe(req.query.dateFrom);
+    const dateTo = parseDateSafe(req.query.dateTo);
+    const where = {};
+    if (month) where.month = month;
+    if (year) where.year = year;
+    if (status) where.status = status === "approved" ? "approve" : status;
+    if (search) {
+      where.OR = [
+        { user: { name: { contains: search } } },
+        { user: { email: { contains: search } } },
+        { user: { username: { contains: search } } },
+      ];
+    }
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) where.createdAt.gte = dateFrom;
+      if (dateTo) where.createdAt.lte = dateTo;
+    }
+
+    const [totalCount, aggregate, byStatus] = await Promise.all([
+      prisma.salary.count({ where }),
+      prisma.salary.aggregate({
+        where,
+        _sum: { net: true },
+        _avg: { net: true },
+      }),
+      prisma.salary.groupBy({
+        by: ["status"],
+        where,
+        _count: { _all: true },
+      }),
+    ]);
+
+    res.json({
+      totalCount,
+      totalPayroll: Number(aggregate._sum?.net || 0),
+      averageSalary: Number(aggregate._avg?.net || 0),
+      byStatus: byStatus.reduce((acc, row) => {
+        acc[row.status || "unknown"] = Number(row._count?._all || 0);
+        return acc;
+      }, {}),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

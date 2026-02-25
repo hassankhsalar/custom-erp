@@ -42,8 +42,9 @@ const FactoryInventory = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('all'); // 'all', 'material', 'product'
+  const [serverTotalPages, setServerTotalPages] = useState(1);
+  const [filters, setFilters] = useState({ searchTerm: '', filterType: 'all', sortBy: 'name', sortDir: 'asc', category: '', brand: '', unit: '' });
+  const [appliedFilters, setAppliedFilters] = useState({ searchTerm: '', filterType: 'all', sortBy: 'name', sortDir: 'asc', category: '', brand: '', unit: '' });
 
   // Load factories on component mount
   useEffect(() => {
@@ -53,10 +54,16 @@ const FactoryInventory = () => {
   // Load inventory when factory is selected
   useEffect(() => {
     if (selectedFactory) {
-      fetchInventory(selectedFactory);
+      fetchInventory(selectedFactory, 1);
       fetchSummary(selectedFactory);
     }
-  }, [selectedFactory]);
+  }, [selectedFactory, itemsPerPage]);
+
+  useEffect(() => {
+    if (selectedFactory) {
+      fetchInventory(selectedFactory, currentPage);
+    }
+  }, [currentPage]);
 
   const fetchFactories = async () => {
     try {
@@ -77,19 +84,32 @@ const FactoryInventory = () => {
     }
   };
 
-  const fetchInventory = async (factoryId) => {
+  const fetchInventory = async (factoryId, page = 1, filterOverrides = appliedFilters) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(API_ROUTES.FACTORY_INVENTORY(factoryId), {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(itemsPerPage),
+        search: filterOverrides.searchTerm || '',
+        filterType: filterOverrides.filterType || 'all',
+        sortBy: filterOverrides.sortBy || 'name',
+        sortDir: filterOverrides.sortDir || 'asc',
+        category: filterOverrides.category || '',
+        brand: filterOverrides.brand || '',
+        unit: filterOverrides.unit || '',
+      });
+      const response = await fetch(`${API_ROUTES.FACTORY_INVENTORY_LIST(factoryId)}?${params.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
       if (!response.ok) throw new Error('Failed to fetch inventory');
       const data = await response.json();
-      setInventory(data.inventory || []);
-      setTotalItems(data.inventory?.length || 0);
+      setInventory(data.items || []);
+      setTotalItems(Number(data.pagination?.totalCount || 0));
+      setServerTotalPages(Number(data.pagination?.totalPages || 1));
+      setCurrentPage(Number(data.pagination?.page || page));
     } catch (err) {
       setError('Failed to load inventory');
       console.error(err);
@@ -120,7 +140,7 @@ const FactoryInventory = () => {
 
   const handleRefresh = () => {
     if (selectedFactory) {
-      fetchInventory(selectedFactory);
+      fetchInventory(selectedFactory, currentPage);
       fetchSummary(selectedFactory);
     }
   };
@@ -171,7 +191,7 @@ const FactoryInventory = () => {
       if (!response.ok) {
         throw new Error(data.error || 'Failed to update inventory item');
       }
-      await fetchInventory(selectedFactory);
+      await fetchInventory(selectedFactory, currentPage);
       await fetchSummary(selectedFactory);
       closeEditModal();
     } catch (err) {
@@ -181,25 +201,12 @@ const FactoryInventory = () => {
     }
   };
 
-  // Filter inventory based on search and type
-  const filteredInventory = inventory.filter(item => {
-    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (item.barcode && item.barcode.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                         (item.category && item.category.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                         (item.brand && item.brand.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesType = filterType === 'all' || item.type === filterType;
-    return matchesSearch && matchesType;
-  });
+  const filteredInventory = inventory;
 
-  // Pagination
-  const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
-  const paginatedInventory = filteredInventory.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const paginatedInventory = filteredInventory;
 
   const nextPage = () => {
-    if (currentPage < totalPages) {
+    if (currentPage < serverTotalPages) {
       setCurrentPage(currentPage + 1);
     }
   };
@@ -211,7 +218,7 @@ const FactoryInventory = () => {
   };
 
   const goToPage = (page) => {
-    if (page >= 1 && page <= totalPages) {
+    if (page >= 1 && page <= serverTotalPages) {
       setCurrentPage(page);
     }
   };
@@ -258,6 +265,83 @@ const FactoryInventory = () => {
     a.download = `factory-inventory-${selectedFactory}.csv`;
     a.click();
   };
+
+  const handleApplyFilters = () => {
+    const next = { ...filters };
+    setAppliedFilters(next);
+    setCurrentPage(1);
+    if (selectedFactory) fetchInventory(selectedFactory, 1, next);
+  };
+
+  const handleClearFilters = () => {
+    const cleared = { searchTerm: '', filterType: 'all', sortBy: 'name', sortDir: 'asc', category: '', brand: '', unit: '' };
+    setFilters(cleared);
+    setAppliedFilters(cleared);
+    setCurrentPage(1);
+    if (selectedFactory) fetchInventory(selectedFactory, 1, cleared);
+  };
+
+  const renderPagination = () => (
+    <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl p-4 mt-4">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Show:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+            <span className="text-sm text-gray-600">per page</span>
+          </div>
+
+          <div className="text-sm text-gray-700">
+            Showing <span className="font-semibold">{totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</span> to{" "}
+            <span className="font-semibold">{Math.min(currentPage * itemsPerPage, totalItems)}</span>{" "}
+            of <span className="font-semibold">{totalItems}</span> items
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button onClick={() => goToPage(1)} disabled={currentPage === 1} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30" title="First page">
+            <ChevronsLeft size={16} className="text-gray-600" />
+          </button>
+          <button onClick={prevPage} disabled={currentPage === 1} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30" title="Previous page">
+            <ChevronLeft size={16} className="text-gray-600" />
+          </button>
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.min(5, serverTotalPages) }, (_, i) => {
+              let pageNum;
+              if (serverTotalPages <= 5) pageNum = i + 1;
+              else if (currentPage <= 3) pageNum = i + 1;
+              else if (currentPage >= serverTotalPages - 2) pageNum = serverTotalPages - 4 + i;
+              else pageNum = currentPage - 2 + i;
+              return (
+                <button key={pageNum} onClick={() => goToPage(pageNum)} className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${currentPage === pageNum ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white" : "hover:bg-white/50 text-gray-700"}`}>
+                  {pageNum}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={nextPage} disabled={currentPage === serverTotalPages} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30" title="Next page">
+            <ChevronRight size={16} className="text-gray-600" />
+          </button>
+          <button onClick={() => goToPage(serverTotalPages)} disabled={currentPage === serverTotalPages} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30" title="Last page">
+            <ChevronsRight size={16} className="text-gray-600" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
@@ -398,29 +482,27 @@ const FactoryInventory = () => {
 
         {/* Search and Filters */}
         <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
-          <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex flex-col gap-4">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
               <input
                 type="text"
                 placeholder="Search by name, barcode, or category..."
-                value={searchTerm}
+                value={filters.searchTerm}
                 onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
+                  setFilters((prev) => ({ ...prev, searchTerm: e.target.value }));
                 }}
                 className="w-full pl-10 pr-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
               />
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={() => {
-                  setFilterType('all');
-                  setCurrentPage(1);
+                  setFilters((prev) => ({ ...prev, filterType: 'all' }));
                 }}
                 className={`px-4 py-2 rounded-xl font-medium transition-colors duration-300 ${
-                  filterType === 'all'
+                  filters.filterType === 'all'
                     ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white'
                     : 'bg-white/60 hover:bg-white/80 text-gray-700'
                 }`}
@@ -429,11 +511,10 @@ const FactoryInventory = () => {
               </button>
               <button
                 onClick={() => {
-                  setFilterType('material');
-                  setCurrentPage(1);
+                  setFilters((prev) => ({ ...prev, filterType: 'material' }));
                 }}
                 className={`px-4 py-2 rounded-xl font-medium transition-colors duration-300 ${
-                  filterType === 'material'
+                  filters.filterType === 'material'
                     ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white'
                     : 'bg-white/60 hover:bg-white/80 text-gray-700'
                 }`}
@@ -442,17 +523,65 @@ const FactoryInventory = () => {
               </button>
               <button
                 onClick={() => {
-                  setFilterType('product');
-                  setCurrentPage(1);
+                  setFilters((prev) => ({ ...prev, filterType: 'product' }));
                 }}
                 className={`px-4 py-2 rounded-xl font-medium transition-colors duration-300 ${
-                  filterType === 'product'
+                  filters.filterType === 'product'
                     ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white'
                     : 'bg-white/60 hover:bg-white/80 text-gray-700'
                 }`}
               >
                 Products
               </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-2">
+              <select
+                value={filters.sortBy}
+                onChange={(e) => setFilters((prev) => ({ ...prev, sortBy: e.target.value }))}
+                className="px-3 py-2 bg-white/80 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              >
+                <option value="name">Sort: Name</option>
+                <option value="stock">Sort: Stock</option>
+                <option value="damage">Sort: Damage</option>
+                <option value="cost">Sort: Cost</option>
+              </select>
+              <select
+                value={filters.sortDir}
+                onChange={(e) => setFilters((prev) => ({ ...prev, sortDir: e.target.value }))}
+                className="px-3 py-2 bg-white/80 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              >
+                <option value="asc">Asc</option>
+                <option value="desc">Desc</option>
+              </select>
+              <input
+                type="text"
+                placeholder="Category"
+                value={filters.category}
+                onChange={(e) => setFilters((prev) => ({ ...prev, category: e.target.value }))}
+                className="px-3 py-2 bg-white/80 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+              <input
+                type="text"
+                placeholder="Brand"
+                value={filters.brand}
+                onChange={(e) => setFilters((prev) => ({ ...prev, brand: e.target.value }))}
+                className="px-3 py-2 bg-white/80 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+              <input
+                type="text"
+                placeholder="Unit"
+                value={filters.unit}
+                onChange={(e) => setFilters((prev) => ({ ...prev, unit: e.target.value }))}
+                className="px-3 py-2 bg-white/80 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+              <div className="flex gap-2">
+                <button onClick={handleApplyFilters} className="flex-1 px-4 py-2 rounded-xl font-medium bg-gradient-to-r from-blue-500 to-cyan-500 text-white">
+                  Apply
+                </button>
+                <button onClick={handleClearFilters} className="flex-1 px-4 py-2 rounded-xl font-medium bg-white/60 hover:bg-white/80 text-gray-700">
+                  Clear
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -474,6 +603,7 @@ const FactoryInventory = () => {
             </div>
           ) : (
             <>
+              {filteredInventory.length > 0 && renderPagination()}
               <div className="overflow-x-auto rounded-xl border border-white/60">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-100/80">
@@ -599,131 +729,7 @@ const FactoryInventory = () => {
               </div>
 
               {/* Pagination Controls */}
-              {filteredInventory.length > 0 && (
-                <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl p-4 mt-4">
-                  <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      {/* Items per page selector */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">Show:</span>
-                        <select
-                          value={itemsPerPage}
-                          onChange={(e) => {
-                            setItemsPerPage(Number(e.target.value));
-                            setCurrentPage(1);
-                          }}
-                          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                        >
-                          <option value="5">5</option>
-                          <option value="10">10</option>
-                          <option value="20">20</option>
-                          <option value="50">50</option>
-                          <option value="100">100</option>
-                        </select>
-                        <span className="text-sm text-gray-600">per page</span>
-                      </div>
-
-                      {/* Page info */}
-                      <div className="text-sm text-gray-700">
-                        Showing <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
-                        <span className="font-semibold">
-                          {Math.min(currentPage * itemsPerPage, filteredInventory.length)}
-                        </span>{" "}
-                        of <span className="font-semibold">{filteredInventory.length}</span> items
-                      </div>
-                    </div>
-
-                    {/* Pagination buttons */}
-                    <div className="flex items-center gap-2">
-                      {/* First page */}
-                      <button
-                        onClick={() => goToPage(1)}
-                        disabled={currentPage === 1}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="First page"
-                      >
-                        <ChevronsLeft size={16} className="text-gray-600" />
-                      </button>
-
-                      {/* Previous page */}
-                      <button
-                        onClick={prevPage}
-                        disabled={currentPage === 1}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="Previous page"
-                      >
-                        <ChevronLeft size={16} className="text-gray-600" />
-                      </button>
-
-                      {/* Page numbers */}
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                          let pageNum;
-                          if (totalPages <= 5) {
-                            pageNum = i + 1;
-                          } else if (currentPage <= 3) {
-                            pageNum = i + 1;
-                          } else if (currentPage >= totalPages - 2) {
-                            pageNum = totalPages - 4 + i;
-                          } else {
-                            pageNum = currentPage - 2 + i;
-                          }
-
-                          return (
-                            <button
-                              key={pageNum}
-                              onClick={() => goToPage(pageNum)}
-                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                                currentPage === pageNum
-                                  ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
-                                  : "hover:bg-white/50 text-gray-700"
-                              }`}
-                            >
-                              {pageNum}
-                            </button>
-                          );
-                        })}
-
-                        {totalPages > 5 && currentPage < totalPages - 2 && (
-                          <>
-                            <span className="mx-1 text-gray-400">...</span>
-                            <button
-                              onClick={() => goToPage(totalPages)}
-                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                                currentPage === totalPages
-                                  ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
-                                  : "hover:bg-white/50 text-gray-700"
-                              }`}
-                            >
-                              {totalPages}
-                            </button>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Next page */}
-                      <button
-                        onClick={nextPage}
-                        disabled={currentPage === totalPages}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="Next page"
-                      >
-                        <ChevronRight size={16} className="text-gray-600" />
-                      </button>
-
-                      {/* Last page */}
-                      <button
-                        onClick={() => goToPage(totalPages)}
-                        disabled={currentPage === totalPages}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="Last page"
-                      >
-                        <ChevronsRight size={16} className="text-gray-600" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {filteredInventory.length > 0 && renderPagination()}
             </>
           )}
         </div>

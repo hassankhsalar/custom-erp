@@ -113,6 +113,63 @@ const mapSaleWithPermissions = (sale, requesterId, access) => {
   };
 };
 
+const parseDateQuery = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const parsePositiveInt = (value) => {
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+const normalizeSortDirection = (value, fallback = "desc") => {
+  return String(value || "").toLowerCase() === "asc" ? "asc" : fallback;
+};
+
+const allowedSaleSortFields = new Set([
+  "createdAt",
+  "grandTotal",
+  "totalAmount",
+  "discount",
+  "paidAmount",
+  "reference",
+]);
+
+const buildSaleListOrderBy = (sortBy, sortDir) => {
+  const field = allowedSaleSortFields.has(sortBy) ? sortBy : "createdAt";
+  const direction = normalizeSortDirection(sortDir);
+  return { [field]: direction };
+};
+
+const buildShopSaleListWhere = ({ scope, shopId, customerId, customerSearch, dateFrom, dateTo }) => {
+  const where = scope.isAdmin ? { shopId: { not: null } } : { shopId: { in: Array.from(scope.shops) } };
+
+  if (shopId) {
+    where.shopId = shopId;
+  }
+
+  if (customerId) {
+    where.customerId = customerId;
+  } else if (customerSearch) {
+    where.customer = {
+      OR: [
+        { name: { contains: customerSearch, mode: "insensitive" } },
+        { mobile: { contains: customerSearch, mode: "insensitive" } },
+      ],
+    };
+  }
+
+  if (dateFrom || dateTo) {
+    where.createdAt = {};
+    if (dateFrom) where.createdAt.gte = dateFrom;
+    if (dateTo) where.createdAt.lte = dateTo;
+  }
+
+  return where;
+};
+
 // Get all shops for POS
 router.get("/shops", async (req, res) => {
   try {
@@ -715,9 +772,16 @@ registerShopSaleWarrantyRoutes({ router, prisma });
 // Get all shop sales with both product and material details (with pagination)
 router.get("/", async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const take = parseInt(limit);
+    let startTime = new Date();
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const take = Math.min(200, Math.max(1, Number.parseInt(req.query.limit, 10) || 10));
+    const skip = (page - 1) * take;
+    const shopId = parsePositiveInt(req.query.shopId);
+    const customerId = parsePositiveInt(req.query.customerId);
+    const customerSearch = String(req.query.customer || "").trim();
+    const dateFrom = parseDateQuery(req.query.dateFrom);
+    const dateTo = parseDateQuery(req.query.dateTo);
+    const orderBy = buildSaleListOrderBy(req.query.sortBy, req.query.sortDir);
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     if (!scope.isAdmin && scope.shops.size === 0) {
@@ -725,52 +789,43 @@ router.get("/", async (req, res) => {
       err.status = 403;
       throw err;
     }
-    const where = scope.isAdmin ? { shopId: { not: null } } : { shopId: { in: Array.from(scope.shops) } };
+
+    if (shopId) {
+      ensureIdScope(scope, "shop", shopId);
+    }
+
+    const where = buildShopSaleListWhere({
+      scope,
+      shopId,
+      customerId,
+      customerSearch,
+      dateFrom,
+      dateTo,
+    });
 
     // Get total count for pagination
     const totalCount = await prisma.sale.count({ where });
 
-    // Get paginated sales
+    // Get paginated sales with a lean payload
     const sales = await prisma.sale.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        reference: true,
+        totalAmount: true,
+        discount: true,
+        grandTotal: true,
+        paidAmount: true,
+        paymentType: true,
+        createdAt: true,
+        transactionStatus: true,
+        editStatus: true,
+        editMaxCount: true,
+        editUsedCount: true,
         shop: {
           select: {
             id: true,
             name: true,
-            shop_keeper: true,
-          },
-        },
-        transactions: {
-          orderBy: { createdAt: "desc" },
-          include: {
-            account: true,
-            createdBy: {
-              select: { id: true, name: true, email: true }
-            },
-            bankAccount: true
-          }
-        },
-        saleItems: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                barcode: true,
-                unit: true,
-                sale_price: true,
-              },
-            },
-            material: {
-              select: {
-                id: true,
-                name: true,
-                barcode: true,
-                unit: true,
-                sale_price: true,
-              },
-            },
           },
         },
         customer: {
@@ -778,28 +833,78 @@ router.get("/", async (req, res) => {
             id: true,
             name: true,
             mobile: true,
-            email: true,
           },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy,
       skip,
       take,
     });
 
-    const access = await getRequesterAccessContext(req.user?.userId || 0);
-    const salesWithAccess = sales.map((sale) =>
-      mapSaleWithPermissions(sale, req.user?.userId || 0, access)
-    );
-
     res.json({
-      sales: salesWithAccess,
+      sales,
       pagination: {
-        currentPage: parseInt(page),
+        currentPage: page,
         totalPages: Math.ceil(totalCount / take),
         totalCount,
-        limit: take
-      }
+        limit: take,
+      },
+    });
+  } catch (err) {
+    if (err.status === 403) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/overview", async (req, res) => {
+  try {
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (!scope.isAdmin && scope.shops.size === 0) {
+      const err = new Error("Forbidden");
+      err.status = 403;
+      throw err;
+    }
+
+    const shopId = parsePositiveInt(req.query.shopId);
+    const customerId = parsePositiveInt(req.query.customerId);
+    const customerSearch = String(req.query.customer || "").trim();
+    const dateFrom = parseDateQuery(req.query.dateFrom);
+    const dateTo = parseDateQuery(req.query.dateTo);
+
+    if (shopId) {
+      ensureIdScope(scope, "shop", shopId);
+    }
+
+    const where = buildShopSaleListWhere({
+      scope,
+      shopId,
+      customerId,
+      customerSearch,
+      dateFrom,
+      dateTo,
+    });
+
+    const [aggregate, saleCount] = await Promise.all([
+      prisma.sale.aggregate({
+        where,
+        _sum: {
+          grandTotal: true,
+          discount: true,
+        },
+      }),
+      prisma.sale.count({ where }),
+    ]);
+
+    const totalRevenue = Number(aggregate._sum.grandTotal || 0);
+    const totalDiscount = Number(aggregate._sum.discount || 0);
+
+    res.json({
+      totalRevenue,
+      totalDiscount,
+      saleCount,
+      averageSale: saleCount > 0 ? totalRevenue / saleCount : 0,
     });
   } catch (err) {
     if (err.status === 403) {

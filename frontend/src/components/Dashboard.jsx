@@ -457,8 +457,8 @@ const TransferStatus = ({ data }) => (
       {Object.entries(data.statusOverview).map(([status, count]) => {
         const percentage = (count / data.statusOverview.total) * 100;
         const statusColors = {
-          transferred: { bg: 'from-emerald-500 to-green-500', text: 'text-emerald-600' },
-          being_shipped: { bg: 'from-blue-500 to-cyan-500', text: 'text-blue-600' },
+          complete: { bg: 'from-emerald-500 to-green-500', text: 'text-emerald-600' },
+          on_the_way: { bg: 'from-blue-500 to-cyan-500', text: 'text-blue-600' },
           pending: { bg: 'from-amber-500 to-orange-500', text: 'text-amber-600' },
           processing: { bg: 'from-green-500 to-lime-500', text: 'text-lime-600' },
           not_received: { bg: 'from-red-500 to-rose-700', text: 'text-red-600' }
@@ -535,7 +535,7 @@ const RecentActivity = ({ data }) => (
           <span className={`text-sm font-medium ${
             activity.amount > 0 ? "text-emerald-600" : "text-gray-600"
           }`}>
-            {activity.amount > 0 ? `+$${activity.amount}` : ""}
+            {activity.amount > 0 ? `+$${activity.amount.toFixed(2)}` : ""}
           </span>
         </div>
       ))}

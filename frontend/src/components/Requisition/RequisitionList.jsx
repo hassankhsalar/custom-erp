@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
@@ -44,14 +44,31 @@ const RequisitionList = () => {
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [requesterType, setRequesterType] = useState("");
+  const [requesterId, setRequesterId] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [appliedFilters, setAppliedFilters] = useState({
+    search: "",
+    status: "",
+    requesterType: "",
+    requesterId: "",
+    dateFrom: "",
+    dateTo: "",
+  });
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortDirection, setSortDirection] = useState("desc");
   const [page, setPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [loadMode, setLoadMode] = useState("filter");
+  const [overview, setOverview] = useState({ totalCount: 0, byStatus: {} });
   const [meta, setMeta] = useState({ totalPages: 1, total: 0 });
   const [places, setPlaces] = useState({ shops: [], stores: [], factories: [] });
   const [segmentModal, setSegmentModal] = useState({ open: false, requisition: null });
   const [sections, setSections] = useState([]);
   const [requisitionModal, setRequisitionModal] = useState({ open: false, loading: false, data: null, error: "" });
+  const initializedRef = useRef(false);
+  const skipNextPageFetchRef = useRef(false);
 
   useEffect(() => {
     const fetchPlaces = async () => {
@@ -72,14 +89,54 @@ const RequisitionList = () => {
     store: places.stores || [],
     factory: places.factories || [],
   }), [places]);
+  const requesterPlaceOptions = useMemo(
+    () => (requesterType ? (placeOptions[requesterType] || []) : []),
+    [placeOptions, requesterType]
+  );
 
-  const fetchData = useCallback(async () => {
+  const fetchOverview = useCallback(async () => {
+    if (tab !== "requisitions") return;
+    try {
+      const res = await axios.get(API_ROUTES.REQUISITIONS_OVERVIEW, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: {
+          search: appliedFilters.search,
+          status: appliedFilters.status,
+          requesterType: appliedFilters.requesterType,
+          requesterId: appliedFilters.requesterId,
+          dateFrom: appliedFilters.dateFrom,
+          dateTo: appliedFilters.dateTo
+        },
+      });
+      setOverview({
+        totalCount: Number(res.data?.totalCount || 0),
+        byStatus: res.data?.byStatus || {},
+      });
+    } catch (error) {
+      console.error(error);
+      setOverview({ totalCount: 0, byStatus: {} });
+    }
+  }, [appliedFilters, tab, token]);
+
+  const fetchData = useCallback(async (mode = "table", pageArg = page, limitArg = itemsPerPage) => {
     setLoading(true);
+    setLoadMode(mode);
     try {
       if (tab === "requisitions") {
         const res = await axios.get(API_ROUTES.REQUISITIONS, {
           headers: { Authorization: `Bearer ${token}` },
-          params: { page, limit: 10, search, status, sortBy, sortDirection },
+          params: {
+            page: pageArg,
+            limit: limitArg,
+            search: appliedFilters.search,
+            status: appliedFilters.status,
+            requesterType: appliedFilters.requesterType,
+            requesterId: appliedFilters.requesterId,
+            dateFrom: appliedFilters.dateFrom,
+            dateTo: appliedFilters.dateTo,
+            sortBy,
+            sortDirection
+          },
         });
         setRows(res.data?.data || []);
         setMeta({
@@ -108,11 +165,28 @@ const RequisitionList = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, search, sortBy, sortDirection, status, tab, token]);
+  }, [appliedFilters, itemsPerPage, page, sortBy, sortDirection, tab, token]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (tab !== "requisitions") {
+      fetchData("filter");
+      return;
+    }
+    initializedRef.current = true;
+    skipNextPageFetchRef.current = page !== 1;
+    setPage(1);
+    fetchData("filter", 1, itemsPerPage);
+    fetchOverview();
+  }, [tab, appliedFilters, sortBy, sortDirection, fetchData, fetchOverview, itemsPerPage]);
+
+  useEffect(() => {
+    if (tab !== "requisitions" || !initializedRef.current) return;
+    if (skipNextPageFetchRef.current) {
+      skipNextPageFetchRef.current = false;
+      return;
+    }
+    fetchData("table", page, itemsPerPage);
+  }, [page, tab, itemsPerPage, fetchData]);
 
   const openSegment = (requisition) => {
     const baseItems = (requisition.items || []).map((it) => ({
@@ -288,6 +362,176 @@ const RequisitionList = () => {
     }
   };
 
+  const processingCount =
+    Number(overview.byStatus?.segmented || 0) +
+    Number(overview.byStatus?.in_process || 0);
+  const approvedCount = Number(overview.byStatus?.approved || 0);
+  const rejectedCount = Number(overview.byStatus?.rejected || 0);
+
+  const goToPage = (pageNum) => {
+    if (pageNum >= 1 && pageNum <= meta.totalPages) {
+      setPage(pageNum);
+    }
+  };
+
+  const renderPaginationControls = () => (
+    <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl p-4 mt-4">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Show:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setPage(1);
+              }}
+              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+            >
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+            <span className="text-sm text-gray-600">per page</span>
+          </div>
+
+          <div className="text-sm text-gray-700">
+            Showing <span className="font-semibold">{meta.total === 0 ? 0 : (page - 1) * itemsPerPage + 1}</span> to{" "}
+            <span className="font-semibold">{Math.min(page * itemsPerPage, meta.total)}</span>{" "}
+            of <span className="font-semibold">{meta.total}</span> requisitions
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => goToPage(1)}
+            disabled={page === 1}
+            className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+            title="First page"
+          >
+            <ChevronsLeft size={16} className="text-gray-600" />
+          </button>
+
+          <button
+            onClick={() => goToPage(page - 1)}
+            disabled={page === 1}
+            className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+            title="Previous page"
+          >
+            <ChevronLeft size={16} className="text-gray-600" />
+          </button>
+
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.min(5, meta.totalPages) }, (_, i) => {
+              let pageNum;
+              if (meta.totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (page <= 3) {
+                pageNum = i + 1;
+              } else if (page >= meta.totalPages - 2) {
+                pageNum = meta.totalPages - 4 + i;
+              } else {
+                pageNum = page - 2 + i;
+              }
+
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => goToPage(pageNum)}
+                  className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                    page === pageNum
+                      ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
+                      : "hover:bg-white/50 text-gray-700"
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+
+            {meta.totalPages > 5 && page < meta.totalPages - 2 && (
+              <>
+                <span className="mx-1 text-gray-400">...</span>
+                <button
+                  onClick={() => goToPage(meta.totalPages)}
+                  className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                    page === meta.totalPages
+                      ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
+                      : "hover:bg-white/50 text-gray-700"
+                  }`}
+                >
+                  {meta.totalPages}
+                </button>
+              </>
+            )}
+          </div>
+
+          <button
+            onClick={() => goToPage(page + 1)}
+            disabled={page === meta.totalPages}
+            className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+            title="Next page"
+          >
+            <ChevronRight size={16} className="text-gray-600" />
+          </button>
+
+          <button
+            onClick={() => goToPage(meta.totalPages)}
+            disabled={page === meta.totalPages}
+            className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+            title="Last page"
+          >
+            <ChevronsRight size={16} className="text-gray-600" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const handleApplyFilters = () => {
+    setAppliedFilters({
+      search,
+      status,
+      requesterType,
+      requesterId,
+      dateFrom,
+      dateTo,
+    });
+    setPage(1);
+  };
+
+  const handleClearFilters = () => {
+    const empty = {
+      search: "",
+      status: "",
+      requesterType: "",
+      requesterId: "",
+      dateFrom: "",
+      dateTo: "",
+    };
+    setSearch(empty.search);
+    setStatus(empty.status);
+    setRequesterType(empty.requesterType);
+    setRequesterId(empty.requesterId);
+    setDateFrom(empty.dateFrom);
+    setDateTo(empty.dateTo);
+    setAppliedFilters(empty);
+    setPage(1);
+  };
+
+  if (loading && loadMode === "filter") {
+    return (
+      <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
+        <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl p-10 text-center">
+          <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading requisitions...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen  rounded-t-2xl w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
       {/* Background decorative elements */}
@@ -354,8 +598,8 @@ const RequisitionList = () => {
               <Filter size={18} className="text-indigo-600" />
               <h2 className="text-lg font-semibold text-gray-800">Filters & Search</h2>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="relative">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="relative col-span-2">
                 <Search className="absolute left-3 top-3 text-gray-400" size={18} />
                 <input
                   value={search}
@@ -379,8 +623,37 @@ const RequisitionList = () => {
               </select>
 
               <select
+                value={requesterType}
+                onChange={(e) => {
+                  setRequesterType(e.target.value);
+                  setRequesterId("");
+                }}
+                className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+              >
+                <option value="">All Requesters</option>
+                <option value="shop">Shop</option>
+                <option value="store">Store</option>
+                <option value="factory">Factory</option>
+              </select>
+
+              <select
+                value={requesterId}
+                onChange={(e) => setRequesterId(e.target.value)}
+                disabled={!requesterType}
+                className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300 disabled:opacity-60"
+              >
+                <option value="">{requesterType ? "All Places" : "Select requester type first"}</option>
+                {requesterPlaceOptions.map((row) => (
+                  <option key={row.id} value={row.id}>{row.name}</option>
+                ))}
+              </select>
+
+              <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
+                onChange={(e) => {
+                  setSortBy(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
               >
                 <option value="createdAt">Sort by Created Date</option>
@@ -390,12 +663,47 @@ const RequisitionList = () => {
 
               <select
                 value={sortDirection}
-                onChange={(e) => setSortDirection(e.target.value)}
+                onChange={(e) => {
+                  setSortDirection(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
               >
                 <option value="desc">Descending</option>
                 <option value="asc">Ascending</option>
               </select>
+
+              <div className="grid grid-cols-2 gap-2 md:col-span-2">
+                <input
+                  type="datetime-local"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                />
+                <input
+                  type="datetime-local"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                />
+              </div>
+              <div className="md:col-span-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleApplyFilters}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 text-sm font-medium inline-flex items-center gap-2"
+                >
+                  <Filter size={16} />
+                  Apply
+                </button>
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="px-4 py-2 rounded-xl bg-white/80 border border-gray-300 text-gray-700 hover:bg-white text-sm font-medium"
+                >
+                  Clear
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -730,7 +1038,11 @@ const RequisitionList = () => {
                       <p><strong>Type:</strong> {requisitionModal.data.requestType}</p>
                     </div>
                     <div className="p-4 rounded-xl bg-white/60 border border-white/60">
-                      <p><strong>Requester:</strong> {requisitionModal.data.requesterType} #{requisitionModal.data.requesterId}</p>
+                      <p>
+                        <strong>Requester:</strong>{" "}
+                        {requisitionModal.data.requesterType} -{" "}
+                        {requisitionModal.data.requesterName || `#${requisitionModal.data.requesterId}`}
+                      </p>
                       <p><strong>Parent:</strong> {requisitionModal.data.parentRequisition?.reference || "-"}</p>
                       <p><strong>Created:</strong> {requisitionModal.data.createdAt ? new Date(requisitionModal.data.createdAt).toLocaleString() : "-"}</p>
                       <p><strong>Updated:</strong> {requisitionModal.data.updatedAt ? new Date(requisitionModal.data.updatedAt).toLocaleString() : "-"}</p>

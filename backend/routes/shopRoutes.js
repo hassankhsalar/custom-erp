@@ -4,6 +4,10 @@ const prisma = new PrismaClient();
 const router = express.Router();
 const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associateScope');
 const STOCK_EPSILON = 1e-9;
+const parsePositiveInt = (value, fallback) => {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
 const toNullableNumber = (value) => {
   if (value === undefined || value === null || value === "") return null;
   const n = parseFloat(value);
@@ -109,6 +113,91 @@ router.get("/:id", async (req, res) => {
     if (err.status === 403) {
       return res.json(null);
     }
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/:id/inventory/list", async (req, res) => {
+  try {
+    const shopId = parseInt(req.params.id);
+    const page = parsePositiveInt(req.query.page, 1);
+    const limit = Math.min(parsePositiveInt(req.query.limit, 20), 200);
+    const search = String(req.query.search || "").trim().toLowerCase();
+    const filterType = String(req.query.filterType || "all").toLowerCase();
+    const category = String(req.query.category || "").trim().toLowerCase();
+    const brand = String(req.query.brand || "").trim().toLowerCase();
+    const unit = String(req.query.unit || "").trim().toLowerCase();
+    const sortBy = String(req.query.sortBy || "name");
+    const sortDir = String(req.query.sortDir || "asc").toLowerCase() === "desc" ? "desc" : "asc";
+    const scope = await buildScope(prisma, req.user.userId);
+    ensureIdScope(scope, 'shop', shopId);
+    const shop = await prisma.shop.findUnique({
+      where: { id: shopId },
+      include: {
+        shopProducts: { include: { product: { select: { id: true, name: true, sale_price: true, alert_quantity: true, barcode: true, category: true } } } },
+        shopMaterials: { include: { material: { select: { id: true, name: true, unit: true, unit_cost: true, sale_price: true, alert_quantity: true, brand: true, barcode: true } } } }
+      }
+    });
+    if (!shop) return res.status(404).json({ error: "Shop not found" });
+
+    const products = (shop.shopProducts || []).map((sp) => ({
+      id: sp.product.id, name: sp.product.name, type: "product", stock: Number(sp.stock || 0), avg_cost: Number(sp.avg_cost || 0), scrap: Number(sp.scrap || 0), unit: "pcs",
+      unit_cost: sp.unit_cost, sale_price: sp.sale_price ?? sp.product.sale_price, alert_quantity: sp.alert_quantity ?? sp.product.alert_quantity, description: sp.product.description, category: sp.product.category, barcode: sp.product.barcode
+    }));
+    const materials = (shop.shopMaterials || []).map((sm) => ({
+      id: sm.material.id, name: sm.material.name, type: "material", stock: Number(sm.stock || 0), avg_cost: Number(sm.avg_cost || 0), scrap: Number(sm.scrap || 0), unit: sm.material.unit,
+      unit_cost: sm.material.unit_cost, sale_price: sm.sale_price ?? sm.material.sale_price, alert_quantity: sm.alert_quantity ?? sm.material.alert_quantity, description: sm.material.description, brand: sm.material.brand, barcode: sm.material.barcode
+    }));
+    let rows = [...materials, ...products];
+    if (filterType !== "all") rows = rows.filter((x) => x.type === filterType);
+    if (search) rows = rows.filter((x) => String(x.name || "").toLowerCase().includes(search) || String(x.barcode || "").toLowerCase().includes(search) || String(x.category || "").toLowerCase().includes(search) || String(x.brand || "").toLowerCase().includes(search));
+    if (category) rows = rows.filter((x) => String(x.category || "").toLowerCase().includes(category));
+    if (brand) rows = rows.filter((x) => String(x.brand || "").toLowerCase().includes(brand));
+    if (unit) rows = rows.filter((x) => String(x.unit || "").toLowerCase().includes(unit));
+    const normalizedSortBy =
+      sortBy === "damage" ? "scrap" :
+      sortBy === "cost" ? "avg_cost" :
+      sortBy;
+    rows.sort((a, b) => {
+      const av = a?.[normalizedSortBy]; const bv = b?.[normalizedSortBy];
+      if (typeof av === "number" && typeof bv === "number") return sortDir === "asc" ? av - bv : bv - av;
+      return sortDir === "asc" ? String(av ?? "").localeCompare(String(bv ?? "")) : String(bv ?? "").localeCompare(String(av ?? ""));
+    });
+    const totalCount = rows.length;
+    const start = (page - 1) * limit;
+    const items = rows.slice(start, start + limit);
+    res.json({ items, pagination: { page, limit, totalCount, totalPages: Math.max(1, Math.ceil(totalCount / limit)) } });
+  } catch (err) {
+    if (err.status === 403) return res.json({ items: [], pagination: { page: 1, limit: 20, totalCount: 0, totalPages: 1 } });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/:id/inventory/summary", async (req, res) => {
+  try {
+    const shopId = parseInt(req.params.id);
+    const scope = await buildScope(prisma, req.user.userId);
+    ensureIdScope(scope, 'shop', shopId);
+    const shop = await prisma.shop.findUnique({
+      where: { id: shopId },
+      include: {
+        shopProducts: { include: { product: { select: { name: true, alert_quantity: true } } } },
+        shopMaterials: { include: { material: { select: { name: true, unit: true, alert_quantity: true } } } }
+      }
+    });
+    if (!shop) return res.status(404).json({ error: "Shop not found" });
+    const materials = shop.shopMaterials || [];
+    const products = shop.shopProducts || [];
+    res.json({
+      materials: { count: materials.length, totalStock: materials.reduce((s, m) => s + (Number(m.stock) || 0), 0), totalScrap: materials.reduce((s, m) => s + (Number(m.scrap) || 0), 0) },
+      products: { count: products.length, totalStock: products.reduce((s, p) => s + (Number(p.stock) || 0), 0), totalScrap: products.reduce((s, p) => s + (Number(p.scrap) || 0), 0) },
+      lowStock: {
+        materials: materials.filter((m) => (Number(m.stock) || 0) <= (Number(m.alert_quantity ?? m.material?.alert_quantity ?? 10) || 10)).slice(0, 5).map((m) => ({ name: m.material?.name, stock: m.stock, unit: m.material?.unit || "" })),
+        products: products.filter((p) => (Number(p.stock) || 0) <= (Number(p.alert_quantity ?? p.product?.alert_quantity ?? 10) || 10)).slice(0, 5).map((p) => ({ name: p.product?.name, stock: p.stock, unit: "pcs" })),
+      }
+    });
+  } catch (err) {
+    if (err.status === 403) return res.json({ materials: { count: 0, totalStock: 0, totalScrap: 0 }, products: { count: 0, totalStock: 0, totalScrap: 0 }, lowStock: { materials: [], products: [] } });
     res.status(500).json({ error: err.message });
   }
 });

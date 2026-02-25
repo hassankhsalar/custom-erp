@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { API_ROUTES } from "../../config";
 import { 
   Users,
@@ -18,7 +18,9 @@ import {
   Plus,
   Download,
   Pencil,
-  Settings
+  Settings,
+  Search,
+  Filter
 } from "lucide-react";
 
 export default function Salaries() {
@@ -35,32 +37,93 @@ export default function Salaries() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [loadMode, setLoadMode] = useState("filter");
   const [totalSalaries, setTotalSalaries] = useState(0);
+  const [overview, setOverview] = useState({ totalCount: 0, totalPayroll: 0, byStatus: {} });
+  const [filters, setFilters] = useState({
+    search: "",
+    month: "",
+    year: "",
+    status: "",
+    dateFrom: "",
+    dateTo: "",
+    sortBy: "year",
+    sortDir: "desc",
+  });
+  const [appliedFilters, setAppliedFilters] = useState({
+    search: "",
+    month: "",
+    year: "",
+    status: "",
+    dateFrom: "",
+    dateTo: "",
+    sortBy: "year",
+    sortDir: "desc",
+  });
   const [editingSalary, setEditingSalary] = useState(null);
   const [editForm, setEditForm] = useState({ baseSalary: "", allowances: "", deductions: "" });
   const [statusSalary, setStatusSalary] = useState(null);
   const [statusDraft, setStatusDraft] = useState("generated");
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [saving, setSaving] = useState(false);
+  const initializedRef = useRef(false);
+  const skipNextPageFetchRef = useRef(false);
   const token = localStorage.getItem("token");
   const STATUS_OPTIONS = ["generated", "created", "approve", "paid"];
 
-  const fetchSalaries = async () => {
+  const fetchSalaries = async (page = 1, mode = "table") => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_ROUTES.EXPENSES}/salaries/list`, {
+      setLoadMode(mode);
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(itemsPerPage),
+        sortBy: appliedFilters.sortBy,
+        sortDir: appliedFilters.sortDir,
+      });
+      if (appliedFilters.search.trim()) params.set("search", appliedFilters.search.trim());
+      if (appliedFilters.month) params.set("month", appliedFilters.month);
+      if (appliedFilters.year) params.set("year", appliedFilters.year);
+      if (appliedFilters.status) params.set("status", appliedFilters.status);
+      if (appliedFilters.dateFrom) params.set("dateFrom", appliedFilters.dateFrom);
+      if (appliedFilters.dateTo) params.set("dateTo", appliedFilters.dateTo);
+      const res = await fetch(`${API_ROUTES.HRM}/payroll?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      const salariesArray = Array.isArray(data) ? data : [];
+      const salariesArray = Array.isArray(data?.items) ? data.items : [];
       setSalaries(salariesArray);
-      setTotalSalaries(salariesArray.length);
-      setTotalPages(Math.ceil(salariesArray.length / itemsPerPage));
+      setCurrentPage(Number(data?.pagination?.page || page));
+      setTotalSalaries(Number(data?.pagination?.totalCount || salariesArray.length));
+      setTotalPages(Math.max(1, Number(data?.pagination?.totalPages || 1)));
     } catch (error) {
       console.error('Error fetching salaries:', error);
       setSalaries([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchOverview = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (appliedFilters.search.trim()) params.set("search", appliedFilters.search.trim());
+      if (appliedFilters.month) params.set("month", appliedFilters.month);
+      if (appliedFilters.year) params.set("year", appliedFilters.year);
+      if (appliedFilters.status) params.set("status", appliedFilters.status);
+      if (appliedFilters.dateFrom) params.set("dateFrom", appliedFilters.dateFrom);
+      if (appliedFilters.dateTo) params.set("dateTo", appliedFilters.dateTo);
+      const res = await fetch(`${API_ROUTES.HRM_PAYROLL_OVERVIEW}${params.toString() ? `?${params.toString()}` : ""}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setOverview({
+        totalCount: Number(data?.totalCount || 0),
+        totalPayroll: Number(data?.totalPayroll || 0),
+        byStatus: data?.byStatus || {},
+      });
+    } catch {
+      setOverview({ totalCount: 0, totalPayroll: 0, byStatus: {} });
     }
   };
 
@@ -96,17 +159,25 @@ export default function Salaries() {
   };
 
   useEffect(() => {
-    fetchSalaries();
     fetchAccounts();
     fetchCompanyProfile();
   }, []);
+  useEffect(() => {
+    initializedRef.current = true;
+    skipNextPageFetchRef.current = currentPage !== 1;
+    setCurrentPage(1);
+    fetchSalaries(1, "filter");
+    fetchOverview();
+  }, [appliedFilters, itemsPerPage]);
 
-  // Get paginated salaries
-  const getPaginatedSalaries = () => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    return salaries.slice(startIndex, endIndex);
-  };
+  useEffect(() => {
+    if (!initializedRef.current) return;
+    if (skipNextPageFetchRef.current) {
+      skipNextPageFetchRef.current = false;
+      return;
+    }
+    fetchSalaries(currentPage, "table");
+  }, [currentPage]);
 
   // Pagination controls
   const nextPage = () => {
@@ -126,6 +197,75 @@ export default function Salaries() {
       setCurrentPage(page);
     }
   };
+
+  const getPaginationItems = () => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (currentPage <= 4) return [1, 2, 3, 4, 5, "...", totalPages];
+    if (currentPage >= totalPages - 3) return [1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    return [1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages];
+  };
+
+  const renderPagination = () => (
+    <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl p-4 mt-4">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Show:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+            >
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+            </select>
+            <span className="text-sm text-gray-600">per page</span>
+          </div>
+          <div className="text-sm text-gray-700">
+            Showing <span className="font-semibold">{totalSalaries === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</span> to{" "}
+            <span className="font-semibold">{Math.min(currentPage * itemsPerPage, totalSalaries)}</span> of{" "}
+            <span className="font-semibold">{totalSalaries}</span> salaries
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => goToPage(1)} disabled={currentPage === 1} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30" title="First page">
+            <ChevronsLeft size={16} className="text-gray-600" />
+          </button>
+          <button onClick={prevPage} disabled={currentPage === 1} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30" title="Previous page">
+            <ChevronLeft size={16} className="text-gray-600" />
+          </button>
+          <div className="flex items-center gap-1">
+            {getPaginationItems().map((item, idx) =>
+              item === "..." ? (
+                <span key={`ellipsis-${idx}`} className="mx-1 text-gray-400">...</span>
+              ) : (
+                <button
+                  key={item}
+                  onClick={() => goToPage(item)}
+                  className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                    currentPage === item ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white" : "hover:bg-white/50 text-gray-700"
+                  }`}
+                >
+                  {item}
+                </button>
+              )
+            )}
+          </div>
+          <button onClick={nextPage} disabled={currentPage === totalPages} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30" title="Next page">
+            <ChevronRight size={16} className="text-gray-600" />
+          </button>
+          <button onClick={() => goToPage(totalPages)} disabled={currentPage === totalPages} className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30" title="Last page">
+            <ChevronsRight size={16} className="text-gray-600" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   // Format currency
   const formatCurrency = (amount) => {
@@ -181,9 +321,13 @@ export default function Salaries() {
   };
 
   // Calculate statistics
-  const paidSalaries = salaries.filter(s => s.status?.toLowerCase() === 'paid').length;
-  const pendingSalaries = salaries.filter(s => ['generated', 'created', 'approve'].includes((s.status || '').toLowerCase())).length;
-  const totalNetAmount = salaries.reduce((sum, s) => sum + (parseFloat(s.net) || 0), 0);
+  const paidSalaries = Number(overview.byStatus?.paid || 0);
+  const pendingSalaries =
+    Number(overview.byStatus?.generated || 0) +
+    Number(overview.byStatus?.created || 0) +
+    Number(overview.byStatus?.approve || 0) +
+    Number(overview.byStatus?.approved || 0);
+  const totalNetAmount = Number(overview.totalPayroll || 0);
 
   const openEditModal = (salary) => {
     setEditingSalary(salary);
@@ -227,7 +371,8 @@ export default function Salaries() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to update salary");
       }
-      await fetchSalaries();
+      await fetchSalaries(currentPage, "table");
+      await fetchOverview();
       closeModals();
     } catch (error) {
       alert(error.message || "Failed to update salary");
@@ -258,7 +403,8 @@ export default function Salaries() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to update status");
       }
-      await fetchSalaries();
+      await fetchSalaries(currentPage, "table");
+      await fetchOverview();
       closeModals();
     } catch (error) {
       alert(error.message || "Failed to update status");
@@ -488,9 +634,70 @@ export default function Salaries() {
           </div>
         </div>
 
+        {/* Filters */}
+        <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div className="md:col-span-2 relative">
+              <Search size={16} className="absolute left-3 top-3.5 text-gray-400" />
+              <input
+                type="text"
+                value={filters.search}
+                onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+                placeholder="Search employee..."
+                className="w-full pl-9 pr-3 py-3 border border-white/60 bg-white/80 backdrop-blur-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+            </div>
+            <select value={filters.month} onChange={(e) => setFilters((prev) => ({ ...prev, month: e.target.value }))} className="w-full border border-white/60 bg-white/80 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+              <option value="">Month</option>
+              <option value="1">January</option>
+              <option value="2">February</option>
+              <option value="3">March</option>
+              <option value="4">April</option>
+              <option value="5">May</option>
+              <option value="6">June</option>
+              <option value="7">July</option>
+              <option value="8">August</option>
+              <option value="9">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+            <input type="number" min="2000" max="2100" placeholder="Year" value={filters.year} onChange={(e) => setFilters((prev) => ({ ...prev, year: e.target.value }))} className="w-full border border-white/60 bg-white/80 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+            <input type="date" value={filters.dateFrom} onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))} className="w-full border border-white/60 bg-white/80 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+            <input type="date" value={filters.dateTo} onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))} className="w-full border border-white/60 bg-white/80 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+            <select value={filters.status} onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))} className="w-full border border-white/60 bg-white/80 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+              <option value="">All status</option>
+              <option value="generated">Generated</option>
+              <option value="created">Created</option>
+              <option value="approve">Approved</option>
+              <option value="paid">Paid</option>
+            </select>
+            <select value={filters.sortBy} onChange={(e) => setFilters((prev) => ({ ...prev, sortBy: e.target.value }))} className="w-full border border-white/60 bg-white/80 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+              <option value="year">Sort: Year</option>
+              <option value="month">Sort: Month</option>
+              <option value="net">Sort: Net</option>
+              <option value="gross">Sort: Gross</option>
+              <option value="status">Sort: Status</option>
+            </select>
+            <select value={filters.sortDir} onChange={(e) => setFilters((prev) => ({ ...prev, sortDir: e.target.value }))} className="w-full border border-white/60 bg-white/80 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+              <option value="desc">Desc</option>
+              <option value="asc">Asc</option>
+            </select>
+            <div className="md:col-span-5 flex justify-end gap-2">
+              <button onClick={() => { setAppliedFilters({ ...filters }); setCurrentPage(1); }} className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-medium">
+                <Filter size={16} />
+                Apply
+              </button>
+              <button onClick={() => { const cleared = { search: "", month: "", year: "", status: "", dateFrom: "", dateTo: "", sortBy: "year", sortDir: "desc" }; setFilters(cleared); setAppliedFilters(cleared); setCurrentPage(1); }} className="px-4 py-2.5 border border-white/60 bg-white/80 rounded-xl text-gray-700 font-medium">
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Main Content */}
         <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
-          {loading ? (
+          {loading && loadMode === "filter" ? (
             <div className="flex items-center justify-center py-12">
               <div className="flex flex-col items-center gap-4">
                 <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-600 rounded-full animate-spin"></div>
@@ -499,7 +706,13 @@ export default function Salaries() {
             </div>
           ) : (
             <>
+              {salaries.length > 0 && renderPagination()}
               <div className="overflow-x-auto rounded-xl border border-white/60">
+                {loading && loadMode === "table" ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="w-10 h-10 border-4 border-blue-500/30 border-t-blue-600 rounded-full animate-spin"></div>
+                  </div>
+                ) : (
                 <table className="w-full text-sm">
                   <thead className="bg-gray-100/80">
                     <tr>
@@ -511,7 +724,7 @@ export default function Salaries() {
                     </tr>
                   </thead>
                   <tbody>
-                    {getPaginatedSalaries().map((salary, index) => {
+                    {salaries.map((salary, index) => {
                       const statusStyle = getStatusStyle(salary.status);
                       const monthYear = `${salary.month}/${salary.year}`;
                       const employeeName = salary.user?.name || salary.user?.username || 'Unknown Employee';
@@ -607,6 +820,7 @@ export default function Salaries() {
                     })}
                   </tbody>
                 </table>
+                )}
                 
                 {salaries.length === 0 && !loading && (
                   <div className="text-center py-12">
@@ -616,7 +830,7 @@ export default function Salaries() {
                     <h3 className="text-lg font-semibold text-gray-700 mb-2">No Salary Records Found</h3>
                     <p className="text-gray-600 mb-6">No salary data available at the moment</p>
                     <button 
-                      onClick={fetchSalaries}
+                      onClick={() => fetchSalaries(currentPage, "table")}
                       className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold rounded-xl hover:shadow-lg transition-all duration-300"
                     >
                       <Plus size={20} />
@@ -627,130 +841,7 @@ export default function Salaries() {
               </div>
 
               {/* Pagination Controls */}
-              {salaries.length > 0 && (
-                <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl p-4 mt-4">
-                  <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      {/* Items per page selector */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">Show:</span>
-                        <select
-                          value={itemsPerPage}
-                          onChange={(e) => {
-                            setItemsPerPage(Number(e.target.value));
-                            setCurrentPage(1);
-                          }}
-                          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                        >
-                          <option value="5">5</option>
-                          <option value="10">10</option>
-                          <option value="20">20</option>
-                          <option value="50">50</option>
-                        </select>
-                        <span className="text-sm text-gray-600">per page</span>
-                      </div>
-
-                      {/* Page info */}
-                      <div className="text-sm text-gray-700">
-                        Showing <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
-                        <span className="font-semibold">
-                          {Math.min(currentPage * itemsPerPage, salaries.length)}
-                        </span>{" "}
-                        of <span className="font-semibold">{totalSalaries}</span> salaries
-                      </div>
-                    </div>
-
-                    {/* Pagination buttons */}
-                    <div className="flex items-center gap-2">
-                      {/* First page */}
-                      <button
-                        onClick={() => goToPage(1)}
-                        disabled={currentPage === 1}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="First page"
-                      >
-                        <ChevronsLeft size={16} className="text-gray-600" />
-                      </button>
-
-                      {/* Previous page */}
-                      <button
-                        onClick={prevPage}
-                        disabled={currentPage === 1}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="Previous page"
-                      >
-                        <ChevronLeft size={16} className="text-gray-600" />
-                      </button>
-
-                      {/* Page numbers */}
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                          let pageNum;
-                          if (totalPages <= 5) {
-                            pageNum = i + 1;
-                          } else if (currentPage <= 3) {
-                            pageNum = i + 1;
-                          } else if (currentPage >= totalPages - 2) {
-                            pageNum = totalPages - 4 + i;
-                          } else {
-                            pageNum = currentPage - 2 + i;
-                          }
-
-                          return (
-                            <button
-                              key={pageNum}
-                              onClick={() => goToPage(pageNum)}
-                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                                currentPage === pageNum
-                                  ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
-                                  : "hover:bg-white/50 text-gray-700"
-                              }`}
-                            >
-                              {pageNum}
-                            </button>
-                          );
-                        })}
-
-                        {totalPages > 5 && currentPage < totalPages - 2 && (
-                          <>
-                            <span className="mx-1 text-gray-400">...</span>
-                            <button
-                              onClick={() => goToPage(totalPages)}
-                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                                currentPage === totalPages
-                                  ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
-                                  : "hover:bg-white/50 text-gray-700"
-                              }`}
-                            >
-                              {totalPages}
-                            </button>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Next page */}
-                      <button
-                        onClick={nextPage}
-                        disabled={currentPage === totalPages}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="Next page"
-                      >
-                        <ChevronRight size={16} className="text-gray-600" />
-                      </button>
-
-                      {/* Last page */}
-                      <button
-                        onClick={() => goToPage(totalPages)}
-                        disabled={currentPage === totalPages}
-                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
-                        title="Last page"
-                      >
-                        <ChevronsRight size={16} className="text-gray-600" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {salaries.length > 0 && renderPagination()}
             </>
           )}
         </div>
