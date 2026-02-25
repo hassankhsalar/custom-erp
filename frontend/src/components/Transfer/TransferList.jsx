@@ -186,7 +186,7 @@ const TransferList = ({ fromType, toType, title }) => {
       case 'pending':
         return 'Pending';
       case 'on_the_way':
-        return 'On The Way';
+        return 'Shipping';
       case 'complete':
         return 'Complete';
       case 'partial':

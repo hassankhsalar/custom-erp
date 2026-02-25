@@ -35,6 +35,14 @@ const hasTransferAccess = (scope, transfer) => {
 const JWT_SECRET = 'your-secret-key'; // Replace with a strong secret key
 const MANUAL_STATUSES = ['processing', 'pending', 'on_the_way', 'complete', 'not_received'];
 const FINAL_STATUSES = ['complete', 'not_received'];
+const buildTransferPlaceForeignKeys = (fromType, fromId, toType, toId) => ({
+  fromStoreId: fromType === 'store' ? parseInt(fromId) : null,
+  fromShopId: fromType === 'shop' ? parseInt(fromId) : null,
+  fromFactoryId: fromType === 'factory' ? parseInt(fromId) : null,
+  toStoreId: toType === 'store' ? parseInt(toId) : null,
+  toShopId: toType === 'shop' ? parseInt(toId) : null,
+  toFactoryId: toType === 'factory' ? parseInt(toId) : null,
+});
 
 const normalizeTransferStatus = (status) => {
   if (!status) return 'processing';
@@ -333,6 +341,12 @@ router.get('/', authenticateToken, async (req, res) => {
         skip: (pageNum - 1) * pageSize,
         take: pageSize,
         include: {
+          fromStore: { select: { id: true, name: true } },
+          fromShop: { select: { id: true, name: true } },
+          fromFactory: { select: { id: true, name: true } },
+          toStore: { select: { id: true, name: true } },
+          toShop: { select: { id: true, name: true } },
+          toFactory: { select: { id: true, name: true } },
           transferItems: {
             select: {
               id: true,
@@ -340,6 +354,8 @@ router.get('/', authenticateToken, async (req, res) => {
               itemId: true,
               productId: true,
               materialId: true,
+              product: { select: { id: true, name: true } },
+              material: { select: { id: true, name: true } },
               quantity: true,
               receivedQuantity: true,
               avg_cost: true,
@@ -358,78 +374,29 @@ router.get('/', authenticateToken, async (req, res) => {
 
   const totalPages = Math.ceil(totalItems / pageSize);
 
-  // Collect all unique IDs for stores, shops, and factories
-  const storeIds = new Set();
-  const shopIds = new Set();
-  const factoryIds = new Set();
-
-  transfers.forEach(transfer => {
-    if (transfer.from === 'store') storeIds.add(transfer.fromId);
-    if (transfer.to === 'store') storeIds.add(transfer.toId);
-    if (transfer.from === 'shop') shopIds.add(transfer.fromId);
-    if (transfer.to === 'shop') shopIds.add(transfer.toId);
-    if (transfer.from === 'factory') factoryIds.add(transfer.fromId);
-    if (transfer.to === 'factory') factoryIds.add(transfer.toId);
-  });
-
-  // Fetch names in bulk
-  const [stores, shops, factories] = await Promise.all([
-    storeIds.size > 0 ? prisma.store.findMany({ where: { id: { in: Array.from(storeIds) } }, select: { id: true, name: true } }) : [],
-    shopIds.size > 0 ? prisma.shop.findMany({ where: { id: { in: Array.from(shopIds) } }, select: { id: true, name: true } }) : [],
-    factoryIds.size > 0 ? prisma.factory.findMany({ where: { id: { in: Array.from(factoryIds) } }, select: { id: true, name: true } }) : [],
-  ]);
-
-  const storeMap = new Map(stores.map(s => [s.id, s.name]));
-  const shopMap = new Map(shops.map(s => [s.id, s.name]));
-  const factoryMap = new Map(factories.map(f => [f.id, f.name]));
-
-  const productIds = new Set();
-  const materialIds = new Set();
-  transfers.forEach(transfer => {
-    transfer.transferItems.forEach(item => {
-      if (item.item === 'product' && item.itemId) productIds.add(item.itemId);
-      if (item.item === 'material' && item.itemId) materialIds.add(item.itemId);
-    });
-  });
-
-  const [products, materials] = await Promise.all([
-    productIds.size > 0
-      ? prisma.product.findMany({
-          where: { id: { in: Array.from(productIds) } },
-          select: { id: true, name: true }
-        })
-      : [],
-    materialIds.size > 0
-      ? prisma.material.findMany({
-          where: { id: { in: Array.from(materialIds) } },
-          select: { id: true, name: true }
-        })
-      : [],
-  ]);
-
-  const productMap = new Map(products.map(p => [p.id, p.name]));
-  const materialMap = new Map(materials.map(m => [m.id, m.name]));
-
   const transfersWithNamesAndTotalProducts = transfers.map(transfer => {
-    let fromName = 'N/A';
-    let toName = 'N/A';
+    const fromName =
+      transfer.fromStore?.name ||
+      transfer.fromShop?.name ||
+      transfer.fromFactory?.name ||
+      `${transfer.from} #${transfer.fromId}`;
 
-    if (transfer.from === 'store') fromName = storeMap.get(transfer.fromId) || 'N/A';
-    else if (transfer.from === 'shop') fromName = shopMap.get(transfer.fromId) || 'N/A';
-    else if (transfer.from === 'factory') fromName = factoryMap.get(transfer.fromId) || 'N/A';
-
-    if (transfer.to === 'store') toName = storeMap.get(transfer.toId) || 'N/A';
-    else if (transfer.to === 'shop') toName = shopMap.get(transfer.toId) || 'N/A';
-    else if (transfer.to === 'factory') toName = factoryMap.get(transfer.toId) || 'N/A';
+    const toName =
+      transfer.toStore?.name ||
+      transfer.toShop?.name ||
+      transfer.toFactory?.name ||
+      `${transfer.to} #${transfer.toId}`;
 
     const totalProducts = transfer.transferItems.reduce((sum, item) => sum + item.quantity, 0);
     const totalItems = transfer.transferItems.length;
     const transferItems = transfer.transferItems.map(item => ({
       ...item,
       remainingQuantity: Math.max(0, (parseFloat(item.quantity) || 0) - (parseFloat(item.receivedQuantity) || 0)),
-      name: item.item === 'product'
-        ? (productMap.get(item.itemId) || 'Unknown Product')
-        : (materialMap.get(item.itemId) || 'Unknown Material'),
+      name:
+        item.selectedName ||
+        item.product?.name ||
+        item.material?.name ||
+        (item.item === 'product' ? 'Unknown Product' : 'Unknown Material'),
     }));
 
     const summary = computeTransferSummary(transfer.transferItems);
@@ -576,6 +543,7 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
         to,
         fromId: parseInt(fromId),
         toId: parseInt(toId),
+        ...buildTransferPlaceForeignKeys(from, fromId, to, toId),
         shipping_cost: parseFloat(shipping_cost),
         note,
         document: document ? document.path : null,
@@ -902,6 +870,7 @@ router.put('/:id', authenticateToken, upload.single('document'), async (req, res
           to: nextTo,
           fromId: nextFromId,
           toId: nextToId,
+          ...buildTransferPlaceForeignKeys(nextFrom, nextFromId, nextTo, nextToId),
           shipping_cost: req.body?.shipping_cost !== undefined ? parseFloat(req.body.shipping_cost || 0) : transfer.shipping_cost,
           note: req.body?.note !== undefined ? req.body.note : transfer.note,
           status: nextStatus,

@@ -497,6 +497,7 @@ model Material {
   purchaseReturnItems     PurchaseReturnItem[]
   purchaseReturnCompensationItems PurchaseReturnCompensationItem[]
   transferReceiptItems TransferReceiptItem[]
+  transferItems      TransferItem[]
   warranties            UserWarranty[]
   requisitionItems      RequisitionItem[]
   requisitionSectionItems RequisitionSectionItem[]
@@ -596,6 +597,7 @@ model Product {
   purchaseReturnItems     PurchaseReturnItem[]
   purchaseReturnCompensationItems PurchaseReturnCompensationItem[]
   transferReceiptItems    TransferReceiptItem[]
+  transferItems           TransferItem[]
   requisitionItems        RequisitionItem[]
   requisitionSectionItems RequisitionSectionItem[]
   stockAdjustments        StockAdjustment[]
@@ -627,6 +629,9 @@ model Factory {
   factoryMaterials FactoryMaterial[]
   stockAdjustments StockAdjustment[]
   requisitionSections RequisitionSection[]
+  damageRecords DamageRecord[]
+  transfersFromFactory Transfer[] @relation("TransferFromFactory")
+  transfersToFactory Transfer[] @relation("TransferToFactory")
 }
 model Production {
   id                      Int                      @id @default(autoincrement()) // Changed to Int
@@ -661,6 +666,9 @@ model Store {
   storeProducts           StoreProduct[]
   stockAdjustments        StockAdjustment[]
   requisitionSections     RequisitionSection[]
+  damageRecords           DamageRecord[]
+  transfersFromStore      Transfer[] @relation("TransferFromStore")
+  transfersToStore        Transfer[] @relation("TransferToStore")
   
   //sales                   Sale[]
   //saleReturns             SaleReturn[]
@@ -1053,6 +1061,9 @@ model Shop {
   sales         Sale[]
   saleReturns   SaleReturn[]
   requisitionSections RequisitionSection[]
+  damageRecords DamageRecord[]
+  transfersFromShop Transfer[] @relation("TransferFromShop")
+  transfersToShop Transfer[] @relation("TransferToShop")
   
   cashRegisterRecord  CashRegisterRecord[]
 }
@@ -1095,8 +1106,20 @@ model Transfer {
   reference     String         @unique
   from          String
   fromId        Int
+  fromStoreId   Int?
+  fromStore     Store?         @relation("TransferFromStore", fields: [fromStoreId], references: [id], onDelete: SetNull)
+  fromShopId    Int?
+  fromShop      Shop?          @relation("TransferFromShop", fields: [fromShopId], references: [id], onDelete: SetNull)
+  fromFactoryId Int?
+  fromFactory   Factory?       @relation("TransferFromFactory", fields: [fromFactoryId], references: [id], onDelete: SetNull)
   to            String
   toId          Int
+  toStoreId     Int?
+  toStore       Store?         @relation("TransferToStore", fields: [toStoreId], references: [id], onDelete: SetNull)
+  toShopId      Int?
+  toShop        Shop?          @relation("TransferToShop", fields: [toShopId], references: [id], onDelete: SetNull)
+  toFactoryId   Int?
+  toFactory     Factory?       @relation("TransferToFactory", fields: [toFactoryId], references: [id], onDelete: SetNull)
   shipping_cost Float
   status        String         @default("processing")
   isRecived     Boolean?       @default(false)
@@ -1112,6 +1135,12 @@ model Transfer {
 
   @@index([requisitionId])
   @@index([requisitionSectionId])
+  @@index([fromStoreId])
+  @@index([fromShopId])
+  @@index([fromFactoryId])
+  @@index([toStoreId])
+  @@index([toShopId])
+  @@index([toFactoryId])
 }
 
 model Requisition {
@@ -1235,7 +1264,9 @@ model TransferItem {
   id         Int      @id @default(autoincrement())
   transferId Int
   productId  Int?
+  product    Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   materialId Int?
+  material   Material? @relation(fields: [materialId], references: [id], onDelete: SetNull)
   transfer   Transfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
   item       String
   itemId     Int
@@ -1248,6 +1279,9 @@ model TransferItem {
   receivedQuantity   Float?
   avg_cost   Float?
   receiptItems TransferReceiptItem[]
+
+  @@index([productId])
+  @@index([materialId])
 }
 
 model TransferReceipt {
@@ -1625,11 +1659,20 @@ model DamageRecord {
   totalLoss Float
   fromType  String
   fromId    Int
+  storeId   Int?
+  store     Store?             @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  shopId    Int?
+  shop      Shop?              @relation(fields: [shopId], references: [id], onDelete: SetNull)
+  factoryId Int?
+  factory   Factory?           @relation(fields: [factoryId], references: [id], onDelete: SetNull)
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
   items     DamageRecordItem[]
 
   @@index([createdAt])
+  @@index([storeId])
+  @@index([shopId])
+  @@index([factoryId])
 }
 
 model DamageRecordItem {

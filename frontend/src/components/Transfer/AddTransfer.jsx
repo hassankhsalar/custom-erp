@@ -565,9 +565,6 @@ const AddTransfer = () => {
                   <option value="processing">Processing</option>
                   <option value="pending">Pending</option>
                   <option value="on_the_way">On The Way</option>
-                  <option value="partial">Partial</option>
-                  <option value="not_received">Cancel</option>
-                  <option value="complete">Complete</option>
                 </select>
               </div>
             </div>
