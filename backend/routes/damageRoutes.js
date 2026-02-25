@@ -1,6 +1,7 @@
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const { decrementBatch, getAvailableBatches, mergeIncomingBatch, parseDateOnly } = require("../utils/batchDetails");
+const { createNotification } = require("../utils/notificationHelper");
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -325,6 +326,13 @@ router.post("/", async (req, res) => {
         );
       }
       return created;
+    });
+
+    await createNotification(prisma, {
+      title: `Damage record created (#${record.id})`,
+      description: `A damage record was created for ${record.fromType} #${record.fromId} with total loss ${record.totalLoss}.`,
+      forRole: "admin",
+      link: "/damage-records/list"
     });
 
     res.status(201).json(record);

@@ -2,6 +2,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
 const { buildScope, ensureIdScope } = require("../utils/associateScope");
+const { createNotification } = require("../utils/notificationHelper");
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -246,6 +247,13 @@ router.post("/", authenticateToken, async (req, res) => {
           include: { product: true, material: true },
         },
       },
+    });
+
+    await createNotification(prisma, {
+      title: `New requisition (${created.reference || created.id})`,
+      description: `A new requisition ${created.reference || created.id} was created.`,
+      forRole: "admin",
+      link: "/requisition/all"
     });
 
     res.status(201).json(created);
@@ -832,6 +840,13 @@ router.post("/:id/child", authenticateToken, async (req, res) => {
         },
       },
       include: { items: true },
+    });
+
+    await createNotification(prisma, {
+      title: `New requisition (${created.reference || created.id})`,
+      description: `A child requisition ${created.reference || created.id} was created.`,
+      forRole: "admin",
+      link: "/requisition/all"
     });
 
     res.status(201).json(created);

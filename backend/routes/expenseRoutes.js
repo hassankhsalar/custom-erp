@@ -3,6 +3,7 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const router = express.Router();
 const { createTransaction } = require("../utils/transactionHelper");
+const { createNotification } = require("../utils/notificationHelper");
 
 // Expense categories
 router.get("/categories", async (req, res) => {
@@ -104,6 +105,13 @@ router.post("/", async (req, res) => {
       });
 
       return expense;
+    });
+
+    await createNotification(prisma, {
+      title: `Expense created (#${result.id})`,
+      description: `A new expense of ${result.amount} was created${result.salaryId ? " for salary disbursement" : ""}.`,
+      forRole: "admin",
+      link: "/expense/list"
     });
 
     res.json(result);

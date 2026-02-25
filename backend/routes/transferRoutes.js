@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 const { createTransaction } = require('../utils/transactionHelper');
+const { createNotification } = require('../utils/notificationHelper');
 const { buildScope, ensureIdScope, buildTransferOrFilter } = require('../utils/associateScope');
 const { getAvailableBatches, mergeIncomingBatch, decrementBatch, parseDateOnly } = require('../utils/batchDetails');
 
@@ -1271,6 +1272,15 @@ router.post('/:id/receive', authenticateToken, async (req, res) => {
         },
         include: { transferItems: true },
       });
+
+      if (nextStatus === 'partial') {
+        await createNotification(tx, {
+          title: `Partial transfer receive (${updatedTransfer.reference || updatedTransfer.id})`,
+          description: `Transfer ${updatedTransfer.reference || updatedTransfer.id} was received partially. Received: ${summary.totalReceived}, Remaining: ${summary.totalRemaining}.`,
+          forRole: 'admin',
+          link: '/transfers'
+        });
+      }
 
       return { receipt, transfer: updatedTransfer, summary };
     });

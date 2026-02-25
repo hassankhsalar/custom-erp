@@ -379,6 +379,13 @@ router.post("/", async (req, res) => {
       return { purchase, purchaseItems };
     });
 
+    await createNotification(prisma, {
+      title: `Purchase created (${result.purchase.reference || result.purchase.id})`,
+      description: `A new purchase ${result.purchase.reference || result.purchase.id} was created.`,
+      forRole: "admin",
+      link: "/purchase/all"
+    });
+
     res.status(201).json({
       message: "Purchase created successfully",
       purchase: {
@@ -1569,6 +1576,13 @@ router.put('/:id', async (req, res) => {
         });
       }
 
+      await createNotification(tx, {
+        title: `Purchase updated (${updatedPurchase.reference || updatedPurchase.id})`,
+        description: `Purchase ${updatedPurchase.reference || updatedPurchase.id} was edited.`,
+        forRole: "admin",
+        link: "/purchase/all"
+      });
+
       return tx.purchase.findUnique({
         where: { id: purchaseId },
         include: {
@@ -1724,6 +1738,13 @@ router.post('/:id/shipments', async (req, res) => {
       await tx.purchase.update({
         where: { id: purchase.id },
         data: { shippingStatus: newShippingStatus }
+      });
+
+      await createNotification(tx, {
+        title: `Purchase shipment received (${purchase.reference || purchase.id})`,
+        description: `A shipment was added to purchase ${purchase.reference || purchase.id}.`,
+        forRole: "admin",
+        link: "/purchase/all"
       });
 
       return { shipment, shippingStatus: newShippingStatus };
@@ -1929,6 +1950,13 @@ router.get('/:id/shipments', async (req, res) => {
     });
 
     const { dueAmount: updatedDueAmount, status } = calculatePurchaseStatus(updatedPurchase);
+
+    await createNotification(prisma, {
+      title: `Purchase payment (${updatedPurchase.reference || updatedPurchase.id})`,
+      description: `Payment of ${paymentAmount} was added to purchase ${updatedPurchase.reference || updatedPurchase.id}.`,
+      forRole: "admin",
+      link: "/purchase/all"
+    });
 
     res.json({
       success: true,
@@ -2394,6 +2422,15 @@ const createStandalonePurchaseOrDamageReturn = async (req, res, returnType) => {
       });
     });
 
+    if (returnType === "damage_return") {
+      await createNotification(prisma, {
+        title: `Damage return created (${result.reference || result.id})`,
+        description: `A standalone damage return ${result.reference || result.id} was created.`,
+        forRole: "admin",
+        link: "/purchase/all"
+      });
+    }
+
     res.status(201).json({
       success: true,
       message: `${returnType === "damage_return" ? "Damage return" : "Purchase return"} created successfully`,
@@ -2655,6 +2692,15 @@ const createPurchaseOrDamageReturn = async (req, res, returnType) => {
 
       return updatedReturn;
     });
+
+    if (returnType === "damage_return") {
+      await createNotification(prisma, {
+        title: `Damage return created (${result.reference || result.id})`,
+        description: `A purchase-linked damage return ${result.reference || result.id} was created.`,
+        forRole: "admin",
+        link: "/purchase/all"
+      });
+    }
 
     res.status(201).json({
       success: true,

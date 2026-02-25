@@ -1,6 +1,7 @@
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const { buildScope, ensureIdScope } = require("../utils/associateScope");
+const { createNotification } = require("../utils/notificationHelper");
 const prisma = new PrismaClient();
 const router = express.Router();
 const { createTransaction } = require('../utils/transactionHelper');
@@ -259,6 +260,13 @@ router.post("/return", async (req, res) => {
         // Continue with other items even if one stock update fails
       }
     }
+
+    await createNotification(prisma, {
+      title: `Sale return created (${saleReturn.reference || saleReturn.id})`,
+      description: `A sale return was created for sale #${saleId}.`,
+      forRole: "admin",
+      link: "/sales/returns"
+    });
 
     res.json({
       success: true,

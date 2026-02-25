@@ -2,6 +2,7 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const router = express.Router();
 const prisma = new PrismaClient();
+const { createNotification } = require('../utils/notificationHelper');
 
 // Get all entities (stores, shops, factories) with their assigned cash registers
 router.get('/entities', async (req, res) => {
@@ -605,6 +606,15 @@ router.put('/cash-register/:id/status', async (req, res) => {
 
       return cashRegister;
     });
+
+    if (['active', 'closed'].includes(status)) {
+      await createNotification(prisma, {
+        title: `Cash register ${status === 'active' ? 'opened' : 'closed'} (${updated.name || updated.id})`,
+        description: `Cash register ${updated.name || `#${updated.id}`} is now ${status}.`,
+        forRole: 'admin',
+        link: '/accounts/cash-register/list'
+      });
+    }
 
     res.json({
       message: `Cash register status updated to ${status}`,
