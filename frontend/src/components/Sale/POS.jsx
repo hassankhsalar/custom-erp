@@ -4,7 +4,7 @@ import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
 import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X, Camera } from "lucide-react";
 import { TbCurrencyTaka } from "react-icons/tb";
 import { activeOnly } from "../../utils/softDelete";
-import { Html5Qrcode } from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 
 export default function ShopPOS( props ) {
   const [shops, setShops] = useState([]);
@@ -96,16 +96,46 @@ export default function ShopPOS( props ) {
 
   useEffect(() => {
     if (!scannerOpen) return;
+
     let cancelled = false;
 
     const startScanner = async () => {
       try {
-        if (!navigator.mediaDevices?.getUserMedia) {
-          throw new Error("Camera is not supported in this browser.");
+        
+        await new Promise((resolve) => setTimeout(resolve, 200));
+
+        const element = document.getElementById(SCANNER_ELEMENT_ID);
+        if (!element) {
+          throw new Error("Unable to start the camera.");
         }
 
-        const scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, { verbose: false });
+        const scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, {
+          verbose: false,
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.CODABAR,
+            Html5QrcodeSupportedFormats.QR_CODE,
+          ],
+          experimentalFeatures: {
+            useBarCodeDetectorIfSupported: true,
+          },
+        });
         scannerRef.current = scanner;
+
+        const devices = await Html5Qrcode.getCameras();
+        if (!devices.length) {
+          throw new Error("No cameras found.");
+        }
+
+        const backCamera =
+          devices.find((d) => /back|rear|environment/i.test(String(d.label || ""))) ||
+          devices[0];
 
         await scanner.start(
           { facingMode: { ideal: "environment" } },
@@ -116,17 +146,18 @@ export default function ShopPOS( props ) {
           },
           (decodedText) => {
             if (cancelled) return;
-            handleSearch(decodedText);
-            setScannerOpen(false);
-          },
-          () => {}
+            handleSearch(String(decodedText || "").trim());
+            closeScanner(); // better than just setScannerOpen(false)
+          }
         );
       } catch (error) {
+        console.error("Scanner error:", error);
         setScannerError(error?.message || "Failed to start camera scanner.");
       }
     };
 
     startScanner();
+
     return () => {
       cancelled = true;
       stopScanner();
