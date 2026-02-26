@@ -680,7 +680,8 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="notification_read" />}>
               <Route path="/notifications" element={<Notifications />} />
             </Route>
-            <Route path="/userprofile" element={<UserProfile />} />
+            <Route path="/profile" element={<UserProfile />} />
+            <Route path="/userprofile" element={<Navigate to="/profile" replace />} />
             {/* Default route for authenticated users */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>

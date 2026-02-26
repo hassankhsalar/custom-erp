@@ -1,1112 +1,681 @@
-const { PrismaClient } = require('@prisma/client');
-const bcrypt = require('bcryptjs');
+﻿const { PrismaClient } = require("@prisma/client");
+const bcrypt = require("bcryptjs");
 
 const prisma = new PrismaClient();
 
-const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-const randFloat = (min, max, decimals = 2) =>
-  Number((Math.random() * (max - min) + min).toFixed(decimals));
-const pick = (arr) => arr[randInt(0, arr.length - 1)];
-const sample = (arr, count) => {
-  const copy = [...arr];
-  const out = [];
-  while (out.length < count && copy.length > 0) {
-    const idx = randInt(0, copy.length - 1);
-    out.push(copy.splice(idx, 1)[0]);
-  }
-  return out;
-};
-
-const chunkArray = (arr, size) => {
-  const chunks = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
-  }
-  return chunks;
-};
-
-async function createManyInChunks(model, data, chunkSize = 1000) {
-  const chunks = chunkArray(data, chunkSize);
-  for (const chunk of chunks) {
-    await prisma[model].createMany({ data: chunk, skipDuplicates: true });
-  }
-}
-
 async function safeDelete(model) {
-  if (!prisma[model] || typeof prisma[model].deleteMany !== 'function') return;
+  if (!prisma[model] || typeof prisma[model].deleteMany !== "function") return;
   await prisma[model].deleteMany();
 }
 
-function randomDate() {
-
-  const start = new Date('2023-01-01T00:00:00');
-  const end = new Date('2026-02-25T23:59:59');
-
-  // Convert dates to their millisecond timestamps
-  const startTime = start.getTime();
-  const endTime = end.getTime();
-  const randomTime = startTime + Math.random() * (endTime - startTime);
-
-  return new Date(randomTime);
-}
-
 async function main() {
-  console.log('Cleaning up existing data...');
-  const cleanupOrder = [
-    // Operational / child tables first
-    'activityLog',
-    'saleEditAccessRequest',
-    'warrantyClaim',
-    'userWarranty',
-    'saleReturnItem',
-    'saleReturn',
-    'saleItem',
-    'sale',
-    'purchaseReturnCompensationItem',
-    'purchaseReturnCompensationShipment',
-    'purchaseReturnPayment',
-    'purchaseReturnItem',
-    'purchaseReturn',
-    'purchaseShipmentItem',
-    'purchaseShipment',
-    'purchaseItem',
-    'purchase',
-    'transferReceiptItem',
-    'transferReceipt',
-    'transferItem',
-    'transfer',
-    'requisitionSectionItem',
-    'requisitionSection',
-    'requisitionItem',
-    'requisition',
-    'productionMaterial',
-    'productionProducts',
-    'production',
-    'repairOrderItem',
-    'repairOrder',
-    'damageRecordItem',
-    'damageRecord',
-    'productRepairItem',
-    'productRepair',
-    'materialRepairItem',
-    'materialRepair',
-    'scrapProduct',
-    'scrapProductRecord',
-    'scrapMaterial',
-    'scrapMaterialRecord',
-    'stockAdjustment',
-    'transactions',
-    'cashRegisterRecord',
-    'cashRegisterWithdraw',
-    'cashRegisterAssignment',
-    'entityAccount',
-    'expense',
-    'expenseCategory',
-    'salary',
-    'leaveApproval',
-    'leaveRequest',
-    'leaveCategory',
-    'holiday',
-    'clockInOut',
-    'employeeProfile',
-    'userManager',
-    'userAssociate',
-    'dailyStockSnapshotItem',
-    'dailyStockSnapshot',
-    'productMaterial',
-    'storeProduct',
-    'shopProduct',
-    'factoryProduct',
-    'storeMaterial',
-    'shopMaterial',
-    'factoryMaterial',
-    'notification',
-    'profile',
+  console.log("Cleaning database...");
 
-    // Master tables / parent tables
-    'customer',
-    'supplier',
-    'shop',
-    'store',
-    'factory',
-    'product',
-    'material',
-    'bankAccount',
-    'accounts',
-    'cashRegister',
-    'businessSettings',
-    'user',
-    'permission',
+  const cleanupOrder = [
+    "activityLog",
+    "saleEditAccessRequest",
+    "warrantyClaim",
+    "userWarranty",
+    "saleReturnItem",
+    "saleReturn",
+    "saleItem",
+    "sale",
+    "purchaseReturnCompensationItem",
+    "purchaseReturnCompensationShipment",
+    "purchaseReturnPayment",
+    "purchaseReturnItem",
+    "purchaseReturn",
+    "purchaseShipmentItem",
+    "purchaseShipment",
+    "purchaseItem",
+    "purchase",
+    "transferReceiptItem",
+    "transferReceipt",
+    "transferItem",
+    "transfer",
+    "requisitionSectionItem",
+    "requisitionSection",
+    "requisitionItem",
+    "requisition",
+    "productionMaterial",
+    "productionProducts",
+    "production",
+    "repairOrderItem",
+    "repairOrder",
+    "damageRecordItem",
+    "damageRecord",
+    "productRepairItem",
+    "productRepair",
+    "materialRepairItem",
+    "materialRepair",
+    "scrapProduct",
+    "scrapProductRecord",
+    "scrapMaterial",
+    "scrapMaterialRecord",
+    "stockAdjustment",
+    "transactions",
+    "cashRegisterRecord",
+    "cashRegisterWithdraw",
+    "cashRegisterAssignment",
+    "entityAccount",
+    "expense",
+    "expenseCategory",
+    "salary",
+    "leaveApproval",
+    "leaveRequest",
+    "leaveCategory",
+    "holiday",
+    "clockInOut",
+    "employeeProfile",
+    "userManager",
+    "userAssociate",
+    "dailyStockSnapshotItem",
+    "dailyStockSnapshot",
+    "productMaterial",
+    "storeProduct",
+    "shopProduct",
+    "factoryProduct",
+    "storeMaterial",
+    "shopMaterial",
+    "factoryMaterial",
+    "notification",
+    "profile",
+    "customer",
+    "supplier",
+    "shop",
+    "store",
+    "factory",
+    "product",
+    "material",
+    "bankAccount",
+    "accounts",
+    "cashRegister",
+    "businessSettings",
+    "user",
+    "permission",
   ];
 
   for (const model of cleanupOrder) {
     await safeDelete(model);
   }
 
-  console.log('Existing data cleaned up.');
+  console.log("Database cleaned.");
 
-  const defaultPermission = await prisma.permission.create({
+  const adminPermission = await prisma.permission.create({
     data: {
-      name: 'admin',
-      permissions: [
-        'material_create', 'material_read', 'material_edit', 'material_delete',
-        'product_read', 'product_create', 'product_edit', 'product_delete',
-        'unit_read', 'unit_create', 'unit_edit', 'unit_delete',
-        'brand_read', 'brand_create', 'brand_edit', 'brand_delete',
-        'product_category_read', 'product_category_create', 'product_category_edit', 'product_category_delete',
-        
-        'factory_create', 'factory_edit', 'factory_delete', 'factory_read', 'factory_item_edit',
-        'store_create', 'store_edit', 'store_delete', 'store_read', 'store_item_edit',
-        'shop_create', 'shop_edit', 'shop_delete', 'shop_read', 'shop_item_edit',
-        
-        'inventory_adjustment_create', 'inventory_adjustment_read',
-        
-        'cash_register_read', 'cash_register_create', 'cash_register_edit', 'cash_register_delete',
-        'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit',
-        'bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete',
-        'bank_account_deposit', 'bank_account_withdraw',
-        
-        'account_read', 'account_create', 'account_edit', 'account_delete',
-        'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement',
-        
-        'purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment',
-        'purchases_return_create', 'purchases_return_edit', 'purchases_return_delete', 'purchases_return_read',
-        
-        'production_create', 'production_edit', 'production_delete', 'production_read', 'production_change_status', 'production_complete',
-        
-        'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_edit_any_day', 'sales_add_payment',
-        'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read',
-        
-        'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive', 'transfer_return',
-
-        'requisition_create', 'requisition_read', 'requisition_update', 'requisition_delete', 'requisition_approve', 'requisition_segment', 'requisition_order_accept',
-        
-        'damage_create', 'damage_edit', 'damage_delete', 'damage_read',
-        'repairs_create', 'repairs_edit', 'repairs_delete', 'repairs_read',
-        
-        'expenses_create', 'expenses_edit', 'expenses_delete', 'expenses_read',
-        'salary_create', 'salary_edit', 'salary_delete', 'salary_read',
-        'leave_approve', 'leave_approve_all', 'leave_read', 'leave_request_create', 'leave_request_edit', 'leave_request_delete',
-        'holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read', 'holiday_manage',
-        'leave_category_manage', 'payroll_manage', 'approve_salary', 'approve_clock_in_out', 'add_salary', 'edit_salary',
-        'hrm_read', 'hrm_employee_manage', 'clock_in_out_manage',
-
-        'general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report',
-        'sales_report', 'purchases_report', 'production_report', 'wastage_report', 'stock_report', 'transfer_report',
-        'profit_loss_report', 'purchase_sales_report', 'customer_report', 'supplier_report',
-        'best_selling_product_report', 'worst_selling_product_report', 'profit_calender_report',
-        
-        'user_create', 'user_edit', 'user_delete', 'user_read', 'user_activate_deactivate', 'user_logout', 'user_associate_create', 'user_activity_log_read',
-        'hrm_settings_edit',
-        'role_create', 'role_edit', 'role_delete', 'role_read',
-        'customer_read', 'customer_create', 'customer_edit', 'customer_delete',
-        'supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete',
-        'general_settings_edit', 'company_settings_edit', 'notification_read',
-        'data_import', 'data_export',
-        
-        // Compatibility aliases (old/new permission key variants)
-        'product_update', 'material_update', 'customer_update', 'supplier_update',
-        'sales_update', 'purchases_update', 'production_update',
-        'transfers_update', 'store_update', 'shop_update', 'factory_update',
-      ],
+      name: "admin",
+      permissions: [],
     },
   });
 
-  const managerPermission = await prisma.permission.create({
+  const passwordHash = await bcrypt.hash("asd123", 10);
+
+  const adminUser = await prisma.user.create({
     data: {
-      name: 'manager',
-      permissions: ['user_read', 'sales_read', 'purchases_read', 'inventory_adjustment_read']
+      email: "admin@example.com",
+      username: "adminuser",
+      name: "Admin User",
+      password: passwordHash,
+      permissionId: adminPermission.id,
+      isActive: true,
+      deleted_at: false,
+      bypassGlobalAccessWindow: true,
     },
   });
 
-  const cashierPermission = await prisma.permission.create({
-    data: {
-      name: 'cashier',
-      permissions: ['sales_create', 'sales_read', 'cash_register_open', 'cash_register_close']
-    },
-  });
 
-  const storeKeeperPermission = await prisma.permission.create({
-    data: {
-      name: 'store_keeper',
-      permissions: ['material_read', 'product_read', 'store_read', 'inventory_adjustment_create']
-    },
-  });
-
-  const adminPassword = await bcrypt.hash('asd123', 10);
-  const admin = await prisma.user.create({
-    data: {
-      email: 'admin@example.com',
-      username: 'adminuser',
-      name: 'Admin',
-      password: adminPassword,
-      permissionId: defaultPermission.id,
-    },
-  });
-
-  const permissionPool = [defaultPermission, managerPermission, cashierPermission, storeKeeperPermission];
-  const extraUsers = [];
-  for (let i = 1; i <= 19; i += 1) {
-    const perm = pick(permissionPool);
-    extraUsers.push({
-      email: `user${i}@example.com`,
-      username: `user${i}`,
-      name: `User ${i}`,
-      password: await bcrypt.hash(`user${i}pass`, 10),
-      permissionId: perm.id,
-    });
-  }
-  await prisma.user.createMany({ data: extraUsers });
-
-  const factories = await Promise.all([
-    prisma.factory.create({ data: { name: 'Main Factory', phone: '01711111111', manager: 'Mr. Hasan', email: 'factory@example.com', address: 'Dhaka, Bangladesh' } }),
-    prisma.factory.create({ data: { name: 'North Factory', phone: '01711111112', manager: 'Mr. Karim', email: 'northfactory@example.com', address: 'Gazipur, Bangladesh' } }),
-    prisma.factory.create({ data: { name: 'South Factory', phone: '01711111113', manager: 'Ms. Fatima', email: 'southfactory@example.com', address: 'Narayanganj, Bangladesh' } }),
-    prisma.factory.create({ data: { name: 'West Factory', phone: '01711111114', manager: 'Mr. Rahim', email: 'westfactory@example.com', address: 'Savar, Bangladesh' } }),
-  ]);
-
-  const stores = await Promise.all([
-    prisma.store.create({ data: { name: 'Central Store', address: 'Uttara, Dhaka', store_keeper: 'Shafiq', mobile: '01722222222' } }),
-    prisma.store.create({ data: { name: 'East Store', address: 'Badda, Dhaka', store_keeper: 'Kamal', mobile: '01722222223' } }),
-    prisma.store.create({ data: { name: 'West Store', address: 'Mirpur, Dhaka', store_keeper: 'Jamal', mobile: '01722222224' } }),
-    prisma.store.create({ data: { name: 'South Store', address: 'Dhanmondi, Dhaka', store_keeper: 'Rina', mobile: '01722222225' } }),
-  ]);
-
-  const shops = await Promise.all([
-    prisma.shop.create({ data: { name: 'BSP Retail Shop', address: 'Banani, Dhaka', shop_keeper: 'Rahim', mobile: '01733333333' } }),
-    prisma.shop.create({ data: { name: 'BSP Gulshan Shop', address: 'Gulshan, Dhaka', shop_keeper: 'Karim', mobile: '01733333334' } }),
-    prisma.shop.create({ data: { name: 'BSP Bashundhara Shop', address: 'Bashundhara, Dhaka', shop_keeper: 'Sadia', mobile: '01733333335' } }),
-    prisma.shop.create({ data: { name: 'BSP Motijheel Shop', address: 'Motijheel, Dhaka', shop_keeper: 'Tarek', mobile: '01733333336' } }),
-  ]);
-
-  const suppliersData = Array.from({ length: 10 }, (_, i) => ({
-    name: `Supplier ${String(i + 1).padStart(2, '0')}`,
-    mobile: `01744${String(10000 + i).padStart(5, '0')}`,
-    address: ['Dhaka', 'Chittagong', 'Khulna', 'Sylhet', 'Rajshahi'][i % 5],
-  }));
-  await prisma.supplier.createMany({ data: suppliersData });
-  const suppliers = await prisma.supplier.findMany();
-  
-  const customersData = Array.from({ length: 200 }, (_, i) => ({
-    name: `Customer ${String(i + 1).padStart(3, '0')}`,
-    mobile: `01855${String(20000 + i).padStart(5, '0')}`,
-    email: `customer${i + 1}@example.com`,
-    address: ['Dhaka', 'Chittagong', 'Khulna', 'Sylhet', 'Rajshahi'][i % 5],
-  }));
-  await prisma.customer.createMany({ data: customersData, skipDuplicates: true });
-  const customers = await prisma.customer.findMany();
-
-  const units = ['kg', 'piece', 'liter', 'box', 'meter'];
-  const brands = ['bsrm', 'rfl', 'berger', 'akij', 'beximco'];
-
-  const materialData = Array.from({ length: 1000 }, (_, i) => {
-    const unitCost = randFloat(10, 500, 2);
-    return {
-      name: `Material ${String(i + 1).padStart(4, '0')}`,
-      brand: pick(brands),
-      description: `Material description ${i + 1}`,
-      barcode: `MAT-${String(i + 1).padStart(6, '0')}`,
-      unit: pick(units),
-      unit_cost: unitCost,
-      sale_price: Number((unitCost * randFloat(1.15, 1.35)).toFixed(2)),
-      current_stock: randInt(50, 500),
-    };
-  });
-  await createManyInChunks('material', materialData, 500);
-
-  const productData = Array.from({ length: 1000 }, (_, i) => {
-    const cost = randFloat(100, 2000, 2);
-    const salePrice = Number((cost * randFloat(1.2, 1.5)).toFixed(2));
-    return {
-      name: `Product ${String(i + 1).padStart(4, '0')}`,
-      description: `Product description ${i + 1}`,
-      sale_price: salePrice,
-      wholesale_price: Number((salePrice * randFloat(0.85, 0.95)).toFixed(2)),
-      cost,
-      barcode: `PRD-${String(i + 1).padStart(6, '0')}`,
-      category: ['Furniture', 'Accessories', 'Tools', 'Electronics'][i % 4],
-      stock: randInt(10, 200),
-    };
-  });
-  await createManyInChunks('product', productData, 500);
-
-  const materials = await prisma.material.findMany({ select: { id: true, unit_cost: true, sale_price: true } });
-  const products = await prisma.product.findMany({ select: { id: true, cost: true, sale_price: true } });
-
-  const productMaterialLinks = [];
-  for (let i = 0; i < 100; i += 1) {
-    const product = products[i];
-    const linkedMaterials = sample(materials, randInt(2, 4));
-    for (const mat of linkedMaterials) {
-      productMaterialLinks.push({
-        product_id: product.id,
-        material_id: mat.id,
-        material_quantity: randFloat(0.5, 5, 2),
-        price: randFloat(10, 500, 2),
-      });
-    }
-  }
-  if (productMaterialLinks.length > 0) {
-    await createManyInChunks('productMaterial', productMaterialLinks, 1000);
-  }
-
-  const storeProductData = [];
-  const storeMaterialData = [];
-  for (const store of stores) {
-    for (const product of products) {
-      storeProductData.push({
-        store_id: store.id,
-        product_id: product.id,
-        stock: randInt(10, 200),
-        avg_cost: Number((product.cost * randFloat(0.9, 1.1)).toFixed(2)),
-      });
-    }
-    for (const material of materials) {
-      storeMaterialData.push({
-        store_id: store.id,
-        material_id: material.id,
-        stock: randInt(50, 500),
-        avg_cost: Number((material.unit_cost * randFloat(0.9, 1.1)).toFixed(2)),
-      });
-    }
-  }
-  await createManyInChunks('storeProduct', storeProductData, 1000);
-  await createManyInChunks('storeMaterial', storeMaterialData, 1000);
-
-  const shopProductData = [];
-  const shopMaterialData = [];
-  for (const shop of shops) {
-    for (const product of products) {
-      shopProductData.push({
-        shop_id: shop.id,
-        product_id: product.id,
-        stock: randInt(5, 120),
-        avg_cost: Number((product.cost * randFloat(0.95, 1.1)).toFixed(2)),
-      });
-    }
-    for (const material of materials) {
-      shopMaterialData.push({
-        shop_id: shop.id,
-        material_id: material.id,
-        stock: randInt(20, 200),
-        avg_cost: Number((material.unit_cost * randFloat(0.95, 1.1)).toFixed(2)),
-      });
-    }
-  }
-  await createManyInChunks('shopProduct', shopProductData, 1000);
-  await createManyInChunks('shopMaterial', shopMaterialData, 1000);
-
-  const factoryProductData = [];
-  const factoryMaterialData = [];
-  for (const factory of factories) {
-    for (const product of products) {
-      factoryProductData.push({
-        factoryId: factory.id,
-        productId: product.id,
-        stock: randInt(20, 300),
-        avg_cost: Number((product.cost * randFloat(0.9, 1.05)).toFixed(2)),
-      });
-    }
-    for (const material of materials) {
-      factoryMaterialData.push({
-        factoryId: factory.id,
-        materialId: material.id,
-        stock: randInt(100, 800),
-        avg_cost: Number((material.unit_cost * randFloat(0.9, 1.05)).toFixed(2)),
-      });
-    }
-  }
-  await createManyInChunks('factoryProduct', factoryProductData, 1000);
-  await createManyInChunks('factoryMaterial', factoryMaterialData, 1000);
-
-  const cashRegisterData = Array.from({ length: 6 }, (_, i) => ({
-    name: `Cash Register ${i + 1}`,
-    status: i % 2 === 0 ? 'active' : 'closed',
-    cash_in_hand: randInt(1000, 50000),
-  }));
-  await prisma.cashRegister.createMany({ data: cashRegisterData });
-  const cashRegisters = await prisma.cashRegister.findMany();
-
-  const bankAccountData = Array.from({ length: 5 }, (_, i) => ({
-    name: `Bank Account ${i + 1}`,
-    account_number: `BA-${String(i + 1).padStart(6, '0')}`,
-    starting_balance: randInt(50000, 200000),
-    current_balance: randInt(80000, 300000),
-    withdraw_charge: randInt(1, 20),
-  }));
-  await prisma.bankAccount.createMany({ data: bankAccountData });
-  const bankAccounts = await prisma.bankAccount.findMany();
-
-  const accountData = Array.from({ length: 6 }, (_, i) => ({
-    name: `Account ${i + 1}`,
-    account_number: `ACCT-${String(i + 1).padStart(5, '0')}`,
-    balance: randInt(10000, 500000),
-    status: 'active',
-  }));
-  await prisma.accounts.createMany({ data: accountData });
-  const accounts = await prisma.accounts.findMany();
-
-  const entityAccounts = [];
-  const allEntities = [
-    ...shops.map(s => ({ type: 'shop', id: s.id })),
-    ...stores.map(s => ({ type: 'store', id: s.id })),
-    ...factories.map(f => ({ type: 'factory', id: f.id })),
+  const productData = [
+    { name: '৬/১৪ বনপাখা ৪পাতা পি.এন.জি', barcode: '00000002', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ বনপাখা ৩ পাতা পি.এন.জি', barcode: '00000003', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ বনপাখা বি সুপার ৩ পাতা', barcode: '00000004', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ বনপাখা বি সুপার ৪ পাতা', barcode: '00000005', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালী বনপাখা ৩ পাতা', barcode: '00000006', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালী বনপাখা ৪ পাতা', barcode: '00000007', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৫ ইতালী বনপাখা ৩ পাতা', barcode: '00000008', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৫ ইতালী বনপাখা ৪ পাতা', barcode: '00000009', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ বনপাখা ৩ গেফ ৩ পাতা', barcode: '00000010', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ বনপাখা ৩ গেফ ৪ পাতা', barcode: '00000011', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ বনপাখা ৩.৫ গেফ ৪ পাতা ৪ গুনা', barcode: '00000012', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ বনপাখা ৩.৫ গেফ ৩ পাতা ৪ গুনা', barcode: '00000013', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ বনপাখা ৩.৫ গেপ ৩ পাতা (৭০ গুনা)', barcode: '00000014', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ বনপাখা ৩.৫ গেপ ৪ পাতা (৭০ গুনা)', barcode: '00000015', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৩ পাতা (৭৩ গুনা)', barcode: '00000016', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৩ পাতা (৭০ গুনা)', barcode: '00000017', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৩ পাতা (৪ গুনা)', barcode: '00000018', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৪ পাতা (৭০ গুনা)', barcode: '00000019', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৪ পাতা (৪ গুনা)', barcode: '00000020', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ বনপাকা ৫ গ্যাপ ৩ পাতা (৭০ গুনা)', barcode: '00000021', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ বনপাকা ৫ গ্যাপ ৩ গ্যাপ (৪ গুনা)', barcode: '00000022', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২/২২ বনপাখা ৪ গেপ ৩ পাতা', barcode: '00000023', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১০/২০ বনপাখা ৪.৫ গেফ ৩ পাতা (৮০)', barcode: '00000024', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/২০ বনপাখা ৪ গেপ ৩ পাতা (৭০ গুনা)', barcode: '00000025', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/২০ বনপাখা ৪ গেপ ৩ পাতা (৭৩ গুনা)', barcode: '00000026', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৩ বনপাখা ৪ পাতা পি.এন.জি', barcode: '00000028', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৪ বনপাখা ৩ পাতা (বি-সুপার গুনা)', barcode: '00000029', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৪ বনপাখা ৪ পাতা (বি-সুপার গুনা)', barcode: '00000031', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৩ ইতালী বনপাখা', barcode: '00000465', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ ইতালী বনপাখা', barcode: '00000466', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২/২২ বনপাখা ৬.৫ হাই ৩ পাতা (৮০)', barcode: '00001054', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ বনপাখা ৩ পাতা গুনা ছাড়া', barcode: '00000642', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ বনপাখা ৩.৫ গ্যাপ ৩ পাতা ২ গুনা', barcode: '00000032', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ বনপাখা ৩.৫ গ্যাপ ৪ পাতা ২ গুনা', barcode: '00000033', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১১ বনপাখা ৪ পাতা কলার পানি', barcode: '00000555', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ বনপাখা ৪ গ্যাপ ৩ পাতা ৬\'\' হাই টেপার', barcode: '00000928', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৩ পাতা (৭০ গুনা)', barcode: '00000782', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৪ পাতা (৭৩ গুনা)', barcode: '00000945', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৩ পাতা ( ৬৫ গুনা)', barcode: '00000911', unit: 'PC', category: 'বনপাখা আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২/২০ বনপাখা কলার ৫ পাতা ৬.৫ গেপ ৮ হাই', barcode: '00000643', unit: 'PC', category: 'বনপাখা আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২/২০ বনপাখা কলার ৬ গ্যাপ ৮ হাই ৫ পাতা', barcode: '00000832', unit: 'PC', category: 'বনপাখা আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৬ বনপাখা ৫ পাতা কলার ৪.৫ গেপ ৬ হাই', barcode: '00000686', unit: 'PC', category: 'বনপাখা আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালী বনপাখা ৩ পাতা ৪ গুনা হার্ড', barcode: '00000700', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ বনপাখা ৩ পাতা পি.এন.জি হার্ড', barcode: '00000558', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ বনপাখা ৪ পাতা পি.এন.জি হার্ড', barcode: '00000559', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ বনপাখা ৩.৫ গেফ ৪ পাতা হার্ড (৭০)', barcode: '00000554', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ বনপাখা ৬ গ্যাপ 4 পাতা (৭০ গুনা) হার্ড', barcode: '00000989', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ বনপাখা ৩ পাতা স্টিল ৪ গুনা পাথর', barcode: '00000656', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৫ বনপাখা পাথর ৩ পাতা স্টিল', barcode: '00000865', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ বনপাখা ৪ পাতা স্টিল বি-সুপার গুনা পাথর', barcode: '00000988', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ বনপাখা ৩ পাতা স্টিল বি-সুপার গুনা পাথর', barcode: '00000535', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ বনপাখা ৪ পাতা স্টিল বি সুপার গুনা', barcode: '00000907', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ হাই স্পীড ইতালী পাম্প হার্ড', barcode: '00000840', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২/২২ হাই স্পীড হার্ড পাম্প', barcode: '00001001', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/১০ সুপার পাম্প (৬৩০৭)', barcode: '00000134', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/১০ সুপার পাম্প (৬৩০৮)', barcode: '00000135', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/৯ সুপার পাম্প', barcode: '00000139', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০ সুপার পাম্প', barcode: '00000497', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০.৫ সুপার পাম্প', barcode: '00000130', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ সুপার নিউ মডেল পাম্প', barcode: '00000129', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৩ সুপার নিউ মডেল পাম্প', barcode: '00000126', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ হাই স্পীড ইতালী পাম্প', barcode: '00000122', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ হাই স্পীড ইতালী বি পাম্প', barcode: '00000123', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৫ হাই স্পীড ইতালী পাম্প', barcode: '00000121', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ হাই স্পীড ইতালী হার্ড পাম্প', barcode: '00000802', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৮.৫ সুপার পাম্প', barcode: '00000138', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৯.৫ সুপার পাম্প (৬৩০৭)', barcode: '00000132', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৯.৫ সুপার পাম্প (৬৩০৮)', barcode: '00000133', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৬ হাই স্পীড ইতালী পাম্প', barcode: '00000118', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৬ হাই স্পীড ইতালী হার্ড পাম্প', barcode: '00000803', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/২০ হাই স্পীড ইতালী হার্ড পাম্প (৬৩১৯)', barcode: '00000794', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৩ সুপার পাম্প', barcode: '00000503', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/১০ স্টিল মডেল পাম্প (ঢালাই)', barcode: '00000664', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০ স্টিল মডেল পাম্প (ঢালাই)', barcode: '00000663', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৯ স্টিল পাম্প', barcode: '00000550', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ সুপার নিউ মডেল বডি', barcode: '00000156', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৪/১৬ ইতালী বডি', barcode: '00000699', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৪/৯ সুপার বডি', barcode: '00000170', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/১০ সুপার বডি', barcode: '00000165', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/৯ সুপার বডি', barcode: '00000169', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০ পানির বডি', barcode: '00000166', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০ সুপার বডি', barcode: '00000176', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০.৫ সুপার বডি', barcode: '00000161', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ নরমাল বডি ৪৫*৬০', barcode: '00000585', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ সুপার নিউ মডেল বডি', barcode: '00000160', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ সুপার বডি ওল্ড মডেল', barcode: '00000298', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৩ সুপার নিউ মডেল বডি', barcode: '00000158', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৩ সুপার বডি', barcode: '00000297', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ নরমাল বডি ৫০*৭০', barcode: '00000672', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ সুপার বডি', barcode: '00000296', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ হাই স্পীড ইতালী বডি', barcode: '00000153', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ হাই স্পীড ইতালী বি বডি', barcode: '00000155', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ হাই স্পীড ইতালী স্টিল বডি', barcode: '00000175', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৫ হাই স্পীড ইতালী বডি', barcode: '00000154', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৮.৫ পানির বডি', barcode: '00000168', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৮.৫ সুপার বডি', barcode: '00000167', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৯.৫ সুপার বডি (৬৩০৭)', barcode: '00000162', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৯.৫ সুপার বডি (৬৩০৮)', barcode: '00000163', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১১ পানির বডি', barcode: '00000174', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৬ হাই স্পীড ইতালী বডি', barcode: '00000151', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ হাই স্পীড ইতালী ৫ গেফ বডি (৬৩১৬)', barcode: '00000150', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ হাই স্পীড ইতালী ৬ গেফ বডি (৬৩১৬)', barcode: '00000149', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩২০ বেয়ারিং কেইস', barcode: 'GEN000001', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১৯ বেয়ারিং কেইস', barcode: 'GEN000002', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১৬ বেয়ারিং কেইস', barcode: 'GEN000003', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১৪ বেয়ারিং কেইস', barcode: 'GEN000004', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১২ বেয়ারিং কেইস', barcode: 'GEN000005', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১০ বেয়ারিং কেইস', barcode: 'GEN000006', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩০৯ বেয়ারিং কেইস', barcode: 'GEN000007', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩০৮ বেয়ারিং কেইস', barcode: 'GEN000008', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩০৭ বেয়ারিং কেইস', barcode: 'GEN000009', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১০ বেয়ারিং কেইস ষ্টীল পাম্প', barcode: 'GEN000010', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১২ বেয়ারিং কেইস ষ্টীল পাম্প', barcode: 'GEN000011', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১৪ বেয়ারিং কেইস ষ্টীল পাম্প', barcode: 'GEN000012', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১৬ বেয়ারিং কেইস ষ্টীল পাম্প', barcode: 'GEN000013', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ সাকশন ১৬ মিলি', barcode: '00000063', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ সাকশন ২০ মিলি', barcode: '00000064', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৬ সাকশন', barcode: '00000065', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ সাকশন', barcode: '00000066', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৫ সাকশন', barcode: '00000067', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালী সাকশন', barcode: '00000069', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সুপার সাকশন', barcode: '00000070', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৩ সাকশন', barcode: '00000071', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ সাকশন', barcode: '00000072', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০.৫ সাকশন', barcode: '00000074', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৯.৫ সাকশন', barcode: '00000076', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৮.৫ সাকশন পানি', barcode: '00000078', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ সাকশন চাপা', barcode: '00000955', unit: 'PC', category: 'সিলিপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ সাকশন কম্পঃ ৬৩১৯', barcode: '00001076', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১০/১৮ সাকশন', barcode: '00000814', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২/২২ সাকশন', barcode: '00000060', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২/২২ সাকশন চাপা (৮০)', barcode: '00000959', unit: 'PC', category: 'সিলিিপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩২০ সাকশন ফ্ল্যান্স', barcode: '00000954', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৩/৪ সাকশন', barcode: '00000083', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৪/৫ সাকশন', barcode: '00000082', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/১০ সাকশন', barcode: '00000079', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/৯ সাকশন', barcode: '00000080', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০ সুপার সাকশন', barcode: '00000652', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০ সাকশন পানি', barcode: '00000075', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ স্টিল পাম্পের সাকশন প্লেট', barcode: '00000682', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৫ স্টিল পাম্পের সাকশন প্লেট', barcode: '00000899', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৮.৫ সাকশন', barcode: '00000077', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১১ সাকশন পানি', barcode: '00000073', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ সাকশন (৮০)- 00000923', barcode: 'GEN000014', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ সাকশন ফ্ল্যান্স ৬৩১৯', barcode: '00000956', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/২০ সেকশনের মুখের ফ্লান্স', barcode: '00000768', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ সিলিপ', barcode: '00000034', unit: 'PC', category: 'সিলিপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৬ সিলিপ', barcode: '00000035', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ সিলিপ', barcode: '00000036', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৫ সিলিপ', barcode: '00000037', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৪ সিলিপ', barcode: '00000038', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৩ সিলিপ', barcode: '00000039', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ সিলিপ', barcode: '00000040', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০.৫ সিলিপ', barcode: '00000041', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৯.৫ সিলিপ', barcode: '00000042', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৮.৫ সিলিপ', barcode: '00000043', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/১০ সিলিপ', barcode: '00000044', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/২০ সিলিপ', barcode: '00000046', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৪ সিলিপ', barcode: '00000047', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০ সিলিপ', barcode: '00000584', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২/২২ নিউ মডেল সিলিপ (হার্ড)', barcode: '00000927', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/১১ সিলিপ', barcode: '00000587', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/৯ সিলিপ', barcode: '00000045', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১১ সিলিপ', barcode: '00000641', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ সিলিপ হার্ড', barcode: '00000688', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৬ সিলিপ হার্ড', barcode: '00000689', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ নিউ মডেল সিলিপ', barcode: '00000925', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ সিলিপ হার্ড', barcode: '00000687', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ খোলাপাখা ৬ গ্যাপ ৭০ গুনা', barcode: '00000178', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ খোলাপাখা ৬ গ্যাপ ৪ গুনা', barcode: '00000179', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ খোলাপাখা ৫ গ্যাপ ৪ গুনা', barcode: '00000180', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ খোলাপাখা ৩.৫ গেফ ৪ পাতা ৪ গুনা', barcode: '00000181', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ খোলাপাখা ৩.৫ গেফ ৪ পাতা ৭০ গুনা', barcode: '00000182', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালী খোলাপাখা ৩ পাতা', barcode: '00000187', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ বি-সুপার খোলাপাখা ৪ পাতা', barcode: '00000188', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ খোলপাখা ৪ পাতা (পি.এন.জি)', barcode: '00000189', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৩ খোলাপাখা ৪ পাতা', barcode: '00000190', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ খোলপাখা ৫ পাতা এমটি (পি.এন.জি)', barcode: '00000191', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০.৫ খোলাপাখা ৩ গেফ', barcode: '00000426', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০ খোলাপাখা পানি', barcode: '00000427', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৯.৫ খোলাপাখা ৫ পাতা ৭ গুনা', barcode: '00000428', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৯.৫ খোলপাখা ৫ পাতা পিএনজি', barcode: '00000429', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/১০ খোলপাখা ৫ পাতা পিএনজি', barcode: '00000431', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৮.৫ খোলাপাখা', barcode: '00000432', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/৯ খোলাপাখা', barcode: '00000433', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৪ খোলাপাখা ৩ পাতা বি সুপার গুনা', barcode: '00000435', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ খোলপাখা ৫ পাতা এমটি পি.এন.জি কলার ছাড়া', barcode: '00000468', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/১০ ইতালী খোলাপাখা', barcode: '00000474', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০ খোলাপাখা ৩ গেপ ৫ পাতা PNG', barcode: '00000766', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ খোলাপাখা ৫ পাতা পি এন জি হার্ড কলার ছাড়া', barcode: '00001070', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/১০ খোলাপাখা ৫ পাতা ৭ গুনা', barcode: '00000430', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ খোলাপাখা ৪ পাতা পি. এন.জি কলার', barcode: '00000921', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ খোলপাখা ৪ পাতা এম.টি পি.এন.জি', barcode: '00000469', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০ খোলাপাখা ৩ গেপ ৪ পাতা পি.এন.জি (2 গুনা)', barcode: '00000878', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০ খোলাপাখা ৫ পাতা ৫ গুনা হাই স্পিট', barcode: '00000485', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১১ খোলাপাখা ৩.৫ গেপ ৫.৫ গুনা', barcode: '00000481', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১১ খোলাপাখা ৩.৫ গেপ পি.এন.জি ৫ পাতা', barcode: '00000480', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ ইতালি খোলাপাখা', barcode: '00000588', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ খোলপাখা ৫ পাতা এমটি ৫.৫ গুনা', barcode: '00000467', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ খোলপাখা ৫ পাতা পিটি পি.এন.জি', barcode: '00000471', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ খোলপাখা ৪ পাতা ৮ গুনা', barcode: '00000913', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ খোলাপাখা ৩.৫ গেফ ৪ পাতা ৮ গুনা', barcode: '00000914', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১১ খোলাপাখা', barcode: '00000461', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ খোলাপাখা ৩.৫ গেফ ৩ পাতা ৪ গুনা স্টীল', barcode: '00000183', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালি খোলপাখা স্টীল ৩ পাতা', barcode: '00000415', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ খোলপাখা ৪ পাতা স্টীল পিএনজি', barcode: '00000417', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ খোলপাখা ৩ পাতা স্টীল পিএনজি', barcode: '00000418', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ ইতালী খোলপাখা ৪ পাতা স্টীল', barcode: '00000421', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৫ খোলাপাখা ৪ পাতা স্টীল', barcode: '00000425', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ খোলাপাখা ৪ পাতা স্টিল বি সুপার গুনা', barcode: '00000472', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ খোলাপাখা ৫ পাতা স্টিল ৬ গুনা', barcode: '00000716', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ খোলাপাখা ৩.৫ গেফ ৪ পাতা ৭০ গুনা স্টীল', barcode: '00000838', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/১০ ইতালী ষ্টীল খোলাপাখা ৪ পাতা', barcode: '00000906', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১১ খোলাপাখা ৪ পাতা ষ্টীল ৩.৫ গ্যাপ ৪" হাই', barcode: '00000985', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ খোলাপাখা ৩ পাতা স্টিল বি সুপার গুনা', barcode: '00001007', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ ষ্টীল খোলাপাখা ৪ পাতা ৬\'\' হাই', barcode: '00001061', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০ ষ্টীল খোলাপাখা পানি ৫ পাতা', barcode: '00000905', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০.৫ খোলাপাখা ৩ গেপ স্টীল ৪ পাতা ৫.৫ গুনা', barcode: '00000424', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০.৫ খোলাপাখা ৩ গেপ স্টীল ৫ পাতা ৫.৫ গুনা', barcode: '00001006', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০.৫ খোলাপাখা স্টীল ঢালাই', barcode: '00000645', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ খোলপাখা ৪ পাতা স্টীল', barcode: '00000646', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৩ খোলাপাখা স্টীল ৩ পাতা', barcode: '00000420', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৩ খোলাপাখা স্টীল ৪ পাতা', barcode: '00000419', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালি খোলপাখা স্টীল ৩ পাতা ৫\'\'-২ হাই', barcode: '00000879', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালি খোলপাখা স্টীল ৪ পাতা', barcode: '00000416', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ খোলপাখা স্টীল ৩ পাতা পাথর ৬" হাই', barcode: '00001062', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ খোলপাখা স্টীল ৪ পাতা পাথর ৬" হাই', barcode: '00000942', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৫ খোলাপাখা ৩ পাতা স্টীল', barcode: '00000714', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ খোলাপাখা ৩.৫ গেফ ৩ পাতা ষ্টিল ৭০ গুনা', barcode: '00000675', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ খোলাপাখা ৩.৫ গেফ ৪ পাতা ৪ গুনা স্টীল', barcode: '00000184', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ খোলাপাখা ৬ গেপ ৪ পাতা ৭৩ গুনা স্টীল', barcode: '00000644', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩২০ বেয়ারিং সেব (৮০) গুনা', barcode: '00001074', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১৯ বেয়ারিং সেব (৭৩) গুনা', barcode: '00001075', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ নরমাল সেব ৬৩১৪', barcode: '00000354', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালি সেব বি গুনা ৬৩১৪', barcode: '00000356', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ বি-সুপার সেব ৬৩১২', barcode: '00000357', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১০ সুপার সেব', barcode: '00000358', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০.৫ সেব ৬৩০৯', barcode: '00000360', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৯.৫ সেব ৬৩০৭', barcode: '00000361', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৯.৫ সেব ৬৩০৮', barcode: '00000362', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৮.৫ পানি পাম্পের সেব ৬৩০৭', barcode: '00000363', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৩/৪ সেব পানি পাম্পের ৬৩০৭', barcode: '00000365', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩০৮ স্টিল পাম্পের সেব', barcode: '00000696', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১১ পানির সেব (৬৩১০)', barcode: '00000960', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩২০ বেয়ারিং সেব (৮০) গুনা', barcode: 'GEN000015', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১৯ বেয়ারিং সেব (৮০)', barcode: 'GEN000016', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১০/২০ সেব ৭৩ গুনা ৬৩২০', barcode: '00000350', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '২৬/৪০ কাটিং ড্রেজার সেব', barcode: '00000651', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ সুপার সেব ৬৩১০', barcode: '00000359', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালি সেব ৪ গুনা ৬৩১৪', barcode: '00000355', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১৬ সেব ২ মাথা গুনা', barcode: '00000650', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/২০ সেব ৭৩ গুনা ৬৩১৯', barcode: '00000852', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ ইতালি প্যাকিং কোমা ৯৫*১২৫', barcode: '00000368', unit: 'PC', category: 'প্যাকিং কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ ইতালি প্যাকিং চাপা ৯৫*১২৫', barcode: '00000369', unit: 'PC', category: 'প্যাকিং কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালি প্যাকিং কোমা ১১০*১০৫', barcode: '00000370', unit: 'PC', category: 'প্যাকিং কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালি প্যাকিং চাপা ১১০*১০৫', barcode: '00000371', unit: 'PC', category: 'প্যাকিং কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১০/২০ প্যাকিং চাপা ১৫০*১৫৫', barcode: '00000367', unit: 'PC', category: 'প্যাকিং কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২/২২ প্যাকিং কোমা', barcode: '00000937', unit: 'PC', category: 'প্যাকিং কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২০.৯৫ ওয়েলসেল কোমা', barcode: '00000265', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৯৫.৭০ ওয়েলসেল কোমা', barcode: '00000267', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৫.৮৫ ওয়েলসেল কোমা', barcode: '00000269', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৯.৫০ ওয়েলসেল কোমা', barcode: '00000270', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৩০.২*১১০.২ সিল কোমা', barcode: '00001079', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১০০.৭৫ ওয়েলসেল কোমা', barcode: '00000266', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ নরমাল ৭০.৯৫ কোমা', barcode: '00000268', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৫.৮৫ ওয়েলসেল কোমা স্টিল পাম্পের', barcode: '00000703', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/২০ ওয়েলসেল কোমা নিউ মডেল', barcode: '00000856', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সেববুস ৭২*৯৫*৬"-৬', barcode: '00000308', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সেববুস ৭২*৯৫*৭"', barcode: '00000309', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সেববুস ৭২*৯৫*৮"', barcode: '00000310', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সেববুস ৭২*৯৫*৯"', barcode: '00000311', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সেববুস ৯০*১২০*৯"', barcode: '00000313', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সেববুস ৯২*১২০*৮"১', barcode: '00000314', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ইতালি সেববুস ৬০*৭৫*৬"৪', barcode: '00000317', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সেববুস ৫৫*৭০*৬"৪', barcode: '00000318', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সেববুস ৬০*৮০*৬"৪', barcode: '00000319', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বি সুপার সেববুস ৫১*৬৫*৬"', barcode: '00000320', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বি সুপার সেববুস ৫১*৬০*৬"', barcode: '00000321', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সুপার সেববুস ৪০*৫০*৬', barcode: '00000322', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ সুপার সেববুস ৪০*৫০*৫.৫"', barcode: '00000323', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সেববুস ৩৬*৪৫*৫.৫"', barcode: '00000324', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সেববুস ৩১*৪০*৪\'\'', barcode: '00000326', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সেববুস ২৮*৩৫*৪"', barcode: '00000327', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৯০*১১২*৯" সেববুস', barcode: '00000868', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২/২২ সেববুশ ৯০*১১২*২৪০', barcode: '00001058', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ সেববুস ৭২*৯৫*৬"-৬ ষ্টিল', barcode: '00000842', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বি সুপার সেববুস ৫১*৬৫*৪"৪ সুতা', barcode: '00000739', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সেববুস ৪০*৫০*৪"৪', barcode: '00000325', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সেববুস স্টিল পাম্পের ৫১*৬৫*৪"১ সুতা', barcode: '00000738', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সেববুস স্টিল পাম্পের ৫১*৬৫*৫"', barcode: '00000990', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'টেপারবুস ১২০*১৫০ ওয়েলসেল ছাড়া', barcode: '00000372', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'টেপারবুস ১২০*১৫০ ওয়েলসেল ওয়ালা', barcode: '00000373', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালি ১০৫*১১০ টেপারবুস', barcode: '00000374', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ ইতালি বডিবুস ৯৫*১৪০ ডাবল ওয়েলসিল', barcode: '00000375', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৯৫.১২৫ টেপারবুস', barcode: '00000376', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বডিবুস ১২০*৯৫', barcode: '00000377', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালি বডিবুস ৭৫*১০০', barcode: '00000378', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বডিবুস ৭০*৯৫', barcode: '00000379', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ বি সুপার বডিবুস ৬৫*৮৫', barcode: '00000380', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ বি সুপার বডিবুস ৬০*৮০', barcode: '00000381', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সুপার বডিবুস ৬৯*৫০', barcode: '00000383', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০.৫ বডিবুস ৪৫*৬০', barcode: '00000384', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/১০ বডিবুস ৪০*৬০', barcode: '00000385', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/১০ বডিবুস ৩৫*৬০', barcode: '00000386', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৩৫*৫০ বডিবুস', barcode: '00000387', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '112*142 বডিবুস', barcode: '00000867', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৯৫.১২৫ টেপারবুস সেল সিস্টেম', barcode: '00000729', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বডিবুস ৫০*৭০', barcode: '00000382', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ ইতালি বডিবুস ৬০*৯০', barcode: '00000580', unit: 'PC', category: 'বডিবুস আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালি বডিবুস ৭৫*১০০ সিল ছাড়া', barcode: '00000578', unit: 'PC', category: 'বডিবুস আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ ইতালি বডিবুস ৯৫*১২০ সিল ছাড়া', barcode: '00000577', unit: 'PC', category: 'বডিবুস আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৭৫*১০১*১১১ টেপারবুস', barcode: '00001077', unit: 'PC', category: 'বডিবুস আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১৬ ইতালি বেয়ারিং কবার ৯”', barcode: '00000254', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১৪ ইতালি বেয়ারিং কবার', barcode: '00000255', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১৪ নরমাল বেয়ারিং কবার', barcode: '00000256', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩০৮ নরমাল বেয়ারিং কবার', barcode: '00000260', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩০৭ নরমাল বেয়ারিং কবার', barcode: '00000261', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩০৯ নরমাল বেয়ারিং কবার', barcode: '00000259', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১০ নরমাল বেয়ারিং কবার', barcode: '00000258', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১২ নরমাল বেয়ারিং কবার', barcode: '00000257', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১৬ ইতালি বেয়ারিং কবার ১১”', barcode: '00000253', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ ইতালী ডিক্স', barcode: '00000272', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ ইতালী ডিক্স', barcode: '00000273', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৫ ইতালী ডিক্স', barcode: '00000274', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালী ডিক্স', barcode: '00000275', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২/২২ নিউ মডেল ডিক্স', barcode: '00000924', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/১০ ইতালি ডিক্স', barcode: '00000843', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ নিউ মডেল ষ্টিল ডিক্স (৬৩১৯)', barcode: '00000948', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/২০ নিউ মডেল ডিক্স', barcode: '00000900', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২০*৯৫ কোমার গেছকেট', barcode: '00000220', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালী কোমার গেছকেট', barcode: '00000221', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৪ সুপার কোমার গেছকেট', barcode: '00000222', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ গেছকেট', barcode: '00000227', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ সুতার গেছকেট', barcode: '00000228', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৬ গেছকেট', barcode: '00000229', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ সুতার গেছকেট', barcode: '00000230', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৫ গেছকেট', barcode: '00000231', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৫ সুতার গেছকেট', barcode: '00000232', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৪ গেছকেট', barcode: '00000233', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৪ সুতার গেছকেট', barcode: '00000234', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৩ গেছকেট', barcode: '00000235', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ গেছকেট', barcode: '00000236', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১০\'\' গেছকেট', barcode: '00000237', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৯.৫ গেছকেট', barcode: '00000238', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৮.৫ গেছকেট', barcode: '00000239', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৩/৪ গেছকেট', barcode: '00000240', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮" পাইপ গেছকেট', barcode: '00000242', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮" টেপার গেছকেট', barcode: '00000243', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮" সুতার গেছকেট', barcode: '00000244', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬" সুতার গেছকেট', barcode: '00000245', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১০/২০ গেছকেট', barcode: '00000225', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২" সুতার গেছকেট', barcode: '00000736', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৪ ইতালি সুতার গেছকেট', barcode: '00000748', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬" টেপার গেছকেট', barcode: '00000247', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬" পাইপ গেছকেট', barcode: '00000246', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৭৫ বোরিং ১৪\'\' আউট', barcode: '00000328', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৯০ বোরিং ১৪\'\' আউট', barcode: '00000329', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৫ বোরিং ১৪\'\' আউট', barcode: '00000330', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৭৫ বোরিং ১২\'\' আউট', barcode: '00000331', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৭৫ বোরিং ১১\'\' আউট', barcode: '00000332', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৫ বোরিং ১২\'\' আউট', barcode: '00000334', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৫ বোরিং ১১\'\' আউট', barcode: '00000335', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৫ বোরিং ১০\'\' আউট', barcode: '00000336', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫৫ বোরিং ১১\'\' আউট', barcode: '00000337', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫৫ বোরিং ১০\'\' আউট', barcode: '00000338', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৪২ বোরিং ১০\'\' আউট', barcode: '00000339', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৩২ বোরিং ৬\'\' আউট', barcode: '00000341', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৩২ বোরিং ৮\'\' আউট', barcode: '00000342', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৩৮ বোরিং ৮\'\' আউট', barcode: '00000343', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১০ ইঞ্জিল কবলিং', barcode: '00000345', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১১ ইঞ্জিল কবলিং', barcode: '00000346', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৪২ বোরিং ৮.৫\'\' আউট', barcode: '00000817', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৩২ বোরিং ৫ আউট', barcode: '00000653', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৩৮ বোরিং ৫ আউট', barcode: '00000654', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৪২ বোরিং ১১ আউট', barcode: '00000583', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫৫ বোরিং ১০.৫ আউট', barcode: '00000655', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৭৫ বোরিং ১০\'\' আউট', barcode: '00000333', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৯৫ বোরিং ১৫\'\' আউট', barcode: '00001063', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৩৫.৫০.১০', barcode: '00000084', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৪০.৬০.১০', barcode: '00000086', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৪৫.৬০.১০', barcode: '00000087', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৫০.৬৯.১০ সুপার', barcode: '00000088', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৬৫.৮৫.১২', barcode: '00000089', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৭৫.১০০.১২', barcode: '00000090', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৯৫.১২০.১২', barcode: '00000091', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৭০.৯৫.১২', barcode: '00000092', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৬০.৮০.১২', barcode: '00000093', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৮০.১০৫.১২', barcode: '00000095', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৪৫.৭০.১০', barcode: '00000563', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল- ৭০.৯০.১২', barcode: '00000594', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৬৫.৮০.১০', barcode: '00000595', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসিল ১১০*৯৫*১২', barcode: '00000604', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসিল ১২০*১৪০*১২', barcode: '00000605', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসিল ৩৫.৪৫.০৮', barcode: '00000614', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৪০.৭২.১০', barcode: '00000615', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৬০.৮৫.১২', barcode: '00000616', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৭৫.৯৫.১২', barcode: '00000617', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৬৫.৯০.১২', barcode: '00000618', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসিল ১৩০.২*১১০.২*১.২', barcode: '00000747', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ১০.২*৭.৫*১.২ নতুন', barcode: '00000962', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসিল ৭৫*৯০*১২', barcode: '00000603', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ১০০.১২৫.১২', barcode: '00000096', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ১১০.১৩০.১২', barcode: '00000562', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৩৫.৬০.১০', barcode: '00000085', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৫০.৭০.১০', barcode: '00000094', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল ৬০.৯০.১২', barcode: '00000593', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ওয়েলসেল লাল ৯৫.১২০.১২', barcode: '00000596', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বেয়ারিং ৬৩২০', barcode: '00000097', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বেয়ারিং ৬৩১৬', barcode: '00000098', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বেয়ারিং ৬৩১৪', barcode: '00000099', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বেয়ারিং ৬৩১২', barcode: '00000100', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বেয়ারিং ৬৩১০', barcode: '00000101', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বেয়ারিং ৬৩০৯', barcode: '00000102', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বেয়ারিং ৬৩০৮', barcode: '00000103', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বেয়ারিং ৬৩০৭', barcode: '00000104', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বেয়ারিং ৬৩১৯', barcode: '00000108', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বেয়ারিং ৬০০৭', barcode: '00000464', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩০৭ নতুন বেয়ারিং', barcode: '00000997', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বেয়ারিং ৬০৩৪', barcode: '00000106', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বেয়ারিং ৬০৩৬', barcode: '00000107', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বেয়ারিং FND ৬৩১৬', barcode: '00000683', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বেয়ারিং কেজি ৬৩১৬', barcode: '00000623', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮\'\' ফুটবল', barcode: '00000211', unit: 'PC', category: 'ফুটবল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬\'\' ফুটবল', barcode: '00000213', unit: 'PC', category: 'ফুটবল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৭" ফুটবল লেদার', barcode: '00000216', unit: 'PC', category: 'ফুটবল লেদার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৯" ফুটবল লেদার', barcode: '00000218', unit: 'PC', category: 'ফুটবল লেদার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬" ফ্ল্যাঞ্জ', barcode: '00000204', unit: 'PC', category: 'ফ্ল্যাঞ্জ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮" ফ্ল্যাঞ্জ', barcode: '00000203', unit: 'PC', category: 'ফ্ল্যাঞ্জ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮" নিপেল', barcode: '00000197', unit: 'PC', category: 'নিপেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬" নিপেল', barcode: '00000198', unit: 'PC', category: 'নিপেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৯" নিপেল', barcode: '00000933', unit: 'PC', category: 'নিপেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'পি.ভি.সি হুইস পাইপ ১.৫\'\' এন.এস', barcode: '00000300', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'পি.ভি.সি হুইস পাইপ ২\'\' এন.এস', barcode: '00000301', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'পি.ভি.সি হুইস পাইপ ২.৫\'\' এন.এস', barcode: '00000302', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'পি.ভি.সি হুইস পাইপ ৩\'\' এন.এস (গ্রিন)', barcode: '00000303', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'পি.ভি.সি হুইস পাইপ ৬\'\' স্পেশাল', barcode: '00000304', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'পি.ভি.সি হুইস পাইপ ৮\'\'-৪০\' স্পেশাল', barcode: '00000305', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'পি.ভি.সি হুইস পাইপ ৫\'\' এস পি', barcode: '00000395', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ইউ. পি.ভি.সি ৬” ড্রেজার পাইপ', barcode: '00000548', unit: 'PC', category: '', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ইউ. পি.ভি.সি ৮” ড্রেজার পাইপ', barcode: '00000549', unit: 'PC', category: '', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'পি.ভি.সি হুইস পাইপ ৮\'\'-২০\' স্পেশাল', barcode: '00000639', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'পি.ভি.সি হুইস পাইপ ৮\'\'-২৫\' স্পেশাল', barcode: '00000640', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'পি.ভি.সি হুইস পাইপ ৮\'\'-৩০\' স্পেশাল', barcode: '00000693', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'পি.ভি.সি হুইস পাইপ ৩\'\' স্পেসাল (সাদা)', barcode: '00000793', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'পি.ভি.সি হুইস পাইপ ৬\'\'- ৩৫\' স্পেশাল', barcode: '00000862', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'পি.ভি.সি হুইস পাইপ ৬\'\'- ৪০\' স্পেশাল', barcode: '00000863', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ইউ. পি.ভি.সি ৭” ড্রেজার পাইপ', barcode: 'GEN000017', unit: 'PC', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'পি.ভি.সি হুইস পাইপ ৮\'\'-৩৫\' স্পেশাল', barcode: '00000943', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ছোট গ্রীজ ক্যাপ', barcode: '00000058', unit: 'PC', category: 'গ্রীজ ক্যাপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বড় গ্রীজ ক্যাপ', barcode: '00000059', unit: 'PC', category: 'গ্রীজ ক্যাপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বড় গ্রীজ ক্যাপ মাথা', barcode: '00000440', unit: 'PC', category: 'গ্রীজ ক্যাপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বড় গ্রীজ ক্যাপ বাটি', barcode: '00000441', unit: 'PC', category: 'গ্রীজ ক্যাপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ছোট গ্রীজ ক্যাপ বাটি', barcode: '00000439', unit: 'PC', category: 'গ্রীজ ক্যাপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ছোট গ্রীজ ক্যাপ মাথা', barcode: '00000438', unit: 'PC', category: 'গ্রীজ ক্যাপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সাদা গ্রীজ', barcode: '00000671', unit: 'kg', category: 'গ্রীজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'সবুজ গ্রীজ', barcode: '00000111', unit: 'kg', category: 'গ্রীজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮\'\' ব্যান্ডপাইপ বড় কম্পিলিট', barcode: '00000192', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮\'\' ব্যান্ডপাইপ ছোট কম্পিলিট', barcode: '00000193', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬\'\' ব্যান্ডপাইপ বড় কম্পিলিট', barcode: '00000194', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬\'\' ব্যান্ডপাইপ ছোট কম্পিলিট', barcode: '00000195', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫\'\' ব্যান্ডপাইপ বড়', barcode: '00000196', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬\'\' ব্যান্ডপাইপ বড় কম্পিলিট ছাড়া', barcode: '00000719', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮\'\' ব্যান্ডপাইপ ছোট কম্পিলিট ছাড়া', barcode: '00000746', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮\'\' ব্যান্ডপাইপ বড় কম্পিলিট ছাড়া', barcode: '00000718', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'এ্যারোলাট গাম', barcode: '00000248', unit: 'Set', category: 'গাম', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'হাতী গাম', barcode: '00000249', unit: 'Set', category: 'গাম', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'এক্সসেল গাম', barcode: '00000250', unit: 'Set', category: 'গাম', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'বি.এস.পি ঘাম', barcode: '00000621', unit: 'Set', category: 'গাম', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'ল্যাপক্স', barcode: '00000561', unit: 'Set', category: 'গাম', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ ইতালী ডিক্স প্লেট', barcode: '00000282', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৬ ইতালী ডিক্স প্লেট', barcode: '00000283', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১০/১৮ ইতালি ডিক্স চাপা', barcode: '00000281', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২/২২ ডিক্স প্লেট টেপার (হার্ড)', barcode: '00000926', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ স্টীল পাম্পের ভাজের প্লেট', barcode: '00000908', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৫ স্টীল পাম্পের ডিক্স প্লেট', barcode: '00000898', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ নিউ মডেল ডিক্স চাপা', barcode: '00000946', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ নিউ মডেল ডিক্স প্লেট', barcode: '00000934', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/২০ ইতালী ডিক্স সিলিপ হার্ড', barcode: '00000901', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২০.৯৫ ওয়েলসেল কোমার কভার', barcode: '00000285', unit: 'PC', category: 'কোমার কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৭০.৯৫ ওয়েলসেল কোমার কভার', barcode: '00000287', unit: 'PC', category: 'কোমার কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৫.৮৫ ওয়েলসেল কোমার কভার', barcode: '00000288', unit: 'PC', category: 'কোমার কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৯.৫০ ওয়েলসেল কোমার কভার', barcode: '00000289', unit: 'PC', category: 'কোমার কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৭৫.১০০ ওয়েলসেল কোমার কভার', barcode: '00000286', unit: 'PC', category: 'কোমার কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '২২\'\' বেইল', barcode: '00000388', unit: 'PC', category: 'টায়ার বেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '২০\'\' বেইল', barcode: '00000389', unit: 'PC', category: 'টায়ার বেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৮ \'\' বেইল', barcode: '00000390', unit: 'PC', category: 'টায়ার বেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৪\'\' বেইল ছোট', barcode: '00000392', unit: 'PC', category: 'টায়ার বেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৬\'\' বেইল', barcode: '00000391', unit: 'PC', category: 'টায়ার বেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২০*৯৫*১২ যোগান', barcode: '00000396', unit: 'PC', category: 'যোগান ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৭৫*১০০*১২ যোগান', barcode: '00000397', unit: 'PC', category: 'যোগান ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৭০*৯৫*১২ যোগান', barcode: '00000398', unit: 'PC', category: 'যোগান ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৫*৮৫*১২ যোগান', barcode: '00000399', unit: 'PC', category: 'যোগান ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১১২*১৩২ যোগান', barcode: '00000951', unit: 'PC', category: 'যোগান ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৪৫*৬০*১০ যোগান', barcode: '00000403', unit: 'PC', category: 'যোগান ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫০*৬৯*১০ যোগান', barcode: '00000401', unit: 'PC', category: 'যোগান ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '২০ মিলি সেকশন স্টিক নাট', barcode: '00000406', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৬ মিলি সেকশন স্টিক নাট', barcode: '00000408', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৩ মিলি সেকশন স্টিক নাট', barcode: '00000410', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৩ মিলি গেলান স্টিক নাট', barcode: '00000411', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৬ মিলি সেকশন স্টিক নাট (লম্বা)', barcode: '00000968', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৬ মিলি স্টিক (১০০ মিলি লম্বা)', barcode: '00001029', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '২০ মিলি স্টিক (১০০ মিলি লম্বা)', barcode: '00001030', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২ মিলি গেলান স্টিক নাট', barcode: '00000413', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১২ মিলি সেকশন স্টিক নাট', barcode: '00000412', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১৬ মিলি গেলান স্টিক নাট', barcode: '00000409', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '২০ মিলি গেলান স্টিক নাট', barcode: '00000407', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/৬ ঢালাই সকেট', barcode: '00001026', unit: 'PC', category: 'ছকেট/ রেডুছাড়', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '১০/৮ ছকেট', barcode: '00000454', unit: 'PC', category: 'ছকেট/ রেডুছাড়', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/৬ কম্পিলিট ছকেট', barcode: '00000452', unit: 'PC', category: 'ছকেট/ রেডুছাড়', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/৬ সকেট', barcode: '00000453', unit: 'PC', category: 'ছকেট/ রেডুছাড়', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬\'\' পাইপ ১৬', barcode: '00000969', unit: 'PC', category: 'সট পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'লায়লনবুস ১২০.৯৫.১২', barcode: '00000597', unit: 'PC', category: 'লায়লনবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১৪ আকাটা সেব', barcode: '00000887', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১৬ আকাটা সেব', barcode: '00000888', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৪.৫" আকাটা বড় সেব', barcode: '00000892', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫" আকাটা বড় সেব', barcode: '00000893', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩০৭ আকাটা সেব', barcode: '00000896', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩০৮ আকাটা সেব', barcode: '00000885', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩০৮ স্টিল পাম্পের আকাটা সেব', barcode: '00000890', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩০৯ আকাটা সেব (৬/১০.৫)', barcode: '00000886', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১০ আকাটা সেব', barcode: '00000883', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১০ স্টিল পাম্পের আকাটা সেব', barcode: '00000891', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১২ আকাটা সেব', barcode: '00000884', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬৩১৯ আকাটা সেব', barcode: '00000889', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: 'স্টীল পাম্পের স্ট্যান্ড ৬৩১২', barcode: '00000458', unit: 'PC', category: 'স্টীল পাম্পের স্ট্যান্ড', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১০.৫ গেলান ৪৫.৬০', barcode: '00000492', unit: 'PC', category: 'গেলান', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ গেলান ৫০.৬৯', barcode: '00000491', unit: 'PC', category: 'গেলান', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ গেলান ৫০.৬৯', barcode: '00000490', unit: 'PC', category: 'গেলান', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ গেলান বি সুপার ৬০.৮০', barcode: '00000489', unit: 'PC', category: 'গেলান', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৯.৫ গেলান ৩৫.৫০', barcode: '00000495', unit: 'PC', category: 'গেলান', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/৯.৫ গেলান ৪০.৬০', barcode: '00000493', unit: 'PC', category: 'গেলান', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৫/১০ ছোট কেলাম', barcode: '00000515', unit: 'PC', category: 'কেলাম', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৯\'\' কেলাম ওল্ড মডেল', barcode: '00000511', unit: 'PC', category: 'কেলাম', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১২ সুপার সেকশন কম্পিপিলিট', barcode: '00000526', unit: 'PC', category: 'কমপ্লিট সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ সুপার সেকশন কম্পিপিলিট', barcode: '00000525', unit: 'PC', category: 'কমপ্লিট সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮/১৮ ইতালি সেকশন ২০ কম্পিপিলিট', barcode: '00000529', unit: 'PC', category: 'কমপ্লিট সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৮\'\' চেইন ঘাট', barcode: '00000634', unit: 'PC', category: 'চেইন ঘাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ ইতালী ষ্টীল বডি', barcode: '00001064', unit: 'PC', category: 'স্টিল বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৪ স্টিল প্লেট পাথর বডি', barcode: '00001004', unit: 'PC', category: 'স্টিল বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
+    { name: '৬/১৫ স্টিল প্লেট বডি', barcode: '00000857', unit: 'PC', category: 'স্টিল বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
   ];
-  allEntities.forEach((entity, idx) => {
-    entityAccounts.push({
-      entityType: entity.type,
-      entityId: entity.id,
-      accountId: accounts[idx % accounts.length].id,
-      isPrimary: true,
-      assignedById: admin.id,
-    });
-  });
-  await prisma.entityAccount.createMany({ data: entityAccounts });
-  const entityAccountMap = {};
-  entityAccounts.forEach((ea) => {
-    entityAccountMap[`${ea.entityType}-${ea.entityId}`] = ea.accountId;
-  });
 
-  const cashRegisterAssignments = shops.map((shop, idx) => ({
-    entityType: 'shop',
-    entityId: shop.id,
-    cashRegisterId: cashRegisters[idx % cashRegisters.length].id,
-    assignedById: admin.id,
-    notes: `Register assignment for ${shop.name}`,
-  }));
-  await prisma.cashRegisterAssignment.createMany({ data: cashRegisterAssignments });
-
-  const userList = await prisma.user.findMany({ select: { id: true } });
-  const userAssociates = [];
-  for (let i = 0; i < Math.min(20, userList.length); i += 1) {
-    const userId = userList[i].id;
-    if (stores[i % stores.length]) {
-      userAssociates.push({ userId, associateName: 'store', associateId: stores[i % stores.length].id });
-    }
-    if (shops[i % shops.length]) {
-      userAssociates.push({ userId, associateName: 'shop', associateId: shops[i % shops.length].id });
-    }
-  }
-  await prisma.userAssociate.createMany({ data: userAssociates, skipDuplicates: true });
-  
-  const employeeProfiles = userList.slice(0, 15).map((u, idx) => ({
-    userId: u.id,
-    designation: ['Manager', 'Supervisor', 'Operator', 'Technician'][idx % 4],
-    baseSalary: randInt(12000, 40000),
-    salaryType: 'monthly',
-    joiningDate: new Date(Date.now() - randInt(30, 365) * 24 * 60 * 60 * 1000),
-    status: 'active',
-  }));
-  await prisma.employeeProfile.createMany({ data: employeeProfiles, skipDuplicates: true });
-
-  const now = new Date();
-  const salaryRecords = [];
-  for (const profile of employeeProfiles) {
-    const base = profile.baseSalary || 0;
-    for (let mOffset = 0; mOffset < 3; mOffset += 1) {
-      const d = new Date(now.getFullYear(), now.getMonth() - mOffset, 1);
-      const allowances = randInt(0, 2000);
-      const deductions = randInt(0, 1000);
-      const gross = base + allowances;
-      const net = gross - deductions;
-      salaryRecords.push({
-        userId: profile.userId,
-        month: d.getMonth() + 1,
-        year: d.getFullYear(),
-        baseSalary: base,
-        allowances,
-        deductions,
-        gross,
-        net,
-        status: pick(['generated', 'approved', 'paid']),
-      });
-    }
-  }
-  await prisma.salary.createMany({ data: salaryRecords, skipDuplicates: true });
-
-  console.log('Seeding purchases (300000)...');
-  for (let i = 0; i < 300; i += 1) {
-    const destinationType = pick(['store', 'shop', 'factory']);
-    const destinationId =
-      destinationType === 'store'
-        ? pick(stores).id
-        : destinationType === 'shop'
-          ? pick(shops).id
-          : pick(factories).id;
-
-    const itemsCount = randInt(1, 3);
-    const purchaseItems = [];
-    let total = 0;
-
-    for (let j = 0; j < itemsCount; j += 1) {
-      const itemType = pick(['product', 'material']);
-      if (itemType === 'product') {
-        const product = pick(products);
-        const quantity = randInt(1, 50);
-        const unitPrice = Number((product.cost * randFloat(0.95, 1.2)).toFixed(2));
-        const totalPrice = Number((unitPrice * quantity).toFixed(2));
-        total += totalPrice;
-        purchaseItems.push({
-          itemType,
-          productId: product.id,
-          quantity,
-          unitPrice,
-          totalPrice,
-        });
-      } else {
-        const material = pick(materials);
-        const quantity = randInt(5, 80);
-        const unitPrice = Number((material.unit_cost * randFloat(0.95, 1.2)).toFixed(2));
-        const totalPrice = Number((unitPrice * quantity).toFixed(2));
-        total += totalPrice;
-        purchaseItems.push({
-          itemType,
-          materialId: material.id,
-          quantity,
-          unitPrice,
-          totalPrice,
-        });
-      }
-    }
-
-    const paidAmount = Number((total * randFloat(0.4, 1)).toFixed(2));
-    const accountId = entityAccountMap[`${destinationType}-${destinationId}`] || pick(accounts).id;
-
-    const purchase = await prisma.purchase.create({
-      data: {
-        reference: `PUR-${String(i + 1).padStart(6, '0')}`,
-        supplierId: pick(suppliers).id,
-        destinationType,
-        destinationId,
-        createdAt: randomDate(),
-        grandTotal: Number(total.toFixed(2)),
-        shippingCost: 0,
-        shippingStatus: 'received',
-        discount: 0,
-        tax: 0,
-        paidAmount,
-        accountId,
-        purchaseItems: { create: purchaseItems },
-      },
-      include: { purchaseItems: true }
-    });
-
-    if (purchase.paidAmount > 0) {
-      await prisma.transactions.create({
-        data: {
-          reference: `TXN-PUR-${purchase.id}`,
-          createdById: admin.id,
-          accountId,
-          purchaseId: purchase.id,
-          purpose: 'purchase',
-          added_to_account: false,
-          amount: purchase.paidAmount,
-          payment_method: pick(['cash', 'bank', 'mobile']),
-          current_account_balance: 0,
-        },
-      });
-    }
-
-    const shipmentItems = purchase.purchaseItems.map((pi) => ({
-      purchaseItemId: pi.id,
-      itemType: pi.itemType,
-      materialId: pi.materialId,
-      productId: pi.productId,
-      quantity: pi.quantity,
-      received_quantity: pi.quantity,
-    }));
-    await prisma.purchaseShipment.create({
-      data: {
-        purchaseId: purchase.id,
-        reference: `SHIP-${String(i + 1).padStart(6, '0')}`,
-        status: 'received',
-        receivedAt: new Date(),
-        items: { create: shipmentItems },
-      }
-    });
+  if (productData.length) {
+    await prisma.product.createMany({ data: productData, skipDuplicates: true });
   }
 
-  console.log('Seeding sales (1000000)...');
-  for (let i = 0; i < 1000; i += 1) {
-    const shop = pick(shops);
-    const itemsCount = randInt(1, 3);
-    const saleItems = [];
-    let totalAmount = 0;
-    let totalCost = 0;
+  console.log(`Products created: ${productData.length}`);
 
-    for (let j = 0; j < itemsCount; j += 1) {
-      const itemType = pick(['product', 'material']);
-      if (itemType === 'product') {
-        const product = pick(products);
-        const quantity = randInt(1, 5);
-        const unitPrice = Number(product.sale_price.toFixed(2));
-        const avgCost = Number(product.cost.toFixed(2));
-        const totalPrice = Number((unitPrice * quantity).toFixed(2));
-        totalAmount += totalPrice;
-        totalCost += avgCost * quantity;
-        saleItems.push({
-          productId: product.id,
-          quantity,
-          unitPrice,
-          avg_cost: avgCost,
-          totalPrice,
-        });
-      } else {
-        const material = pick(materials);
-        const quantity = randInt(1, 10);
-        const unitPrice = Number(material.sale_price.toFixed(2));
-        const avgCost = Number(material.unit_cost.toFixed(2));
-        const totalPrice = Number((unitPrice * quantity).toFixed(2));
-        totalAmount += totalPrice;
-        totalCost += avgCost * quantity;
-        saleItems.push({
-          materialId: material.id,
-          quantity,
-          unitPrice,
-          avg_cost: avgCost,
-          totalPrice,
-        });
-      }
-    }
-
-    const paymentType = pick(['cash', 'card', 'bank', 'mobile']);
-    const paidAmount = Number((totalAmount * randFloat(0.7, 1)).toFixed(2));
-    const bankAccount = (paymentType === 'bank' || paymentType === 'card') ? pick(bankAccounts) : null;
-
-
-    const sale = await prisma.sale.create({
-      data: {
-        reference: `SAL-${String(i + 1).padStart(6, '0')}`,
-        shopId: shop.id,
-        customerId: pick(customers).id,
-        totalAmount: Number(totalAmount.toFixed(2)),
-        discount: 0,
-        grandTotal: Number(totalAmount.toFixed(2)),
-        total_cost: Number(totalCost.toFixed(2)),
-        paymentType,
-        paidAmount,
-        createdAt: randomDate(),
-        bankAccountId: bankAccount ? bankAccount.id : null,
-        bankName: bankAccount ? bankAccount.name : null,
-        saleItems: { create: saleItems },
-      },
-    });
-
-    if (sale.paidAmount > 0) {
-      const accountId = entityAccountMap[`shop-${shop.id}`] || pick(accounts).id;
-      await prisma.transactions.create({
-        data: {
-          reference: `TXN-SAL-${sale.id}`,
-          createdById: admin.id,
-          accountId,
-          saleId: sale.id,
-          cashRegisterId: paymentType === 'cash' ? pick(cashRegisters).id : null,
-          bankAccountId: bankAccount ? bankAccount.id : null,
-          purpose: 'sale',
-          added_to_account: true,
-          amount: sale.paidAmount,
-          payment_method: paymentType,
-          current_account_balance: 0,
-        },
-      });
-    }
-  }
-
-  console.log('Seeding transfers (30000)...');
-  const transferStatuses = ['processing', 'pending', 'on_the_way', 'complete', 'not_received'];
-  for (let i = 0; i < 300; i += 1) {
-    const fromType = pick(['store', 'shop', 'factory']);
-    let toType = pick(['store', 'shop', 'factory']);
-    while (toType === fromType) {
-      toType = pick(['store', 'shop', 'factory']);
-    }
-    const fromId =
-      fromType === 'store'
-        ? pick(stores).id
-        : fromType === 'shop'
-          ? pick(shops).id
-          : pick(factories).id;
-    const toId =
-      toType === 'store'
-        ? pick(stores).id
-        : toType === 'shop'
-          ? pick(shops).id
-          : pick(factories).id;
-    const status = pick(transferStatuses);
-
-    const itemsCount = randInt(1, 3);
-    const transferItems = [];
-    for (let j = 0; j < itemsCount; j += 1) {
-      const itemType = pick(['product', 'material']);
-      if (itemType === 'product') {
-        const product = pick(products);
-        const quantity = randInt(1, 20);
-        transferItems.push({
-          item: 'product',
-          itemId: product.id,
-          productId: product.id,
-          materialId: null,
-          quantity,
-          receivedQuantity: status === 'transferred' ? quantity : null,
-          avg_cost: Number(product.cost.toFixed(2)),
-        });
-      } else {
-        const material = pick(materials);
-        const quantity = randInt(5, 50);
-        transferItems.push({
-          item: 'material',
-          itemId: material.id,
-          productId: null,
-          materialId: material.id,
-          quantity,
-          receivedQuantity: status === 'transferred' ? quantity : null,
-          avg_cost: Number(material.unit_cost.toFixed(2)),
-        });
-      }
-    }
-
-    await prisma.transfer.create({
-      data: {
-        reference: `TRF-${String(i + 1).padStart(6, '0')}`,
-        from: fromType,
-        fromId,
-        fromStoreId: fromType === 'store' ? fromId : null,
-        fromShopId: fromType === 'shop' ? fromId : null,
-        fromFactoryId: fromType === 'factory' ? fromId : null,
-        to: toType,
-        toId,
-        toStoreId: toType === 'store' ? toId : null,
-        toShopId: toType === 'shop' ? toId : null,
-        toFactoryId: toType === 'factory' ? toId : null,
-        shipping_cost: randFloat(0, 2000, 2),
-        status,
-        note: `Transfer ${i + 1}`,
-        transferItems: { create: transferItems },
-      },
-    });
-  }
-
-  const notifications = Array.from({ length: 10 }, (_, i) => ({
-    title: `Notification ${i + 1}`,
-    description: `Auto-generated notification ${i + 1}`,
-    link: '/dashboard',
-    forRole: pick(['store_keeper', 'manager', 'admin', 'cashier']),
-  }));
-  await prisma.notification.createMany({ data: notifications });
-
-  console.log('Seeding activity logs...');
-  const activityModules = [
-    'sales',
-    'purchases',
-    'transfers',
-    'productions',
-    'requisitions',
-    'damage-records',
-    'repairs',
-    'accounts',
-    'cash-registers',
-    'bank-accounts',
-    'hrm',
-    'users',
-  ];
-  const activityActions = [
-    'create',
-    'update',
-    'delete',
-    'approve',
-    'reject',
-    'status_change',
-    'payment',
-    'shipment',
-    'return',
-  ];
-  const activityLogs = Array.from({ length: 500000 }, (_, i) => {
-    const module = pick(activityModules);
-    const action = pick(activityActions);
-    const actor = pick(userList);
-    const success = Math.random() > 0.08;
-    const entityId = randInt(1, 1000);
-    return {
-      userId: actor?.id || null,
-      module,
-      action,
-      description: `${action} on ${module} #${entityId}`,
-      entityId,
-      status: success ? 'success' : 'failed',
-      metadata: {
-        seed: true,
-        index: i + 1,
-        amount: randFloat(100, 20000, 2),
-        quantity: randFloat(1, 150, 2),
-      },
-      ipAddress: `192.168.1.${randInt(2, 254)}`,
-      userAgent: pick([
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        'Mozilla/5.0 (Linux; Android 13)',
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)',
-      ]),
-      createdAt: randomDate(),
-    };
-  });
-  await createManyInChunks('activityLog', activityLogs, 500);
-
-  const productions = [];
-  for (let i = 0; i < 100; i += 1) {
-    const factory = pick(factories);
-    const product = pick(products);
-    const material = pick(materials);
-    productions.push({
-      reference: `PROD-${String(i + 1).padStart(6, '0')}`,
-      start_date: new Date(Date.now() - randInt(1, 30) * 24 * 60 * 60 * 1000),
-      estimated_end_date: new Date(Date.now() + randInt(1, 30) * 24 * 60 * 60 * 1000),
-      factoryId: factory.id,
-      status: pick(['pending', 'running', 'production_done']),
-      productionProducts: {
-        create: [
-          {
-            productId: product.id,
-            code: `PRD-${product.id}-B${i + 1}`,
-            quantity: randInt(10, 100),
-            unit_cost: Number(product.cost.toFixed(2)),
-            received: randInt(5, 90),
-            scrap: randInt(0, 5),
-          },
-        ],
-      },
-      productionMaterials: {
-        create: [
-          {
-            materialId: material.id,
-            quantity: randInt(50, 200),
-            price: Number(material.unit_cost.toFixed(2)),
-            scrap: randInt(0, 10),
-          },
-        ],
-      },
-    });
-  }
-
-  for (const production of productions) {
-    await prisma.production.create({ data: production });
-  }
-
-  console.log('Seeding expense categories and expenses...');
-  const expenseCategoryNames = [
-    'Office Supplies',
-    'Transport',
-    'Utilities',
-    'Maintenance',
-    'Rent',
-    'Internet',
-    'Salary Disbursement',
-    'Miscellaneous',
-  ];
-  await prisma.expenseCategory.createMany({
-    data: expenseCategoryNames.map((name) => ({ name })),
-    skipDuplicates: true,
-  });
-  const expenseCategories = await prisma.expenseCategory.findMany();
-
-  for (let i = 0; i < 2000; i += 1) {
-    await prisma.expense.create({
-      data: {
-        categoryId: pick(expenseCategories).id,
-        accountId: pick(accounts).id,
-        amount: randFloat(100, 20000, 2),
-        date: new Date(Date.now() - randInt(1, 365) * 24 * 60 * 60 * 1000),
-        description: `Seeded expense #${i + 1}`,
-        createdById: pick(userList).id,
-      },
-    });
-  }
-
-  console.log('Seeding requisitions (10000)...');
-  for (let i = 0; i < 10000; i += 1) {
-    const requesterType = pick(['store', 'shop', 'factory']);
-    const requesterId =
-      requesterType === 'store'
-        ? pick(stores).id
-        : requesterType === 'shop'
-          ? pick(shops).id
-          : pick(factories).id;
-
-    const itemsCount = randInt(1, 4);
-    const requisitionItems = [];
-    for (let j = 0; j < itemsCount; j += 1) {
-      const itemType = pick(['product', 'material']);
-      if (itemType === 'product') {
-        requisitionItems.push({
-          itemType: 'product',
-          productId: pick(products).id,
-          materialId: null,
-          requestedQty: randFloat(1, 30, 2),
-          note: `Seeded requisition item ${j + 1}`,
-        });
-      } else {
-        requisitionItems.push({
-          itemType: 'material',
-          productId: null,
-          materialId: pick(materials).id,
-          requestedQty: randFloat(1, 50, 2),
-          note: `Seeded requisition item ${j + 1}`,
-        });
-      }
-    }
-
-    await prisma.requisition.create({
-      data: {
-        reference: `REQ-${String(i + 1).padStart(6, '0')}`,
-        title: `Seeded Requisition ${i + 1}`,
-        note: `Auto-generated requisition ${i + 1}`,
-        requestType: 'items',
-        status: pick(['pending', 'approved', 'in_process', 'segmented']),
-        requesterType,
-        requesterId,
-        requesterUserId: pick(userList).id,
-        items: { create: requisitionItems },
-      },
-    });
-  }
-
-  console.log('Seeding combined damage records (300)...');
-  for (let i = 0; i < 300; i += 1) {
-    const fromType = pick(['store', 'shop', 'factory']);
-    const fromId =
-      fromType === 'store'
-        ? pick(stores).id
-        : fromType === 'shop'
-          ? pick(shops).id
-          : pick(factories).id;
-
-    const itemCount = randInt(1, 4);
-    const items = [];
-    let totalLoss = 0;
-    for (let j = 0; j < itemCount; j += 1) {
-      const itemType = pick(['product', 'material']);
-      if (itemType === 'product') {
-        const product = pick(products);
-        const quantity = randFloat(1, 10, 2);
-        const lossPerUnit = Number((product.cost * randFloat(0.8, 1.2)).toFixed(2));
-        totalLoss += quantity * lossPerUnit;
-        items.push({
-          itemType: 'product',
-          productId: product.id,
-          quantity,
-          lossPerUnit,
-        });
-      } else {
-        const material = pick(materials);
-        const quantity = randFloat(1, 20, 2);
-        const lossPerUnit = Number((material.unit_cost * randFloat(0.8, 1.2)).toFixed(2));
-        totalLoss += quantity * lossPerUnit;
-        items.push({
-          itemType: 'material',
-          materialId: material.id,
-          quantity,
-          lossPerUnit,
-        });
-      }
-    }
-
-    await prisma.damageRecord.create({
-      data: {
-        reason: pick(['Broken', 'Damaged in handling', 'Defect', 'Expired']),
-        note: `Seeded damage record ${i + 1}`,
-        fromType,
-        fromId,
-        storeId: fromType === 'store' ? fromId : null,
-        shopId: fromType === 'shop' ? fromId : null,
-        factoryId: fromType === 'factory' ? fromId : null,
-        totalLoss: Number(totalLoss.toFixed(2)),
-        items: { create: items },
-      },
-    });
-  }
-
-  console.log('Seeding combined repair orders (300)...');
-  for (let i = 0; i < 300; i += 1) {
-    const fromType = pick(['store', 'shop', 'factory']);
-    const fromId =
-      fromType === 'store'
-        ? pick(stores).id
-        : fromType === 'shop'
-          ? pick(shops).id
-          : pick(factories).id;
-
-    const itemsCount = randInt(1, 3);
-    const items = [];
-    for (let j = 0; j < itemsCount; j += 1) {
-      const itemType = pick(['product', 'material']);
-      if (itemType === 'product') {
-        items.push({
-          itemType: 'product',
-          productId: pick(products).id,
-          quantity: randFloat(1, 8, 2),
-          success: 0,
-          fail: 0,
-        });
-      } else {
-        items.push({
-          itemType: 'material',
-          materialId: pick(materials).id,
-          quantity: randFloat(1, 12, 2),
-          success: 0,
-          fail: 0,
-        });
-      }
-    }
-
-    await prisma.repairOrder.create({
-      data: {
-        reference: `REP-${String(i + 1).padStart(6, '0')}`,
-        destination: pick(['Vendor A', 'Service Center', 'In-house Unit']),
-        shippingCost: randFloat(0, 2000, 2),
-        note: `Seeded repair order ${i + 1}`,
-        status: pick(['pending', 'in_progress', 'completed']),
-        from: fromType,
-        fromId,
-        accountId: pick(accounts).id,
-        createdById: admin.id,
-        items: { create: items },
-      },
-    });
-  }
-
-  await prisma.businessSettings.createMany({
-    data: [
-      { key: 'company', value: { name: 'BSP Engineering', country: 'BD' } },
-      { key: 'sales', value: { allowNegativeStock: false } },
-      { key: 'purchases', value: { requireApproval: false } },
-    ],
-    skipDuplicates: true,
-  });
-
-  console.log('✅ Seeding completed successfully!');
-  console.log(`Created ${await prisma.permission.count()} permissions`);
-  console.log(`Created ${await prisma.user.count()} users`);
-  console.log(`Created ${await prisma.factory.count()} factories`);
-  console.log(`Created ${await prisma.store.count()} stores`);
-  console.log(`Created ${await prisma.shop.count()} shops`);
-  console.log(`Created ${await prisma.supplier.count()} suppliers`);
-  console.log(`Created ${await prisma.material.count()} materials`);
-  console.log(`Created ${await prisma.product.count()} products`);
-  console.log(`Created ${await prisma.cashRegister.count()} cash registers`);
-  console.log(`Created ${await prisma.bankAccount.count()} bank accounts`);
-  console.log(`Created ${await prisma.accounts.count()} accounts`);
-  console.log(`Created ${await prisma.purchase.count()} purchases`);
-  console.log(`Created ${await prisma.production.count()} productions`);
-  console.log(`Created ${await prisma.sale.count()} sales`);
-  console.log(`Created ${await prisma.transfer.count()} transfers`);
-  console.log(`Created ${await prisma.requisition.count()} requisitions`);
-  console.log(`Created ${await prisma.expenseCategory.count()} expense categories`);
-  console.log(`Created ${await prisma.expense.count()} expenses`);
-  console.log(`Created ${await prisma.notification.count()} notifications`);
-  console.log(`Created ${await prisma.activityLog.count()} activity logs`);
-  console.log(`Created ${await prisma.damageRecord.count()} damage records`);
-  console.log(`Created ${await prisma.repairOrder.count()} repair orders`);
-  console.log(`Created ${await prisma.cashRegisterAssignment.count()} cash register assignments`);
-  console.log(`Created ${await prisma.entityAccount.count()} entity accounts`);
-  console.log(`Created ${await prisma.userAssociate.count()} user associates`);
+  console.log("Seed completed.");
+  console.log(`Permission created: ${adminPermission.name} (#${adminPermission.id})`);
+  console.log(`User created: ${adminUser.username} (${adminUser.email})`);
 }
 
 main()
@@ -1117,3 +686,8 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+
+
+
+

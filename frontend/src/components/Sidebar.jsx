@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { usePermission } from '../hooks/usePermission'; // Import usePermission
+import { API_ROUTES } from '../config';
+import { useAuth } from '../App';
 import { 
   ChevronDown, ChevronRight, ChevronLeft, ChevronRightIcon,
   Home, ShoppingCart, Factory, Package, 
@@ -26,8 +29,45 @@ import {
 const Sidebar = () => {
   const [openMenus, setOpenMenus] = useState({});
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [activeUsersCount, setActiveUsersCount] = useState(0);
   const { currentUser, loading, error } = useCurrentUser();
   const { hasPermission } = usePermission(); // Initialize usePermission
+  const { socket } = useAuth();
+  const canViewActiveUsers = hasPermission('user_read');
+
+  useEffect(() => {
+    if (!canViewActiveUsers) {
+      setActiveUsersCount(0);
+      return;
+    }
+
+    const fetchActiveUsers = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(API_ROUTES.USER_ACTIVE_SESSIONS, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setActiveUsersCount(Array.isArray(res.data) ? res.data.length : 0);
+      } catch (err) {
+        setActiveUsersCount(0);
+      }
+    };
+
+    fetchActiveUsers();
+  }, [canViewActiveUsers]);
+
+  useEffect(() => {
+    if (!socket || !canViewActiveUsers) return undefined;
+
+    const handleActiveUsersUpdate = (sessions) => {
+      setActiveUsersCount(Array.isArray(sessions) ? sessions.length : 0);
+    };
+
+    socket.on('active-users:update', handleActiveUsersUpdate);
+    return () => {
+      socket.off('active-users:update', handleActiveUsersUpdate);
+    };
+  }, [socket, canViewActiveUsers]);
 
   const toggleMenu = (menuName) => {
     setOpenMenus(prev => ({
@@ -291,9 +331,9 @@ const Sidebar = () => {
       subItems: [
         { name: 'All User', path: '/users/all', icon: <Users size={16} />, permissionKey: 'user_read' },
         { name: 'Create User', path: '/users/create', icon: <UserPlus size={16} />, permissionKey: 'user_create' },
-        { name: 'Assign User', path: '/assignuser', icon: <UserPlus size={16} />, permissionKey: ['user_assign', 'user_create'] },
-        { name: 'Assigned List', path: '/assignedusers', icon: <UserPlus size={16} />, permissionKey: ['user_associate_read', 'user_read'] },
-        { name: 'Role & Permissions', path: '/managepermissions', icon: <UserPlus size={16} />, permissionKey: ['role_create', 'role_update', 'role_delete'] }
+        { name: 'Assign User', path: '/assignuser', icon: <UserPlus size={16} />, permissionKey: ['user_associate_create', 'user_create'] },
+        { name: 'Assigned List', path: '/assignedusers', icon: <UserPlus size={16} />, permissionKey: ['user_associate_create', 'user_read'] },
+        { name: 'Role & Permissions', path: '/managepermissions', icon: <UserPlus size={16} />, permissionKey: ['role_create', 'role_edit', 'role_delete'] }
       ]
     },
     {
@@ -448,16 +488,26 @@ const Sidebar = () => {
       {/* Footer Stats - Hidden when collapsed */}
       {!isCollapsed && (
         <div className="mt-8 pt-6 border-t border-gray-200/50">
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200/50">
+          {canViewActiveUsers ? (
+            <Link
+              to="/users/all?mode=active"
+              className="flex items-center justify-between p-3 mb-8 rounded-xl bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200/50 hover:shadow-md transition-all"
+            >
               <p className="text-xs text-gray-600">Active Users</p>
-              <p className="text-lg font-bold text-green-600">24</p>
+              <div className="flex items-center gap-1">
+                <div className='h-2 w-2 rounded-full bg-green-600'></div>
+                <p className="text-lg font-bold text-green-600">{activeUsersCount}</p>
+              </div>
+            </Link>
+          ) : (
+            <div className="flex items-center justify-between p-3 mb-8 rounded-xl bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200/50">
+              <p className="text-xs text-gray-600">Active Users</p>
+              <div className="flex items-center gap-1">
+                <div className='h-2 w-2 rounded-full bg-green-600'></div>
+                <p className="text-lg font-bold text-green-600">0</p>
+              </div>
             </div>
-            <div className="p-3 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/30 border border-blue-200/50">
-              <p className="text-xs text-gray-600">Today Sales</p>
-              <p className="text-lg font-bold text-blue-600">$12.5K</p>
-            </div>
-          </div>
+          )}
           
           <div className="flex items-center justify-between">
             <p className="text-xs text-gray-500">

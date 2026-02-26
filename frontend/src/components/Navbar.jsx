@@ -3,7 +3,7 @@ import { CiMenuFries } from "react-icons/ci";
 import logo from "/logo.png";
 import { Bell, CircleUserRound, Home, Zap, Newspaper, Store, Sun, Moon, LogOut } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
-import { API_ROUTES } from "../config";
+import { API_ROUTES, MEDIA_BASE_URL } from "../config";
 
 import { useAuth } from "../App";
 
@@ -20,6 +20,16 @@ const Navbar = () => {
 
     const localUserName = localStorage.getItem('name');
     const localUserEmail = localStorage.getItem('email');
+    const [profileImageFailed, setProfileImageFailed] = useState(false);
+
+    const getImageUrl = (imagePath) => {
+        if (!imagePath) return null;
+        if (imagePath.startsWith('http')) return imagePath;
+        if (imagePath.startsWith('/uploads')) return `${MEDIA_BASE_URL}${imagePath}`;
+        return `${MEDIA_BASE_URL}/uploads/${imagePath}`;
+    };
+
+    const profileImageUrl = getImageUrl(currentUser?.profile?.image);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -182,9 +192,18 @@ const Navbar = () => {
                                 onClick={() => setProfileOpen(!isProfileOpen)}
                                 className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-blue-500/10 to-purple-500/10 hover:from-blue-500/20 hover:to-purple-500/20 border border-white/30 transition-all duration-300 group backdrop-blur-sm bg-white/80 hover:bg-white/95 hover:translate-y-[-1px] hover:shadow-[0_5px_20px_rgba(59,157,248,0.2)]"
                             >
-                                <div className="p-1.5 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 shadow-[0_4px_12px_rgba(59,157,248,0.3)]">
-                                    <CircleUserRound size={20} className="text-white" />
-                                </div>
+                                {profileImageUrl && !profileImageFailed ? (
+                                    <img
+                                        src={profileImageUrl}
+                                        alt="User"
+                                        className="w-9 h-9 rounded-lg object-cover border border-white/50 shadow-[0_4px_12px_rgba(59,157,248,0.3)]"
+                                        onError={() => setProfileImageFailed(true)}
+                                    />
+                                ) : (
+                                    <div className="p-1.5 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 shadow-[0_4px_12px_rgba(59,157,248,0.3)]">
+                                        <CircleUserRound size={20} className="text-white" />
+                                    </div>
+                                )}
                                 <div className="text-left hidden md:block">
                                     <p className="text-sm font-semibold text-gray-800">{loading ? "Loading..." : currentUser?.name || localUserName || "Guest"}</p>
                                     <p className="text-xs text-gray-500">{loading ? "..." : currentUser?.email || localUserEmail || "..."}</p>
