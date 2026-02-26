@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { Html5Qrcode } from "html5-qrcode";
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { activeOnly } from '../../utils/softDelete';
@@ -16,7 +17,9 @@ import {
   ClipboardList,
   ArrowLeftRight,
   Filter,
-  Trash2
+  Trash2,
+  Camera,
+  X
 } from "lucide-react";
 
 const AddTransfer = () => {
@@ -36,6 +39,8 @@ const AddTransfer = () => {
   const [document, setDocument] = useState(null);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState("");
   const [stores, setStores] = useState([]);
   const [shops, setShops] = useState([]);
   const [factories, setFactories] = useState([]);
@@ -198,9 +203,9 @@ const AddTransfer = () => {
     }
   }, [toType, stores, shops, factories, toId]);
 
-  const handleSearch = async (e) => {
-    setSearch(e.target.value);
-    if (e.target.value.length > 1 && fromId) {
+  const searchItems = async (value) => {
+    setSearch(value);
+    if (value.length > 1 && fromId) {
       try {
         const token = localStorage.getItem('token');
 
@@ -214,7 +219,7 @@ const AddTransfer = () => {
           params: {
             from: fromType,
             fromId,
-            search: e.target.value
+            search: value
           },
         });
         setSearchResults(Array.isArray(res.data) ? res.data : []);
@@ -227,6 +232,61 @@ const AddTransfer = () => {
     setSearchResults([]);
   }
 };
+
+  const handleSearch = async (e) => {
+    await searchItems(e.target.value);
+  };
+
+  useEffect(() => {
+    if (!scannerOpen) return undefined;
+
+    const scannerId = "transfer-create-scanner";
+    let scanner = null;
+    let isActive = true;
+    let hasScanned = false;
+
+    const start = async () => {
+      try {
+        setScannerError("");
+        scanner = new Html5Qrcode(scannerId);
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: 250 },
+          async (decodedText) => {
+            if (hasScanned || !isActive) return;
+            hasScanned = true;
+            await searchItems(String(decodedText || "").trim());
+            setScannerOpen(false);
+          },
+          () => {}
+        );
+      } catch (error) {
+        if (!isActive) return;
+        setScannerError(error?.message || "Unable to start camera scanner.");
+      }
+    };
+
+    start();
+
+    return () => {
+      isActive = false;
+      if (!scanner) return;
+      Promise.resolve()
+        .then(async () => {
+          if (scanner.isScanning) {
+            await scanner.stop();
+          }
+        })
+        .catch(() => {})
+        .finally(async () => {
+          try {
+            await scanner.clear();
+          } catch {
+            // ignore scanner cleanup errors
+          }
+        });
+    };
+  }, [scannerOpen, fromId, fromType]);
 
   const handleAddItem = (item) => {
     const firstBatch = Array.isArray(item.batches) && item.batches.length > 0 ? item.batches[0] : null;
@@ -600,9 +660,17 @@ const AddTransfer = () => {
                 type="text"
                 value={search}
                 onChange={handleSearch}
-                className="w-full glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
+                className="w-full glass-input p-2 pl-10 pr-12 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
                 placeholder="Search products or materials..."
               />
+              <button
+                type="button"
+                onClick={() => setScannerOpen(true)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg text-indigo-600 hover:bg-indigo-50 transition-colors"
+                title="Scan barcode/QR"
+              >
+                <Camera size={18} />
+              </button>
             </div>
 
             {searchResults.length > 0 && (
@@ -782,6 +850,28 @@ const AddTransfer = () => {
           </div>
         </div>
       </div>
+
+      {scannerOpen && (
+        <div className="fixed inset-0 z-[200] bg-black/90 p-4 md:p-6">
+          <div className="h-full max-w-4xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-800">Scan Barcode / QR</h3>
+              <button
+                type="button"
+                onClick={() => setScannerOpen(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+                title="Close scanner"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 bg-black p-3">
+              <div id="transfer-create-scanner" className="w-full h-full min-h-[320px]" />
+            </div>
+            {scannerError && <p className="px-4 py-3 text-sm text-red-600">{scannerError}</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Factory, Package, Save, Search, ShoppingBag, Store, Trash2, Truck } from "lucide-react";
+import { AlertTriangle, Camera, Factory, Package, Save, Search, ShoppingBag, Store, Trash2, Truck, X } from "lucide-react";
+import { Html5Qrcode } from "html5-qrcode";
 import { API_ROUTES } from "../../config";
 import { activeOnly } from "../../utils/softDelete";
 
@@ -22,6 +23,8 @@ export default function RepairCreate() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState("");
   const [repairItems, setRepairItems] = useState([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -92,6 +95,55 @@ export default function RepairCreate() {
     setSearchResults(results);
     setShowSearch(true);
   };
+
+  useEffect(() => {
+    if (!scannerOpen) return undefined;
+
+    const scannerId = "repair-create-scanner";
+    let scanner = null;
+    let isActive = true;
+    let hasScanned = false;
+
+    const start = async () => {
+      try {
+        setScannerError("");
+        scanner = new Html5Qrcode(scannerId);
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: 250 },
+          (decodedText) => {
+            if (hasScanned || !isActive) return;
+            hasScanned = true;
+            handleSearchChange(String(decodedText || "").trim());
+            setScannerOpen(false);
+          },
+          () => {}
+        );
+      } catch (error) {
+        if (!isActive) return;
+        setScannerError(error?.message || "Unable to start camera scanner.");
+      }
+    };
+
+    start();
+
+    return () => {
+      isActive = false;
+      if (!scanner) return;
+      Promise.resolve()
+        .then(async () => {
+          if (scanner.isScanning) await scanner.stop();
+        })
+        .catch(() => {})
+        .finally(async () => {
+          try {
+            await scanner.clear();
+          } catch {
+            // ignore scanner cleanup errors
+          }
+        });
+    };
+  }, [scannerOpen, damagedItems]);
 
   const addItem = (item) => {
     const exists = repairItems.find((x) => x.itemType === item.itemType && Number(x.itemId) === Number(item.id));
@@ -193,7 +245,15 @@ export default function RepairCreate() {
         <div ref={searchRef} className="rounded-xl border border-white/60 bg-white/60 p-3">
           <label className="text-sm font-semibold text-gray-700">Search Damaged Items</label>
           <div className="relative mt-2">
-            <input value={searchTerm} onChange={(e) => handleSearchChange(e.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2" placeholder="Search damaged products/materials" />
+            <input value={searchTerm} onChange={(e) => handleSearchChange(e.target.value)} className="w-full rounded-lg border border-gray-200 bg-white px-3 pr-12 py-2" placeholder="Search damaged products/materials" />
+            <button
+              type="button"
+              onClick={() => setScannerOpen(true)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-cyan-600 hover:bg-cyan-50 transition-colors"
+              title="Scan barcode/QR"
+            >
+              <Camera size={16} />
+            </button>
             {showSearch && searchResults.length > 0 && (
               <div className="absolute z-20 mt-1 w-full max-h-52 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-xl">
                 {searchResults.map((item) => (
@@ -225,6 +285,28 @@ export default function RepairCreate() {
           </button>
         </div>
       </div>
+
+      {scannerOpen && (
+        <div className="fixed inset-0 z-[200] bg-black/90 p-4 md:p-6">
+          <div className="h-full max-w-4xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-800">Scan Barcode / QR</h3>
+              <button
+                type="button"
+                onClick={() => setScannerOpen(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+                title="Close scanner"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 bg-black p-3">
+              <div id="repair-create-scanner" className="w-full h-full min-h-[320px]" />
+            </div>
+            {scannerError && <p className="px-4 py-3 text-sm text-red-600">{scannerError}</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

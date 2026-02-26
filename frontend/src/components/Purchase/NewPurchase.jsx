@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
-import { Plus, Trash2, Package, Tag, Truck, Building2, Store, Factory, ShoppingBag, Check, Image as ImageIcon, CreditCard, DollarSign, Percent, Truck as ShippingIcon } from "lucide-react";
+import { Plus, Trash2, Package, Tag, Truck, Building2, Store, Factory, ShoppingBag, Check, Image as ImageIcon, CreditCard, DollarSign, Percent, Truck as ShippingIcon, Camera, X } from "lucide-react";
+import { Html5Qrcode } from "html5-qrcode";
 import { useLocation } from "react-router-dom";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
 import { activeOnly } from "../../utils/softDelete";
@@ -21,6 +22,8 @@ export default function NewPurchase() {
     showSearchResults: false,
     filteredResults: [], // Combined materials and products
   });
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState("");
   const [purchaseItems, setPurchaseItems] = useState([]); // This will hold the actual items for the purchase order
   const [form, setForm] = useState({
     supplierId: "",
@@ -65,6 +68,55 @@ export default function NewPurchase() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (!scannerOpen) return undefined;
+
+    const scannerId = "purchase-create-scanner";
+    let scanner = null;
+    let isActive = true;
+    let hasScanned = false;
+
+    const start = async () => {
+      try {
+        setScannerError("");
+        scanner = new Html5Qrcode(scannerId);
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: 250 },
+          (decodedText) => {
+            if (hasScanned || !isActive) return;
+            hasScanned = true;
+            handleSearchInputChange(String(decodedText || "").trim());
+            setScannerOpen(false);
+          },
+          () => {}
+        );
+      } catch (error) {
+        if (!isActive) return;
+        setScannerError(error?.message || "Unable to start camera scanner.");
+      }
+    };
+
+    start();
+
+    return () => {
+      isActive = false;
+      if (!scanner) return;
+      Promise.resolve()
+        .then(async () => {
+          if (scanner.isScanning) await scanner.stop();
+        })
+        .catch(() => {})
+        .finally(async () => {
+          try {
+            await scanner.clear();
+          } catch {
+            // ignore scanner cleanup errors
+          }
+        });
+    };
+  }, [scannerOpen]);
 
   useEffect(() => {
     fetchMaterials();
@@ -862,8 +914,16 @@ const fetchBankAccounts = async () => {
                   placeholder="Search materials or products by name/barcode..."
                   value={searchState.searchTerm}
                   onChange={(e) => handleSearchInputChange(e.target.value)}
-                  className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                  className="w-full p-2 pr-12 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
                 />
+                <button
+                  type="button"
+                  onClick={() => setScannerOpen(true)}
+                  className="absolute right-2 top-[41px] p-2 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
+                  title="Scan barcode/QR"
+                >
+                  <Camera size={18} />
+                </button>
 
                 {/* Search Results Dropdown */}
                 {searchState.showSearchResults && searchState.filteredResults.length > 0 && (
@@ -1372,6 +1432,28 @@ const fetchBankAccounts = async () => {
           </div>
         </div>
       </div>
+
+      {scannerOpen && (
+        <div className="fixed inset-0 z-[200] bg-black/90 p-4 md:p-6">
+          <div className="h-full max-w-4xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-800">Scan Barcode / QR</h3>
+              <button
+                type="button"
+                onClick={() => setScannerOpen(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+                title="Close scanner"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 bg-black p-3">
+              <div id="purchase-create-scanner" className="w-full h-full min-h-[320px]" />
+            </div>
+            {scannerError && <p className="px-4 py-3 text-sm text-red-600">{scannerError}</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
