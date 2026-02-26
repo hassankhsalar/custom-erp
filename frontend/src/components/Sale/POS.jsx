@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { API_ROUTES } from "../../config";
+import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
 import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X, Camera } from "lucide-react";
 import { TbCurrencyTaka } from "react-icons/tb";
 import { activeOnly } from "../../utils/softDelete";
@@ -44,7 +44,7 @@ export default function ShopPOS( props ) {
     
     if (imagePath.startsWith('http')) return imagePath;
     
-    const baseUrl = 'http://localhost:3001';
+    const baseUrl = MEDIA_BASE_URL;
     
     if (imagePath.startsWith('/uploads')) {
       return `${baseUrl}${imagePath}`;
@@ -111,8 +111,8 @@ export default function ShopPOS( props ) {
           { facingMode: { ideal: "environment" } },
           {
             fps: 10,
-            qrbox: { width: 280, height: 280 },
-            aspectRatio: 1.7778,
+            qrbox: { width: 340, height: 340 },
+            aspectRatio: 1,
           },
           (decodedText) => {
             if (cancelled) return;
@@ -1294,8 +1294,10 @@ export default function ShopPOS( props ) {
             </button>
           </div>
 
-          <div className="w-full h-full pt-16">
-            <div id={SCANNER_ELEMENT_ID} className="w-full h-full" />
+          <div className="w-full h-full pt-16 flex items-center justify-center px-4">
+            <div className="w-[min(88vw,560px)] h-[min(88vw,560px)] rounded-2xl overflow-hidden border-2 border-white/30 shadow-2xl bg-black">
+              <div id={SCANNER_ELEMENT_ID} className="w-full h-full" />
+            </div>
           </div>
 
           {scannerError && (

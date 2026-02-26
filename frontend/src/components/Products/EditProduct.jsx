@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
-import { API_ROUTES } from '../../config';
+import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
 import { 
   Image as ImageIcon, 
   X, 
@@ -40,14 +40,12 @@ const EditProduct = () => {
     if (!imagePath) return null;
     
     if (imagePath.startsWith('http')) return imagePath;
-    
-    const baseUrl = 'http://localhost:3001';
-    
+
     if (imagePath.startsWith('/uploads')) {
-      return `${baseUrl}${imagePath}`;
-    } else {
-      return `${baseUrl}/uploads/${imagePath}`;
-    }
+      return `${MEDIA_BASE_URL}${imagePath}`;
+    } 
+    
+    return `${MEDIA_BASE_URL}/uploads/${imagePath}`;
   };
 
   useEffect(() => {
