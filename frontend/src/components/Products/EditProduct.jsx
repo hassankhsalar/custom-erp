@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
+import SearchableSelect from '../common/SearchableSelect';
 import { 
   Image as ImageIcon, 
   X, 
@@ -34,6 +35,9 @@ const EditProduct = () => {
   const [imagePreview, setImagePreview] = useState(null);
   const [selectedImageFile, setSelectedImageFile] = useState(null);
   const [expandedMaterialDetails, setExpandedMaterialDetails] = useState(null);
+  const [units, setUnits] = useState([]);
+  const [brands, setBrands] = useState([]);
+  const [categories, setCategories] = useState([]);
 
   // Function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -73,6 +77,8 @@ const EditProduct = () => {
           cost: response.data.cost || '',
           alert_quantity: response.data.alert_quantity || '0',
           category: response.data.category || '',
+          brand: response.data.brand || '',
+          unit: response.data.unit || '',
           barcode: response.data.barcode || '',
           image: response.data.image || null,
         };
@@ -124,9 +130,26 @@ const EditProduct = () => {
       }
     };
 
+    const fetchMasterData = async () => {
+      if (!token) return;
+      try {
+        const [unitsRes, brandsRes, categoriesRes] = await Promise.all([
+          axios.get(`${API_ROUTES.MASTER_DATA_UNITS}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_ROUTES.MASTER_DATA_BRANDS}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_ROUTES.MASTER_DATA_PRODUCT_CATEGORIES}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+        setUnits(unitsRes.data.items || []);
+        setBrands(brandsRes.data.items || []);
+        setCategories(categoriesRes.data.items || []);
+      } catch (error) {
+        console.error('Error fetching master data:', error);
+      }
+    };
+
     if (token) {
       fetchProduct();
       fetchMaterials();
+      fetchMasterData();
     }
   }, [id, token, navigate]);
 
@@ -272,6 +295,8 @@ const EditProduct = () => {
         cost: parseFloat(product.cost),
         alert_quantity: product.alert_quantity ? parseInt(product.alert_quantity) : 0,
         category: product.category || null,
+        brand: product.brand || null,
+        unit: product.unit || null,
         barcode: product.barcode || null,
         image: selectedImageFile ? imageUrl : product.image,
         materials: materials.map(m => ({
@@ -318,6 +343,18 @@ const EditProduct = () => {
   const totalMaterialsCost = materials.reduce((sum, mat) => 
     sum + (parseFloat(mat.price) * parseFloat(mat.material_quantity)), 0
   );
+  const categoryOptions = categories.map((category) => ({ value: category.name, label: category.name }));
+  const brandOptions = brands.map((brand) => ({ value: brand.name, label: brand.name }));
+  const unitOptions = units.map((unit) => ({ value: unit.name, label: unit.name }));
+  const mergedCategoryOptions = product?.category && !categoryOptions.some((option) => option.value === product.category)
+    ? [{ value: product.category, label: product.category }, ...categoryOptions]
+    : categoryOptions;
+  const mergedBrandOptions = product?.brand && !brandOptions.some((option) => option.value === product.brand)
+    ? [{ value: product.brand, label: product.brand }, ...brandOptions]
+    : brandOptions;
+  const mergedUnitOptions = product?.unit && !unitOptions.some((option) => option.value === product.unit)
+    ? [{ value: product.unit, label: product.unit }, ...unitOptions]
+    : unitOptions;
 
   if (loading) {
     return (
@@ -548,14 +585,39 @@ const EditProduct = () => {
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                    <input 
-                      type="text" 
+                    <SearchableSelect
                       name="category" 
                       value={product.category || ''} 
                       onChange={handleProductChange} 
-                      placeholder="Product category" 
-                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-gray-500/30 focus:border-gray-500 transition-all duration-200"
+                      options={mergedCategoryOptions}
+                      placeholder="Select category"
                     />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Brand</label>
+                    <SearchableSelect
+                      name="brand"
+                      value={product.brand || ''}
+                      onChange={handleProductChange}
+                      options={mergedBrandOptions}
+                      placeholder="Select brand"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Unit</label>
+                    <SearchableSelect
+                      name="unit"
+                      value={product.unit || ''}
+                      onChange={handleProductChange}
+                      options={mergedUnitOptions}
+                      placeholder="Unit"
+                      disabled
+                    />
+                    <p className="mt-1 text-xs text-amber-700">Unit cannot be changed after stock exists.</p>
                   </div>
                 </div>
                 

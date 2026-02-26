@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { API_ROUTES } from '../../config';
+import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
+import SearchableSelect from '../common/SearchableSelect';
 import { 
   Image as ImageIcon, 
   X, 
@@ -25,6 +26,7 @@ const EditMaterial = () => {
   const [material, setMaterial] = useState({
     name: '',
     description: '',
+    category: '',
     brand: '',
     barcode: '',
     image: '',
@@ -37,6 +39,9 @@ const EditMaterial = () => {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [selectedImageFile, setSelectedImageFile] = useState(null);
+  const [units, setUnits] = useState([]);
+  const [brands, setBrands] = useState([]);
+  const [categories, setCategories] = useState([]);
   const token = localStorage.getItem('token');
 
   // Function to get full image URL
@@ -55,6 +60,22 @@ const EditMaterial = () => {
   };
 
   useEffect(() => {
+    const fetchMasterData = async () => {
+      if (!token) return;
+      try {
+        const [unitsRes, brandsRes, categoriesRes] = await Promise.all([
+          axios.get(`${API_ROUTES.MASTER_DATA_UNITS}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_ROUTES.MASTER_DATA_BRANDS}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_ROUTES.MASTER_DATA_PRODUCT_CATEGORIES}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+        setUnits(unitsRes.data.items || []);
+        setBrands(brandsRes.data.items || []);
+        setCategories(categoriesRes.data.items || []);
+      } catch (error) {
+        console.error('Error loading master data:', error);
+      }
+    };
+
     const fetchMaterial = async () => {
       try {
         const response = await axios.get(`${API_ROUTES.MATERIALS}/${id}`, {
@@ -86,6 +107,7 @@ const EditMaterial = () => {
     };
     
     if (token) {
+      fetchMasterData();
       fetchMaterial();
     } else {
       alert('No authentication token found. Please login.');
@@ -245,6 +267,18 @@ const EditMaterial = () => {
   };
 
   const margin = calculateMargin();
+  const categoryOptions = categories.map((category) => ({ value: category.name, label: category.name }));
+  const brandOptions = brands.map((brand) => ({ value: brand.name, label: brand.name }));
+  const unitOptions = units.map((unit) => ({ value: unit.name, label: unit.name }));
+  const mergedCategoryOptions = material?.category && !categoryOptions.some((option) => option.value === material.category)
+    ? [{ value: material.category, label: material.category }, ...categoryOptions]
+    : categoryOptions;
+  const mergedBrandOptions = material?.brand && !brandOptions.some((option) => option.value === material.brand)
+    ? [{ value: material.brand, label: material.brand }, ...brandOptions]
+    : brandOptions;
+  const mergedUnitOptions = material?.unit && !unitOptions.some((option) => option.value === material.unit)
+    ? [{ value: material.unit, label: material.unit }, ...unitOptions]
+    : unitOptions;
 
   if (loading) {
     return (
@@ -407,17 +441,15 @@ const EditMaterial = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Unit
                       </label>
-                      <div className="relative">
-                        <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                        <input
-                          type="text"
-                          name="unit"
-                          value={material.unit}
-                          placeholder="kg/piece/litre"
-                          readOnly
-                          className="w-full pl-10 p-3 border outline-none border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200"
-                        />
-                      </div>
+                      <SearchableSelect
+                        name="unit"
+                        value={material.unit || ''}
+                        onChange={handleChange}
+                        options={mergedUnitOptions}
+                        placeholder="Unit"
+                        disabled
+                      />
+                      <p className="mt-1 text-xs text-amber-700">Unit cannot be changed after stock exists.</p>
                     </div>
 
                   </div>
@@ -428,17 +460,26 @@ const EditMaterial = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Brand
                       </label>
-                      <div className="relative">
-                        <Factory className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                        <input
-                          type="text"
-                          name="brand"
-                          value={material.brand}
-                          onChange={handleChange}
-                          placeholder="Brand name"
-                          className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200"
-                        />
-                      </div>
+                      <SearchableSelect
+                        name="brand"
+                        value={material.brand || ''}
+                        onChange={handleChange}
+                        options={mergedBrandOptions}
+                        placeholder="Select brand"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Category
+                      </label>
+                      <SearchableSelect
+                        name="category"
+                        value={material.category || ''}
+                        onChange={handleChange}
+                        options={mergedCategoryOptions}
+                        placeholder="Select category"
+                      />
                     </div>
 
                     <div>
