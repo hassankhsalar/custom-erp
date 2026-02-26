@@ -875,6 +875,73 @@ const StoreInventory = () => {
           </div>
         </div>
       )}
+      {editModal.isOpen && editModal.data && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeEditModal}></div>
+          <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden">
+            <div className="p-6 border-b border-white/50 bg-linear-to-r from-blue-500/10 to-cyan-500/10">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-800">Edit Inventory Item</h2>
+                <button onClick={closeEditModal} className="p-2 bg-white/60 rounded-lg hover:bg-white/80 transition-colors duration-300">
+                  <X size={20} className="text-gray-600" />
+                </button>
+              </div>
+              <p className="text-gray-600 mt-1">{editModal.data.name}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Stock</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  value={editForm.stock}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, stock: e.target.value }))}
+                  className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Sale Price</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  value={editForm.sale_price}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, sale_price: e.target.value }))}
+                  className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Alert Quantity</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  value={editForm.alert_quantity}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, alert_quantity: e.target.value }))}
+                  className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-white/50 bg-white/80 backdrop-blur-sm flex justify-end gap-3">
+              <button onClick={closeEditModal} className="px-5 py-2.5 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60">
+                Cancel
+              </button>
+              <button
+                onClick={saveEditModal}
+                disabled={savingEdit}
+                className={`px-5 py-2.5 rounded-xl font-semibold transition-all duration-300 ${
+                  savingEdit
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 shadow-lg hover:shadow-xl'
+                }`}
+              >
+                {savingEdit ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

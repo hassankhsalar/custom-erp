@@ -405,7 +405,7 @@ const EditMaterial = () => {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Unit Type <span className="text-red-500">*</span>
+                        Unit
                       </label>
                       <div className="relative">
                         <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
@@ -413,10 +413,9 @@ const EditMaterial = () => {
                           type="text"
                           name="unit"
                           value={material.unit}
-                          onChange={handleChange}
                           placeholder="kg/piece/litre"
-                          required
-                          className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200"
+                          readOnly
+                          className="w-full pl-10 p-3 border outline-none border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200"
                         />
                       </div>
                     </div>
