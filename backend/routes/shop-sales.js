@@ -1577,6 +1577,19 @@ router.delete("/:id", async (req, res) => {
     if (!sale) {
       return res.status(404).json({ error: "Sale not found" });
     }
+    const saleItemCount = (sale.saleItems || []).length;
+    const saleReturnCount = (sale.saleReturns || []).length;
+    const returnItemCount = (sale.saleReturns || []).reduce((sum, row) => sum + ((row.returnItems || []).length), 0);
+    const saleQuantityReset = (sale.saleItems || []).reduce((sum, item) => sum + (parseFloat(item.quantity || 0) || 0), 0);
+    const returnQuantityRollback = (sale.saleReturns || []).reduce(
+      (sum, row) => sum + (row.returnItems || []).reduce((s, it) => s + (parseFloat(it.quantity || 0) || 0), 0),
+      0
+    );
+    const linkedTransactions = await prisma.transactions.findMany({
+      where: { saleId },
+      select: { id: true, amount: true, added_to_account: true, accountId: true, bankAccountId: true, cashRegisterId: true },
+    });
+    const reversedMoneyTotal = linkedTransactions.reduce((sum, tx) => sum + (parseFloat(tx.amount || 0) || 0), 0);
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, "shop", sale.shopId);
@@ -1655,7 +1668,26 @@ router.delete("/:id", async (req, res) => {
       await tx.sale.delete({ where: { id: saleId } });
     });
 
-    res.json({ success: true, message: "Sale deleted successfully" });
+    const summary = {
+      saleId,
+      saleItemCount,
+      saleQuantityReset,
+      saleReturnCount,
+      returnItemCount,
+      returnQuantityRollback,
+      reversedTransactionCount: linkedTransactions.length,
+      reversedMoneyTotal,
+    };
+
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "sale",
+      entityId: saleId,
+      description: `Deleted sale #${saleId}: reset ${saleItemCount} items (${saleQuantityReset}) and rolled back ${linkedTransactions.length} transactions totaling ${reversedMoneyTotal}.`,
+      details: summary,
+    });
+
+    res.json({ success: true, message: "Sale deleted successfully", summary });
   } catch (err) {
     if (err.status === 403) {
       return res.status(403).json({ error: "Forbidden" });

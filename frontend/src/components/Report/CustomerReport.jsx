@@ -395,8 +395,6 @@ const CustomerReport = () => {
                       <th className="p-4 text-left font-medium text-gray-700">Contact</th>
                       <th className="p-4 text-left font-medium text-gray-700">Purchase History</th>
                       <th className="p-4 text-left font-medium text-gray-700">Financials</th>
-                      <th className="p-4 text-left font-medium text-gray-700">Status</th>
-                      <th className="p-4 text-left font-medium text-gray-700">Loyalty</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -465,28 +463,6 @@ const CustomerReport = () => {
                                   ${Number(r.totalDue || 0).toFixed(2)}
                                 </span>
                               </div>
-                              <div className="pt-1 border-t border-white/40">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-sm text-gray-600">Balance:</span>
-                                  <span className={`font-bold ${
-                                    Number(r.totalDue || 0) > 0 ? 'text-amber-600' : 'text-emerald-600'
-                                  }`}>
-                                    ${(Number(r.totalDue || 0) - Number(r.totalPaid || 0)).toFixed(2)}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-semibold ${status.color}`}>
-                              {status.icon}
-                              {status.text}
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-semibold ${loyalty.color}`}>
-                              {loyalty.icon}
-                              {loyalty.text}
                             </div>
                           </td>
                         </tr>

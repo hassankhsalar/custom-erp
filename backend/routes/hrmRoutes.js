@@ -381,6 +381,10 @@ router.delete("/employees/:userId", async (req, res) => {
   try {
     const userId = parseInt(req.params.userId, 10);
     if (!userId) return res.status(400).json({ error: "Invalid userId" });
+    const profile = await prisma.employeeProfile.findUnique({ where: { userId } });
+    const managerLinks = await prisma.userManager.count({
+      where: { OR: [{ userId }, { managerId: userId }] },
+    });
 
     await prisma.$transaction(async (tx) => {
       await tx.userManager.deleteMany({
@@ -390,8 +394,21 @@ router.delete("/employees/:userId", async (req, res) => {
       });
       await tx.employeeProfile.deleteMany({ where: { userId } });
     });
+    const summary = {
+      userId,
+      designation: profile?.designation || null,
+      baseSalary: profile?.baseSalary || null,
+      managerLinksRemoved: managerLinks,
+    };
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "employee",
+      entityId: userId,
+      description: `Deleted employee profile for user #${userId} and removed ${managerLinks} manager links.`,
+      details: summary,
+    });
 
-    res.json({ success: true, message: "Employee profile deleted successfully" });
+    res.json({ success: true, message: "Employee profile deleted successfully", summary });
   } catch (err) {
     res.status(500).json({ error: err.message || "Failed to delete employee profile" });
   }
@@ -594,7 +611,22 @@ router.delete("/leave-requests/:id", async (req, res) => {
     }
 
     await prisma.leaveRequest.delete({ where: { id } });
-    res.json({ success: true, message: "Leave request deleted successfully" });
+    const summary = {
+      leaveRequestId: id,
+      userId: leave.userId,
+      categoryId: leave.categoryId,
+      startDate: leave.startDate,
+      endDate: leave.endDate,
+      status: leave.status,
+    };
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "leave request",
+      entityId: id,
+      description: `Deleted leave request #${id} for user #${leave.userId} (${String(leave.status || "pending")}).`,
+      details: summary,
+    });
+    res.json({ success: true, message: "Leave request deleted successfully", summary });
   } catch (err) {
     res.status(500).json({ error: err.message || "Failed to delete leave request" });
   }
@@ -979,6 +1011,11 @@ router.delete("/payroll/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!id) return res.status(400).json({ error: "Invalid salary id" });
+    const salaryBeforeDelete = await prisma.salary.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+    if (!salaryBeforeDelete) return res.status(404).json({ error: "Salary not found" });
 
     await prisma.$transaction(async (tx) => {
       const salary = await tx.salary.findUnique({ where: { id }, include: { user: true } });
@@ -1002,7 +1039,25 @@ router.delete("/payroll/:id", async (req, res) => {
       await tx.salary.delete({ where: { id } });
     });
 
-    res.json({ success: true, message: "Salary deleted successfully" });
+    const summary = {
+      salaryId: id,
+      userId: salaryBeforeDelete.userId,
+      employee: salaryBeforeDelete.user?.name || salaryBeforeDelete.user?.username || null,
+      month: salaryBeforeDelete.month,
+      year: salaryBeforeDelete.year,
+      net: salaryBeforeDelete.net,
+      status: salaryBeforeDelete.status,
+      hadPaidRollback: String(salaryBeforeDelete.status || "").toLowerCase() === "paid",
+    };
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "salary",
+      entityId: id,
+      description: `Deleted salary #${id} (${salaryBeforeDelete.month}/${salaryBeforeDelete.year}) for user #${salaryBeforeDelete.userId}, net ${salaryBeforeDelete.net}.`,
+      details: summary,
+    });
+
+    res.json({ success: true, message: "Salary deleted successfully", summary });
   } catch (err) {
     res.status(500).json({ error: err.message || "Failed to delete salary" });
   }

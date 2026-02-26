@@ -657,6 +657,7 @@ function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScop
 
       const scope = await buildScope(prisma, req.user?.userId || 0);
 
+      let deletedSummary = null;
       await prisma.$transaction(async (tx) => {
         const saleReturn = await tx.saleReturn.findUnique({
           where: { id: returnId },
@@ -667,6 +668,8 @@ function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScop
         });
         if (!saleReturn) throw new Error("Sale return not found");
         ensureIdScope(scope, "shop", saleReturn.shopId);
+        const itemCount = (saleReturn.returnItems || []).length;
+        const totalQty = (saleReturn.returnItems || []).reduce((sum, it) => sum + (parseFloat(it.quantity || 0) || 0), 0);
 
         for (const item of saleReturn.returnItems || []) {
           const qty = parseFloat(item.quantity || 0);
@@ -693,6 +696,7 @@ function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScop
           }
         }
 
+        await tx.saleReturnItem.deleteMany({ where: { saleReturnId: returnId } });
         await tx.saleReturn.delete({ where: { id: returnId } });
 
         if (saleReturn.saleId) {
@@ -719,9 +723,24 @@ function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScop
             },
           });
         }
+        deletedSummary = {
+          returnId,
+          saleId: saleReturn.saleId || null,
+          itemCount,
+          totalQty,
+          shopId: saleReturn.shopId,
+        };
       });
 
-      res.json({ success: true, message: "Sale return deleted successfully" });
+      req.setAuditTrail?.({
+        action: "delete",
+        entity: "sale return",
+        entityId: returnId,
+        description: `Deleted sale return #${returnId}: rolled back ${deletedSummary?.itemCount || 0} items (${deletedSummary?.totalQty || 0}).`,
+        details: deletedSummary,
+      });
+
+      res.json({ success: true, message: "Sale return deleted successfully", summary: deletedSummary });
     } catch (err) {
       if (err.status === 403) return res.status(403).json({ error: "Forbidden" });
       res.status(400).json({ error: err.message || "Failed to delete sale return" });

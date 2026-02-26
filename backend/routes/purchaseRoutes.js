@@ -3242,6 +3242,15 @@ router.delete('/returns/:returnId', async (req, res) => {
       },
     });
     if (!purchaseReturn) return res.status(404).json({ error: 'Return not found' });
+    const sourceItemCount = (purchaseReturn.items || []).length;
+    const sourceQtyTotal = (purchaseReturn.items || []).reduce((sum, it) => sum + (parseFloat(it.quantity || 0) || 0), 0);
+    const shipmentItemCount = (purchaseReturn.compensationShipments || []).reduce((sum, sh) => sum + ((sh.items || []).length), 0);
+    const shipmentQtyTotal = (purchaseReturn.compensationShipments || []).reduce(
+      (sum, sh) => sum + (sh.items || []).reduce((s, it) => s + (parseFloat(it.quantity || 0) || 0), 0),
+      0
+    );
+    const paymentCount = (purchaseReturn.compensationPayments || []).length;
+    const paymentAmountTotal = (purchaseReturn.compensationPayments || []).reduce((sum, p) => sum + (parseFloat(p.amount || 0) || 0), 0);
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     if (purchaseReturn.purchase?.destinationType && purchaseReturn.purchase?.destinationId) {
@@ -3317,7 +3326,26 @@ router.delete('/returns/:returnId', async (req, res) => {
       });
     });
 
-    res.json({ success: true, message: 'Return deleted successfully' });
+    const summary = {
+      returnId,
+      reference: purchaseReturn.reference,
+      sourceItemCount,
+      sourceQtyTotal,
+      shipmentItemCount,
+      shipmentQtyTotal,
+      paymentCount,
+      paymentAmountTotal,
+    };
+
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "purchase return",
+      entityId: returnId,
+      description: `Deleted purchase return ${purchaseReturn.reference || `#${returnId}`}: restored ${sourceItemCount} source items and rolled back ${paymentCount} payments (${paymentAmountTotal}).`,
+      details: summary,
+    });
+
+    res.json({ success: true, message: 'Return deleted successfully', summary });
   } catch (error) {
     if (error.status === 403) return res.status(403).json({ error: 'Forbidden' });
     res.status(400).json({ error: error.message || 'Failed to delete return' });
@@ -3352,6 +3380,20 @@ router.delete('/:id', async (req, res) => {
     if (!purchase) {
       return res.status(404).json({ error: 'Purchase not found' });
     }
+    const purchaseItemCount = (purchase.purchaseItems || []).length;
+    const purchaseQtyTotal = (purchase.purchaseItems || []).reduce((sum, item) => sum + (parseFloat(item.quantity || 0) || 0), 0);
+    const returnCount = (purchase.purchaseReturns || []).length;
+    const returnItemCount = (purchase.purchaseReturns || []).reduce((sum, r) => sum + ((r.items || []).length), 0);
+    const compensationPaymentCount = (purchase.purchaseReturns || []).reduce((sum, r) => sum + ((r.compensationPayments || []).length), 0);
+    const compensationPaymentAmount = (purchase.purchaseReturns || []).reduce(
+      (sum, r) => sum + (r.compensationPayments || []).reduce((s, p) => s + (parseFloat(p.amount || 0) || 0), 0),
+      0
+    );
+    const linkedTransactions = await prisma.transactions.findMany({
+      where: { purchaseId },
+      select: { id: true, amount: true },
+    });
+    const purchaseRollbackAmount = linkedTransactions.reduce((sum, tx) => sum + (parseFloat(tx.amount || 0) || 0), 0);
 
     const receivedByPurchaseItemId = {};
     for (const shipment of purchase.purchaseShipments || []) {
@@ -3464,9 +3506,31 @@ router.delete('/:id', async (req, res) => {
       await tx.purchase.delete({ where: { id: purchaseId } });
     });
 
+    const summary = {
+      purchaseId,
+      reference: purchase.reference,
+      purchaseItemCount,
+      purchaseQtyTotal,
+      returnCount,
+      returnItemCount,
+      compensationPaymentCount,
+      compensationPaymentAmount,
+      purchaseTransactionRollbackCount: linkedTransactions.length,
+      purchaseRollbackAmount,
+    };
+
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "purchase",
+      entityId: purchaseId,
+      description: `Deleted purchase ${purchase.reference || `#${purchaseId}`}: rolled back ${purchaseItemCount} purchase items and ${linkedTransactions.length} purchase transactions (${purchaseRollbackAmount}).`,
+      details: summary,
+    });
+
     res.json({
       success: true,
-      message: 'Purchase deleted successfully'
+      message: 'Purchase deleted successfully',
+      summary
     });
 
   } catch (error) {

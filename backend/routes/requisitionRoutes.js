@@ -388,6 +388,12 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     if (!scope.isAdmin && existing.requesterUserId && !isCreator) {
       return res.status(403).json({ error: "Only creator can delete this requisition" });
     }
+    const itemCount = await prisma.requisitionItem.count({ where: { requisitionId: id } });
+    const sectionCount = (existing.sections || []).length;
+    const sectionIds = (existing.sections || []).map((section) => section.id);
+    const sectionItemCount = sectionIds.length
+      ? await prisma.requisitionSectionItem.count({ where: { sectionId: { in: sectionIds } } })
+      : 0;
 
     await prisma.$transaction(async (tx) => {
       const sectionIds = (existing.sections || []).map((section) => section.id);
@@ -400,8 +406,24 @@ router.delete("/:id", authenticateToken, async (req, res) => {
       await tx.requisitionItem.deleteMany({ where: { requisitionId: id } });
       await tx.requisition.delete({ where: { id } });
     });
+    const summary = {
+      requisitionId: id,
+      reference: existing.reference,
+      requesterType: existing.requesterType,
+      requesterId: existing.requesterId,
+      itemCount,
+      sectionCount,
+      sectionItemCount,
+    };
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "requisition",
+      entityId: id,
+      description: `Deleted requisition ${existing.reference || `#${id}`}: removed ${itemCount} requisition items and ${sectionItemCount} section items.`,
+      details: summary,
+    });
 
-    return res.json({ success: true, message: "Requisition deleted successfully" });
+    return res.json({ success: true, message: "Requisition deleted successfully", summary });
   } catch (error) {
     if (error.status === 403) return res.status(403).json({ error: "Forbidden" });
     return res.status(500).json({ error: error.message || "Failed to delete requisition" });

@@ -863,68 +863,89 @@ export default function AllPurchase() {
 
         {/* Main Content */}
         <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
-          <div className="mb-6 grid grid-cols-1 md:grid-cols-7 gap-3">
-            <input
-              type="text"
-              value={filters.search}
-              onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-              placeholder="Search by ref or supplier..."
-              className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-            />
-            <select
-              value={filters.supplierId}
-              onChange={(e) => setFilters((prev) => ({ ...prev, supplierId: e.target.value }))}
-              className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-            >
-              <option value="">All Suppliers</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-            <select
-              value={filters.destinationType}
-              onChange={(e) => setFilters((prev) => ({ ...prev, destinationType: e.target.value, destinationId: "" }))}
-              className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-            >
-              <option value="">All Destination Types</option>
-              <option value="store">Store</option>
-              <option value="shop">Shop</option>
-              <option value="factory">Factory</option>
-            </select>
-            <select
-              value={filters.destinationId}
-              onChange={(e) => setFilters((prev) => ({ ...prev, destinationId: e.target.value }))}
-              disabled={!filters.destinationType}
-              className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-60"
-            >
-              <option value="">{filters.destinationType ? "All Destinations" : "Select destination type first"}</option>
-              {activeDestinationOptions.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
-            <select
-              value={filters.shippingStatus}
-              onChange={(e) => setFilters((prev) => ({ ...prev, shippingStatus: e.target.value }))}
-              className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-            >
-              <option value="">All Shipping Status</option>
-              <option value="pending">Pending</option>
-              <option value="partial">Partial</option>
-              <option value="received">Received</option>
-            </select>
-            <input
-              type="datetime-local"
-              value={filters.dateFrom}
-              onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
-              className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-            />
-            <input
-              type="datetime-local"
-              value={filters.dateTo}
-              onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
-              className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-            />
-            <div className="md:col-span-7 flex justify-end gap-2">
+          <div className="mb-6 grid grid-cols-1 md:grid-cols-5 gap-3">
+            <div className="w-full md:col-span-2"> 
+              <label htmlFor="search" className="text-sm text-gray-600">Search</label>
+              <input
+                type="text"
+                value={filters.search}
+                onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+                placeholder="Search by ref or supplier..."
+                className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+            </div>
+            <div>
+              <label htmlFor="supplier" className="text-sm text-gray-600">Supplier</label>
+              <select
+                value={filters.supplierId}
+                onChange={(e) => setFilters((prev) => ({ ...prev, supplierId: e.target.value }))}
+                className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              >
+                <option value="">All Suppliers</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="destinationType" className="text-sm text-gray-600">Destination Type</label>
+              <select
+                value={filters.destinationType}
+                onChange={(e) => setFilters((prev) => ({ ...prev, destinationType: e.target.value, destinationId: "" }))}
+                className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              >
+                <option value="">All Destination Types</option>
+                <option value="store">Store</option>
+                <option value="shop">Shop</option>
+                <option value="factory">Factory</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="destination" className="text-sm text-gray-600">Destination</label>
+              <select
+                value={filters.destinationId}
+                onChange={(e) => setFilters((prev) => ({ ...prev, destinationId: e.target.value }))}
+                disabled={!filters.destinationType}
+                className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:opacity-60"
+              >
+                <option value="">{filters.destinationType ? "All Destinations" : "Select destination type first"}</option>
+                {activeDestinationOptions.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="shippingStatus" className="text-sm text-gray-600">Shipping Status</label>
+              <select
+                value={filters.shippingStatus}
+                onChange={(e) => setFilters((prev) => ({ ...prev, shippingStatus: e.target.value }))}
+                className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              >
+                <option value="">All Shipping Status</option>
+                <option value="pending">Pending</option>
+                <option value="partial">Partial</option>
+                <option value="received">Received</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="dateFrom" className="text-sm text-gray-600">Date From</label>
+              <input
+                type="datetime-local"
+                value={filters.dateFrom}
+                onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
+                className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+            </div>
+            <div>
+              <label htmlFor="dateTo" className="text-sm text-gray-600">Date To</label>
+              <input
+                type="datetime-local"
+                value={filters.dateTo}
+                onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
+                className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+            </div>
+            <div className="md:col-span-5 flex justify-end gap-2">
               <button
                 onClick={handleApplyFilters}
                 className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 transition-all duration-300"
@@ -933,7 +954,7 @@ export default function AllPurchase() {
               </button>
               <button
                 onClick={handleClearFilters}
-                className="px-4 py-2 rounded-xl bg-white/80 border border-white/60 text-gray-700 hover:bg-white transition-all duration-300"
+                className="px-4 py-2 col-span-5 flex justify-end rounded-xl bg-white/80 border border-white/60 text-gray-700 hover:bg-white transition-all duration-300"
               >
                 Clear
               </button>

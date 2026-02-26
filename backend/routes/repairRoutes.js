@@ -498,6 +498,15 @@ router.delete("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!id) return res.status(400).json({ error: "Invalid repair ID" });
+    const existing = await prisma.repairOrder.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+    if (!existing) return res.status(404).json({ error: "Repair request not found" });
+    const itemCount = (existing.items || []).length;
+    const sentQty = (existing.items || []).reduce((sum, row) => sum + (parseFloat(row.quantity || 0) || 0), 0);
+    const successQty = (existing.items || []).reduce((sum, row) => sum + (parseFloat(row.success || 0) || 0), 0);
+    const failQty = (existing.items || []).reduce((sum, row) => sum + (parseFloat(row.fail || 0) || 0), 0);
 
     await prisma.$transaction(async (tx) => {
       const repair = await tx.repairOrder.findUnique({
@@ -541,7 +550,23 @@ router.delete("/:id", async (req, res) => {
       await tx.repairOrder.delete({ where: { id } });
     });
 
-    return res.json({ success: true, message: "Repair request deleted successfully" });
+    const summary = {
+      repairId: id,
+      reference: existing.reference,
+      itemCount,
+      sentQty,
+      successQtyRollback: successQty,
+      failQtyRollback: failQty,
+    };
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "repair",
+      entityId: id,
+      description: `Deleted repair ${existing.reference || `#${id}`}: rolled back success ${successQty}, fail ${failQty}, sent ${sentQty}.`,
+      details: summary,
+    });
+
+    return res.json({ success: true, message: "Repair request deleted successfully", summary });
   } catch (error) {
     return res.status(error.status || 500).json({ error: error.message || "Failed to delete repair request" });
   }
