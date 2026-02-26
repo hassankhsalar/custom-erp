@@ -338,7 +338,7 @@ const CreateProduct = () => {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit *</label>
                     <select 
                       name="unit"
                       onChange={handleProductChange}

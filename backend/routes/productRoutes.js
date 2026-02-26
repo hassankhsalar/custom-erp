@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 const router = express.Router();
 const { buildScope, ensureIdScope } = require("../utils/associateScope");
 const { withActiveWhere } = require("../utils/softDelete");
+const { seedProductIntoAllPlaces } = require("../utils/inventoryBootstrap");
 
 // Create a new product with materials
 router.post('/', async (req, res) => {
@@ -16,21 +17,27 @@ router.post('/', async (req, res) => {
     productData.barcode = String(code);
   }
   try {
-    const product = await prisma.product.create({
-      data: {
-        ...productData,
-        materials: {
-          create: materials.map(material => ({
-            material_id: material.material_id,
-            material_quantity: material.material_quantity,
-            price: material.price
-          })),
+    const product = await prisma.$transaction(async (tx) => {
+      const created = await tx.product.create({
+        data: {
+          ...productData,
+          materials: {
+            create: (Array.isArray(materials) ? materials : []).map(material => ({
+              material_id: material.material_id,
+              material_quantity: material.material_quantity,
+              price: material.price
+            })),
+          },
         },
-      },
-      include: {
-        materials: true,
-      },
+        include: {
+          materials: true,
+        },
+      });
+
+      await seedProductIntoAllPlaces(tx, created);
+      return created;
     });
+
     res.status(201).json(product);
   } catch (error) {
     res.status(400).json({ error: error.message });

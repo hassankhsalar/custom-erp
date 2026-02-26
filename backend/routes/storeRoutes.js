@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associateScope');
 
 const prisma = new PrismaClient();
+const { seedStoreInventoryForAllItems } = require("../utils/inventoryBootstrap");
 const router = express.Router();
 const STOCK_EPSILON = 1e-9;
 const parsePositiveInt = (value, fallback) => {
@@ -293,29 +294,27 @@ router.post('/',  async (req, res) => {
     if (!scope.isAdmin) {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    const newStore = await prisma.store.create({
-      data: {
-        name,
-        address,
-        store_keeper,
-        mobile,
-        deleted_at: false,
-        storeMaterials: {
-          create: storeMaterials?.map(material => ({
-            material_id: material.material_id,
-            stock: material.stock,
-            deleted_at: false,
-          })),
+    const newStore = await prisma.$transaction(async (tx) => {
+      const created = await tx.store.create({
+        data: {
+          name,
+          address,
+          store_keeper,
+          mobile,
+          deleted_at: false,
         },
-        storeProducts: {
-          create: storeProducts?.map(product => ({
-            product_id: product.product_id,
-            stock: product.stock,
-            deleted_at: false,
-          })),
-        },
-      },
+      });
+
+      await seedStoreInventoryForAllItems(
+        tx,
+        created.id,
+        Array.isArray(storeProducts) ? storeProducts : [],
+        Array.isArray(storeMaterials) ? storeMaterials : []
+      );
+
+      return created;
     });
+
     res.status(201).json(newStore);
   } catch (error) {
     console.error('Error creating store:', error);

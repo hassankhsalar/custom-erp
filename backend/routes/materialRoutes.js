@@ -5,6 +5,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const router = express.Router();
 const { withActiveWhere } = require("../utils/softDelete");
+const { seedMaterialIntoAllPlaces } = require("../utils/inventoryBootstrap");
 
 // Create a new material
 router.post('/', async (req, res) => {
@@ -13,9 +14,14 @@ router.post('/', async (req, res) => {
       code = Date.now();
       req.body.barcode = String(code);
     }
-    const material = await prisma.material.create({
-      data: req.body,
+    const material = await prisma.$transaction(async (tx) => {
+      const created = await tx.material.create({
+        data: req.body,
+      });
+      await seedMaterialIntoAllPlaces(tx, created);
+      return created;
     });
+
     res.status(201).json(material);
   } catch (error) {
     res.status(400).json({ error: error.message });

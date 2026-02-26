@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associateScope');
+const { seedFactoryInventoryForAllItems } = require("../utils/inventoryBootstrap");
 
 const prisma = new PrismaClient();
 const STOCK_EPSILON = 1e-9;
@@ -445,16 +446,22 @@ router.get('/', async (req, res) => {
 // Create a new factory
 router.post('/', async (req, res) => {
   const { name, phone, manager, email, address } = req.body;
-  const factory = await prisma.factory.create({
-    data: {
-      name,
-      phone,
-      manager,
-      email,
-      address,
-      deleted_at: false,
-    },
+  const factory = await prisma.$transaction(async (tx) => {
+    const created = await tx.factory.create({
+      data: {
+        name,
+        phone,
+        manager,
+        email,
+        address,
+        deleted_at: false,
+      },
+    });
+
+    await seedFactoryInventoryForAllItems(tx, created.id);
+    return created;
   });
+
   res.json(factory);
 });
 
