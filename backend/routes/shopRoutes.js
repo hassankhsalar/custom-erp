@@ -22,9 +22,10 @@ router.get("/", async (req, res) => {
       ensureTypeScope(scope, 'shop');
     }
     const shops = await prisma.shop.findMany({
-      ...(scope?.isAdmin ? {} : { where: { id: { in: Array.from(scope.shops) } } }),
+      where: scope?.isAdmin ? { deleted_at: false } : { id: { in: Array.from(scope.shops) }, deleted_at: false },
       include: {
         shopProducts: {
+          where: { deleted_at: false, product: { deleted_at: false } },
           include: {
             product: {
               select: {
@@ -38,6 +39,7 @@ router.get("/", async (req, res) => {
           }
         },
         shopMaterials: {
+          where: { deleted_at: false, material: { deleted_at: false } },
           include: {
             material: {
               select: {
@@ -69,10 +71,11 @@ router.get("/:id", async (req, res) => {
   try {
     const scope = await buildScope(prisma, req.user.userId);
     ensureIdScope(scope, 'shop', parseInt(req.params.id));
-    const shop = await prisma.shop.findUnique({
-      where: { id: parseInt(req.params.id) },
+    const shop = await prisma.shop.findFirst({
+      where: { id: parseInt(req.params.id), deleted_at: false },
       include: {
         shopProducts: {
+          where: { deleted_at: false, product: { deleted_at: false } },
           include: {
             product: {
               select: {
@@ -87,6 +90,7 @@ router.get("/:id", async (req, res) => {
           }
         },
         shopMaterials: {
+          where: { deleted_at: false, material: { deleted_at: false } },
           include: {
             material: {
               select: {
@@ -131,11 +135,11 @@ router.get("/:id/inventory/list", async (req, res) => {
     const sortDir = String(req.query.sortDir || "asc").toLowerCase() === "desc" ? "desc" : "asc";
     const scope = await buildScope(prisma, req.user.userId);
     ensureIdScope(scope, 'shop', shopId);
-    const shop = await prisma.shop.findUnique({
-      where: { id: shopId },
+    const shop = await prisma.shop.findFirst({
+      where: { id: shopId, deleted_at: false },
       include: {
-        shopProducts: { include: { product: { select: { id: true, name: true, sale_price: true, alert_quantity: true, barcode: true, category: true } } } },
-        shopMaterials: { include: { material: { select: { id: true, name: true, unit: true, unit_cost: true, sale_price: true, alert_quantity: true, brand: true, barcode: true } } } }
+        shopProducts: { where: { deleted_at: false, product: { deleted_at: false } }, include: { product: { select: { id: true, name: true, sale_price: true, alert_quantity: true, barcode: true, category: true } } } },
+        shopMaterials: { where: { deleted_at: false, material: { deleted_at: false } }, include: { material: { select: { id: true, name: true, unit: true, unit_cost: true, sale_price: true, alert_quantity: true, brand: true, barcode: true } } } }
       }
     });
     if (!shop) return res.status(404).json({ error: "Shop not found" });
@@ -178,11 +182,11 @@ router.get("/:id/inventory/summary", async (req, res) => {
     const shopId = parseInt(req.params.id);
     const scope = await buildScope(prisma, req.user.userId);
     ensureIdScope(scope, 'shop', shopId);
-    const shop = await prisma.shop.findUnique({
-      where: { id: shopId },
+    const shop = await prisma.shop.findFirst({
+      where: { id: shopId, deleted_at: false },
       include: {
-        shopProducts: { include: { product: { select: { name: true, alert_quantity: true } } } },
-        shopMaterials: { include: { material: { select: { name: true, unit: true, alert_quantity: true } } } }
+        shopProducts: { where: { deleted_at: false, product: { deleted_at: false } }, include: { product: { select: { name: true, alert_quantity: true } } } },
+        shopMaterials: { where: { deleted_at: false, material: { deleted_at: false } }, include: { material: { select: { name: true, unit: true, alert_quantity: true } } } }
       }
     });
     if (!shop) return res.status(404).json({ error: "Shop not found" });
@@ -225,8 +229,8 @@ router.put('/inventory/:shopId/item', async (req, res) => {
 
     const result = await prisma.$transaction(async (tx) => {
       if (normalizedItemType === 'product') {
-        const existing = await tx.shopProduct.findUnique({
-          where: { shop_id_product_id: { shop_id: shopId, product_id: parsedItemId } },
+        const existing = await tx.shopProduct.findFirst({
+          where: { shop_id: shopId, product_id: parsedItemId, deleted_at: false, product: { deleted_at: false } },
         });
         if (!existing) throw new Error('Inventory row not found');
 
@@ -255,8 +259,8 @@ router.put('/inventory/:shopId/item', async (req, res) => {
         return updated;
       }
 
-      const existing = await tx.shopMaterial.findUnique({
-        where: { shop_id_material_id: { shop_id: shopId, material_id: parsedItemId } },
+      const existing = await tx.shopMaterial.findFirst({
+        where: { shop_id: shopId, material_id: parsedItemId, deleted_at: false, material: { deleted_at: false } },
       });
       if (!existing) throw new Error('Inventory row not found');
 
@@ -313,7 +317,8 @@ router.post("/", async (req, res) => {
           name,
           address,
           shop_keeper,
-          mobile
+          mobile,
+          deleted_at: false
         }
       });
 
@@ -325,7 +330,8 @@ router.post("/", async (req, res) => {
               data: {
                 shop_id: shop.id,
                 product_id: product.product_id,
-                stock: product.stock
+                stock: product.stock,
+                deleted_at: false
               }
             });
           })
@@ -340,7 +346,8 @@ router.post("/", async (req, res) => {
               data: {
                 shop_id: shop.id,
                 material_id: material.material_id,
-                stock: material.stock
+                stock: material.stock,
+                deleted_at: false
               }
             });
           })
@@ -351,8 +358,8 @@ router.post("/", async (req, res) => {
     });
 
     // Fetch the complete shop with relations
-    const completeShop = await prisma.shop.findUnique({
-      where: { id: result.id },
+    const completeShop = await prisma.shop.findFirst({
+      where: { id: result.id, deleted_at: false },
       include: {
         shopProducts: {
           include: {
@@ -419,8 +426,9 @@ router.put("/:id", async (req, res) => {
       // Update shop products
       if (shopProducts) {
         // Delete existing products
-        await tx.shopProduct.deleteMany({
+        await tx.shopProduct.updateMany({
           where: { shop_id: parseInt(req.params.id) }
+          ,data: { deleted_at: true }
         });
 
         // Create new products
@@ -431,7 +439,8 @@ router.put("/:id", async (req, res) => {
                 data: {
                   shop_id: parseInt(req.params.id),
                   product_id: product.product_id,
-                  stock: product.stock
+                  stock: product.stock,
+                  deleted_at: false
                 }
               });
             })
@@ -442,8 +451,9 @@ router.put("/:id", async (req, res) => {
       // Update shop materials
       if (shopMaterials) {
         // Delete existing materials
-        await tx.shopMaterial.deleteMany({
+        await tx.shopMaterial.updateMany({
           where: { shop_id: parseInt(req.params.id) }
+          ,data: { deleted_at: true }
         });
 
         // Create new materials
@@ -454,7 +464,8 @@ router.put("/:id", async (req, res) => {
                 data: {
                   shop_id: parseInt(req.params.id),
                   material_id: material.material_id,
-                  stock: material.stock
+                  stock: material.stock,
+                  deleted_at: false
                 }
               });
             })
@@ -485,8 +496,19 @@ router.delete("/:id", async (req, res) => {
     if (!scope.isAdmin) {
       return res.status(403).json({ error: "Forbidden" });
     }
-    await prisma.shop.delete({
-      where: { id: parseInt(req.params.id) }
+    await prisma.$transaction(async (tx) => {
+      await tx.shop.update({
+        where: { id: parseInt(req.params.id) },
+        data: { deleted_at: true },
+      });
+      await tx.shopProduct.updateMany({
+        where: { shop_id: parseInt(req.params.id) },
+        data: { deleted_at: true },
+      });
+      await tx.shopMaterial.updateMany({
+        where: { shop_id: parseInt(req.params.id) },
+        data: { deleted_at: true },
+      });
     });
 
     res.json({ message: "Shop deleted successfully" });
@@ -503,10 +525,11 @@ router.get("/:id/stock", async (req, res) => {
   try {
     const scope = await buildScope(prisma, req.user.userId);
     ensureIdScope(scope, 'shop', parseInt(req.params.id));
-    const shop = await prisma.shop.findUnique({
-      where: { id: parseInt(req.params.id) },
+    const shop = await prisma.shop.findFirst({
+      where: { id: parseInt(req.params.id), deleted_at: false },
       include: {
         shopProducts: {
+          where: { deleted_at: false, product: { deleted_at: false } },
           include: {
             product: {
               select: {
@@ -521,6 +544,7 @@ router.get("/:id/stock", async (req, res) => {
           }
         },
         shopMaterials: {
+          where: { deleted_at: false, material: { deleted_at: false } },
           include: {
             material: {
               select: {

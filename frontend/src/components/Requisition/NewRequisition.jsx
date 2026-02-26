@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { API_ROUTES } from "../../config";
+import { activeOnly } from "../../utils/softDelete";
 import { 
   ClipboardList, 
   Search, 
@@ -59,7 +60,12 @@ const NewRequisition = () => {
         const res = await axios.get(API_ROUTES.REQUISITION_PLACES, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setPlaces(res.data || { shops: [], stores: [], factories: [] });
+        const data = res.data || {};
+        setPlaces({
+          shops: activeOnly(data.shops || []),
+          stores: activeOnly(data.stores || []),
+          factories: activeOnly(data.factories || []),
+        });
       } catch (error) {
         console.error("Failed to load places", error);
       }

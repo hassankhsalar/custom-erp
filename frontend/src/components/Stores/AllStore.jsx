@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES } from '../../config';
+import { activeOnly } from '../../utils/softDelete';
 import {
   Store,
   User,
@@ -53,7 +54,7 @@ const AllStore = () => {
           },
         });
         // Handle both array response and paginated response
-        const storesData = response.data.stores || response.data || [];
+        const storesData = activeOnly(response.data.stores || response.data || []);
         setStores(storesData);
         setTotalPages(Math.ceil(storesData.length / itemsPerPage));
         setTotalStores(storesData.length);
@@ -99,7 +100,7 @@ const AllStore = () => {
             'Content-Type': 'application/json',
           },
         });
-        const storesData = response.data.stores || response.data || [];
+        const storesData = activeOnly(response.data.stores || response.data || []);
         setStores(storesData);
         setTotalPages(Math.ceil(storesData.length / itemsPerPage));
         setTotalStores(storesData.length);

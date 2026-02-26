@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
+import { activeOnly } from "../../utils/softDelete";
 import { 
   BarChart3, 
   Filter, 
@@ -51,7 +52,7 @@ export default function BestSellingReport() {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      setRows(data.rows || []);
+      setRows(activeOnly(data.rows || []));
       setPagination(data.pagination || { page: 1, limit, totalPages: 1 });
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -93,21 +94,6 @@ export default function BestSellingReport() {
                 </h1>
                 <p className="text-gray-600 mt-2">Analyze product performance by sales metrics</p>
               </div>
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <button 
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-                onClick={() => fetchRows(1, pagination.limit)}
-                disabled={loading}
-              >
-                {loading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Filter size={20} />
-                )}
-                {loading ? "Loading..." : "Generate Report"}
-              </button>
             </div>
           </div>
         </div>
@@ -228,6 +214,22 @@ export default function BestSellingReport() {
               />
             </div>
           </div>
+          
+          <div className=" flex items-end justify-end gap-4">
+            <button 
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+              onClick={() => fetchRows(1, pagination.limit)}
+              disabled={loading}
+            >
+              {loading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Filter size={20} />
+              )}
+              {loading ? "Loading..." : "Generate Report"}
+            </button>
+          </div>
+
         </div>
 
         {/* Table Section */}
@@ -259,7 +261,6 @@ export default function BestSellingReport() {
                       <th className="p-4 text-left font-medium text-gray-700">Quantity</th>
                       <th className="p-4 text-left font-medium text-gray-700">Total Amount</th>
                       <th className="p-4 text-left font-medium text-gray-700">Profit</th>
-                      <th className="p-4 text-left font-medium text-gray-700">Performance</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -367,25 +368,6 @@ export default function BestSellingReport() {
                                   {profit >= 0 ? 'Profit' : 'Loss'}
                                 </p>
                               </div>
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-semibold ${
-                              performance === "high" 
-                                ? "bg-gradient-to-r from-emerald-500 to-green-500" 
-                                : "bg-gradient-to-r from-red-500 to-rose-500"
-                            }`}>
-                              {performance === "high" ? (
-                                <>
-                                  <CheckCircle size={12} />
-                                  High Performer
-                                </>
-                              ) : (
-                                <>
-                                  <AlertTriangle size={12} />
-                                  Low Performer
-                                </>
-                              )}
                             </div>
                           </td>
                         </tr>
@@ -521,43 +503,6 @@ export default function BestSellingReport() {
           )}
         </div>
 
-        {/* Legend Section */}
-        {rows.length > 0 && (
-          <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Performance Legend</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-amber-50/60 to-yellow-50/60 rounded-xl">
-                <div className="w-8 h-8 flex items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 text-white font-bold">
-                  1
-                </div>
-                <div>
-                  <p className="font-medium text-gray-800">Top Performer</p>
-                  <p className="text-sm text-gray-600">Highest sales/profit</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-emerald-50/60 to-green-50/60 rounded-xl">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-semibold bg-gradient-to-r from-emerald-500 to-green-500">
-                  <CheckCircle size={12} />
-                  High Performer
-                </div>
-                <div>
-                  <p className="font-medium text-gray-800">Positive Profit</p>
-                  <p className="text-sm text-gray-600">Making profit</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-red-50/60 to-rose-50/60 rounded-xl">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-semibold bg-gradient-to-r from-red-500 to-rose-500">
-                  <AlertTriangle size={12} />
-                  Low Performer
-                </div>
-                <div>
-                  <p className="font-medium text-gray-800">Negative Profit</p>
-                  <p className="text-sm text-gray-600">Making loss</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

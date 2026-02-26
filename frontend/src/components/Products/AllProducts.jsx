@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES } from '../../config';
+import { activeOnly } from '../../utils/softDelete';
 import { 
   Pen, 
   Trash2, 
@@ -61,7 +62,7 @@ const AllProducts = () => {
             'Content-Type': 'application/json',
           },
         });
-        setProducts(response.data.products);
+        setProducts(activeOnly(response.data.products));
         setTotalPages(Math.ceil(response.data.totalCount / itemsPerPage));
         setTotalProducts(response.data.totalCount);
       } catch (error) {
@@ -109,7 +110,7 @@ const AllProducts = () => {
             'Content-Type': 'application/json',
           },
         });
-        setProducts(response.data.products);
+        setProducts(activeOnly(response.data.products));
         setTotalPages(Math.ceil(response.data.totalCount / itemsPerPage));
         setTotalProducts(response.data.totalCount);
       } catch (error) {

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { activeOnly } from '../../utils/softDelete';
 import { 
   Truck, 
   Package, 
@@ -66,9 +67,9 @@ const AddTransfer = () => {
             headers: { Authorization: `Bearer ${token}` }
           }),
         ]);
-        setStores(storesRes.data.stores || storesRes.data || []);
-        setShops(shopsRes.data);
-        setFactories(factoriesRes.data);
+        setStores(activeOnly(storesRes.data.stores || storesRes.data || []));
+        setShops(activeOnly(shopsRes.data.shops || shopsRes.data || []));
+        setFactories(activeOnly(factoriesRes.data.factories || factoriesRes.data || []));
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {

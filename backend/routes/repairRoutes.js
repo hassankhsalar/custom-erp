@@ -5,6 +5,7 @@ const path = require("path");
 const fs = require("fs");
 const { createTransaction } = require("../utils/transactionHelper");
 const { createNotification } = require("../utils/notificationHelper");
+const { assertActivePlace, assertActiveItem } = require("../utils/softDelete");
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -138,18 +139,19 @@ router.get("/damaged-items", async (req, res) => {
       return res.status(400).json({ error: "sourceType must be store/shop/factory" });
     }
     if (!sourceId) return res.status(400).json({ error: "sourceId is required" });
+    await assertActivePlace(prisma, sourceType, sourceId);
 
     let productRows = [];
     let materialRows = [];
     if (sourceType === "store") {
-      productRows = await prisma.storeProduct.findMany({ where: { store_id: sourceId, scrap: { gt: 0 } }, include: { product: true } });
-      materialRows = await prisma.storeMaterial.findMany({ where: { store_id: sourceId, scrap: { gt: 0 } }, include: { material: true } });
+      productRows = await prisma.storeProduct.findMany({ where: { store_id: sourceId, scrap: { gt: 0 }, deleted_at: false, product: { deleted_at: false } }, include: { product: true } });
+      materialRows = await prisma.storeMaterial.findMany({ where: { store_id: sourceId, scrap: { gt: 0 }, deleted_at: false, material: { deleted_at: false } }, include: { material: true } });
     } else if (sourceType === "shop") {
-      productRows = await prisma.shopProduct.findMany({ where: { shop_id: sourceId, scrap: { gt: 0 } }, include: { product: true } });
-      materialRows = await prisma.shopMaterial.findMany({ where: { shop_id: sourceId, scrap: { gt: 0 } }, include: { material: true } });
+      productRows = await prisma.shopProduct.findMany({ where: { shop_id: sourceId, scrap: { gt: 0 }, deleted_at: false, product: { deleted_at: false } }, include: { product: true } });
+      materialRows = await prisma.shopMaterial.findMany({ where: { shop_id: sourceId, scrap: { gt: 0 }, deleted_at: false, material: { deleted_at: false } }, include: { material: true } });
     } else {
-      productRows = await prisma.factoryProduct.findMany({ where: { factoryId: sourceId, scrap: { gt: 0 } }, include: { product: true } });
-      materialRows = await prisma.factoryMaterial.findMany({ where: { factoryId: sourceId, scrap: { gt: 0 } }, include: { material: true } });
+      productRows = await prisma.factoryProduct.findMany({ where: { factoryId: sourceId, scrap: { gt: 0 }, deleted_at: false, product: { deleted_at: false } }, include: { product: true } });
+      materialRows = await prisma.factoryMaterial.findMany({ where: { factoryId: sourceId, scrap: { gt: 0 }, deleted_at: false, material: { deleted_at: false } }, include: { material: true } });
     }
 
     const products = productRows.map((r) => ({
@@ -186,6 +188,7 @@ router.post("/", upload.single("document"), async (req, res) => {
     if (!normalizedFromId || !destination) {
       return res.status(400).json({ error: "fromId and destination are required" });
     }
+    await assertActivePlace(prisma, normalizedFromType, normalizedFromId);
     const items = normalizeItems(req.body.items);
     const shippingCostValue = parseFloat(shippingCost || 0);
     if (shippingCostValue > 0 && !accountId) {
@@ -195,6 +198,7 @@ router.post("/", upload.single("document"), async (req, res) => {
     const result = await prisma.$transaction(async (tx) => {
       for (const item of items) {
         const itemId = item.itemType === "product" ? item.productId : item.materialId;
+        await assertActiveItem(tx, item.itemType, itemId);
         await updateScrap(tx, normalizedFromType, normalizedFromId, item.itemType, itemId, "decrement", item.quantity);
       }
 

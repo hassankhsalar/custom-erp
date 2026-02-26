@@ -6,6 +6,7 @@ const { createTransaction } = require('../utils/transactionHelper');
 const { createNotification } = require('../utils/notificationHelper');
 const { buildScope, ensureTypeScope, ensureIdScope } = require("../utils/associateScope");
 const { getAvailableBatches, decrementBatch } = require("../utils/batchDetails");
+const { assertActivePlace, assertActiveItem } = require("../utils/softDelete");
 const { registerSaleEditAccessRoutes } = require("./shop-sales/editAccessRoutes");
 const { registerShopSaleWarrantyRoutes } = require("./shop-sales/warrantyRoutes");
 const { registerShopSaleReturnRoutes } = require("./shop-sales/returnRoutes");
@@ -177,7 +178,7 @@ router.get("/shops", async (req, res) => {
     if (!scope.isAdmin) {
       ensureTypeScope(scope, "shop");
     }
-    const where = scope.isAdmin ? {} : { id: { in: Array.from(scope.shops) } };
+    const where = scope.isAdmin ? { deleted_at: false } : { id: { in: Array.from(scope.shops) }, deleted_at: false };
 
     const shops = await prisma.shop.findMany({
       where,
@@ -207,20 +208,23 @@ router.get("/items/shop/:shopId", async (req, res) => {
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, "shop", parseInt(shopId));
+    await assertActivePlace(prisma, "shop", parseInt(shopId));
     
     // Fetch shop products
     const shopProducts = await prisma.shopProduct.findMany({
       where: { 
         shop_id: parseInt(shopId),
-        ...(search ? {
-          product: {
-            OR: [
-              { name: { contains: search, mode: 'insensitive' } },
-              { barcode: { contains: search, mode: 'insensitive' } },
-              { category: { contains: search, mode: 'insensitive' } }
-            ]
-          }
-        } : {})
+        deleted_at: false,
+        product: search
+          ? {
+              deleted_at: false,
+              OR: [
+                { name: { contains: search, mode: 'insensitive' } },
+                { barcode: { contains: search, mode: 'insensitive' } },
+                { category: { contains: search, mode: 'insensitive' } }
+              ]
+            }
+          : { deleted_at: false }
       },
       include: {
         product: {
@@ -246,16 +250,18 @@ router.get("/items/shop/:shopId", async (req, res) => {
     const shopMaterials = await prisma.shopMaterial.findMany({
       where: { 
         shop_id: parseInt(shopId),
-        ...(search ? {
-          material: {
-            OR: [
-              { name: { contains: search, mode: 'insensitive' } },
-              { barcode: { contains: search, mode: 'insensitive' } },
-              { brand: { contains: search, mode: 'insensitive' } },
-              { description: { contains: search, mode: 'insensitive' } }
-            ]
-          }
-        } : {})
+        deleted_at: false,
+        material: search
+          ? {
+              deleted_at: false,
+              OR: [
+                { name: { contains: search, mode: 'insensitive' } },
+                { barcode: { contains: search, mode: 'insensitive' } },
+                { brand: { contains: search, mode: 'insensitive' } },
+                { description: { contains: search, mode: 'insensitive' } }
+              ]
+            }
+          : { deleted_at: false }
       },
       include: {
         material: {
@@ -343,6 +349,7 @@ router.post("/", async (req, res) => {
     const { shopId, customerId, paymentType, discount, items, bankAccountId, paidAmount, cashRegisterId } = req.body;
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, "shop", parseInt(shopId));
+    await assertActivePlace(prisma, "shop", parseInt(shopId));
 
     // Validate required fields
     if (!shopId || !items || !Array.isArray(items) || items.length === 0) {
@@ -363,6 +370,7 @@ router.post("/", async (req, res) => {
       if (!item.itemId) {
         return res.status(400).json({ error: "Each item must have itemId" });
       }
+      await assertActiveItem(prisma, item.type, parseInt(item.itemId));
       if (item.warrantyEnabled) {
         if (!item.warrantyExpiryDate) {
           return res.status(400).json({ error: "warrantyExpiryDate is required when warrantyEnabled is true" });

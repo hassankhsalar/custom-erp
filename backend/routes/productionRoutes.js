@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associateScope');
 const { mergeIncomingBatch, parseDateOnly } = require('../utils/batchDetails');
 const { createNotification } = require('../utils/notificationHelper');
+const { assertActivePlace, assertActiveItem } = require('../utils/softDelete');
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -41,6 +42,7 @@ router.post('/', authenticateToken, async (req, res) => {
   try {
     const scope = await buildScope(prisma, req.user.userId);
     ensureIdScope(scope, 'factory', parseInt(factoryId));
+    await assertActivePlace(prisma, 'factory', parseInt(factoryId));
     const reference = await generateReference();
 
     const result = await prisma.$transaction(async (prisma) => {
@@ -48,13 +50,14 @@ router.post('/', authenticateToken, async (req, res) => {
       for (const material of materials) {
         const materialId = parseInt(material.materialId);
         const qty = parseFloat(material.quantity);
+        await assertActiveItem(prisma, 'material', materialId);
 
-        const factoryMaterial = await prisma.factoryMaterial.findUnique({
+        const factoryMaterial = await prisma.factoryMaterial.findFirst({
           where: {
-            factoryId_materialId: {
-              factoryId: parseInt(factoryId),
-              materialId,
-            }
+            factoryId: parseInt(factoryId),
+            materialId,
+            deleted_at: false,
+            material: { deleted_at: false },
           }
         });
 
@@ -62,8 +65,8 @@ router.post('/', authenticateToken, async (req, res) => {
           throw new Error(`Not enough stock for material ${material.name || materialId} in this factory`);
         }
 
-        const baseMaterial = await prisma.material.findUnique({
-          where: { id: materialId },
+        const baseMaterial = await prisma.material.findFirst({
+          where: { id: materialId, deleted_at: false },
           select: { unit_cost: true }
         });
         const unitPrice = factoryMaterial.avg_cost && factoryMaterial.avg_cost > 0
@@ -75,6 +78,10 @@ router.post('/', authenticateToken, async (req, res) => {
           quantity: qty,
           price: unitPrice,
         });
+      }
+
+      for (const product of products || []) {
+        await assertActiveItem(prisma, 'product', parseInt(product.productId));
       }
 
       const newProduction = await prisma.production.create({
@@ -301,6 +308,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const scope = await buildScope(prisma, req.user.userId);
     ensureIdScope(scope, 'factory', parseInt(factoryId));
+    await assertActivePlace(prisma, 'factory', parseInt(factoryId));
     const result = await prisma.$transaction(async (prisma) => {
       // Get the old production to find the old materials
       const oldProduction = await prisma.production.findUnique({
@@ -337,13 +345,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
       for (const material of materials) {
         const materialId = parseInt(material.materialId);
         const qty = parseFloat(material.quantity);
+        await assertActiveItem(prisma, 'material', materialId);
 
-        const factoryMaterial = await prisma.factoryMaterial.findUnique({
+        const factoryMaterial = await prisma.factoryMaterial.findFirst({
           where: {
-            factoryId_materialId: {
-              factoryId: parseInt(factoryId),
-              materialId,
-            }
+            factoryId: parseInt(factoryId),
+            materialId,
+            deleted_at: false,
+            material: { deleted_at: false },
           }
         });
 
@@ -351,8 +360,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
           throw new Error(`Not enough stock for material ${materialId} in factory ${factoryId}`);
         }
 
-        const baseMaterial = await prisma.material.findUnique({
-          where: { id: materialId },
+        const baseMaterial = await prisma.material.findFirst({
+          where: { id: materialId, deleted_at: false },
           select: { unit_cost: true }
         });
         const unitPrice = factoryMaterial.avg_cost && factoryMaterial.avg_cost > 0
@@ -381,6 +390,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
       }
 
       // Update the production
+      for (const product of products || []) {
+        await assertActiveItem(prisma, 'product', parseInt(product.productId));
+      }
       const updatedProduction = await prisma.production.update({
         where: { id: parseInt(id) },
         data: {
@@ -522,17 +534,17 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
           const scrapQuantity = parseFloat(p.scrap || 0);
           
           if (receivedQuantity > 0 || scrapQuantity > 0) {
-          const factoryProduct = await prisma.factoryProduct.findUnique({
+          const factoryProduct = await prisma.factoryProduct.findFirst({
             where: {
-              factoryId_productId: {
-                factoryId: factoryId,
-                productId: p.productId,
-              }
+              factoryId: factoryId,
+              productId: p.productId,
+              deleted_at: false,
+              product: { deleted_at: false },
             }
           });
 
-          const productCostRow = await prisma.product.findUnique({
-            where: { id: p.productId },
+          const productCostRow = await prisma.product.findFirst({
+            where: { id: p.productId, deleted_at: false },
             select: { cost: true }
           });
           const baseUnitCost = finalUnitCost > 0
@@ -572,11 +584,12 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
               },
             });
           } else {
-            await prisma.factoryProduct.create({
-              data: {
-                factoryId: factoryId,
-                productId: p.productId,
-                stock: receivedQuantity,
+              await prisma.factoryProduct.create({
+                data: {
+                  factoryId: factoryId,
+                  productId: p.productId,
+                  deleted_at: false,
+                  stock: receivedQuantity,
                 scrap: scrapQuantity,
                 avg_cost: baseUnitCost,
                 batchDetails: mergeIncomingBatch(null, {
@@ -606,12 +619,12 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
           
           // Add fine materials back to factory stock (restock)
           if (fineQuantity > 0 || scrapQuantity > 0) {
-            const factoryMaterial = await prisma.factoryMaterial.findUnique({
+            const factoryMaterial = await prisma.factoryMaterial.findFirst({
               where: {
-                factoryId_materialId: {
-                  factoryId: factoryId,
-                  materialId: m.materialId,
-                }
+                factoryId: factoryId,
+                materialId: m.materialId,
+                deleted_at: false,
+                material: { deleted_at: false },
               }
             });
 
@@ -635,6 +648,7 @@ router.put('/:id/status', authenticateToken, async (req, res) => {
                 data: {
                   factoryId: factoryId,
                   materialId: m.materialId,
+                  deleted_at: false,
                   stock: fineQuantity,
                   scrap: scrapQuantity,
                 }

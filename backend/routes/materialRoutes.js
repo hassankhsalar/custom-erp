@@ -4,6 +4,7 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
 const router = express.Router();
+const { withActiveWhere } = require("../utils/softDelete");
 
 // Create a new material
 router.post('/', async (req, res) => {
@@ -25,7 +26,7 @@ router.get('/', async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    const where = {};
+    const where = { deleted_at: false };
 
     if (search) {
       where.OR = [
@@ -79,6 +80,7 @@ router.get('/', async (req, res) => {
 router.get('/all-materials', async (req, res) => {
   try {
     const materials = await prisma.material.findMany({
+      where: withActiveWhere(),
       orderBy: {
         name: 'asc',
       },
@@ -98,8 +100,8 @@ router.get('/all-materials', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const material = await prisma.material.findUnique({
-      where: { id: parseInt(id) },
+    const material = await prisma.material.findFirst({
+      where: { id: parseInt(id), deleted_at: false },
     });
     if (material) {
       res.json(material);
@@ -139,8 +141,23 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    await prisma.material.delete({
-      where: { id: parseInt(id) },
+    await prisma.$transaction(async (tx) => {
+      await tx.material.update({
+        where: { id: parseInt(id) },
+        data: { deleted_at: true },
+      });
+      await tx.storeMaterial.updateMany({
+        where: { material_id: parseInt(id) },
+        data: { deleted_at: true },
+      });
+      await tx.shopMaterial.updateMany({
+        where: { material_id: parseInt(id) },
+        data: { deleted_at: true },
+      });
+      await tx.factoryMaterial.updateMany({
+        where: { materialId: parseInt(id) },
+        data: { deleted_at: true },
+      });
     });
     res.status(204).send();
   } catch (error) {

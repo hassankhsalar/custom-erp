@@ -481,6 +481,7 @@ model Material {
   current_stock       Float                @default(0)
   created_at          DateTime             @default(now())
   updated_at          DateTime             @updatedAt
+  deleted_at          Boolean              @default(false)
   alert_quantity      Float                @default(0)
   ProductMaterial     ProductMaterial[]
   storeMaterials      StoreMaterial[]
@@ -580,6 +581,7 @@ model Product {
   stock                   Int                      @default(0)
   created_at              DateTime                 @default(now())
   updated_at              DateTime                 @updatedAt
+  deleted_at              Boolean                  @default(false)
   alert_quantity          Int                      @default(0) 
   materials               ProductMaterial[]
   productionProducts      ProductionProducts[]
@@ -624,6 +626,7 @@ model Factory {
   manager     String?
   email       String?
   address     String?
+  deleted_at  Boolean      @default(false)
   productions Production[] // Added for relation
   factoryProducts FactoryProduct[]
   factoryMaterials FactoryMaterial[]
@@ -662,6 +665,7 @@ model Store {
   address                 String?
   store_keeper            String?
   mobile                  String?
+  deleted_at              Boolean                  @default(false)
   storeMaterials          StoreMaterial[]
   storeProducts           StoreProduct[]
   stockAdjustments        StockAdjustment[]
@@ -682,6 +686,7 @@ model StoreMaterial {
   sale_price Float?
   alert_quantity Float?
   scrap      Float? @default(0)
+  deleted_at Boolean @default(false)
   batchDetails Json?
   store    Store    @relation(fields: [store_id], references: [id])
   material Material @relation(fields: [material_id], references: [id])
@@ -697,6 +702,7 @@ model StoreProduct {
   sale_price Float?
   alert_quantity Float?
   scrap      Float? @default(0)
+  deleted_at Boolean @default(false)
   batchDetails Json?
   store   Store   @relation(fields: [store_id], references: [id])
   product Product @relation(fields: [product_id], references: [id])
@@ -1056,6 +1062,7 @@ model Shop {
   mobile      String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  deleted_at  Boolean       @default(false)
   
   // Relations
   shopProducts  ShopProduct[]
@@ -1079,6 +1086,7 @@ model ShopProduct {
   sale_price Float?
   alert_quantity Float?
   scrap      Float? @default(0)
+  deleted_at Boolean @default(false)
   batchDetails Json?
   shop    Shop    @relation(fields: [shop_id], references: [id])
   product Product @relation(fields: [product_id], references: [id])
@@ -1094,6 +1102,7 @@ model ShopMaterial {
   sale_price Float?
   alert_quantity Float?
   scrap      Float? @default(0)
+  deleted_at Boolean @default(false)
   batchDetails Json?
   shop     Shop     @relation(fields: [shop_id], references: [id])
   material Material @relation(fields: [material_id], references: [id])
@@ -1330,6 +1339,7 @@ model FactoryProduct {
   sale_price Float?
   alert_quantity Float?
   scrap      Float? @default(0)
+  deleted_at Boolean @default(false)
   batchDetails Json?
   factory   Factory @relation(fields: [factoryId], references: [id])
   product   Product @relation(fields: [productId], references: [id])
@@ -1345,6 +1355,7 @@ model FactoryMaterial {
   sale_price Float?
   alert_quantity Float?
   scrap      Float? @default(0)
+  deleted_at Boolean @default(false)
   batchDetails Json?
   factory  Factory  @relation(fields: [factoryId], references: [id])
   material Material @relation(fields: [materialId], references: [id])

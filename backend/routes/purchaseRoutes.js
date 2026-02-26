@@ -6,6 +6,7 @@ const router = express.Router();
 const { createTransaction } = require('../utils/transactionHelper');
 const { createNotification } = require('../utils/notificationHelper');
 const { parseDateOnly, mergeIncomingBatch, decrementBatch, getAvailableBatches } = require('../utils/batchDetails');
+const { assertActivePlace, assertActiveItem } = require('../utils/softDelete');
 
 // Generate unique reference for transactions
 const generateTransactionReference = () => {
@@ -143,6 +144,11 @@ router.post("/", async (req, res) => {
           error: "Quantity and unitPrice must be positive numbers" 
         });
       }
+      await assertActiveItem(
+        prisma,
+        item.itemType,
+        item.itemType === "product" ? item.productId : item.materialId
+      );
 
       if (item.receivedQuantity !== undefined && item.receivedQuantity !== null) {
         const receivedQty = parseFloat(item.receivedQuantity);
@@ -420,31 +426,7 @@ router.post("/", async (req, res) => {
 
 // Helper function to validate destination exists
 async function validateDestinationExists(destinationType, destinationId) {
-  switch (destinationType) {
-    case "store":
-      const store = await prisma.store.findUnique({
-        where: { id: destinationId }
-      });
-      if (!store) throw new Error("Store not found");
-      break;
-      
-    case "shop":
-      const shop = await prisma.shop.findUnique({
-        where: { id: destinationId }
-      });
-      if (!shop) throw new Error("Shop not found");
-      break;
-      
-    case "factory":
-      const factory = await prisma.factory.findUnique({
-        where: { id: destinationId }
-      });
-      if (!factory) throw new Error("Factory not found");
-      break;
-      
-    default:
-      throw new Error("Invalid destination type");
-  }
+  await assertActivePlace(prisma, destinationType, destinationId);
 }
 
 // Helper function to get destination details
@@ -453,20 +435,20 @@ async function getDestinationDetails(destinationType, destinationId) {
   
   switch (destinationType) {
     case "store":
-      return await prisma.store.findUnique({
-        where: { id: destinationId },
+      return await prisma.store.findFirst({
+        where: { id: destinationId, deleted_at: false },
         select: { id: true, name: true, address: true }
       });
       
     case "shop":
-      return await prisma.shop.findUnique({
-        where: { id: destinationId },
+      return await prisma.shop.findFirst({
+        where: { id: destinationId, deleted_at: false },
         select: { id: true, name: true, address: true }
       });
       
     case "factory":
-      return await prisma.factory.findUnique({
-        where: { id: destinationId },
+      return await prisma.factory.findFirst({
+        where: { id: destinationId, deleted_at: false },
         select: { id: true, name: true, address: true }
       });
       
@@ -2940,29 +2922,29 @@ router.get('/returns/damage-items', async (req, res) => {
 
     if (sourceType === 'store') {
       productRows = await prisma.storeProduct.findMany({
-        where: { store_id: sourceId, scrap: { gt: 0 } },
+        where: { store_id: sourceId, scrap: { gt: 0 }, deleted_at: false, product: { deleted_at: false } },
         include: { product: true }
       });
       materialRows = await prisma.storeMaterial.findMany({
-        where: { store_id: sourceId, scrap: { gt: 0 } },
+        where: { store_id: sourceId, scrap: { gt: 0 }, deleted_at: false, material: { deleted_at: false } },
         include: { material: true }
       });
     } else if (sourceType === 'shop') {
       productRows = await prisma.shopProduct.findMany({
-        where: { shop_id: sourceId, scrap: { gt: 0 } },
+        where: { shop_id: sourceId, scrap: { gt: 0 }, deleted_at: false, product: { deleted_at: false } },
         include: { product: true }
       });
       materialRows = await prisma.shopMaterial.findMany({
-        where: { shop_id: sourceId, scrap: { gt: 0 } },
+        where: { shop_id: sourceId, scrap: { gt: 0 }, deleted_at: false, material: { deleted_at: false } },
         include: { material: true }
       });
     } else {
       productRows = await prisma.factoryProduct.findMany({
-        where: { factoryId: sourceId, scrap: { gt: 0 } },
+        where: { factoryId: sourceId, scrap: { gt: 0 }, deleted_at: false, product: { deleted_at: false } },
         include: { product: true }
       });
       materialRows = await prisma.factoryMaterial.findMany({
-        where: { factoryId: sourceId, scrap: { gt: 0 } },
+        where: { factoryId: sourceId, scrap: { gt: 0 }, deleted_at: false, material: { deleted_at: false } },
         include: { material: true }
       });
     }
@@ -3018,29 +3000,29 @@ router.get('/returns/source-items', async (req, res) => {
 
     if (sourceType === 'store') {
       productRows = await prisma.storeProduct.findMany({
-        where: { store_id: sourceId, stock: { gt: 0 } },
+        where: { store_id: sourceId, stock: { gt: 0 }, deleted_at: false, product: { deleted_at: false } },
         include: { product: true }
       });
       materialRows = await prisma.storeMaterial.findMany({
-        where: { store_id: sourceId, stock: { gt: 0 } },
+        where: { store_id: sourceId, stock: { gt: 0 }, deleted_at: false, material: { deleted_at: false } },
         include: { material: true }
       });
     } else if (sourceType === 'shop') {
       productRows = await prisma.shopProduct.findMany({
-        where: { shop_id: sourceId, stock: { gt: 0 } },
+        where: { shop_id: sourceId, stock: { gt: 0 }, deleted_at: false, product: { deleted_at: false } },
         include: { product: true }
       });
       materialRows = await prisma.shopMaterial.findMany({
-        where: { shop_id: sourceId, stock: { gt: 0 } },
+        where: { shop_id: sourceId, stock: { gt: 0 }, deleted_at: false, material: { deleted_at: false } },
         include: { material: true }
       });
     } else {
       productRows = await prisma.factoryProduct.findMany({
-        where: { factoryId: sourceId, stock: { gt: 0 } },
+        where: { factoryId: sourceId, stock: { gt: 0 }, deleted_at: false, product: { deleted_at: false } },
         include: { product: true }
       });
       materialRows = await prisma.factoryMaterial.findMany({
-        where: { factoryId: sourceId, stock: { gt: 0 } },
+        where: { factoryId: sourceId, stock: { gt: 0 }, deleted_at: false, material: { deleted_at: false } },
         include: { material: true }
       });
     }
@@ -3381,21 +3363,21 @@ router.get("/destinations/:type", async (req, res) => {
     switch (type) {
       case "store":
         destinations = await prisma.store.findMany({
-          where,
+          where: { ...(where || {}), deleted_at: false },
           select: { id: true, name: true, address: true }
         });
         break;
         
       case "shop":
         destinations = await prisma.shop.findMany({
-          where,
+          where: { ...(where || {}), deleted_at: false },
           select: { id: true, name: true, address: true }
         });
         break;
         
       case "factory":
         destinations = await prisma.factory.findMany({
-          where,
+          where: { ...(where || {}), deleted_at: false },
           select: { id: true, name: true, address: true }
         });
         break;

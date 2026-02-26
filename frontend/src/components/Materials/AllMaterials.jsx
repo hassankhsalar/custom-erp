@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES } from '../../config';
+import { activeOnly } from '../../utils/softDelete';
 import {
   Pen,
   Trash2,
@@ -45,7 +46,7 @@ const AllMaterials = () => {
     
     if (imagePath.startsWith('http')) return imagePath;
     
-    const baseUrl = 'http://localhost:3001';
+    const baseUrl = MEDIA_BASE_URL;
     
     if (imagePath.startsWith('/uploads')) {
       return `${baseUrl}${imagePath}`;
@@ -65,7 +66,7 @@ const AllMaterials = () => {
             'Content-Type': 'application/json',
           },
         });
-        setMaterials(response.data.materials);
+        setMaterials(activeOnly(response.data.materials));
         setTotalPages(Math.ceil(response.data.totalCount / itemsPerPage));
         setTotalMaterials(response.data.totalCount);
       } catch (error) {
@@ -113,7 +114,7 @@ const AllMaterials = () => {
             'Content-Type': 'application/json',
           },
         });
-        setMaterials(response.data.materials);
+        setMaterials(activeOnly(response.data.materials));
         setTotalPages(Math.ceil(response.data.totalCount / itemsPerPage));
         setTotalMaterials(response.data.totalCount);
       } catch (error) {

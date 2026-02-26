@@ -75,7 +75,7 @@ export default function AddAccount() {
         throw new Error("Initial balance is required");
       }
 
-      const response = await fetch("http://localhost:3001/api/accounts", {
+      const response = await fetch(API_ROUTES.ACCOUNTS, {
         method: "POST",
         headers: {
             'Authorization': `Bearer ${token}`,

@@ -24,6 +24,7 @@ import {
   X
 } from 'lucide-react';
 import { API_ROUTES } from '../../config';
+import { activeOnly } from '../../utils/softDelete';
 
 const FactoryInventory = () => {
   const [factories, setFactories] = useState([]);
@@ -74,9 +75,10 @@ const FactoryInventory = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch factories');
       const data = await response.json();
-      setFactories(data);
-      if (data.length > 0) {
-        setSelectedFactory(data[0].id);
+      const nextFactories = activeOnly(Array.isArray(data) ? data : data?.factories || []);
+      setFactories(nextFactories);
+      if (nextFactories.length > 0) {
+        setSelectedFactory(nextFactories[0].id);
       }
     } catch (err) {
       setError('Failed to load factories');
@@ -106,7 +108,7 @@ const FactoryInventory = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch inventory');
       const data = await response.json();
-      setInventory(data.items || []);
+      setInventory(activeOnly(data.items || []));
       setTotalItems(Number(data.pagination?.totalCount || 0));
       setServerTotalPages(Number(data.pagination?.totalPages || 1));
       setCurrentPage(Number(data.pagination?.page || page));

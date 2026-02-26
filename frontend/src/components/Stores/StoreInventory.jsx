@@ -24,6 +24,7 @@ import {
   Building2
 } from 'lucide-react';
 import { API_ROUTES } from '../../config';
+import { activeOnly } from '../../utils/softDelete';
 
 const StoreInventory = () => {
   const [stores, setStores] = useState([]);
@@ -84,7 +85,7 @@ const StoreInventory = () => {
       console.log('Stores fetched:', data);
       
       // Handle both paginated and non-paginated responses
-      const storesList = data.stores || data || [];
+      const storesList = activeOnly(data.stores || data || []);
       setStores(storesList);
       
       if (storesList.length > 0) {
@@ -126,7 +127,7 @@ const StoreInventory = () => {
       }
       
       const data = await response.json();
-      setInventory(data.items || []);
+      setInventory(activeOnly(data.items || []));
       setTotalItems(Number(data.pagination?.totalCount || 0));
       setServerTotalPages(Number(data.pagination?.totalPages || 1));
       setCurrentPage(Number(data.pagination?.page || page));

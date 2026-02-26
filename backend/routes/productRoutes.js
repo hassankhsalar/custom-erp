@@ -5,6 +5,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const router = express.Router();
 const { buildScope, ensureIdScope } = require("../utils/associateScope");
+const { withActiveWhere } = require("../utils/softDelete");
 
 // Create a new product with materials
 router.post('/', async (req, res) => {
@@ -42,6 +43,7 @@ router.get('/', async (req, res) => {
   const skip = (page - 1) * limit;
   const take = parseInt(limit);
   const where = {};
+  where.deleted_at = false;
 
   if (search) {
     where.name = {
@@ -77,6 +79,7 @@ router.get('/', async (req, res) => {
 router.get('/all-products', async (req, res) => {
   const { search } = req.query;
   const where = {};
+  where.deleted_at = false;
 
   if (search) {
     where.name = {
@@ -102,8 +105,8 @@ router.get('/all-products', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const product = await prisma.product.findUnique({
-      where: { id: parseInt(id) },
+    const product = await prisma.product.findFirst({
+      where: { id: parseInt(id), deleted_at: false },
       include: {
         materials: {
           include: {
@@ -160,11 +163,23 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
      // First, delete existing product materials for this product
-    await prisma.productMaterial.deleteMany({
-      where: { product_id: parseInt(id) },
-    });
-    await prisma.product.delete({
-      where: { id: parseInt(id) },
+    await prisma.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id: parseInt(id) },
+        data: { deleted_at: true },
+      });
+      await tx.storeProduct.updateMany({
+        where: { product_id: parseInt(id) },
+        data: { deleted_at: true },
+      });
+      await tx.shopProduct.updateMany({
+        where: { product_id: parseInt(id) },
+        data: { deleted_at: true },
+      });
+      await tx.factoryProduct.updateMany({
+        where: { productId: parseInt(id) },
+        data: { deleted_at: true },
+      });
     });
     res.status(204).send();
   } catch (error) {
@@ -182,9 +197,10 @@ router.get('/store/:storeId', async (req, res) => {
     ensureIdScope(scope, "store", storeId);
 
     const products = await prisma.product.findMany({
+      where: withActiveWhere(),
       include: {
         storeProducts: {
-          where: { store_id: storeId },
+          where: { store_id: storeId, deleted_at: false },
           select: { stock: true },
         },
       },
@@ -217,6 +233,7 @@ router.get('/search', async (req, res) => {
   try {
     const products = await prisma.product.findMany({
       where: {
+        deleted_at: false,
         OR: [
           { name: { contains: q, mode: 'insensitive' } },
           { barcode: { contains: q, mode: 'insensitive' } },
