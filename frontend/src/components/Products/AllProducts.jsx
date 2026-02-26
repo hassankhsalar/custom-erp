@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { API_ROUTES } from '../../config';
+import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
 import { activeOnly } from '../../utils/softDelete';
 import { 
   Pen, 
@@ -42,7 +42,7 @@ const AllProducts = () => {
     
     if (imagePath.startsWith('http')) return imagePath;
     
-    const baseUrl = 'http://localhost:3001';
+    const baseUrl = MEDIA_BASE_URL;
     
     if (imagePath.startsWith('/uploads')) {
       return `${baseUrl}${imagePath}`;
@@ -658,6 +658,10 @@ const AllProducts = () => {
                     <div>
                       <p className="text-sm text-gray-600">Product Name</p>
                       <p className="font-medium text-lg">{modal.data.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Product Barcode</p>
+                      <p className="font-medium text-lg">{modal.data.barcode}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Description</p>

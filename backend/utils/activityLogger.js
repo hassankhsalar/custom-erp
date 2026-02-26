@@ -126,6 +126,22 @@ const STOCK_MONEY_MODULES = new Set([
   "expenses",
 ]);
 
+const MAX_LOG_LENGTHS = {
+  module: 120,
+  action: 120,
+  description: 5000,
+  status: 50,
+  ipAddress: 64,
+  userAgent: 255,
+};
+
+const truncateText = (value, maxLength) => {
+  if (value === undefined || value === null) return null;
+  const text = String(value);
+  if (text.length <= maxLength) return text;
+  return text.slice(0, Math.max(0, maxLength - 3)) + "...";
+};
+
 const shouldNotifyAdminForMutation = ({ module, action, audit }) => {
   if (audit?.skipNotification) return false;
   if (action === "create" && (module === "sales" || module === "shop-sales")) return false;
@@ -149,14 +165,14 @@ const logActivity = async ({
     await prisma.activityLog.create({
       data: {
         userId,
-        module,
-        action,
-        description,
+        module: truncateText(module, MAX_LOG_LENGTHS.module),
+        action: truncateText(action, MAX_LOG_LENGTHS.action),
+        description: truncateText(description, MAX_LOG_LENGTHS.description),
         entityId,
-        status,
+        status: truncateText(status, MAX_LOG_LENGTHS.status),
         metadata,
-        ipAddress,
-        userAgent,
+        ipAddress: truncateText(ipAddress, MAX_LOG_LENGTHS.ipAddress),
+        userAgent: truncateText(userAgent, MAX_LOG_LENGTHS.userAgent),
       },
     });
   } catch (error) {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
+import { TbCurrencyTaka } from "react-icons/tb";
 import { 
   Trash2, 
   Edit, 
@@ -34,6 +35,12 @@ export default function AllCustomers() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [modal, setModal] = useState({ isOpen: false, customer: null });
+  const [clearDueModal, setClearDueModal] = useState({
+    isOpen: false,
+    customer: null,
+    amount: "",
+    saving: false
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -120,6 +127,62 @@ export default function AllCustomers() {
 
   const closeModal = () => {
     setModal({ isOpen: false, customer: null });
+  };
+
+  const openClearDueModal = (customer) => {
+    setClearDueModal({
+      isOpen: true,
+      customer,
+      amount: String(parseFloat(customer?.total_due || 0).toFixed(2)),
+      saving: false
+    });
+  };
+
+  const closeClearDueModal = () => {
+    setClearDueModal({
+      isOpen: false,
+      customer: null,
+      amount: "",
+      saving: false
+    });
+  };
+
+  const submitClearDue = async () => {
+    if (!clearDueModal.customer) return;
+
+    const amount = parseFloat(clearDueModal.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      alert("Please enter a valid amount greater than 0.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    try {
+      setClearDueModal((prev) => ({ ...prev, saving: true }));
+      const res = await fetch(`${API_ROUTES.CUSTOMERS}/${clearDueModal.customer.id}/clear-due`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ amount })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to clear due");
+      }
+      closeClearDueModal();
+      fetchCustomers();
+      alert(`Due cleared successfully. Applied: $${(data.appliedAmount || 0).toFixed(2)}`);
+    } catch (err) {
+      alert(err.message || "Failed to clear due");
+      setClearDueModal((prev) => ({ ...prev, saving: false }));
+    }
   };
 
   // Pagination controls
@@ -390,6 +453,19 @@ export default function AllCustomers() {
                             >
                               <Trash2 size={16} />
                             </button>
+
+                            <button
+                              onClick={() => openClearDueModal(customer)}
+                              disabled={parseFloat(customer.total_due || 0) <= 0}
+                              className={`p-2 rounded-lg transition-colors duration-300 ${
+                                parseFloat(customer.total_due || 0) > 0
+                                  ? "bg-amber-50 text-amber-600 hover:bg-amber-100"
+                                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                              }`}
+                              title={parseFloat(customer.total_due || 0) > 0 ? "Clear Due" : "No due"}
+                            >
+                              <TbCurrencyTaka size={16} />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -646,6 +722,46 @@ export default function AllCustomers() {
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {clearDueModal.isOpen && clearDueModal.customer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeClearDueModal}></div>
+          <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-2">Clear Customer Due</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              {clearDueModal.customer.name} | Current due: ${parseFloat(clearDueModal.customer.total_due || 0).toFixed(2)}
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={clearDueModal.amount}
+                onChange={(e) => setClearDueModal((prev) => ({ ...prev, amount: e.target.value }))}
+                className="w-full border border-gray-300 rounded-xl p-3 bg-white/80"
+              />
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={closeClearDueModal}
+                className="px-5 py-2.5 rounded-xl bg-gray-200/70 text-gray-700 hover:bg-gray-300/80"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitClearDue}
+                disabled={clearDueModal.saving}
+                className={`px-5 py-2.5 rounded-xl text-white ${
+                  clearDueModal.saving ? "bg-gray-400" : "bg-gradient-to-r from-amber-500 to-orange-500"
+                }`}
+              >
+                {clearDueModal.saving ? "Clearing..." : "Clear Due"}
+              </button>
             </div>
           </div>
         </div>

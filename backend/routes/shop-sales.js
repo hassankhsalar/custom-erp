@@ -829,8 +829,11 @@ router.get("/", async (req, res) => {
         createdAt: true,
         transactionStatus: true,
         editStatus: true,
+        editGrantedToUserId: true,
+        editOpenedAt: true,
         editMaxCount: true,
         editUsedCount: true,
+        editAccessDurationMinutes: true,
         shop: {
           select: {
             id: true,

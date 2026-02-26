@@ -820,7 +820,7 @@ async function main() {
     'shipment',
     'return',
   ];
-  const activityLogs = Array.from({ length: 500 }, (_, i) => {
+  const activityLogs = Array.from({ length: 500000 }, (_, i) => {
     const module = pick(activityModules);
     const action = pick(activityActions);
     const actor = pick(userList);

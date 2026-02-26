@@ -11,9 +11,9 @@ const { withActiveWhere } = require("../utils/softDelete");
 router.post('/', async (req, res) => {
   const { materials, ...productData } = req.body;
   const hasCode = Object.keys(productData).some(key => key === 'barcode');
-  if (!hasCode) {
+  if (!hasCode || productData.barcode === null || productData.barcode === '') {
     let code = Date.now();
-    productData.barcode = code;
+    productData.barcode = String(code);
   }
   try {
     const product = await prisma.product.create({

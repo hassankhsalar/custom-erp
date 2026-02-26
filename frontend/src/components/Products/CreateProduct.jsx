@@ -318,6 +318,7 @@ const CreateProduct = () => {
                       id="product-category-list"
                       className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0"
                       onChange={handleProductChange}>
+                        <option value="">Select a category</option>
                       {categories.map((category) => (
                         <option key={category.id} value={category.name} > {category.name} </option>
                       ))}
@@ -330,6 +331,7 @@ const CreateProduct = () => {
                       id="product-brand-list" 
                       className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0" 
                       onChange={handleProductChange}>
+                        <option value="">Select a brand</option>
                       {brands.map((brand) => (
                         <option key={brand.id} value={brand.name} className="capitalize" > {brand.name} </option>
                       ))}
@@ -342,6 +344,7 @@ const CreateProduct = () => {
                       onChange={handleProductChange}
                       id="product-unit-list" 
                       className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0">
+                        <option value="">Select a unit</option>
                       {units.map((unit) => (
                         <option key={unit.id} value={unit.name} className="capitalize"> {unit.name} </option>
                       ))}
