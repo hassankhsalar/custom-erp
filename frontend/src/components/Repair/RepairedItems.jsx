@@ -10,6 +10,7 @@ import {
   Loader2,
   MoreVertical,
   RefreshCw,
+  Trash2,
   X,
   XCircle,
 } from "lucide-react";
@@ -205,6 +206,24 @@ export default function RepairedItems() {
       error: "",
     });
     setActiveDropdown(null);
+  };
+
+  const deleteRepair = async (row) => {
+    const ok = window.confirm(`Delete repair ${row.reference || row.id}? This action cannot be undone.`);
+    if (!ok) return;
+    try {
+      const res = await fetch(API_ROUTES.REPAIR_BY_ID(row.id), {
+        method: "DELETE",
+        headers,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to delete repair");
+      setActiveDropdown(null);
+      await fetchRows({ mode: "table", page: currentPage, limit: itemsPerPage });
+      await fetchOverview();
+    } catch (err) {
+      setError(err.message || "Failed to delete repair");
+    }
   };
 
   const submitStatus = async () => {
@@ -466,6 +485,7 @@ export default function RepairedItems() {
                           <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 shadow-xl rounded-xl z-20 py-1">
                             <button onClick={() => { setViewModal({ open: true, row }); setActiveDropdown(null); }} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2"><Eye size={14} /> View</button>
                             <button onClick={() => openStatusModal(row)} className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 flex items-center gap-2"><RefreshCw size={14} /> Update Status</button>
+                            <button onClick={() => deleteRepair(row)} className="w-full text-left px-3 py-2 text-sm hover:bg-rose-50 text-rose-600 flex items-center gap-2"><Trash2 size={14} /> Delete</button>
                           </div>
                         )}
                       </div>

@@ -13,6 +13,7 @@ import {
   ShoppingBag,
   Factory,
   Truck,
+  Trash2,
   XCircle
 } from "lucide-react";
 import { API_ROUTES } from "../../config";
@@ -30,6 +31,7 @@ export default function AllPurchaseReturns() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [activeDropdown, setActiveDropdown] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -223,6 +225,28 @@ export default function AllPurchaseReturns() {
     }
   };
 
+  const handleDeleteReturn = async (row) => {
+    if (!window.confirm(`Delete ${row.reference}? This will rollback stock and account effects.`)) {
+      return;
+    }
+
+    try {
+      setDeletingId(row.id);
+      const res = await fetch(API_ROUTES.PURCHASE_RETURN_BY_ID(row.id), {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to delete return");
+      await fetchReturns();
+    } catch (err) {
+      alert(err.message || "Failed to delete return");
+    } finally {
+      setDeletingId(null);
+      setActiveDropdown(null);
+    }
+  };
+
   const totalPages = Math.ceil(totalCount / itemsPerPage) || 1;
 
   return (
@@ -306,6 +330,7 @@ export default function AllPurchaseReturns() {
                             <button onClick={() => openShipmentModal(row)} className="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 flex items-center gap-2"><Truck size={14} /> Add Shipment</button>
                             <button onClick={() => openPaymentModal(row)} className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 flex items-center gap-2"><CreditCard size={14} /> Add Payment</button>
                             <button onClick={() => openPaymentsModal(row)} className="w-full text-left px-3 py-2 text-sm hover:bg-amber-50 flex items-center gap-2"><AlertTriangle size={14} /> View Payments</button>
+                            <button disabled={deletingId === row.id} onClick={() => handleDeleteReturn(row)} className="w-full text-left px-3 py-2 text-sm hover:bg-rose-50 text-rose-700 flex items-center gap-2 disabled:opacity-60"><Trash2 size={14} /> {deletingId === row.id ? "Deleting..." : "Delete"}</button>
                           </div>
                         )}
                       </div>

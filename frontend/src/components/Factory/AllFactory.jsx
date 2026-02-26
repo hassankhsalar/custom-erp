@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES } from '../../config';
+import { activeOnly } from '../../utils/softDelete';
 import {
   Building2,
   User,
@@ -54,7 +55,7 @@ const AllFactory = () => {
             'Content-Type': 'application/json',
           },
         });
-        setFactories(response.data.factories || response.data);
+        setFactories(activeOnly(response.data.factories || response.data));
         setTotalPages(Math.ceil((response.data.totalCount || response.data.length) / itemsPerPage));
         setTotalFactories(response.data.totalCount || response.data.length);
         setLoading(false);
@@ -102,7 +103,7 @@ const AllFactory = () => {
             'Content-Type': 'application/json',
           },
         });
-        setFactories(response.data.factories || response.data);
+        setFactories(activeOnly(response.data.factories || response.data));
         setTotalPages(Math.ceil((response.data.totalCount || response.data.length) / itemsPerPage));
         setTotalFactories(response.data.totalCount || response.data.length);
         alert('Factory deleted successfully!');

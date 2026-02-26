@@ -5,6 +5,7 @@ const router = express.Router();
 const { generateMonthlySalaries } = require("../services/salaryCron");
 const { createTransaction } = require("../utils/transactionHelper");
 const { createNotification } = require("../utils/notificationHelper");
+const { rollbackAndDeleteTransactionsByWhere } = require("../utils/transactionRollback");
 const SALARY_STATUSES = ["generated", "created", "approve", "approved", "paid"];
 
 const parsePositiveInt = (value, fallback) => {
@@ -19,8 +20,8 @@ const parseDateSafe = (value) => {
 };
 
 const userHasPermission = async (userId, permission) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
+  const user = await prisma.user.findFirst({
+    where: { id: userId, deleted_at: false },
     include: { permission: true },
   });
   if (!user || !user.permission) return false;
@@ -52,6 +53,7 @@ router.get("/users/search", async (req, res) => {
     // SIMPLE search without complex conditions
     const users = await prisma.user.findMany({
       where: {
+        deleted_at: false,
         OR: [
           { name: { contains: searchQuery } },
           { email: { contains: searchQuery } },
@@ -142,6 +144,7 @@ router.get("/employees/:userId/manager", async (req, res) => {
 router.get("/employees", async (req, res) => {
   try {
     const users = await prisma.user.findMany({
+      where: { deleted_at: false },
       include: {
         employeeProfile: true,
         managerOf: { include: { user: true } },
@@ -168,6 +171,7 @@ router.get("/employees/search", async (req, res) => {
     
     const users = await prisma.user.findMany({
       where: {
+        deleted_at: false,
         OR: [
           { name: { contains: searchQuery } },
           { email: { contains: searchQuery } },
@@ -373,6 +377,43 @@ router.get("/clock-records", async (req, res) => {
   }
 });
 
+router.delete("/employees/:userId", async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId, 10);
+    if (!userId) return res.status(400).json({ error: "Invalid userId" });
+    const profile = await prisma.employeeProfile.findUnique({ where: { userId } });
+    const managerLinks = await prisma.userManager.count({
+      where: { OR: [{ userId }, { managerId: userId }] },
+    });
+
+    await prisma.$transaction(async (tx) => {
+      await tx.userManager.deleteMany({
+        where: {
+          OR: [{ userId }, { managerId: userId }],
+        },
+      });
+      await tx.employeeProfile.deleteMany({ where: { userId } });
+    });
+    const summary = {
+      userId,
+      designation: profile?.designation || null,
+      baseSalary: profile?.baseSalary || null,
+      managerLinksRemoved: managerLinks,
+    };
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "employee",
+      entityId: userId,
+      description: `Deleted employee profile for user #${userId} and removed ${managerLinks} manager links.`,
+      details: summary,
+    });
+
+    res.json({ success: true, message: "Employee profile deleted successfully", summary });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to delete employee profile" });
+  }
+});
+
 router.get("/clock-records/overview", async (req, res) => {
   try {
     const { userId, startDate, endDate, search, status } = req.query;
@@ -501,7 +542,7 @@ router.delete("/holidays/:id", async (req, res) => {
 //get Leave categories
 router.get("/leave-categories", async (req, res) => {
   try {
-    const categories = await prisma.leaveCategory.findMany({ orderBy: { name: "asc" } });
+    const categories = await prisma.leaveCategory.findMany({ where: { deleted_at: false }, orderBy: { name: "asc" } });
     res.json(categories);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -545,10 +586,49 @@ router.put("/leave-categories/:id", async (req, res) => {
 router.delete("/leave-categories/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    await prisma.leaveCategory.delete({ where: { id } });
+    await prisma.leaveCategory.update({ where: { id }, data: { deleted_at: true } });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete("/leave-requests/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: "Invalid leave request id" });
+
+    const requesterId = req.user.userId;
+    const canApproveAll = await userHasPermission(requesterId, "leave_approve_all");
+    const leave = await prisma.leaveRequest.findUnique({ where: { id } });
+    if (!leave) return res.status(404).json({ error: "Leave request not found" });
+
+    if (!canApproveAll && leave.userId !== requesterId) {
+      const canApprove = await userHasPermission(requesterId, "leave_approve");
+      if (!canApprove || !(await isManagerOf(requesterId, leave.userId))) {
+        return res.status(403).json({ error: "Not authorized to delete this leave request" });
+      }
+    }
+
+    await prisma.leaveRequest.delete({ where: { id } });
+    const summary = {
+      leaveRequestId: id,
+      userId: leave.userId,
+      categoryId: leave.categoryId,
+      startDate: leave.startDate,
+      endDate: leave.endDate,
+      status: leave.status,
+    };
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "leave request",
+      entityId: id,
+      description: `Deleted leave request #${id} for user #${leave.userId} (${String(leave.status || "pending")}).`,
+      details: summary,
+    });
+    res.json({ success: true, message: "Leave request deleted successfully", summary });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to delete leave request" });
   }
 });
 
@@ -880,7 +960,7 @@ router.put("/payroll/:id", async (req, res) => {
           amount: nextNet,
           payment_method: "salary",
           current_account_balance: updatedAccount.balance,
-          note: `Salary payment ${updatedSalary.month}/${updatedSalary.year} - ${employeeName}`
+          note: `Salary payment #${updatedSalary.id} ${updatedSalary.month}/${updatedSalary.year} - ${employeeName}`
         });
       }
 
@@ -924,6 +1004,62 @@ router.post("/payroll/calculate", async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete("/payroll/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: "Invalid salary id" });
+    const salaryBeforeDelete = await prisma.salary.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+    if (!salaryBeforeDelete) return res.status(404).json({ error: "Salary not found" });
+
+    await prisma.$transaction(async (tx) => {
+      const salary = await tx.salary.findUnique({ where: { id }, include: { user: true } });
+      if (!salary) throw new Error("Salary not found");
+
+      if (String(salary.status || "").toLowerCase() === "paid") {
+        await rollbackAndDeleteTransactionsByWhere(tx, {
+          purpose: "Salary Payment",
+          OR: [
+            { note: { contains: `#${salary.id}` } },
+            { note: { contains: `Salary payment ${salary.month}/${salary.year}` } },
+          ],
+          amount: parseFloat(salary.net || 0),
+        }, { reverseBalances: true });
+      }
+
+      await tx.expense.updateMany({
+        where: { salaryId: id },
+        data: { salaryId: null },
+      });
+      await tx.salary.delete({ where: { id } });
+    });
+
+    const summary = {
+      salaryId: id,
+      userId: salaryBeforeDelete.userId,
+      employee: salaryBeforeDelete.user?.name || salaryBeforeDelete.user?.username || null,
+      month: salaryBeforeDelete.month,
+      year: salaryBeforeDelete.year,
+      net: salaryBeforeDelete.net,
+      status: salaryBeforeDelete.status,
+      hadPaidRollback: String(salaryBeforeDelete.status || "").toLowerCase() === "paid",
+    };
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "salary",
+      entityId: id,
+      description: `Deleted salary #${id} (${salaryBeforeDelete.month}/${salaryBeforeDelete.year}) for user #${salaryBeforeDelete.userId}, net ${salaryBeforeDelete.net}.`,
+      details: summary,
+    });
+
+    res.json({ success: true, message: "Salary deleted successfully", summary });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to delete salary" });
   }
 });
 

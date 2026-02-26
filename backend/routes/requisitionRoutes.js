@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
 const { buildScope, ensureIdScope } = require("../utils/associateScope");
 const { createNotification } = require("../utils/notificationHelper");
+const { assertActivePlace, assertActiveItem } = require("../utils/softDelete");
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -21,9 +22,9 @@ const authenticateToken = (req, res, next) => {
 
 const getLocationName = async (type, id) => {
   if (!type || !id) return null;
-  if (type === "shop") return (await prisma.shop.findUnique({ where: { id }, select: { name: true } }))?.name || null;
-  if (type === "store") return (await prisma.store.findUnique({ where: { id }, select: { name: true } }))?.name || null;
-  if (type === "factory") return (await prisma.factory.findUnique({ where: { id }, select: { name: true } }))?.name || null;
+  if (type === "shop") return (await prisma.shop.findFirst({ where: { id, deleted_at: false }, select: { name: true } }))?.name || null;
+  if (type === "store") return (await prisma.store.findFirst({ where: { id, deleted_at: false }, select: { name: true } }))?.name || null;
+  if (type === "factory") return (await prisma.factory.findFirst({ where: { id, deleted_at: false }, select: { name: true } }))?.name || null;
   return null;
 };
 
@@ -43,19 +44,19 @@ const buildLocationNameMap = async (rows) => {
   const [shops, stores, factories] = await Promise.all([
     shopIds.size
       ? prisma.shop.findMany({
-          where: { id: { in: Array.from(shopIds) } },
+          where: { id: { in: Array.from(shopIds) }, deleted_at: false },
           select: { id: true, name: true },
         })
       : Promise.resolve([]),
     storeIds.size
       ? prisma.store.findMany({
-          where: { id: { in: Array.from(storeIds) } },
+          where: { id: { in: Array.from(storeIds) }, deleted_at: false },
           select: { id: true, name: true },
         })
       : Promise.resolve([]),
     factoryIds.size
       ? prisma.factory.findMany({
-          where: { id: { in: Array.from(factoryIds) } },
+          where: { id: { in: Array.from(factoryIds) }, deleted_at: false },
           select: { id: true, name: true },
         })
       : Promise.resolve([]),
@@ -133,17 +134,17 @@ router.get("/places", authenticateToken, async (req, res) => {
     const scope = await buildScope(prisma, req.user?.userId || 0);
     const [shops, stores, factories] = await Promise.all([
       prisma.shop.findMany({
-        where: scope.isAdmin ? {} : { id: { in: Array.from(scope.shops) } },
+        where: scope.isAdmin ? { deleted_at: false } : { id: { in: Array.from(scope.shops) }, deleted_at: false },
         select: { id: true, name: true },
         orderBy: { name: "asc" },
       }),
       prisma.store.findMany({
-        where: scope.isAdmin ? {} : { id: { in: Array.from(scope.stores) } },
+        where: scope.isAdmin ? { deleted_at: false } : { id: { in: Array.from(scope.stores) }, deleted_at: false },
         select: { id: true, name: true },
         orderBy: { name: "asc" },
       }),
       prisma.factory.findMany({
-        where: scope.isAdmin ? {} : { id: { in: Array.from(scope.factories) } },
+        where: scope.isAdmin ? { deleted_at: false } : { id: { in: Array.from(scope.factories) }, deleted_at: false },
         select: { id: true, name: true },
         orderBy: { name: "asc" },
       }),
@@ -197,14 +198,20 @@ router.get("/lookup/items", authenticateToken, async (req, res) => {
       productModel.findMany({
         where: {
           ...productWhere,
-          ...(search ? { product: { name: { contains: search } } } : {}),
+          deleted_at: false,
+          product: search
+            ? { deleted_at: false, name: { contains: search } }
+            : { deleted_at: false },
         },
         include: { product: true },
       }),
       materialModel.findMany({
         where: {
           ...materialWhere,
-          ...(search ? { material: { name: { contains: search } } } : {}),
+          deleted_at: false,
+          material: search
+            ? { deleted_at: false, name: { contains: search } }
+            : { deleted_at: false },
         },
         include: { material: true },
       }),
@@ -259,6 +266,10 @@ router.post("/", authenticateToken, async (req, res) => {
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, requesterType, parseInt(requesterId, 10));
+    await assertActivePlace(prisma, requesterType, parseInt(requesterId, 10));
+    for (const item of requestType === "items" ? items : []) {
+      await assertActiveItem(prisma, item.itemType, parseInt(item.itemId, 10));
+    }
 
     const created = await prisma.requisition.create({
       data: {
@@ -355,6 +366,67 @@ router.put("/:id", authenticateToken, async (req, res) => {
   } catch (error) {
     if (error.status === 403) return res.status(403).json({ error: "Forbidden" });
     res.status(500).json({ error: error.message || "Failed to update requisition" });
+  }
+});
+
+router.delete("/:id", authenticateToken, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: "Invalid requisition ID" });
+
+    const existing = await prisma.requisition.findUnique({
+      where: { id },
+      include: { sections: { select: { id: true } } },
+    });
+    if (!existing) return res.status(404).json({ error: "Requisition not found" });
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, existing.requesterType, existing.requesterId);
+
+    const requesterId = req.user?.userId || 0;
+    const isCreator = Number(existing.requesterUserId || 0) === Number(requesterId);
+    if (!scope.isAdmin && existing.requesterUserId && !isCreator) {
+      return res.status(403).json({ error: "Only creator can delete this requisition" });
+    }
+    const itemCount = await prisma.requisitionItem.count({ where: { requisitionId: id } });
+    const sectionCount = (existing.sections || []).length;
+    const sectionIds = (existing.sections || []).map((section) => section.id);
+    const sectionItemCount = sectionIds.length
+      ? await prisma.requisitionSectionItem.count({ where: { sectionId: { in: sectionIds } } })
+      : 0;
+
+    await prisma.$transaction(async (tx) => {
+      const sectionIds = (existing.sections || []).map((section) => section.id);
+      if (sectionIds.length > 0) {
+        await tx.requisitionSectionItem.deleteMany({
+          where: { sectionId: { in: sectionIds } },
+        });
+      }
+      await tx.requisitionSection.deleteMany({ where: { requisitionId: id } });
+      await tx.requisitionItem.deleteMany({ where: { requisitionId: id } });
+      await tx.requisition.delete({ where: { id } });
+    });
+    const summary = {
+      requisitionId: id,
+      reference: existing.reference,
+      requesterType: existing.requesterType,
+      requesterId: existing.requesterId,
+      itemCount,
+      sectionCount,
+      sectionItemCount,
+    };
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "requisition",
+      entityId: id,
+      description: `Deleted requisition ${existing.reference || `#${id}`}: removed ${itemCount} requisition items and ${sectionItemCount} section items.`,
+      details: summary,
+    });
+
+    return res.json({ success: true, message: "Requisition deleted successfully", summary });
+  } catch (error) {
+    if (error.status === 403) return res.status(403).json({ error: "Forbidden" });
+    return res.status(500).json({ error: error.message || "Failed to delete requisition" });
   }
 });
 
@@ -939,6 +1011,10 @@ router.post("/:id/child", authenticateToken, async (req, res) => {
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, requesterType, parseInt(requesterId, 10));
+    await assertActivePlace(prisma, requesterType, parseInt(requesterId, 10));
+    for (const item of requestType === "items" ? items : []) {
+      await assertActiveItem(prisma, item.itemType, parseInt(item.itemId, 10));
+    }
 
     const created = await prisma.requisition.create({
       data: {

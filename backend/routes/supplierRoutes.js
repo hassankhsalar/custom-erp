@@ -27,6 +27,7 @@ router.post('/', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const suppliers = await prisma.supplier.findMany({
+      where: { deleted_at: false },
       orderBy: { id: 'desc' },
     });
     res.json(suppliers);
@@ -38,8 +39,8 @@ router.get('/', async (req, res) => {
 // ✅ Get supplier by ID
 router.get('/:id', async (req, res) => {
   try {
-    const supplier = await prisma.supplier.findUnique({
-      where: { id: parseInt(req.params.id) },
+    const supplier = await prisma.supplier.findFirst({
+      where: { id: parseInt(req.params.id), deleted_at: false },
     });
 
     if (!supplier) return res.status(404).json({ error: 'Supplier not found' });
@@ -66,14 +67,15 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// ✅ Delete supplier
+// ✅ Soft delete supplier
 router.delete('/:id', async (req, res) => {
   try {
-    await prisma.supplier.delete({
+    await prisma.supplier.update({
       where: { id: parseInt(req.params.id) },
+      data: { deleted_at: true },
     });
 
-    res.json({ message: 'Supplier deleted successfully' });
+    res.json({ message: 'Supplier archived successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

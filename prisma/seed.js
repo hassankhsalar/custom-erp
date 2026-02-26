@@ -525,7 +525,7 @@ async function main() {
   await prisma.salary.createMany({ data: salaryRecords, skipDuplicates: true });
 
   console.log('Seeding purchases (300000)...');
-  for (let i = 0; i < 300000; i += 1) {
+  for (let i = 0; i < 300; i += 1) {
     const destinationType = pick(['store', 'shop', 'factory']);
     const destinationId =
       destinationType === 'store'
@@ -627,7 +627,7 @@ async function main() {
   }
 
   console.log('Seeding sales (1000000)...');
-  for (let i = 0; i < 1000000; i += 1) {
+  for (let i = 0; i < 1000; i += 1) {
     const shop = pick(shops);
     const itemsCount = randInt(1, 3);
     const saleItems = [];
@@ -714,7 +714,7 @@ async function main() {
 
   console.log('Seeding transfers (30000)...');
   const transferStatuses = ['processing', 'pending', 'on_the_way', 'complete', 'not_received'];
-  for (let i = 0; i < 30000; i += 1) {
+  for (let i = 0; i < 300; i += 1) {
     const fromType = pick(['store', 'shop', 'factory']);
     let toType = pick(['store', 'shop', 'factory']);
     while (toType === fromType) {
@@ -793,6 +793,62 @@ async function main() {
     forRole: pick(['store_keeper', 'manager', 'admin', 'cashier']),
   }));
   await prisma.notification.createMany({ data: notifications });
+
+  console.log('Seeding activity logs...');
+  const activityModules = [
+    'sales',
+    'purchases',
+    'transfers',
+    'productions',
+    'requisitions',
+    'damage-records',
+    'repairs',
+    'accounts',
+    'cash-registers',
+    'bank-accounts',
+    'hrm',
+    'users',
+  ];
+  const activityActions = [
+    'create',
+    'update',
+    'delete',
+    'approve',
+    'reject',
+    'status_change',
+    'payment',
+    'shipment',
+    'return',
+  ];
+  const activityLogs = Array.from({ length: 500 }, (_, i) => {
+    const module = pick(activityModules);
+    const action = pick(activityActions);
+    const actor = pick(userList);
+    const success = Math.random() > 0.08;
+    const entityId = randInt(1, 1000);
+    return {
+      userId: actor?.id || null,
+      module,
+      action,
+      description: `${action} on ${module} #${entityId}`,
+      entityId,
+      status: success ? 'success' : 'failed',
+      metadata: {
+        seed: true,
+        index: i + 1,
+        amount: randFloat(100, 20000, 2),
+        quantity: randFloat(1, 150, 2),
+      },
+      ipAddress: `192.168.1.${randInt(2, 254)}`,
+      userAgent: pick([
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Mozilla/5.0 (Linux; Android 13)',
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)',
+      ]),
+      createdAt: randomDate(),
+    };
+  });
+  await createManyInChunks('activityLog', activityLogs, 500);
 
   const productions = [];
   for (let i = 0; i < 100; i += 1) {
@@ -1045,6 +1101,7 @@ async function main() {
   console.log(`Created ${await prisma.expenseCategory.count()} expense categories`);
   console.log(`Created ${await prisma.expense.count()} expenses`);
   console.log(`Created ${await prisma.notification.count()} notifications`);
+  console.log(`Created ${await prisma.activityLog.count()} activity logs`);
   console.log(`Created ${await prisma.damageRecord.count()} damage records`);
   console.log(`Created ${await prisma.repairOrder.count()} repair orders`);
   console.log(`Created ${await prisma.cashRegisterAssignment.count()} cash register assignments`);

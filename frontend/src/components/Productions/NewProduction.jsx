@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
+import { activeOnly } from '../../utils/softDelete';
 import { 
   Factory, 
   Calendar, 
@@ -52,7 +53,7 @@ const NewProduction = () => {
         const factoryResponse = await axios.get(API_ROUTES.FACTORIES, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setFactories(factoryResponse.data);
+        setFactories(activeOnly(factoryResponse.data.factories || factoryResponse.data || []));
       } catch (error) {
         console.error('Error fetching initial data:', error);
       } finally {
@@ -207,7 +208,7 @@ const NewProduction = () => {
         const response = await axios.get(`${API_ROUTES.PRODUCTS}?search=${e.target.value}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setSearchResults(response.data.products);
+        setSearchResults(activeOnly(response.data.products || []));
       } catch (error) {
         console.error('Error searching products:', error);
       }

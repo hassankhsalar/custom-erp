@@ -1,0 +1,2 @@
+- `frontend/src/components/Materials/AddMaterial.jsx`: `http://localhost:3001/api/uploads/product`
+- `frontend/src/components/Materials/EditMaterial.jsx`: `http://localhost:3001/api/uploads/material`

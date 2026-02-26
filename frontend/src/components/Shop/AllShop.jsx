@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES } from '../../config';
+import { activeOnly } from '../../utils/softDelete';
 import {
   ShoppingBag,
   User,
@@ -53,7 +54,7 @@ const AllShop = () => {
           },
         });
         // Handle both array response and paginated response
-        const shopsData = Array.isArray(response.data) ? response.data : response.data.shops || [];
+        const shopsData = activeOnly(Array.isArray(response.data) ? response.data : response.data.shops || []);
         setShops(shopsData);
         setTotalPages(Math.ceil(shopsData.length / itemsPerPage));
         setTotalShops(shopsData.length);
@@ -99,7 +100,7 @@ const AllShop = () => {
             'Content-Type': 'application/json',
           },
         });
-        const shopsData = Array.isArray(response.data) ? response.data : response.data.shops || [];
+        const shopsData = activeOnly(Array.isArray(response.data) ? response.data : response.data.shops || []);
         setShops(shopsData);
         setTotalPages(Math.ceil(shopsData.length / itemsPerPage));
         setTotalShops(shopsData.length);

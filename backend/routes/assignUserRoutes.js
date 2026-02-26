@@ -9,6 +9,7 @@ const prisma = new PrismaClient();
 router.get('/all-assignments', async (req, res) => {
   try {
     const assignments = await prisma.userAssociate.findMany({
+      where: { user: { deleted_at: false } },
       include: {
         user: {
           select: {
@@ -31,11 +32,11 @@ router.get('/all-assignments', async (req, res) => {
 
     // Get all entities to map IDs to names
     const [stores, shops, factories, cashRegisters, accounts] = await Promise.all([
-      prisma.store.findMany(),
-      prisma.shop.findMany(),
-      prisma.factory.findMany(),
-      prisma.cashRegister.findMany(),
-      prisma.accounts.findMany()
+      prisma.store.findMany({ where: { deleted_at: false } }),
+      prisma.shop.findMany({ where: { deleted_at: false } }),
+      prisma.factory.findMany({ where: { deleted_at: false } }),
+      prisma.cashRegister.findMany({ where: { deleted_at: false } }),
+      prisma.accounts.findMany({ where: { deleted_at: false } })
     ]);
 
     // Create lookup maps
@@ -88,7 +89,8 @@ router.get('/user/:userId', async (req, res) => {
 
     const assignments = await prisma.userAssociate.findMany({
       where: {
-        userId: parseInt(userId)
+        userId: parseInt(userId),
+        user: { deleted_at: false },
       },
       include: {
         user: {
@@ -125,13 +127,13 @@ router.get('/user/:userId', async (req, res) => {
             });
             break;
           case 'cashRegister':
-            entity = await prisma.cashRegister.findUnique({ 
-              where: { id: assignment.associateId } 
+            entity = await prisma.cashRegister.findFirst({ 
+              where: { id: assignment.associateId, deleted_at: false } 
             });
             break;
           case 'account':
-            entity = await prisma.accounts.findUnique({ 
-              where: { id: assignment.associateId } 
+            entity = await prisma.accounts.findFirst({ 
+              where: { id: assignment.associateId, deleted_at: false } 
             });
             break;
         }
@@ -155,15 +157,16 @@ router.get('/user/:userId', async (req, res) => {
 router.get('/entities', async (req, res) => {
   try {
     const [stores, shops, factories, cashRegisters, accounts] = await Promise.all([
-      prisma.store.findMany(),
-      prisma.shop.findMany(),
-      prisma.factory.findMany(),
-      prisma.cashRegister.findMany(),
-      prisma.accounts.findMany({ where: { status: 'active' } })
+      prisma.store.findMany({ where: { deleted_at: false } }),
+      prisma.shop.findMany({ where: { deleted_at: false } }),
+      prisma.factory.findMany({ where: { deleted_at: false } }),
+      prisma.cashRegister.findMany({ where: { deleted_at: false } }),
+      prisma.accounts.findMany({ where: { status: 'active', deleted_at: false } })
     ]);
 
     // Get all user assignments
     const assignments = await prisma.userAssociate.findMany({
+      where: { user: { deleted_at: false } },
       include: {
         user: {
           select: {
@@ -284,6 +287,7 @@ router.get('/entities', async (req, res) => {
 router.get('/available-users', async (req, res) => {
   try {
     const users = await prisma.user.findMany({
+      where: { deleted_at: false },
       select: {
         id: true,
         name: true,
@@ -327,8 +331,8 @@ router.post('/assign', async (req, res) => {
     }
 
     // Check if user exists
-    const user = await prisma.user.findUnique({
-      where: { id: parseInt(userId) }
+    const user = await prisma.user.findFirst({
+      where: { id: parseInt(userId), deleted_at: false }
     });
 
     if (!user) {
@@ -366,16 +370,16 @@ router.post('/assign', async (req, res) => {
           break;
           
         case 'cashRegister':
-          const cashRegister = await prisma.cashRegister.findUnique({ 
-            where: { id: parseInt(associateId) } 
+          const cashRegister = await prisma.cashRegister.findFirst({ 
+            where: { id: parseInt(associateId), deleted_at: false } 
           });
           entityExists = cashRegister !== null;
           entityName = cashRegister?.name || '';
           break;
           
         case 'account':
-          const account = await prisma.accounts.findUnique({ 
-            where: { id: parseInt(associateId) } 
+          const account = await prisma.accounts.findFirst({ 
+            where: { id: parseInt(associateId), deleted_at: false } 
           });
           entityExists = account !== null;
           entityName = account?.name || '';
@@ -455,7 +459,8 @@ router.get('/entity/:type/:id', async (req, res) => {
     const assignments = await prisma.userAssociate.findMany({
       where: {
         associateName: type,
-        associateId: parseInt(id)
+        associateId: parseInt(id),
+        user: { deleted_at: false },
       },
       include: {
         user: {
@@ -533,10 +538,10 @@ router.get('/entity-details/:type/:id', async (req, res) => {
         entity = await prisma.factory.findUnique({ where: { id: parseInt(id) } });
         break;
       case 'cashRegister':
-        entity = await prisma.cashRegister.findUnique({ where: { id: parseInt(id) } });
+        entity = await prisma.cashRegister.findFirst({ where: { id: parseInt(id), deleted_at: false } });
         break;
       case 'account':
-        entity = await prisma.accounts.findUnique({ where: { id: parseInt(id) } });
+        entity = await prisma.accounts.findFirst({ where: { id: parseInt(id), deleted_at: false } });
         break;
       default:
         return res.status(400).json({ error: 'Invalid entity type' });
@@ -562,7 +567,7 @@ router.get('/stats', async (req, res) => {
       totalAssignments,
       assignmentsByType
     ] = await Promise.all([
-      prisma.user.count(),
+      prisma.user.count({ where: { deleted_at: false } }),
       prisma.$queryRaw`SELECT COUNT(*) as count FROM (
         SELECT id FROM Store 
         UNION SELECT id FROM Shop 

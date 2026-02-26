@@ -4,8 +4,10 @@ const prisma = new PrismaClient();
 const router = express.Router();
 const { createTransaction } = require('../utils/transactionHelper');
 const { createNotification } = require('../utils/notificationHelper');
+const { rollbackAndDeleteTransactionsByWhere } = require('../utils/transactionRollback');
 const { buildScope, ensureTypeScope, ensureIdScope } = require("../utils/associateScope");
 const { getAvailableBatches, decrementBatch } = require("../utils/batchDetails");
+const { assertActivePlace, assertActiveItem } = require("../utils/softDelete");
 const { registerSaleEditAccessRoutes } = require("./shop-sales/editAccessRoutes");
 const { registerShopSaleWarrantyRoutes } = require("./shop-sales/warrantyRoutes");
 const { registerShopSaleReturnRoutes } = require("./shop-sales/returnRoutes");
@@ -24,8 +26,8 @@ const isSameCalendarDay = (a, b) =>
   a.getDate() === b.getDate();
 
 const getRequesterAccessContext = async (userId) => {
-  const user = await prisma.user.findUnique({
-    where: { id: Number(userId) },
+  const user = await prisma.user.findFirst({
+    where: { id: Number(userId), deleted_at: false },
     include: {
       permission: {
         select: {
@@ -177,7 +179,7 @@ router.get("/shops", async (req, res) => {
     if (!scope.isAdmin) {
       ensureTypeScope(scope, "shop");
     }
-    const where = scope.isAdmin ? {} : { id: { in: Array.from(scope.shops) } };
+    const where = scope.isAdmin ? { deleted_at: false } : { id: { in: Array.from(scope.shops) }, deleted_at: false };
 
     const shops = await prisma.shop.findMany({
       where,
@@ -207,20 +209,23 @@ router.get("/items/shop/:shopId", async (req, res) => {
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, "shop", parseInt(shopId));
+    await assertActivePlace(prisma, "shop", parseInt(shopId));
     
     // Fetch shop products
     const shopProducts = await prisma.shopProduct.findMany({
       where: { 
         shop_id: parseInt(shopId),
-        ...(search ? {
-          product: {
-            OR: [
-              { name: { contains: search, mode: 'insensitive' } },
-              { barcode: { contains: search, mode: 'insensitive' } },
-              { category: { contains: search, mode: 'insensitive' } }
-            ]
-          }
-        } : {})
+        deleted_at: false,
+        product: search
+          ? {
+              deleted_at: false,
+              OR: [
+                { name: { contains: search, mode: 'insensitive' } },
+                { barcode: { contains: search, mode: 'insensitive' } },
+                { category: { contains: search, mode: 'insensitive' } }
+              ]
+            }
+          : { deleted_at: false }
       },
       include: {
         product: {
@@ -246,16 +251,18 @@ router.get("/items/shop/:shopId", async (req, res) => {
     const shopMaterials = await prisma.shopMaterial.findMany({
       where: { 
         shop_id: parseInt(shopId),
-        ...(search ? {
-          material: {
-            OR: [
-              { name: { contains: search, mode: 'insensitive' } },
-              { barcode: { contains: search, mode: 'insensitive' } },
-              { brand: { contains: search, mode: 'insensitive' } },
-              { description: { contains: search, mode: 'insensitive' } }
-            ]
-          }
-        } : {})
+        deleted_at: false,
+        material: search
+          ? {
+              deleted_at: false,
+              OR: [
+                { name: { contains: search, mode: 'insensitive' } },
+                { barcode: { contains: search, mode: 'insensitive' } },
+                { brand: { contains: search, mode: 'insensitive' } },
+                { description: { contains: search, mode: 'insensitive' } }
+              ]
+            }
+          : { deleted_at: false }
       },
       include: {
         material: {
@@ -343,6 +350,7 @@ router.post("/", async (req, res) => {
     const { shopId, customerId, paymentType, discount, items, bankAccountId, paidAmount, cashRegisterId } = req.body;
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, "shop", parseInt(shopId));
+    await assertActivePlace(prisma, "shop", parseInt(shopId));
 
     // Validate required fields
     if (!shopId || !items || !Array.isArray(items) || items.length === 0) {
@@ -363,6 +371,7 @@ router.post("/", async (req, res) => {
       if (!item.itemId) {
         return res.status(400).json({ error: "Each item must have itemId" });
       }
+      await assertActiveItem(prisma, item.type, parseInt(item.itemId));
       if (item.warrantyEnabled) {
         if (!item.warrantyExpiryDate) {
           return res.status(400).json({ error: "warrantyExpiryDate is required when warrantyEnabled is true" });
@@ -432,8 +441,8 @@ router.post("/", async (req, res) => {
         if (!assignment) {
           throw new Error("Selected cash register is not assigned to this shop");
         }
-        const existingRegister = await tx.cashRegister.findUnique({
-          where: { id: registerId },
+        const existingRegister = await tx.cashRegister.findFirst({
+          where: { id: registerId, deleted_at: false },
           select: { id: true, status: true }
         });
         if (!existingRegister || existingRegister.status !== "active") {
@@ -1043,8 +1052,8 @@ router.post("/:id/payments", async (req, res) => {
         if (!assignment) {
           throw new Error("Selected cash register is not assigned to this shop");
         }
-        const existingRegister = await tx.cashRegister.findUnique({
-          where: { id: registerId },
+        const existingRegister = await tx.cashRegister.findFirst({
+          where: { id: registerId, deleted_at: false },
           select: { id: true, status: true }
         });
         if (!existingRegister || existingRegister.status !== "active") {
@@ -1550,7 +1559,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// Delete sale (only if no payments)
+// Delete sale and rollback all linked payment balances
 router.delete("/:id", async (req, res) => {
   try {
     const saleId = parseInt(req.params.id);
@@ -1560,11 +1569,27 @@ router.delete("/:id", async (req, res) => {
 
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      include: { saleItems: true }
+      include: {
+        saleItems: true,
+        saleReturns: { include: { returnItems: true } },
+      }
     });
     if (!sale) {
       return res.status(404).json({ error: "Sale not found" });
     }
+    const saleItemCount = (sale.saleItems || []).length;
+    const saleReturnCount = (sale.saleReturns || []).length;
+    const returnItemCount = (sale.saleReturns || []).reduce((sum, row) => sum + ((row.returnItems || []).length), 0);
+    const saleQuantityReset = (sale.saleItems || []).reduce((sum, item) => sum + (parseFloat(item.quantity || 0) || 0), 0);
+    const returnQuantityRollback = (sale.saleReturns || []).reduce(
+      (sum, row) => sum + (row.returnItems || []).reduce((s, it) => s + (parseFloat(it.quantity || 0) || 0), 0),
+      0
+    );
+    const linkedTransactions = await prisma.transactions.findMany({
+      where: { saleId },
+      select: { id: true, amount: true, added_to_account: true, accountId: true, bankAccountId: true, cashRegisterId: true },
+    });
+    const reversedMoneyTotal = linkedTransactions.reduce((sum, tx) => sum + (parseFloat(tx.amount || 0) || 0), 0);
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, "shop", sale.shopId);
@@ -1573,11 +1598,34 @@ router.delete("/:id", async (req, res) => {
     if (!canDelete) {
       return res.status(403).json({ error: "You do not have permission to delete this sale" });
     }
-    if ((parseFloat(sale.paidAmount) || 0) > 0) {
-      return res.status(400).json({ error: "Cannot delete sale with payments" });
-    }
-
     await prisma.$transaction(async (tx) => {
+      for (const saleReturn of sale.saleReturns || []) {
+        for (const item of saleReturn.returnItems || []) {
+          const qty = parseFloat(item.quantity || 0);
+          if (qty <= 0) continue;
+          if (item.productId) {
+            await tx.shopProduct.updateMany({
+              where: { shop_id: sale.shopId, product_id: item.productId },
+              data: { stock: { decrement: qty } },
+            });
+            await tx.product.updateMany({
+              where: { id: item.productId },
+              data: { stock: { decrement: qty } },
+            });
+          }
+          if (item.materialId) {
+            await tx.shopMaterial.updateMany({
+              where: { shop_id: sale.shopId, material_id: item.materialId },
+              data: { stock: { decrement: qty } },
+            });
+            await tx.material.updateMany({
+              where: { id: item.materialId },
+              data: { current_stock: { decrement: qty } },
+            });
+          }
+        }
+      }
+
       for (const item of sale.saleItems) {
         if (item.productId) {
           await tx.shopProduct.update({
@@ -1611,12 +1659,35 @@ router.delete("/:id", async (req, res) => {
         }
       }
 
+      await tx.saleReturnItem.deleteMany({ where: { saleReturn: { saleId } } });
+      await tx.saleReturn.deleteMany({ where: { saleId } });
+      await tx.warrantyClaim.deleteMany({ where: { warranty: { saleId } } });
+      await tx.userWarranty.deleteMany({ where: { saleId } });
+      await rollbackAndDeleteTransactionsByWhere(tx, { saleId }, { reverseBalances: true });
       await tx.saleItem.deleteMany({ where: { saleId } });
-      await tx.transactions.deleteMany({ where: { saleId } });
       await tx.sale.delete({ where: { id: saleId } });
     });
 
-    res.json({ success: true, message: "Sale deleted successfully" });
+    const summary = {
+      saleId,
+      saleItemCount,
+      saleQuantityReset,
+      saleReturnCount,
+      returnItemCount,
+      returnQuantityRollback,
+      reversedTransactionCount: linkedTransactions.length,
+      reversedMoneyTotal,
+    };
+
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "sale",
+      entityId: saleId,
+      description: `Deleted sale #${saleId}: reset ${saleItemCount} items (${saleQuantityReset}) and rolled back ${linkedTransactions.length} transactions totaling ${reversedMoneyTotal}.`,
+      details: summary,
+    });
+
+    res.json({ success: true, message: "Sale deleted successfully", summary });
   } catch (err) {
     if (err.status === 403) {
       return res.status(403).json({ error: "Forbidden" });

@@ -22,12 +22,13 @@ router.get('/allfactories', async (req, res) => {
     if (!scope.isAdmin) {
       ensureTypeScope(scope, 'factory');
       const factories = await prisma.factory.findMany({
-        where: { id: { in: Array.from(scope.factories) } },
+        where: { id: { in: Array.from(scope.factories) }, deleted_at: false },
         select: { id: true, name: true }
       });
       return res.json(factories);
     }
     const factories = await prisma.factory.findMany({
+      where: { deleted_at: false },
       select: { id: true, name: true }
     });
     res.json(factories);
@@ -164,11 +165,11 @@ router.get('/inventory/:factoryId/list', async (req, res) => {
     ensureIdScope(scope, 'factory', parseInt(factoryId));
 
     const factoryMaterials = await prisma.factoryMaterial.findMany({
-      where: { factoryId: parseInt(factoryId) },
+      where: { factoryId: parseInt(factoryId), deleted_at: false, material: { deleted_at: false } },
       include: { material: { select: { id: true, name: true, unit: true, unit_cost: true, sale_price: true, alert_quantity: true, description: true, brand: true, barcode: true } } }
     });
     const factoryProducts = await prisma.factoryProduct.findMany({
-      where: { factoryId: parseInt(factoryId) },
+      where: { factoryId: parseInt(factoryId), deleted_at: false, product: { deleted_at: false } },
       include: { product: { select: { id: true, name: true, sale_price: true, wholesale_price: true, cost: true, alert_quantity: true, description: true, category: true, barcode: true } } }
     });
 
@@ -271,8 +272,8 @@ router.put('/inventory/:factoryId/item', async (req, res) => {
 
     const result = await prisma.$transaction(async (tx) => {
       if (normalizedItemType === 'product') {
-        const existing = await tx.factoryProduct.findUnique({
-          where: { factoryId_productId: { factoryId, productId: parsedItemId } },
+        const existing = await tx.factoryProduct.findFirst({
+          where: { factoryId, productId: parsedItemId, deleted_at: false, product: { deleted_at: false } },
         });
         if (!existing) throw new Error('Inventory row not found');
 
@@ -301,8 +302,8 @@ router.put('/inventory/:factoryId/item', async (req, res) => {
         return updated;
       }
 
-      const existing = await tx.factoryMaterial.findUnique({
-        where: { factoryId_materialId: { factoryId, materialId: parsedItemId } },
+      const existing = await tx.factoryMaterial.findFirst({
+        where: { factoryId, materialId: parsedItemId, deleted_at: false, material: { deleted_at: false } },
       });
       if (!existing) throw new Error('Inventory row not found');
 
@@ -348,7 +349,7 @@ router.get('/inventory/:factoryId/summary', async (req, res) => {
 
     // Get materials summary
     const materialsSummary = await prisma.factoryMaterial.aggregate({
-      where: { factoryId: parseInt(factoryId) },
+      where: { factoryId: parseInt(factoryId), deleted_at: false, material: { deleted_at: false } },
       _count: true,
       _sum: {
         stock: true,
@@ -358,7 +359,7 @@ router.get('/inventory/:factoryId/summary', async (req, res) => {
 
     // Get products summary
     const productsSummary = await prisma.factoryProduct.aggregate({
-      where: { factoryId: parseInt(factoryId) },
+      where: { factoryId: parseInt(factoryId), deleted_at: false, product: { deleted_at: false } },
       _count: true,
       _sum: {
         stock: true,
@@ -368,14 +369,14 @@ router.get('/inventory/:factoryId/summary', async (req, res) => {
 
     // Low stock based on place-level alert first, then global alert fallback
     const lowStockMaterialRows = await prisma.factoryMaterial.findMany({
-      where: { factoryId: parseInt(factoryId) },
+      where: { factoryId: parseInt(factoryId), deleted_at: false, material: { deleted_at: false } },
       include: {
         material: { select: { name: true, unit: true, alert_quantity: true } }
       },
     });
 
     const lowStockProductRows = await prisma.factoryProduct.findMany({
-      where: { factoryId: parseInt(factoryId) },
+      where: { factoryId: parseInt(factoryId), deleted_at: false, product: { deleted_at: false } },
       include: {
         product: { select: { name: true, alert_quantity: true } }
       },
@@ -427,11 +428,11 @@ router.get('/', async (req, res) => {
     if (!scope.isAdmin) {
       ensureTypeScope(scope, 'factory');
       const factories = await prisma.factory.findMany({
-        where: { id: { in: Array.from(scope.factories) } }
+        where: { id: { in: Array.from(scope.factories) }, deleted_at: false }
       });
       return res.json(factories);
     }
-    const factories = await prisma.factory.findMany();
+    const factories = await prisma.factory.findMany({ where: { deleted_at: false } });
     res.json(factories);
   } catch (error) {
     if (error.status === 403) {
@@ -451,6 +452,7 @@ router.post('/', async (req, res) => {
       manager,
       email,
       address,
+      deleted_at: false,
     },
   });
   res.json(factory);
@@ -462,9 +464,10 @@ router.get('/:id', async (req, res) => {
     try {
       const scope = await buildScope(prisma, req.user.userId);
       ensureIdScope(scope, 'factory', parseInt(id));
-      const factory = await prisma.factory.findUnique({
+      const factory = await prisma.factory.findFirst({
           where: {
               id: parseInt(id),
+              deleted_at: false,
           },
       });
       res.json(factory);
@@ -483,7 +486,7 @@ router.get('/:id/materials', async (req, res) => {
     const scope = await buildScope(prisma, req.user.userId);
     ensureIdScope(scope, 'factory', parseInt(id));
     const materials = await prisma.factoryMaterial.findMany({
-      where: { factoryId: parseInt(id) },
+      where: { factoryId: parseInt(id), deleted_at: false, material: { deleted_at: false } },
       include: {
         material: {
           select: { id: true, name: true, unit: true, unit_cost: true }
@@ -521,10 +524,19 @@ router.put('/:id', async (req, res) => {
 // Delete a factory
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
-  await prisma.factory.delete({
-    where: {
-      id: parseInt(id),
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.factory.update({
+      where: { id: parseInt(id) },
+      data: { deleted_at: true },
+    });
+    await tx.factoryProduct.updateMany({
+      where: { factoryId: parseInt(id) },
+      data: { deleted_at: true },
+    });
+    await tx.factoryMaterial.updateMany({
+      where: { factoryId: parseInt(id) },
+      data: { deleted_at: true },
+    });
   });
   res.json({ message: 'Factory deleted successfully' });
 });

@@ -7,12 +7,14 @@ const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 const { createTransaction } = require('../utils/transactionHelper');
 const { createNotification } = require('../utils/notificationHelper');
+const { rollbackAndDeleteTransactionsByWhere } = require('../utils/transactionRollback');
 const { buildScope, ensureIdScope, buildTransferOrFilter } = require('../utils/associateScope');
 const { getAvailableBatches, mergeIncomingBatch, decrementBatch, parseDateOnly } = require('../utils/batchDetails');
+const { assertActivePlace, assertActiveItem } = require('../utils/softDelete');
 
 const userHasPermission = async (userId, permission) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
+  const user = await prisma.user.findFirst({
+    where: { id: userId, deleted_at: false },
     include: { permission: true }
   });
   if (!user || !user.permission) return false;
@@ -136,14 +138,14 @@ const resolveDefaultAvgCost = async (tx, itemType, itemId, fallbackAvgCost) => {
   if (itemType === 'product') {
     return (
       (await tx.product.findUnique({
-        where: { id: parseInt(itemId) },
+        where: { id: parseInt(itemId), deleted_at: false },
         select: { cost: true }
       }))?.cost || 0
     );
   }
   return (
     (await tx.material.findUnique({
-      where: { id: parseInt(itemId) },
+      where: { id: parseInt(itemId), deleted_at: false },
       select: { unit_cost: true }
     }))?.unit_cost || 0
   );
@@ -591,18 +593,20 @@ router.get('/available-items', authenticateToken, async (req, res) => {
       (from === 'store' ? prisma.storeProduct : from === 'shop' ? prisma.shopProduct : prisma.factoryProduct).findMany({
         where: {
           ...productWhere,
-          ...(search
-            ? { product: { name: { contains: search } } }
-            : {}),
+          deleted_at: false,
+          product: search
+            ? { deleted_at: false, name: { contains: search } }
+            : { deleted_at: false },
         },
         include: productInclude,
       }),
       (from === 'store' ? prisma.storeMaterial : from === 'shop' ? prisma.shopMaterial : prisma.factoryMaterial).findMany({
         where: {
           ...materialWhere,
-          ...(search
-            ? { material: { name: { contains: search } } }
-            : {}),
+          deleted_at: false,
+          material: search
+            ? { deleted_at: false, name: { contains: search } }
+            : { deleted_at: false },
         },
         include: materialInclude,
       }),
@@ -648,6 +652,8 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, from, parseInt(fromId));
     ensureIdScope(scope, to, parseInt(toId));
+    await assertActivePlace(prisma, from, parseInt(fromId));
+    await assertActivePlace(prisma, to, parseInt(toId));
 
     const transfer = await prisma.transfer.create({
       data: {
@@ -668,8 +674,8 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
 
     // Create a transaction for the shipping cost amount
     if (parseFloat(shipping_cost) > 0) {
-      const fromAccount = await prisma.accounts.findUnique({
-        where: { id: parseInt(fromId) }
+      const fromAccount = await prisma.accounts.findFirst({
+        where: { id: parseInt(fromId), deleted_at: false }
       });
 
       if (fromAccount?.id) {
@@ -698,9 +704,16 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
       if (!itemType || !["product", "material"].includes(itemType) || !itemId || quantity <= 0) {
         throw new Error("Each transfer item must have valid itemType, id, and quantity");
       }
+      await assertActiveItem(prisma, itemType, itemId);
 
       const config = getStockModelConfig(from, itemType, fromId, itemId);
-      const sourceRow = await prisma[config.model].findUnique({ where: config.where });
+      const sourceWhere =
+        from === "store"
+          ? { store_id: parseInt(fromId), [itemType === "product" ? "product_id" : "material_id"]: itemId, deleted_at: false }
+          : from === "shop"
+            ? { shop_id: parseInt(fromId), [itemType === "product" ? "product_id" : "material_id"]: itemId, deleted_at: false }
+            : { factoryId: parseInt(fromId), [itemType === "product" ? "productId" : "materialId"]: itemId, deleted_at: false };
+      const sourceRow = await prisma[config.model].findFirst({ where: sourceWhere });
       if (!sourceRow) {
         throw new Error(`Item ${itemId} not found in ${from} ${fromId}`);
       }
@@ -1079,6 +1092,15 @@ router.delete('/:id', authenticateToken, async (req, res) => {
           });
         }
       }
+
+      await rollbackAndDeleteTransactionsByWhere(
+        tx,
+        {
+          purpose: 'Shipping cost for transfer',
+          note: { contains: `transfer #${transferId}` },
+        },
+        { reverseBalances: false }
+      );
 
       await tx.transfer.delete({ where: { id: transferId } });
     });

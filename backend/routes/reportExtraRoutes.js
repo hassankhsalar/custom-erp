@@ -59,6 +59,7 @@ router.get("/cash-bank/details", async (req, res) => {
     `;
 
     const cashRegisters = await prisma.cashRegister.findMany({
+      where: { deleted_at: false },
       select: { id: true, name: true, cash_in_hand: true, status: true }
     });
 
@@ -77,8 +78,9 @@ router.get("/cash-bank/details", async (req, res) => {
     const limit = parseInt(req.query.limit || "10", 10);
     const offset = (page - 1) * limit;
 
-    const totalBanks = await prisma.bankAccount.count();
+    const totalBanks = await prisma.bankAccount.count({ where: { deleted_at: false } });
     const bankAccounts = await prisma.bankAccount.findMany({
+      where: { deleted_at: false },
       skip: offset,
       take: limit,
       select: { id: true, name: true, account_number: true, withdraw_charge: true, current_balance: true }
@@ -166,6 +168,7 @@ router.get("/purchase-sales/details", async (req, res) => {
           JOIN \`Purchase\` pu ON pu.id = pi.purchaseId
           JOIN \`Product\` p ON p.id = pi.productId
           WHERE pi.productId IS NOT NULL
+            AND p.deleted_at = 0
           ${purchaseDateClause}
           GROUP BY p.id
           UNION
@@ -174,6 +177,7 @@ router.get("/purchase-sales/details", async (req, res) => {
           JOIN \`Sale\` s ON s.id = si.saleId
           JOIN \`Product\` p ON p.id = si.productId
           WHERE si.productId IS NOT NULL
+            AND p.deleted_at = 0
           ${saleDateClause}
           GROUP BY p.id
           UNION
@@ -182,6 +186,7 @@ router.get("/purchase-sales/details", async (req, res) => {
           JOIN \`Purchase\` pu ON pu.id = pi.purchaseId
           JOIN \`Material\` m ON m.id = pi.materialId
           WHERE pi.materialId IS NOT NULL
+            AND m.deleted_at = 0
           ${purchaseDateClause}
           GROUP BY m.id
           UNION
@@ -190,6 +195,7 @@ router.get("/purchase-sales/details", async (req, res) => {
           JOIN \`Sale\` s ON s.id = si.saleId
           JOIN \`Material\` m ON m.id = si.materialId
           WHERE si.materialId IS NOT NULL
+            AND m.deleted_at = 0
           ${saleDateClause}
           GROUP BY m.id
         ) t
@@ -212,6 +218,7 @@ router.get("/purchase-sales/details", async (req, res) => {
         JOIN \`Purchase\` pu ON pu.id = pi.purchaseId
         JOIN \`Product\` p ON p.id = pi.productId
         WHERE pi.productId IS NOT NULL
+          AND p.deleted_at = 0
         ${purchaseDateClause}
         GROUP BY p.id
         UNION ALL
@@ -222,6 +229,7 @@ router.get("/purchase-sales/details", async (req, res) => {
         JOIN \`Sale\` s ON s.id = si.saleId
         JOIN \`Product\` p ON p.id = si.productId
         WHERE si.productId IS NOT NULL
+          AND p.deleted_at = 0
         ${saleDateClause}
         GROUP BY p.id
         UNION ALL
@@ -232,6 +240,7 @@ router.get("/purchase-sales/details", async (req, res) => {
         JOIN \`Purchase\` pu ON pu.id = pi.purchaseId
         JOIN \`Material\` m ON m.id = pi.materialId
         WHERE pi.materialId IS NOT NULL
+          AND m.deleted_at = 0
         ${purchaseDateClause}
         GROUP BY m.id
         UNION ALL
@@ -242,6 +251,7 @@ router.get("/purchase-sales/details", async (req, res) => {
         JOIN \`Sale\` s ON s.id = si.saleId
         JOIN \`Material\` m ON m.id = si.materialId
         WHERE si.materialId IS NOT NULL
+          AND m.deleted_at = 0
         ${saleDateClause}
         GROUP BY m.id
       ) t
@@ -278,7 +288,7 @@ router.get("/customer/details", async (req, res) => {
       ? Prisma.sql`AND s.createdAt >= ${start} AND s.createdAt <= ${end}`
       : Prisma.sql``;
 
-    const totalCount = await prisma.customer.count();
+    const totalCount = await prisma.customer.count({ where: { deleted_at: false } });
 
     const rows = await prisma.$queryRaw`
       SELECT c.id, c.name, c.mobile, c.email,
@@ -301,6 +311,7 @@ router.get("/customer/details", async (req, res) => {
         ${saleDateClause}
         GROUP BY s.customerId
       ) agg ON agg.customerId = c.id
+      WHERE c.deleted_at = 0
       ORDER BY c.id DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
@@ -333,7 +344,7 @@ router.get("/supplier/details", async (req, res) => {
       ? Prisma.sql`AND p.createdAt >= ${start} AND p.createdAt <= ${end}`
       : Prisma.sql``;
 
-    const totalCount = await prisma.supplier.count();
+    const totalCount = await prisma.supplier.count({ where: { deleted_at: false } });
 
     const rows = await prisma.$queryRaw`
       SELECT s.id, s.name, s.mobile,
@@ -356,6 +367,7 @@ router.get("/supplier/details", async (req, res) => {
         ${purchaseDateClause}
         GROUP BY p.supplierId
       ) agg ON agg.supplierId = s.id
+      WHERE s.deleted_at = 0
       ORDER BY s.id DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
@@ -404,6 +416,7 @@ router.get("/best-selling/details", async (req, res) => {
           JOIN \`Sale\` s ON s.id = si.saleId
           JOIN \`Product\` p ON p.id = si.productId
           WHERE si.productId IS NOT NULL
+            AND p.deleted_at = 0
           ${saleDateClause}
           GROUP BY p.id
           UNION
@@ -412,6 +425,7 @@ router.get("/best-selling/details", async (req, res) => {
           JOIN \`Sale\` s ON s.id = si.saleId
           JOIN \`Material\` m ON m.id = si.materialId
           WHERE si.materialId IS NOT NULL
+            AND m.deleted_at = 0
           ${saleDateClause}
           GROUP BY m.id
         ) t
@@ -433,6 +447,7 @@ router.get("/best-selling/details", async (req, res) => {
         JOIN \`Sale\` s ON s.id = si.saleId
         JOIN \`Product\` p ON p.id = si.productId
         WHERE si.productId IS NOT NULL
+          AND p.deleted_at = 0
         ${saleDateClause}
         UNION ALL
         SELECT 'material' as itemType, m.id as itemId, m.name, m.brand as category, m.image,
@@ -442,6 +457,7 @@ router.get("/best-selling/details", async (req, res) => {
         JOIN \`Sale\` s ON s.id = si.saleId
         JOIN \`Material\` m ON m.id = si.materialId
         WHERE si.materialId IS NOT NULL
+          AND m.deleted_at = 0
         ${saleDateClause}
       ) t
       GROUP BY itemType, itemId, name, category, image
@@ -484,9 +500,9 @@ router.get("/transfer/overview", async (req, res) => {
     const totalCount = statusRows.reduce((s, r) => s + Number(r.count || 0), 0);
 
     const fetchPlaces = async (type) => {
-      if (type === "shop") return prisma.shop.findMany({ select: { id: true, name: true } });
-      if (type === "store") return prisma.store.findMany({ select: { id: true, name: true } });
-      return prisma.factory.findMany({ select: { id: true, name: true } });
+      if (type === "shop") return prisma.shop.findMany({ where: { deleted_at: false }, select: { id: true, name: true } });
+      if (type === "store") return prisma.store.findMany({ where: { deleted_at: false }, select: { id: true, name: true } });
+      return prisma.factory.findMany({ where: { deleted_at: false }, select: { id: true, name: true } });
     };
 
     const buildGroup = async (direction, type) => {
@@ -575,16 +591,18 @@ router.get("/transfer/top-sender", async (req, res) => {
       ORDER BY ${Prisma.raw(orderColumn)} DESC
     `;
 
-    const shops = await prisma.shop.findMany({ select: { id: true, name: true } });
-    const stores = await prisma.store.findMany({ select: { id: true, name: true } });
-    const factories = await prisma.factory.findMany({ select: { id: true, name: true } });
+    const shops = await prisma.shop.findMany({ where: { deleted_at: false }, select: { id: true, name: true } });
+    const stores = await prisma.store.findMany({ where: { deleted_at: false }, select: { id: true, name: true } });
+    const factories = await prisma.factory.findMany({ where: { deleted_at: false }, select: { id: true, name: true } });
     const nameMap = {};
     shops.forEach(s => { nameMap[`shop-${s.id}`] = s.name; });
     stores.forEach(s => { nameMap[`store-${s.id}`] = s.name; });
     factories.forEach(f => { nameMap[`factory-${f.id}`] = f.name; });
 
     res.json({
-      rows: rows.map(r => ({
+      rows: rows
+        .filter((r) => !!nameMap[`${r.placeType}-${r.placeId}`])
+        .map(r => ({
         placeType: r.placeType,
         placeId: r.placeId,
         placeName: nameMap[`${r.placeType}-${r.placeId}`] || "Unknown",
@@ -629,16 +647,18 @@ router.get("/transfer/top-receiver", async (req, res) => {
       ORDER BY ${Prisma.raw(orderColumn)} DESC
     `;
 
-    const shops = await prisma.shop.findMany({ select: { id: true, name: true } });
-    const stores = await prisma.store.findMany({ select: { id: true, name: true } });
-    const factories = await prisma.factory.findMany({ select: { id: true, name: true } });
+    const shops = await prisma.shop.findMany({ where: { deleted_at: false }, select: { id: true, name: true } });
+    const stores = await prisma.store.findMany({ where: { deleted_at: false }, select: { id: true, name: true } });
+    const factories = await prisma.factory.findMany({ where: { deleted_at: false }, select: { id: true, name: true } });
     const nameMap = {};
     shops.forEach(s => { nameMap[`shop-${s.id}`] = s.name; });
     stores.forEach(s => { nameMap[`store-${s.id}`] = s.name; });
     factories.forEach(f => { nameMap[`factory-${f.id}`] = f.name; });
 
     res.json({
-      rows: rows.map(r => ({
+      rows: rows
+        .filter((r) => !!nameMap[`${r.placeType}-${r.placeId}`])
+        .map(r => ({
         placeType: r.placeType,
         placeId: r.placeId,
         placeName: nameMap[`${r.placeType}-${r.placeId}`] || "Unknown",
@@ -677,6 +697,11 @@ router.get("/transfer/top-items", async (req, res) => {
         FROM \`TransferItem\` ti
         JOIN \`Transfer\` t ON t.id = ti.transferId
         WHERE (ti.productId IS NOT NULL OR ti.materialId IS NOT NULL)
+          AND (
+            (ti.productId IS NOT NULL AND ti.productId IN (SELECT id FROM \`Product\` WHERE deleted_at = 0))
+            OR
+            (ti.materialId IS NOT NULL AND ti.materialId IN (SELECT id FROM \`Material\` WHERE deleted_at = 0))
+          )
           AND ${scopeSql}
         ${dateClause}
         GROUP BY COALESCE(ti.productId, ti.materialId), ti.item
@@ -691,14 +716,14 @@ router.get("/transfer/top-items", async (req, res) => {
         FROM \`TransferItem\` ti
         JOIN \`Transfer\` t ON t.id = ti.transferId
         JOIN \`Product\` p ON p.id = ti.productId
-        WHERE ti.productId IS NOT NULL AND ${scopeSql}
+        WHERE ti.productId IS NOT NULL AND p.deleted_at = 0 AND ${scopeSql}
         ${dateClause}
         UNION ALL
         SELECT 'material' as itemType, m.id as itemId, m.name, m.brand as category, m.image, m.unit as unit, ti.quantity
         FROM \`TransferItem\` ti
         JOIN \`Transfer\` t ON t.id = ti.transferId
         JOIN \`Material\` m ON m.id = ti.materialId
-        WHERE ti.materialId IS NOT NULL AND ${scopeSql}
+        WHERE ti.materialId IS NOT NULL AND m.deleted_at = 0 AND ${scopeSql}
         ${dateClause}
       ) t
       GROUP BY itemType, itemId, name, category, image, unit

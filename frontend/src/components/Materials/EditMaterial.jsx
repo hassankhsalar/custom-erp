@@ -46,7 +46,7 @@ const EditMaterial = () => {
     
     if (imagePath.startsWith('http')) return imagePath;
     
-    const baseUrl = 'http://localhost:3001';
+    const baseUrl = MEDIA_BASE_URL;
     
     if (imagePath.startsWith('/uploads')) {
       return `${baseUrl}${imagePath}`;

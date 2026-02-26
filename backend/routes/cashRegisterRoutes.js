@@ -29,6 +29,7 @@ const getActiveShopIdForRegister = async (tx, cashRegisterId) => {
 router.get('/', async (req, res) => {
   try {
     const cashRegisters = await prisma.cashRegister.findMany({
+      where: { deleted_at: false },
       include: {
         assignments: {
           where: { isActive: true },
@@ -125,8 +126,8 @@ router.get('/:id/transactions', async (req, res) => {
 // Get single cash register
 router.get('/:id', async (req, res) => {
   try {
-    const cashRegister = await prisma.cashRegister.findUnique({
-      where: { id: parseInt(req.params.id) },
+    const cashRegister = await prisma.cashRegister.findFirst({
+      where: { id: parseInt(req.params.id), deleted_at: false },
       include: {
         assignments: {
           include: {
@@ -163,7 +164,7 @@ router.post('/', async (req, res) => {
     
     // Check if cash register with same name already exists
     const existingRegister = await prisma.cashRegister.findFirst({
-      where: { name: name.trim() }
+      where: { name: name.trim(), deleted_at: false }
     });
     
     if (existingRegister) {
@@ -227,7 +228,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// Delete cash register
+// Soft delete cash register
 router.delete('/:id', async (req, res) => {
   try {
     // Check if cash register has any active assignments
@@ -244,11 +245,12 @@ router.delete('/:id', async (req, res) => {
       });
     }
     
-    await prisma.cashRegister.delete({
-      where: { id: parseInt(req.params.id) }
+    await prisma.cashRegister.update({
+      where: { id: parseInt(req.params.id) },
+      data: { deleted_at: true, status: 'inactive', updatedAt: new Date() }
     });
     
-    res.json({ message: 'Cash register deleted successfully' });
+    res.json({ message: 'Cash register archived successfully' });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

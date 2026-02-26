@@ -4,6 +4,7 @@ import { API_ROUTES } from "../../config";
 import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X } from "lucide-react";
 import { TbCurrencyTaka } from "react-icons/tb";
 import e from "cors";
+import { activeOnly } from "../../utils/softDelete";
 
 export default function ShopPOS( props ) {
   const [shops, setShops] = useState([]);
@@ -74,7 +75,7 @@ export default function ShopPOS( props ) {
         if (!res.ok) throw new Error("Failed to fetch shops");
         return res.json();
       })
-      .then((data) => setShops(Array.isArray(data) ? data : []))
+      .then((data) => setShops(activeOnly(Array.isArray(data) ? data : data?.shops || [])))
       .catch((err) => {
         console.error("Error fetching shops:", err);
         setShops([]);
@@ -137,7 +138,7 @@ export default function ShopPOS( props ) {
         return res.json();
       })
       .then((data) => {
-        setShopItems(Array.isArray(data) ? data : []);
+        setShopItems(activeOnly(Array.isArray(data) ? data : []));
         setSearchResults([]);
         setSearchQuery("");
       })

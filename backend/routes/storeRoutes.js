@@ -41,14 +41,16 @@ router.get('/', async (req, res) => {
       ensureTypeScope(scope, 'store');
     }
     const stores = await prisma.store.findMany({
-      ...(scope?.isAdmin ? {} : { where: { id: { in: Array.from(scope.stores) } } }),
+      where: scope?.isAdmin ? { deleted_at: false } : { id: { in: Array.from(scope.stores) }, deleted_at: false },
       include: {
         storeProducts: {
+          where: { deleted_at: false, product: { deleted_at: false } },
           include: {
             product: true,
           },
         },
         storeMaterials: {
+          where: { deleted_at: false, material: { deleted_at: false } },
           include: {
             material: true,
           },
@@ -75,15 +77,17 @@ router.get('/:id', async (req, res) => {
   try {
     const scope = await buildScope(prisma, req.user.userId);
     ensureIdScope(scope, 'store', parseInt(id));
-    const store = await prisma.store.findUnique({
-      where: { id: parseInt(id) },
+    const store = await prisma.store.findFirst({
+      where: { id: parseInt(id), deleted_at: false },
       include: {
         storeProducts: {
+          where: { deleted_at: false, product: { deleted_at: false } },
           include: {
             product: true,
           },
         },
         storeMaterials: {
+          where: { deleted_at: false, material: { deleted_at: false } },
           include: {
             material: true,
           },
@@ -118,11 +122,11 @@ router.get('/:id/inventory/list', async (req, res) => {
   try {
     const scope = await buildScope(prisma, req.user.userId);
     ensureIdScope(scope, 'store', storeId);
-    const store = await prisma.store.findUnique({
-      where: { id: storeId },
+    const store = await prisma.store.findFirst({
+      where: { id: storeId, deleted_at: false },
       include: {
-        storeProducts: { include: { product: true } },
-        storeMaterials: { include: { material: true } },
+        storeProducts: { where: { deleted_at: false, product: { deleted_at: false } }, include: { product: true } },
+        storeMaterials: { where: { deleted_at: false, material: { deleted_at: false } }, include: { material: true } },
       },
     });
     if (!store) return res.status(404).json({ error: 'Store not found' });
@@ -165,11 +169,11 @@ router.get('/:id/inventory/summary', async (req, res) => {
   try {
     const scope = await buildScope(prisma, req.user.userId);
     ensureIdScope(scope, 'store', storeId);
-    const store = await prisma.store.findUnique({
-      where: { id: storeId },
+    const store = await prisma.store.findFirst({
+      where: { id: storeId, deleted_at: false },
       include: {
-        storeProducts: { include: { product: { select: { name: true, alert_quantity: true } } } },
-        storeMaterials: { include: { material: { select: { name: true, unit: true, alert_quantity: true } } } },
+        storeProducts: { where: { deleted_at: false, product: { deleted_at: false } }, include: { product: { select: { name: true, alert_quantity: true } } } },
+        storeMaterials: { where: { deleted_at: false, material: { deleted_at: false } }, include: { material: { select: { name: true, unit: true, alert_quantity: true } } } },
       },
     });
     if (!store) return res.status(404).json({ error: 'Store not found' });
@@ -213,8 +217,8 @@ router.put('/inventory/:storeId/item', async (req, res) => {
 
     const result = await prisma.$transaction(async (tx) => {
       if (normalizedItemType === 'product') {
-        const existing = await tx.storeProduct.findUnique({
-          where: { store_id_product_id: { store_id: storeId, product_id: parsedItemId } },
+        const existing = await tx.storeProduct.findFirst({
+          where: { store_id: storeId, product_id: parsedItemId, deleted_at: false, product: { deleted_at: false } },
         });
         if (!existing) throw new Error('Inventory row not found');
 
@@ -243,8 +247,8 @@ router.put('/inventory/:storeId/item', async (req, res) => {
         return updated;
       }
 
-      const existing = await tx.storeMaterial.findUnique({
-        where: { store_id_material_id: { store_id: storeId, material_id: parsedItemId } },
+      const existing = await tx.storeMaterial.findFirst({
+        where: { store_id: storeId, material_id: parsedItemId, deleted_at: false, material: { deleted_at: false } },
       });
       if (!existing) throw new Error('Inventory row not found');
 
@@ -295,16 +299,19 @@ router.post('/',  async (req, res) => {
         address,
         store_keeper,
         mobile,
+        deleted_at: false,
         storeMaterials: {
           create: storeMaterials?.map(material => ({
             material_id: material.material_id,
             stock: material.stock,
+            deleted_at: false,
           })),
         },
         storeProducts: {
           create: storeProducts?.map(product => ({
             product_id: product.product_id,
             stock: product.stock,
+            deleted_at: false,
           })),
         },
       },
@@ -325,12 +332,14 @@ router.put('/:id',  async (req, res) => {
     if (!scope.isAdmin) {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    // First, delete existing store materials and products
-    await prisma.storeMaterial.deleteMany({
+    // Soft-delete existing store materials and products, then revive/create submitted rows
+    await prisma.storeMaterial.updateMany({
       where: { store_id: parseInt(id) },
+      data: { deleted_at: true },
     });
-    await prisma.storeProduct.deleteMany({
+    await prisma.storeProduct.updateMany({
       where: { store_id: parseInt(id) },
+      data: { deleted_at: true },
     });
 
     const updatedStore = await prisma.store.update({
@@ -340,20 +349,24 @@ router.put('/:id',  async (req, res) => {
         address,
         store_keeper,
         mobile,
-        storeMaterials: {
-          create: storeMaterials?.map(material => ({
-            material_id: material.material_id,
-            stock: material.stock,
-          })),
-        },
-        storeProducts: {
-          create: storeProducts?.map(product => ({
-            product_id: product.product_id,
-            stock: product.stock,
-          })),
-        },
       },
     });
+    await prisma.$transaction([
+      ...(storeMaterials || []).map((material) =>
+        prisma.storeMaterial.upsert({
+          where: { store_id_material_id: { store_id: parseInt(id), material_id: material.material_id } },
+          update: { stock: material.stock, deleted_at: false },
+          create: { store_id: parseInt(id), material_id: material.material_id, stock: material.stock, deleted_at: false },
+        })
+      ),
+      ...(storeProducts || []).map((product) =>
+        prisma.storeProduct.upsert({
+          where: { store_id_product_id: { store_id: parseInt(id), product_id: product.product_id } },
+          update: { stock: product.stock, deleted_at: false },
+          create: { store_id: parseInt(id), product_id: product.product_id, stock: product.stock, deleted_at: false },
+        })
+      ),
+    ]);
     res.json(updatedStore);
   } catch (error) {
     console.error('Error updating store:', error);
@@ -369,8 +382,19 @@ router.delete('/:id', async (req, res) => {
     if (!scope.isAdmin) {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    await prisma.store.delete({
-      where: { id: parseInt(id) },
+    await prisma.$transaction(async (tx) => {
+      await tx.store.update({
+        where: { id: parseInt(id) },
+        data: { deleted_at: true },
+      });
+      await tx.storeMaterial.updateMany({
+        where: { store_id: parseInt(id) },
+        data: { deleted_at: true },
+      });
+      await tx.storeProduct.updateMany({
+        where: { store_id: parseInt(id) },
+        data: { deleted_at: true },
+      });
     });
     res.status(204).send(); // No content
   } catch (error) {

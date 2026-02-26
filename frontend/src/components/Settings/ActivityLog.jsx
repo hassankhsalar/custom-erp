@@ -407,7 +407,7 @@ const ActivityLog = () => {
                           </div>
                         </td>
                         <td className="p-4">
-                          <p className="text-gray-600 max-w-xs truncate" title={log.description}>
+                          <p className="text-gray-600 max-w-xs" title={log.description}>
                             {log.description || "-"}
                           </p>
                         </td>

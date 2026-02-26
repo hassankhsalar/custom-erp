@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpDown, Users, Phone, MapPin, Calendar, Hash, Building2, TrendingUp, Search, X, Clock, UserCircle } from "lucide-react";
+import { ArrowUpDown, Users, Phone, MapPin, Calendar, Hash, Building2, TrendingUp, Search, X, Clock, UserCircle, Trash2 } from "lucide-react";
 
 import { API_ROUTES } from '../../config';
 
@@ -9,6 +9,7 @@ export default function AllSuppliers() {
   const [error, setError] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [searchQuery, setSearchQuery] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
   const fetchSuppliers = async () => {
@@ -120,6 +121,25 @@ export default function AllSuppliers() {
 
   const clearSearch = () => {
     setSearchQuery("");
+  };
+
+  const handleDeleteSupplier = async (supplierId) => {
+    if (!window.confirm("Delete this supplier?")) return;
+    try {
+      setDeletingId(supplierId);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_ROUTES.SUPPLIERS}/${supplierId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to delete supplier");
+      setSuppliers((prev) => prev.filter((s) => s.id !== supplierId));
+    } catch (err) {
+      alert(err.message || "Failed to delete supplier");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   if (loading) {
@@ -307,6 +327,9 @@ export default function AllSuppliers() {
                     </div>
                   </th>
                 ))}
+                <th className="p-4 text-left font-medium text-gray-700 border-b border-white/20">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -373,6 +396,16 @@ export default function AllSuppliers() {
                         </div>
                       </div>
                     </div>
+                  </td>
+                  <td className="p-4">
+                    <button
+                      onClick={() => handleDeleteSupplier(item.id)}
+                      disabled={deletingId === item.id}
+                      className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-60"
+                      title="Delete supplier"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </td>
                 </tr>
               ))}

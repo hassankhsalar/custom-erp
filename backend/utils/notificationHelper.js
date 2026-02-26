@@ -1,4 +1,5 @@
 const { emitNotificationCreated } = require("../services/realtimeEmitter");
+const { getRequestContext } = require("./requestContext");
 
 const createNotification = async (prismaClient, data) => {
   const {
@@ -22,6 +23,10 @@ const createNotification = async (prismaClient, data) => {
       forRole
     }
   });
+  const context = getRequestContext();
+  if (context) {
+    context.manualNotificationCount = Number(context.manualNotificationCount || 0) + 1;
+  }
   emitNotificationCreated(notification);
   return notification;
 };

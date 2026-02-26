@@ -1,4 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
+const { createNotification } = require("./notificationHelper");
+const { getRequestContext } = require("./requestContext");
 
 const prisma = new PrismaClient();
 
@@ -11,6 +13,9 @@ const sanitizeBody = (body) => {
   delete clone.password;
   delete clone.token;
   delete clone.accessToken;
+  delete clone.oldPassword;
+  delete clone.newPassword;
+  delete clone.confirmPassword;
   return clone;
 };
 
@@ -59,9 +64,74 @@ const inferAction = (method, path) => {
   }
 };
 
+const getEntityLabelFromPath = (path) => {
+  const parts = getPathParts(path);
+  if (parts.length < 2) return "record";
+  const base = String(parts[1] || "record")
+    .replace(/-/g, " ")
+    .replace(/s$/, "");
+  return base || "record";
+};
+
+const titleCase = (value = "") => value.charAt(0).toUpperCase() + value.slice(1);
+
+const summarizeResponse = (body) => {
+  if (!body || typeof body !== "object") return null;
+  if (typeof body.message === "string" && body.message.trim()) return body.message.trim();
+  if (body.summary && typeof body.summary === "object") return body.summary;
+  if (body.audit && typeof body.audit === "object") return body.audit;
+  return null;
+};
+
+const buildDescription = ({ method, path, action, audit, responseBody, userId }) => {
+  if (audit?.description) return audit.description;
+  const entity = audit?.entity || getEntityLabelFromPath(path);
+  const entityId = audit?.entityId || getEntityIdFromPath(path);
+  const objectRef = entityId ? `${entity} #${entityId}` : entity;
+  const byUser = userId ? ` by user #${userId}` : "";
+  const base = `${titleCase(action)} ${objectRef}${byUser}`;
+  const responseSummary = summarizeResponse(responseBody);
+  const body = sanitizeBody(audit?.requestBody || null);
+  const changedFields = !body ? [] : Object.keys(body).filter((key) => body[key] !== undefined);
+  if ((action === "create" || action === "update") && changedFields.length) {
+    if (typeof responseSummary === "string") return `${base}. Fields: ${changedFields.join(", ")}. ${responseSummary}`;
+    return `${base}. Fields: ${changedFields.join(", ")}.`;
+  }
+  if (typeof responseSummary === "string") return `${base}. ${responseSummary}`;
+  return base;
+};
+
 const shouldSkip = (path, method) => {
   if (!MUTATING_METHODS.has(method)) return true;
   return EXCLUDED_PATH_PREFIXES.some((prefix) => path.startsWith(prefix));
+};
+
+const STOCK_MONEY_MODULES = new Set([
+  "materials",
+  "products",
+  "factories",
+  "stores",
+  "shops",
+  "productions",
+  "purchases",
+  "sales",
+  "shop-sales",
+  "transfers",
+  "damage-records",
+  "repairs",
+  "requisitions",
+  "accounts",
+  "cash-registers",
+  "bank-accounts",
+  "expenses",
+]);
+
+const shouldNotifyAdminForMutation = ({ module, action, audit }) => {
+  if (audit?.skipNotification) return false;
+  if (action === "create" && (module === "sales" || module === "shop-sales")) return false;
+  if (audit?.stockMovement || audit?.moneyMovement) return true;
+  if (action === "payment" || action === "shipment" || action === "return") return true;
+  return STOCK_MONEY_MODULES.has(module);
 };
 
 const logActivity = async ({
@@ -98,6 +168,17 @@ const activityLoggerMiddleware = (req, res, next) => {
   const method = req.method;
   const path = normalizePath(req.originalUrl);
   const shouldIgnore = shouldSkip(path, method);
+  let responseBody = null;
+
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    responseBody = body;
+    return originalJson(body);
+  };
+
+  req.setAuditTrail = (audit = {}) => {
+    res.locals.audit = { ...(res.locals.audit || {}), ...audit };
+  };
 
   if (shouldIgnore) return next();
 
@@ -105,20 +186,50 @@ const activityLoggerMiddleware = (req, res, next) => {
     const success = res.statusCode < 400;
     const module = getModuleFromPath(path);
     const action = inferAction(method, path);
-    const description = `${method} ${path}`;
-    const metadata = sanitizeBody(req.body);
+    const audit = res.locals.audit || {};
+    const description = buildDescription({
+      method,
+      path,
+      action,
+      audit: { ...audit, requestBody: sanitizeBody(req.body) },
+      responseBody,
+      userId: req.user?.userId || null,
+    });
+    const metadata = {
+      requestBody: sanitizeBody(req.body),
+      responseSummary: summarizeResponse(responseBody),
+      auditDetails: audit?.details || null,
+      statusCode: res.statusCode,
+    };
 
     logActivity({
       userId: req.user?.userId || null,
       module,
-      action,
+      action: audit?.action || action,
       description,
-      entityId: getEntityIdFromPath(path),
+      entityId: audit?.entityId || getEntityIdFromPath(path),
       status: success ? "success" : "failed",
       metadata,
       ipAddress: req.ip || null,
       userAgent: req.headers["user-agent"] || null,
     });
+
+    if (!success) return;
+    if (!shouldNotifyAdminForMutation({ module, action: audit?.action || action, audit })) return;
+
+    const requestContext = getRequestContext();
+    if (requestContext && Number(requestContext.manualNotificationCount || 0) > 0) return;
+
+    const entity = audit?.entity || getEntityLabelFromPath(path);
+    const notificationTitle = `${titleCase(audit?.action || action)} ${entity}`;
+    const notificationDescription = description;
+
+    createNotification(prisma, {
+      title: notificationTitle,
+      description: notificationDescription,
+      forRole: "admin",
+      link: path,
+    }).catch(() => {});
   });
 
   next();

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
+import { activeOnly } from "../../utils/softDelete";
 import {
   Package,
   Layers,
@@ -74,7 +75,7 @@ const StockReport = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      setPlaces(Array.isArray(data) ? data : []);
+      setPlaces(activeOnly(Array.isArray(data) ? data : data?.stores || data?.shops || data?.factories || []));
     } catch (error) {
       console.error('Error fetching places:', error);
       setPlaces([]);
@@ -102,7 +103,7 @@ const StockReport = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      setRows(data.rows || []);
+      setRows(activeOnly(data.rows || []));
       setPagination(data.pagination || { page: 1, limit, totalPages: 1 });
       
       // Calculate statistics

@@ -198,6 +198,24 @@ export default function LeaveRequests() {
     }
   };
 
+  const handleDeleteRequest = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this leave request?")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_ROUTES.HRM}/leave-requests/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to delete leave request");
+      fetchRequests();
+    } catch (error) {
+      alert(error.message || "Failed to delete leave request");
+    }
+  };
+
   const getCategoryIcon = (categoryName) => {
     const name = categoryName?.toLowerCase() || "";
     if (name.includes("sick") || name.includes("medical")) return <BriefcaseMedical size={16} />;
@@ -806,6 +824,13 @@ export default function LeaveRequests() {
                                       </button>
                                     </>
                                   )}
+                                  <button
+                                    onClick={() => handleDeleteRequest(request.id)}
+                                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
                                 </div>
                               </td>
                             </tr>

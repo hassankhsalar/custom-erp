@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Factory, Package, Save, Search, ShoppingBag, Store, Trash2, Truck } from "lucide-react";
 import { API_ROUTES } from "../../config";
+import { activeOnly } from "../../utils/softDelete";
 
 export default function RepairCreate() {
   const token = localStorage.getItem("token");
@@ -37,7 +38,7 @@ export default function RepairCreate() {
     fetch(API_ROUTES.PURCHASE_DESTINATIONS(sourceType), { headers })
       .then((r) => r.json())
       .then((rows) => {
-        const list = Array.isArray(rows) ? rows : [];
+        const list = activeOnly(Array.isArray(rows) ? rows : []);
         setSourceOptions(list);
         setSourceId(list[0]?.id ? String(list[0].id) : "");
       })
@@ -54,7 +55,7 @@ export default function RepairCreate() {
     }
     fetch(API_ROUTES.REPAIR_DAMAGED_ITEMS(sourceType, sourceId), { headers })
       .then((r) => r.json())
-      .then((data) => setDamagedItems(Array.isArray(data?.items) ? data.items : []))
+      .then((data) => setDamagedItems(activeOnly(Array.isArray(data?.items) ? data.items : [])))
       .catch(() => setDamagedItems([]));
   }, [sourceType, sourceId]);
 

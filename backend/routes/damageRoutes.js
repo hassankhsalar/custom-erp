@@ -2,6 +2,7 @@ const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const { decrementBatch, getAvailableBatches, mergeIncomingBatch, parseDateOnly } = require("../utils/batchDetails");
 const { createNotification } = require("../utils/notificationHelper");
+const { assertActivePlace, assertActiveItem } = require("../utils/softDelete");
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -81,14 +82,14 @@ const fetchBranchItems = async (fromType, fromId) => {
   let materialRows = [];
 
   if (fromType === "store") {
-    productRows = await prisma.storeProduct.findMany({ where: { store_id: fromId }, include: { product: true } });
-    materialRows = await prisma.storeMaterial.findMany({ where: { store_id: fromId }, include: { material: true } });
+    productRows = await prisma.storeProduct.findMany({ where: { store_id: fromId, deleted_at: false, product: { deleted_at: false } }, include: { product: true } });
+    materialRows = await prisma.storeMaterial.findMany({ where: { store_id: fromId, deleted_at: false, material: { deleted_at: false } }, include: { material: true } });
   } else if (fromType === "shop") {
-    productRows = await prisma.shopProduct.findMany({ where: { shop_id: fromId }, include: { product: true } });
-    materialRows = await prisma.shopMaterial.findMany({ where: { shop_id: fromId }, include: { material: true } });
+    productRows = await prisma.shopProduct.findMany({ where: { shop_id: fromId, deleted_at: false, product: { deleted_at: false } }, include: { product: true } });
+    materialRows = await prisma.shopMaterial.findMany({ where: { shop_id: fromId, deleted_at: false, material: { deleted_at: false } }, include: { material: true } });
   } else {
-    productRows = await prisma.factoryProduct.findMany({ where: { factoryId: fromId }, include: { product: true } });
-    materialRows = await prisma.factoryMaterial.findMany({ where: { factoryId: fromId }, include: { material: true } });
+    productRows = await prisma.factoryProduct.findMany({ where: { factoryId: fromId, deleted_at: false, product: { deleted_at: false } }, include: { product: true } });
+    materialRows = await prisma.factoryMaterial.findMany({ where: { factoryId: fromId, deleted_at: false, material: { deleted_at: false } }, include: { material: true } });
   }
 
   const products = productRows
@@ -178,15 +179,23 @@ const updateBranchDamage = async (tx, fromType, fromId, itemType, itemId, operat
 const ensureAvailability = async (tx, fromType, fromId, items) => {
   for (const item of items) {
     if (item.itemType === "product") {
-      const product = await tx.product.findUnique({ where: { id: item.itemId }, select: { name: true } });
+      const product = await tx.product.findFirst({ where: { id: item.itemId, deleted_at: false }, select: { name: true } });
+      await assertActiveItem(tx, "product", item.itemId);
       if (!product) {
         const error = new Error(`Product not found (id: ${item.itemId})`);
         error.status = 404;
         throw error;
       }
       const model = fromType === "store" ? tx.storeProduct : fromType === "shop" ? tx.shopProduct : tx.factoryProduct;
-      const branchRow = await model.findUnique({
-        where: getProductWhere(fromType, fromId, item.itemId),
+      const branchRow = await model.findFirst({
+        where: {
+          ...(fromType === "store"
+            ? { store_id: fromId, product_id: item.itemId }
+            : fromType === "shop"
+              ? { shop_id: fromId, product_id: item.itemId }
+              : { factoryId: fromId, productId: item.itemId }),
+          deleted_at: false,
+        },
         select: { stock: true, batchDetails: true },
       });
       if (!branchRow || Number(branchRow.stock || 0) < item.quantity) {
@@ -214,15 +223,23 @@ const ensureAvailability = async (tx, fromType, fromId, items) => {
       continue;
     }
 
-    const material = await tx.material.findUnique({ where: { id: item.itemId }, select: { name: true } });
+    const material = await tx.material.findFirst({ where: { id: item.itemId, deleted_at: false }, select: { name: true } });
+    await assertActiveItem(tx, "material", item.itemId);
     if (!material) {
       const error = new Error(`Material not found (id: ${item.itemId})`);
       error.status = 404;
       throw error;
     }
     const model = fromType === "store" ? tx.storeMaterial : fromType === "shop" ? tx.shopMaterial : tx.factoryMaterial;
-    const branchRow = await model.findUnique({
-      where: getMaterialWhere(fromType, fromId, item.itemId),
+    const branchRow = await model.findFirst({
+      where: {
+        ...(fromType === "store"
+          ? { store_id: fromId, material_id: item.itemId }
+          : fromType === "shop"
+            ? { shop_id: fromId, material_id: item.itemId }
+            : { factoryId: fromId, materialId: item.itemId }),
+        deleted_at: false,
+      },
       select: { stock: true, batchDetails: true },
     });
     if (!branchRow || Number(branchRow.stock || 0) < item.quantity) {
@@ -277,6 +294,7 @@ router.get("/branch-items", async (req, res) => {
     if (!Number.isInteger(fromId) || fromId <= 0) {
       return res.status(400).json({ error: "fromId is required" });
     }
+    await assertActivePlace(prisma, fromType, fromId);
 
     const items = await fetchBranchItems(fromType, fromId);
     res.json({ items });
@@ -297,6 +315,7 @@ router.post("/", async (req, res) => {
     if (!Number.isInteger(fromId) || fromId <= 0) {
       return res.status(400).json({ error: "fromId is required" });
     }
+    await assertActivePlace(prisma, fromType, fromId);
     if (!reason) {
       return res.status(400).json({ error: "reason is required" });
     }
@@ -487,6 +506,7 @@ router.put("/:id", async (req, res) => {
     if (!Number.isInteger(fromId) || fromId <= 0) {
       return res.status(400).json({ error: "fromId is required" });
     }
+    await assertActivePlace(prisma, fromType, fromId);
     if (!reason) {
       return res.status(400).json({ error: "reason is required" });
     }

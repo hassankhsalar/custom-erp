@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
+import { activeOnly } from "../../utils/softDelete";
 import {
   ArrowLeft,
   Plus,
@@ -126,18 +127,18 @@ const AddMaterialScrapRecord = () => {
         `${API_ROUTES.STORES}`,
         getAuthHeaders(),
       );
-      setStores(storesRes.data.stores || storesRes.data || []);
+      setStores(activeOnly(storesRes.data.stores || storesRes.data || []));
 
       // Fetch shops
       const shopsRes = await axios.get(`${API_ROUTES.SHOPS}`, getAuthHeaders());
-      setShops(shopsRes.data.shops || shopsRes.data || []);
+      setShops(activeOnly(shopsRes.data.shops || shopsRes.data || []));
 
       // Fetch factories
       const factoriesRes = await axios.get(
         `${API_ROUTES.FACTORIES}`,
         getAuthHeaders(),
       );
-      setFactories(factoriesRes.data.factories || factoriesRes.data || []);
+      setFactories(activeOnly(factoriesRes.data.factories || factoriesRes.data || []));
     } catch (error) {
       console.error("Error fetching branches:", error);
       if (error.response?.status === 401) {
@@ -166,7 +167,7 @@ const AddMaterialScrapRecord = () => {
       }
 
       // Try with full URL first
-      const url = `http://localhost:3001/api/branch-materials?type=${formData.fromType}&branchId=${formData.fromBranchId}`;
+      const url = `${API_ROUTES.BRANCH_MATERIALS}?type=${formData.fromType}&branchId=${formData.fromBranchId}`;
       console.log("Trying full URL:", url);
 
       const response = await axios.get(url, {
@@ -183,7 +184,7 @@ const AddMaterialScrapRecord = () => {
         response.data.success === true &&
         Array.isArray(response.data.materials)
       ) {
-        setAvailableMaterials(response.data.materials);
+        setAvailableMaterials(activeOnly(response.data.materials));
         console.log(
           "Successfully fetched materials:",
           response.data.materials.length,

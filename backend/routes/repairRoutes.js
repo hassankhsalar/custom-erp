@@ -4,7 +4,9 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { createTransaction } = require("../utils/transactionHelper");
+const { rollbackAndDeleteTransactionsByWhere } = require("../utils/transactionRollback");
 const { createNotification } = require("../utils/notificationHelper");
+const { assertActivePlace, assertActiveItem } = require("../utils/softDelete");
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -89,44 +91,45 @@ const updateScrap = async (tx, fromType, fromId, itemType, itemId, op, amount) =
   });
 };
 
-const updateStock = async (tx, fromType, fromId, itemType, itemId, amount) => {
+const updateStock = async (tx, fromType, fromId, itemType, itemId, amount, op = "increment") => {
   const delta = parseFloat(amount || 0);
   if (!delta || delta <= 0) return;
+  const field = op === "decrement" ? { decrement: delta } : { increment: delta };
 
   if (itemType === "product") {
     if (fromType === "store") {
       return tx.storeProduct.update({
         where: { store_id_product_id: { store_id: fromId, product_id: itemId } },
-        data: { stock: { increment: delta } },
+        data: { stock: field },
       });
     }
     if (fromType === "shop") {
       return tx.shopProduct.update({
         where: { shop_id_product_id: { shop_id: fromId, product_id: itemId } },
-        data: { stock: { increment: delta } },
+        data: { stock: field },
       });
     }
     return tx.factoryProduct.update({
       where: { factoryId_productId: { factoryId: fromId, productId: itemId } },
-      data: { stock: { increment: delta } },
+      data: { stock: field },
     });
   }
 
   if (fromType === "store") {
     return tx.storeMaterial.update({
       where: { store_id_material_id: { store_id: fromId, material_id: itemId } },
-      data: { stock: { increment: delta } },
+      data: { stock: field },
     });
   }
   if (fromType === "shop") {
     return tx.shopMaterial.update({
       where: { shop_id_material_id: { shop_id: fromId, material_id: itemId } },
-      data: { stock: { increment: delta } },
+      data: { stock: field },
     });
   }
   return tx.factoryMaterial.update({
     where: { factoryId_materialId: { factoryId: fromId, materialId: itemId } },
-    data: { stock: { increment: delta } },
+    data: { stock: field },
   });
 };
 
@@ -138,18 +141,19 @@ router.get("/damaged-items", async (req, res) => {
       return res.status(400).json({ error: "sourceType must be store/shop/factory" });
     }
     if (!sourceId) return res.status(400).json({ error: "sourceId is required" });
+    await assertActivePlace(prisma, sourceType, sourceId);
 
     let productRows = [];
     let materialRows = [];
     if (sourceType === "store") {
-      productRows = await prisma.storeProduct.findMany({ where: { store_id: sourceId, scrap: { gt: 0 } }, include: { product: true } });
-      materialRows = await prisma.storeMaterial.findMany({ where: { store_id: sourceId, scrap: { gt: 0 } }, include: { material: true } });
+      productRows = await prisma.storeProduct.findMany({ where: { store_id: sourceId, scrap: { gt: 0 }, deleted_at: false, product: { deleted_at: false } }, include: { product: true } });
+      materialRows = await prisma.storeMaterial.findMany({ where: { store_id: sourceId, scrap: { gt: 0 }, deleted_at: false, material: { deleted_at: false } }, include: { material: true } });
     } else if (sourceType === "shop") {
-      productRows = await prisma.shopProduct.findMany({ where: { shop_id: sourceId, scrap: { gt: 0 } }, include: { product: true } });
-      materialRows = await prisma.shopMaterial.findMany({ where: { shop_id: sourceId, scrap: { gt: 0 } }, include: { material: true } });
+      productRows = await prisma.shopProduct.findMany({ where: { shop_id: sourceId, scrap: { gt: 0 }, deleted_at: false, product: { deleted_at: false } }, include: { product: true } });
+      materialRows = await prisma.shopMaterial.findMany({ where: { shop_id: sourceId, scrap: { gt: 0 }, deleted_at: false, material: { deleted_at: false } }, include: { material: true } });
     } else {
-      productRows = await prisma.factoryProduct.findMany({ where: { factoryId: sourceId, scrap: { gt: 0 } }, include: { product: true } });
-      materialRows = await prisma.factoryMaterial.findMany({ where: { factoryId: sourceId, scrap: { gt: 0 } }, include: { material: true } });
+      productRows = await prisma.factoryProduct.findMany({ where: { factoryId: sourceId, scrap: { gt: 0 }, deleted_at: false, product: { deleted_at: false } }, include: { product: true } });
+      materialRows = await prisma.factoryMaterial.findMany({ where: { factoryId: sourceId, scrap: { gt: 0 }, deleted_at: false, material: { deleted_at: false } }, include: { material: true } });
     }
 
     const products = productRows.map((r) => ({
@@ -186,6 +190,7 @@ router.post("/", upload.single("document"), async (req, res) => {
     if (!normalizedFromId || !destination) {
       return res.status(400).json({ error: "fromId and destination are required" });
     }
+    await assertActivePlace(prisma, normalizedFromType, normalizedFromId);
     const items = normalizeItems(req.body.items);
     const shippingCostValue = parseFloat(shippingCost || 0);
     if (shippingCostValue > 0 && !accountId) {
@@ -195,6 +200,7 @@ router.post("/", upload.single("document"), async (req, res) => {
     const result = await prisma.$transaction(async (tx) => {
       for (const item of items) {
         const itemId = item.itemType === "product" ? item.productId : item.materialId;
+        await assertActiveItem(tx, item.itemType, itemId);
         await updateScrap(tx, normalizedFromType, normalizedFromId, item.itemType, itemId, "decrement", item.quantity);
       }
 
@@ -485,6 +491,84 @@ router.patch("/:id/status", async (req, res) => {
     res.json({ message: "Repair status updated successfully", repair: result });
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to update repair status" });
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: "Invalid repair ID" });
+    const existing = await prisma.repairOrder.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+    if (!existing) return res.status(404).json({ error: "Repair request not found" });
+    const itemCount = (existing.items || []).length;
+    const sentQty = (existing.items || []).reduce((sum, row) => sum + (parseFloat(row.quantity || 0) || 0), 0);
+    const successQty = (existing.items || []).reduce((sum, row) => sum + (parseFloat(row.success || 0) || 0), 0);
+    const failQty = (existing.items || []).reduce((sum, row) => sum + (parseFloat(row.fail || 0) || 0), 0);
+
+    await prisma.$transaction(async (tx) => {
+      const repair = await tx.repairOrder.findUnique({
+        where: { id },
+        include: { items: true },
+      });
+      if (!repair) {
+        const err = new Error("Repair request not found");
+        err.status = 404;
+        throw err;
+      }
+
+      for (const item of repair.items || []) {
+        const itemId = item.itemType === "product" ? item.productId : item.materialId;
+        if (!itemId) continue;
+
+        const successQty = parseFloat(item.success || 0);
+        const failQty = parseFloat(item.fail || 0);
+        const sentQty = parseFloat(item.quantity || 0);
+
+        if (successQty > 0) {
+          await updateStock(tx, repair.from, repair.fromId, item.itemType, itemId, successQty, "decrement");
+        }
+        if (failQty > 0) {
+          await updateScrap(tx, repair.from, repair.fromId, item.itemType, itemId, "decrement", failQty);
+        }
+        if (sentQty > 0) {
+          await updateScrap(tx, repair.from, repair.fromId, item.itemType, itemId, "increment", sentQty);
+        }
+      }
+
+      await rollbackAndDeleteTransactionsByWhere(
+        tx,
+        {
+          purpose: "Shipping cost for repair",
+          note: { contains: `repair #${id}` },
+        },
+        { reverseBalances: true }
+      );
+
+      await tx.repairOrder.delete({ where: { id } });
+    });
+
+    const summary = {
+      repairId: id,
+      reference: existing.reference,
+      itemCount,
+      sentQty,
+      successQtyRollback: successQty,
+      failQtyRollback: failQty,
+    };
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "repair",
+      entityId: id,
+      description: `Deleted repair ${existing.reference || `#${id}`}: rolled back success ${successQty}, fail ${failQty}, sent ${sentQty}.`,
+      details: summary,
+    });
+
+    return res.json({ success: true, message: "Repair request deleted successfully", summary });
+  } catch (error) {
+    return res.status(error.status || 500).json({ error: error.message || "Failed to delete repair request" });
   }
 });
 

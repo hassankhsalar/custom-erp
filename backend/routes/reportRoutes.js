@@ -350,7 +350,7 @@ router.get("/trial-balance", async (req, res) => {
     const transactions = await prisma.transactions.findMany({
       select: { accountId: true, amount: true, added_to_account: true }
     });
-    const accounts = await prisma.accounts.findMany({ select: { id: true, name: true, balance: true } });
+    const accounts = await prisma.accounts.findMany({ where: { deleted_at: false }, select: { id: true, name: true, balance: true } });
 
     const totalsByAccount = {};
     transactions.forEach(t => {
@@ -376,8 +376,8 @@ router.get("/trial-balance", async (req, res) => {
 
 router.get("/cash-bank", async (req, res) => {
   try {
-    const accounts = await prisma.accounts.findMany({ select: { id: true, name: true, balance: true } });
-    const banks = await prisma.bankAccount.findMany({ select: { id: true, name: true, current_balance: true } });
+    const accounts = await prisma.accounts.findMany({ where: { deleted_at: false }, select: { id: true, name: true, balance: true } });
+    const banks = await prisma.bankAccount.findMany({ where: { deleted_at: false }, select: { id: true, name: true, current_balance: true } });
     res.json({ accounts, banks });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -515,6 +515,7 @@ router.get("/production/products", async (req, res) => {
       JOIN \`Production\` p ON p.id = pp.productionId
       JOIN \`Product\` prod ON prod.id = pp.productId
       WHERE p.factoryId = ${factoryId}
+        AND prod.deleted_at = 0
       ${dateClause}
       GROUP BY pp.productId
       ORDER BY totalProduced DESC
@@ -527,6 +528,7 @@ router.get("/production/products", async (req, res) => {
       FROM \`ProductionProducts\` pp
       JOIN \`Production\` p ON p.id = pp.productionId
       WHERE p.factoryId = ${factoryId}
+        AND pp.productId IN (SELECT id FROM \`Product\` WHERE deleted_at = 0)
         AND p.status <> 'production_done'
         ${dateClause}
       GROUP BY pp.productId
@@ -537,7 +539,7 @@ router.get("/production/products", async (req, res) => {
     });
 
     const factoryStocks = await prisma.factoryProduct.findMany({
-      where: { factoryId },
+      where: { factoryId, deleted_at: false, product: { deleted_at: false } },
       select: { productId: true, stock: true, scrap: true }
     });
     const stockMap = {};
@@ -595,6 +597,7 @@ router.get("/wastage/materials", async (req, res) => {
         FROM \`ProductionMaterial\` pm
         JOIN \`Production\` p ON p.id = pm.productionId
         WHERE p.factoryId = ${factoryId}
+          AND pm.materialId IN (SELECT id FROM \`Material\` WHERE deleted_at = 0)
         ${dateClause}
         GROUP BY pm.materialId
       ) t
@@ -612,6 +615,7 @@ router.get("/wastage/materials", async (req, res) => {
       JOIN \`Production\` p ON p.id = pm.productionId
       JOIN \`Material\` m ON m.id = pm.materialId
       WHERE p.factoryId = ${factoryId}
+        AND m.deleted_at = 0
       ${dateClause}
       GROUP BY pm.materialId
       ORDER BY totalScrap DESC
@@ -619,7 +623,7 @@ router.get("/wastage/materials", async (req, res) => {
     `;
 
     const factoryMaterials = await prisma.factoryMaterial.findMany({
-      where: { factoryId },
+      where: { factoryId, deleted_at: false, material: { deleted_at: false } },
       select: { materialId: true, scrap: true }
     });
     const scrapMap = {};
@@ -677,6 +681,7 @@ router.get("/wastage/products", async (req, res) => {
         FROM \`ProductionProducts\` pp
         JOIN \`Production\` p ON p.id = pp.productionId
         WHERE p.factoryId = ${factoryId}
+          AND pp.productId IN (SELECT id FROM \`Product\` WHERE deleted_at = 0)
         ${dateClause}
         GROUP BY pp.productId
       ) t
@@ -693,6 +698,7 @@ router.get("/wastage/products", async (req, res) => {
       JOIN \`Production\` p ON p.id = pp.productionId
       JOIN \`Product\` pr ON pr.id = pp.productId
       WHERE p.factoryId = ${factoryId}
+        AND pr.deleted_at = 0
       ${dateClause}
       GROUP BY pp.productId
       ORDER BY totalScrap DESC
@@ -700,7 +706,7 @@ router.get("/wastage/products", async (req, res) => {
     `;
 
     const factoryProducts = await prisma.factoryProduct.findMany({
-      where: { factoryId },
+      where: { factoryId, deleted_at: false, product: { deleted_at: false } },
       select: { productId: true, scrap: true }
     });
     const scrapMap = {};
@@ -757,6 +763,7 @@ router.get("/stock/products", async (req, res) => {
         });
       }
       const rows = await prisma.product.findMany({
+        where: { deleted_at: false },
         ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
         select: { id: true, name: true, category: true, image: true, stock: true, alert_quantity: true },
         ...(sortBy === "stock" ? { orderBy: { stock: sortOrder } } : {})
@@ -766,7 +773,7 @@ router.get("/stock/products", async (req, res) => {
         const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
         return res.json(paginateRows(sorted, page, limit));
       }
-      const total = await prisma.product.count();
+      const total = await prisma.product.count({ where: { deleted_at: false } });
       return res.json({
         rows: mappedRows,
         pagination: { page, limit, totalCount: total, totalPages: Math.ceil(total / limit) }
@@ -785,8 +792,8 @@ router.get("/stock/products", async (req, res) => {
         }
       }
       const where = storeId
-        ? { store_id: storeId }
-        : scope.isAdmin ? {} : { store_id: { in: Array.from(scope.stores) } };
+        ? { store_id: storeId, deleted_at: false, product: { deleted_at: false }, store: { deleted_at: false } }
+        : scope.isAdmin ? { deleted_at: false, product: { deleted_at: false }, store: { deleted_at: false } } : { store_id: { in: Array.from(scope.stores) }, deleted_at: false, product: { deleted_at: false }, store: { deleted_at: false } };
       const rows = await prisma.storeProduct.findMany({
         where,
         ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
@@ -827,8 +834,8 @@ router.get("/stock/products", async (req, res) => {
         }
       }
       const where = shopId
-        ? { shop_id: shopId }
-        : scope.isAdmin ? {} : { shop_id: { in: Array.from(scope.shops) } };
+        ? { shop_id: shopId, deleted_at: false, product: { deleted_at: false }, shop: { deleted_at: false } }
+        : scope.isAdmin ? { deleted_at: false, product: { deleted_at: false }, shop: { deleted_at: false } } : { shop_id: { in: Array.from(scope.shops) }, deleted_at: false, product: { deleted_at: false }, shop: { deleted_at: false } };
       const rows = await prisma.shopProduct.findMany({
         where,
         ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
@@ -869,8 +876,8 @@ router.get("/stock/products", async (req, res) => {
         }
       }
       const where = factoryId
-        ? { factoryId }
-        : scope.isAdmin ? {} : { factoryId: { in: Array.from(scope.factories) } };
+        ? { factoryId, deleted_at: false, product: { deleted_at: false }, factory: { deleted_at: false } }
+        : scope.isAdmin ? { deleted_at: false, product: { deleted_at: false }, factory: { deleted_at: false } } : { factoryId: { in: Array.from(scope.factories) }, deleted_at: false, product: { deleted_at: false }, factory: { deleted_at: false } };
       const rows = await prisma.factoryProduct.findMany({
         where,
         ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
@@ -928,6 +935,7 @@ router.get("/stock/materials", async (req, res) => {
         });
       }
       const rows = await prisma.material.findMany({
+        where: { deleted_at: false },
         ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
         select: { id: true, name: true, brand: true, category: true, image: true, current_stock: true, unit: true, alert_quantity: true },
         ...(sortBy === "stock" ? { orderBy: { current_stock: sortOrder } } : {})
@@ -937,7 +945,7 @@ router.get("/stock/materials", async (req, res) => {
         const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
         return res.json(paginateRows(sorted, page, limit));
       }
-      const total = await prisma.material.count();
+      const total = await prisma.material.count({ where: { deleted_at: false } });
       return res.json({
         rows: mappedRows,
         pagination: { page, limit, totalCount: total, totalPages: Math.ceil(total / limit) }
@@ -956,8 +964,8 @@ router.get("/stock/materials", async (req, res) => {
         }
       }
       const where = storeId
-        ? { store_id: storeId }
-        : scope.isAdmin ? {} : { store_id: { in: Array.from(scope.stores) } };
+        ? { store_id: storeId, deleted_at: false, material: { deleted_at: false }, store: { deleted_at: false } }
+        : scope.isAdmin ? { deleted_at: false, material: { deleted_at: false }, store: { deleted_at: false } } : { store_id: { in: Array.from(scope.stores) }, deleted_at: false, material: { deleted_at: false }, store: { deleted_at: false } };
       const rows = await prisma.storeMaterial.findMany({
         where,
         ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
@@ -998,8 +1006,8 @@ router.get("/stock/materials", async (req, res) => {
         }
       }
       const where = shopId
-        ? { shop_id: shopId }
-        : scope.isAdmin ? {} : { shop_id: { in: Array.from(scope.shops) } };
+        ? { shop_id: shopId, deleted_at: false, material: { deleted_at: false }, shop: { deleted_at: false } }
+        : scope.isAdmin ? { deleted_at: false, material: { deleted_at: false }, shop: { deleted_at: false } } : { shop_id: { in: Array.from(scope.shops) }, deleted_at: false, material: { deleted_at: false }, shop: { deleted_at: false } };
       const rows = await prisma.shopMaterial.findMany({
         where,
         ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
@@ -1040,8 +1048,8 @@ router.get("/stock/materials", async (req, res) => {
         }
       }
       const where = factoryId
-        ? { factoryId }
-        : scope.isAdmin ? {} : { factoryId: { in: Array.from(scope.factories) } };
+        ? { factoryId, deleted_at: false, material: { deleted_at: false }, factory: { deleted_at: false } }
+        : scope.isAdmin ? { deleted_at: false, material: { deleted_at: false }, factory: { deleted_at: false } } : { factoryId: { in: Array.from(scope.factories) }, deleted_at: false, material: { deleted_at: false }, factory: { deleted_at: false } };
       const rows = await prisma.factoryMaterial.findMany({
         where,
         ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
@@ -1094,8 +1102,8 @@ router.get("/wastage", async (req, res) => {
 
 router.get("/stock", async (req, res) => {
   try {
-    const products = await prisma.product.findMany({ select: { stock: true } });
-    const materials = await prisma.material.findMany({ select: { current_stock: true } });
+    const products = await prisma.product.findMany({ where: { deleted_at: false }, select: { stock: true } });
+    const materials = await prisma.material.findMany({ where: { deleted_at: false }, select: { current_stock: true } });
     res.json({
       productStock: sum(products, "stock"),
       materialStock: sum(materials, "current_stock")
@@ -1205,8 +1213,13 @@ router.get("/best-selling", async (req, res) => {
       where: { sale: buildSaleScopeWhere(scope) },
       include: { product: true, material: true }
     });
+    const filtered = items.filter((i) => {
+      if (i.productId) return i.product && i.product.deleted_at === false;
+      if (i.materialId) return i.material && i.material.deleted_at === false;
+      return false;
+    });
     const byItem = {};
-    items.forEach(i => {
+    filtered.forEach(i => {
       const key = i.productId ? `p-${i.productId}` : `m-${i.materialId}`;
       const name = i.product?.name || i.material?.name || "Unknown";
       if (!byItem[key]) byItem[key] = { name, quantity: 0, total: 0 };

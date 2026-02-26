@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
+import { activeOnly } from "../../utils/softDelete";
 import {
   Truck,
   Package,
@@ -82,7 +83,7 @@ const TransferReport = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      setTopSender(data.rows || []);
+      setTopSender(activeOnly(data.rows || []));
     } catch (error) {
       console.error('Error fetching top sender:', error);
     } finally {
@@ -99,7 +100,7 @@ const TransferReport = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      setTopReceiver(data.rows || []);
+      setTopReceiver(activeOnly(data.rows || []));
     } catch (error) {
       console.error('Error fetching top receiver:', error);
     } finally {
@@ -117,7 +118,7 @@ const TransferReport = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      setTopItems(data.rows || []);
+      setTopItems(activeOnly(data.rows || []));
       setTopItemsPagination(data.pagination || { page: 1, limit, totalPages: 1 });
     } catch (error) {
       console.error('Error fetching top items:', error);

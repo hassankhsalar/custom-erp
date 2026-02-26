@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
+import { activeOnly } from "../../utils/softDelete";
 import {
   TrendingUp,
   TrendingDown,
@@ -56,7 +57,7 @@ const PurchaseSalesReport = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      setRows(data.rows || []);
+      setRows(activeOnly(data.rows || []));
       setPagination(data.pagination || { page: 1, limit, totalPages: 1 });
       
       // Calculate statistics

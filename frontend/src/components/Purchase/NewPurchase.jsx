@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { Plus, Trash2, Package, Tag, Truck, Building2, Store, Factory, ShoppingBag, Check, Image as ImageIcon, CreditCard, DollarSign, Percent, Truck as ShippingIcon } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
+import { activeOnly } from "../../utils/softDelete";
 
 export default function NewPurchase() {
   const location = useLocation();
@@ -139,7 +140,7 @@ export default function NewPurchase() {
     
     const res = await fetch(API_ROUTES.MATERIALS_ALL, { headers });
     const data = await res.json();
-    setMaterials(data.materials || data || []);
+    setMaterials(activeOnly(data.materials || data || []));
   } catch (error) {
     console.error("Failed to fetch materials:", error);
     setMaterials([]);
@@ -156,7 +157,7 @@ const fetchProducts = async () => {
     
     const res = await fetch(API_ROUTES.PRODUCTS_ALL, { headers });
     const data = await res.json();
-    setProducts(data.products || data || []);
+    setProducts(activeOnly(data.products || data || []));
   } catch (error) {
     console.error("Failed to fetch products:", error);
     setProducts([]);
@@ -231,11 +232,13 @@ const fetchBankAccounts = async () => {
       
       // Handle different response formats
       if (Array.isArray(data)) {
-        setDestinations(data);
+        setDestinations(activeOnly(data));
       } else if (data.stores) {
-        setDestinations(data.stores);
+        setDestinations(activeOnly(data.stores));
       } else if (data.shops) {
-        setDestinations(data.shops || data);
+        setDestinations(activeOnly(data.shops || data));
+      } else if (data.factories) {
+        setDestinations(activeOnly(data.factories));
       } else {
         setDestinations([]);
       }

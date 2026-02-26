@@ -16,8 +16,8 @@ const normalizeTimeValue = (value) => {
 
 const getCurrentUserWithPermission = async (userId) => {
   if (!userId) return null;
-  return prisma.user.findUnique({
-    where: { id: Number(userId) },
+  return prisma.user.findFirst({
+    where: { id: Number(userId), deleted_at: false },
     include: {
       permission: {
         select: {
@@ -61,9 +61,9 @@ const toRoleLabel = (permissionName) => {
 
 const buildLocationMaps = async () => {
   const [stores, shops, factories] = await Promise.all([
-    prisma.store.findMany({ select: { id: true, name: true } }),
-    prisma.shop.findMany({ select: { id: true, name: true } }),
-    prisma.factory.findMany({ select: { id: true, name: true } }),
+    prisma.store.findMany({ where: { deleted_at: false }, select: { id: true, name: true } }),
+    prisma.shop.findMany({ where: { deleted_at: false }, select: { id: true, name: true } }),
+    prisma.factory.findMany({ where: { deleted_at: false }, select: { id: true, name: true } }),
   ]);
   return {
     store: new Map(stores.map((x) => [x.id, x.name])),
@@ -359,6 +359,7 @@ router.get("/", async (req, res) => {
 
     const locationMaps = await buildLocationMaps();
     const users = await prisma.user.findMany({
+      where: { deleted_at: false },
       select: {
         id: true,
         email: true,
@@ -414,8 +415,8 @@ router.get("/:id", async (req, res, next) => {
       return res.json(cachedUser);
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: parseInt(id) },
+    const user = await prisma.user.findFirst({
+      where: { id: parseInt(id), deleted_at: false },
       select: {
         id: true,
         email: true,
@@ -458,7 +459,7 @@ router.get("/:id", async (req, res, next) => {
   }
 });
 
-// Delete user
+// Soft delete user
 router.delete("/:id", async (req, res) => {
   try {
     const currentUser = await requirePermission(req, res, "user_delete");
@@ -466,13 +467,18 @@ router.delete("/:id", async (req, res) => {
 
     const { id } = req.params;
 
-    await prisma.user.delete({
-      where: { id: parseInt(id) }
+    await prisma.user.update({
+      where: { id: parseInt(id) },
+      data: {
+        deleted_at: true,
+        isActive: false,
+        sessionVersion: { increment: 1 },
+      },
     });
 
     cache.del(`user_${id}`);
 
-    res.json({ message: "User deleted successfully" });
+    res.json({ message: "User archived successfully" });
   } catch (err) {
     console.error("Delete user error:", err);
     
@@ -544,8 +550,8 @@ router.get("/username/:username", async (req, res) => {
   try {
     const { username } = req.params;
 
-    const user = await prisma.user.findUnique({
-      where: { username },
+    const user = await prisma.user.findFirst({
+      where: { username, deleted_at: false },
       select: {
         id: true,
         email: true,
@@ -584,8 +590,8 @@ router.put("/:userId/permission", async (req, res) => {
     const { permissionId } = req.body;
 
     // Check if user exists
-    const user = await prisma.user.findUnique({
-      where: { id: parseInt(userId) }
+    const user = await prisma.user.findFirst({
+      where: { id: parseInt(userId), deleted_at: false }
     });
 
     if (!user) {
@@ -636,8 +642,8 @@ router.get("/:userId/permissions", async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const user = await prisma.user.findUnique({
-      where: { id: parseInt(userId) },
+    const user = await prisma.user.findFirst({
+      where: { id: parseInt(userId), deleted_at: false },
       select: {
         id: true,
         username: true,
@@ -703,8 +709,8 @@ router.post("/:id/force-logout", async (req, res) => {
       return res.status(400).json({ error: "Invalid user id" });
     }
 
-    const targetUser = await prisma.user.findUnique({
-      where: { id: targetUserId },
+    const targetUser = await prisma.user.findFirst({
+      where: { id: targetUserId, deleted_at: false },
       select: { id: true, sessionVersion: true, username: true },
     });
     if (!targetUser) {
@@ -738,8 +744,8 @@ router.get("/:userId/has-permission/:permission", async (req, res) => {
   try {
     const { userId, permission } = req.params;
 
-    const user = await prisma.user.findUnique({
-      where: { id: parseInt(userId) },
+    const user = await prisma.user.findFirst({
+      where: { id: parseInt(userId), deleted_at: false },
       select: {
         id: true,
         username: true,

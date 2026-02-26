@@ -57,7 +57,7 @@ const getExpenseOrderBy = (sortBy, sortDir) => {
 // Expense categories
 router.get("/categories", async (req, res) => {
   try {
-    const categories = await prisma.expenseCategory.findMany({ orderBy: { name: "asc" } });
+    const categories = await prisma.expenseCategory.findMany({ where: { deleted_at: false }, orderBy: { name: "asc" } });
     res.json(categories);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -88,7 +88,7 @@ router.put("/categories/:id", async (req, res) => {
 router.delete("/categories/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    await prisma.expenseCategory.delete({ where: { id } });
+    await prisma.expenseCategory.update({ where: { id }, data: { deleted_at: true } });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

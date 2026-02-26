@@ -2,6 +2,7 @@ const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const { buildScope, ensureIdScope } = require("../utils/associateScope");
 const { createNotification } = require("../utils/notificationHelper");
+const { assertActivePlace, assertActiveItem } = require("../utils/softDelete");
 const prisma = new PrismaClient();
 const router = express.Router();
 const { createTransaction } = require('../utils/transactionHelper');
@@ -13,11 +14,15 @@ router.post("/", async (req, res) => {
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, "store", parseInt(storeId));
+    await assertActivePlace(prisma, "store", parseInt(storeId));
 
     let totalAmount = 0;
     items.forEach(i => {
       totalAmount += i.unitPrice * i.quantity;
     });
+    for (const i of items) {
+      await assertActiveItem(prisma, "product", i.productId);
+    }
     const grandTotal = totalAmount - (discount || 0);
 
     if (["bank", "card"].includes((paymentType || "cash").toLowerCase()) && !bankAccountId) {
@@ -72,10 +77,11 @@ router.post("/", async (req, res) => {
               store_id: storeId,
               product_id: i.productId
             }
-          }
+          },
+          include: { product: { select: { deleted_at: true } } },
         });
 
-        if (existingStock) {
+        if (existingStock && !existingStock.deleted_at && !existingStock.product?.deleted_at) {
           await tx.storeProduct.update({
             where: { store_id_product_id: { store_id: storeId, product_id: i.productId } },
             data: { stock: { decrement: i.quantity } }

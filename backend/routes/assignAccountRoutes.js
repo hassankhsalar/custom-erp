@@ -8,10 +8,11 @@ router.get('/entities', async (req, res) => {
   try {
     // Get all stores, shops, and factories
     const [stores, shops, factories, assignments] = await Promise.all([
-      prisma.store.findMany(),
-      prisma.shop.findMany(),
-      prisma.factory.findMany(),
+      prisma.store.findMany({ where: { deleted_at: false } }),
+      prisma.shop.findMany({ where: { deleted_at: false } }),
+      prisma.factory.findMany({ where: { deleted_at: false } }),
       prisma.entityAccount.findMany({
+        where: { account: { deleted_at: false } },
         include: {
           account: true,
           assignedBy: {
@@ -77,7 +78,8 @@ router.get('/available-accounts', async (req, res) => {
   try {
     const accounts = await prisma.accounts.findMany({
       where: {
-        status: 'active'
+        status: 'active',
+        deleted_at: false,
       },
       orderBy: { name: 'asc' }
     });
@@ -102,8 +104,8 @@ router.post('/assign', async (req, res) => {
     }
 
     // Check if account exists
-    const account = await prisma.accounts.findUnique({
-      where: { id: parseInt(accountId) }
+    const account = await prisma.accounts.findFirst({
+      where: { id: parseInt(accountId), deleted_at: false }
     });
 
     if (!account) {

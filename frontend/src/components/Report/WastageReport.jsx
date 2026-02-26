@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES } from "../../config";
+import { activeOnly } from "../../utils/softDelete";
 import {
   Factory,
   Filter,
@@ -45,7 +46,7 @@ const WastageReport = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
-      setFactories(Array.isArray(data) ? data : []);
+      setFactories(activeOnly(Array.isArray(data) ? data : data?.factories || []));
     } catch (error) {
       console.error('Error fetching factories:', error);
     }
@@ -72,7 +73,7 @@ const WastageReport = () => {
       });
       
       const data = await res.json();
-      setRows(data.rows || []);
+      setRows(activeOnly(data.rows || []));
       setPagination(data.pagination || { page: 1, limit, totalPages: 1 });
       calculateSummary(data.rows || []);
     } catch (error) {

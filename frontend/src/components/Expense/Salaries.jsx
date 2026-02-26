@@ -20,7 +20,8 @@ import {
   Pencil,
   Settings,
   Search,
-  Filter
+  Filter,
+  Trash2
 } from "lucide-react";
 
 export default function Salaries() {
@@ -66,6 +67,7 @@ export default function Salaries() {
   const [statusDraft, setStatusDraft] = useState("generated");
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const initializedRef = useRef(false);
   const skipNextPageFetchRef = useRef(false);
   const token = localStorage.getItem("token");
@@ -409,6 +411,25 @@ export default function Salaries() {
     } catch (error) {
       alert(error.message || "Failed to update status");
       setSaving(false);
+    }
+  };
+
+  const handleDeleteSalary = async (salaryId) => {
+    if (!window.confirm("Delete this salary record?")) return;
+    try {
+      setDeletingId(salaryId);
+      const res = await fetch(`${API_ROUTES.HRM}/payroll/${salaryId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to delete salary");
+      await fetchSalaries(currentPage, "table");
+      await fetchOverview();
+    } catch (error) {
+      alert(error.message || "Failed to delete salary");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -812,6 +833,14 @@ export default function Salaries() {
                                 title={canDownloadPayslip(salary.status) ? "Download Pay Slip" : "Available after approval"}
                               >
                                 <Download size={16} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSalary(salary.id)}
+                                disabled={deletingId === salary.id}
+                                className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300 disabled:opacity-60"
+                                title="Delete Salary"
+                              >
+                                <Trash2 size={16} />
                               </button>
                             </div>
                           </td>

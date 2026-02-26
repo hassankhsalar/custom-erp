@@ -20,6 +20,7 @@ const makeReference = (prefix) => {
 router.get('/', async (req, res) => {
   try {
     const accounts = await prisma.accounts.findMany({
+      where: { deleted_at: false },
       orderBy: { createdAt: 'desc' }
     });
     res.json(accounts);
@@ -51,7 +52,7 @@ router.post('/', async (req, res) => {
     
     // Check if account number already exists
     const existingAccount = await prisma.accounts.findFirst({
-      where: { account_number: cleanAccountNumber }
+      where: { account_number: cleanAccountNumber, deleted_at: false }
     });
     
     if (existingAccount) {
@@ -81,8 +82,8 @@ router.post('/', async (req, res) => {
 // Get single account
 router.get('/:id', async (req, res) => {
   try {
-    const account = await prisma.accounts.findUnique({
-      where: { id: parseInt(req.params.id) }
+    const account = await prisma.accounts.findFirst({
+      where: { id: parseInt(req.params.id), deleted_at: false }
     });
     
     if (!account) {
@@ -126,14 +127,18 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// Delete account
+// Soft delete account
 router.delete('/:id', async (req, res) => {
   try {
-    await prisma.accounts.delete({
+    await prisma.accounts.update({
       where: { id: parseInt(req.params.id) }
+      ,data: {
+        deleted_at: true,
+        status: 'inactive'
+      }
     });
     
-    res.json({ message: 'Account deleted successfully' });
+    res.json({ message: 'Account archived successfully' });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

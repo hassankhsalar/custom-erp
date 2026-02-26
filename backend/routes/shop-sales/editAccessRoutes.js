@@ -73,8 +73,8 @@ function registerSaleEditAccessRoutes({
       const scope = await buildScope(prisma, req.user?.userId || 0);
       ensureIdScope(scope, "shop", sale.shopId);
 
-      const requester = await prisma.user.findUnique({
-        where: { id: req.user?.userId || 0 },
+      const requester = await prisma.user.findFirst({
+        where: { id: req.user?.userId || 0, deleted_at: false },
         select: { id: true, name: true, username: true, email: true },
       });
 
@@ -169,7 +169,7 @@ function registerSaleEditAccessRoutes({
       const requesterIds = Array.from(new Set(rows.map((r) => r.requesterUserId).filter(Boolean)));
       const resolverIds = Array.from(new Set(rows.map((r) => r.resolvedByUserId).filter(Boolean)));
       const users = await prisma.user.findMany({
-        where: { id: { in: Array.from(new Set([...requesterIds, ...resolverIds])) } },
+        where: { id: { in: Array.from(new Set([...requesterIds, ...resolverIds])) }, deleted_at: false },
         select: { id: true, name: true, username: true, email: true },
       });
       const userMap = new Map(users.map((u) => [u.id, u]));

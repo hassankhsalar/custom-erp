@@ -9,11 +9,11 @@ router.get('/entities', async (req, res) => {
   try {
     // Get all stores, shops, and factories
     const [stores, shops, factories, assignments] = await Promise.all([
-      prisma.store.findMany(),
-      prisma.shop.findMany(),
-      prisma.factory.findMany(),
+      prisma.store.findMany({ where: { deleted_at: false } }),
+      prisma.shop.findMany({ where: { deleted_at: false } }),
+      prisma.factory.findMany({ where: { deleted_at: false } }),
       prisma.cashRegisterAssignment.findMany({
-        where: { isActive: true },
+        where: { isActive: true, cashRegister: { deleted_at: false } },
         include: {
           cashRegister: true,
           assignedBy: {
@@ -81,7 +81,8 @@ router.get('/available-cash-registers', async (req, res) => {
     
     const cashRegisters = await prisma.cashRegister.findMany({
       where: {
-        status: status
+        status: status,
+        deleted_at: false,
       },
       orderBy: { name: 'asc' }
     });
@@ -96,6 +97,7 @@ router.get('/available-cash-registers', async (req, res) => {
 router.get('/all-cash-registers', async (req, res) => {
   try {
     const cashRegisters = await prisma.cashRegister.findMany({
+      where: { deleted_at: false },
       include: {
         assignments: {
           where: { isActive: true },
@@ -133,8 +135,8 @@ router.post('/assign', async (req, res) => {
     }
 
     // Check if cash register exists
-    const cashRegister = await prisma.cashRegister.findUnique({
-      where: { id: parseInt(cashRegisterId) }
+    const cashRegister = await prisma.cashRegister.findFirst({
+      where: { id: parseInt(cashRegisterId), deleted_at: false }
     });
 
     if (!cashRegister) {
@@ -306,8 +308,8 @@ router.post('/assign-multiple', async (req, res) => {
     for (const cashRegisterId of cashRegisterIds) {
       try {
         // Check if cash register exists and is active
-        const cashRegister = await prisma.cashRegister.findUnique({
-          where: { id: parseInt(cashRegisterId) }
+        const cashRegister = await prisma.cashRegister.findFirst({
+          where: { id: parseInt(cashRegisterId), deleted_at: false }
         });
 
         if (!cashRegister) {
@@ -515,8 +517,8 @@ router.put('/cash-register/:id/status', async (req, res) => {
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      const cashRegister = await tx.cashRegister.findUnique({
-        where: { id: parseInt(id) }
+      const cashRegister = await tx.cashRegister.findFirst({
+        where: { id: parseInt(id), deleted_at: false }
       });
       if (!cashRegister) {
         throw new Error('Cash register not found');
@@ -640,7 +642,7 @@ router.get('/stats', async (req, res) => {
       prisma.$queryRaw`SELECT COUNT(*) as count FROM (SELECT id FROM Store UNION SELECT id FROM Shop UNION SELECT id FROM Factory) as entities`,
       
       // Total cash registers
-      prisma.cashRegister.count(),
+      prisma.cashRegister.count({ where: { deleted_at: false } }),
       
       // Assigned cash registers
       prisma.cashRegisterAssignment.count({ where: { isActive: true } }),
@@ -649,6 +651,7 @@ router.get('/stats', async (req, res) => {
       prisma.cashRegister.count({
         where: {
           status: 'active',
+          deleted_at: false,
           NOT: {
             assignments: {
               some: { isActive: true }

@@ -29,7 +29,7 @@ import {
   Clock,
   Layers,
   ArrowUpDown,
-  MoreVertical
+  Trash2
 } from "lucide-react";
 import { useAuth } from "../../App";
 
@@ -294,6 +294,20 @@ const RequisitionList = () => {
   const reject = async (id) => {
     await axios.post(API_ROUTES.REQUISITION_REJECT(id), {}, { headers: { Authorization: `Bearer ${token}` } });
     fetchData();
+  };
+
+  const deleteRequisition = async (id) => {
+    const ok = window.confirm("Delete this requisition? This action cannot be undone.");
+    if (!ok) return;
+    try {
+      await axios.delete(API_ROUTES.REQUISITION_BY_ID(id), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      fetchData();
+      fetchOverview();
+    } catch (error) {
+      alert(error?.response?.data?.error || "Failed to delete requisition");
+    }
   };
 
   const acceptOrder = (order, type) => {
@@ -797,6 +811,16 @@ const RequisitionList = () => {
                                   title="Edit"
                                 >
                                   <Edit size={16} />
+                                </button>
+                              )}
+
+                              {!row.isSegmented && (isAdmin || row.requesterUserId === currentUser?.id) && (
+                                <button
+                                  className="p-2 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-colors duration-300"
+                                  onClick={() => deleteRequisition(row.id)}
+                                  title="Delete"
+                                >
+                                  <Trash2 size={16} />
                                 </button>
                               )}
                               

@@ -8,12 +8,14 @@ const { Server } = require('socket.io');
 const { activityLoggerMiddleware, logActivity } = require('./utils/activityLogger');
 const { createSessionTracker, getAccessBlockReason } = require('./services/realtimeTracker');
 const { setRealtimeIo } = require('./services/realtimeEmitter');
+const { withRequestContext } = require('./utils/requestContext');
 
 const prisma = new PrismaClient();
 const app = express();
 const server = http.createServer(app);
 app.use(cors());
 app.use(express.json());
+app.use(withRequestContext);
 app.use(activityLoggerMiddleware);
 
 const JWT_SECRET = 'your-secret-key';

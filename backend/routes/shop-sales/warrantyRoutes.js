@@ -3,6 +3,7 @@ function registerShopSaleWarrantyRoutes({ router, prisma }) {
     try {
       const { status, mobile, serial, customer, item, itemType, expiryFrom, expiryTo, page = 1, limit = 20 } = req.query;
       const where = {};
+      where.status = { not: "deleted" };
       if (status) where.status = String(status);
       if (serial) where.serialNumber = { contains: String(serial) };
       if (customer) {
@@ -124,7 +125,10 @@ function registerShopSaleWarrantyRoutes({ router, prisma }) {
       if (!id) {
         return res.status(400).json({ error: "Invalid id" });
       }
-      await prisma.userWarranty.delete({ where: { id } });
+      await prisma.userWarranty.update({
+        where: { id },
+        data: { status: "deleted", voidedAt: new Date() },
+      });
       res.json({ success: true });
     } catch (error) {
       console.error("Warranty delete error:", error);

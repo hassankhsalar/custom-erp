@@ -24,6 +24,7 @@ import {
   Store
 } from 'lucide-react';
 import { API_ROUTES } from '../../config';
+import { activeOnly } from '../../utils/softDelete';
 
 const ShopInventory = () => {
   const [shops, setShops] = useState([]);
@@ -83,10 +84,11 @@ const ShopInventory = () => {
       const data = await response.json();
       console.log('Shops fetched:', data);
       
-      setShops(data);
+      setShops(activeOnly(Array.isArray(data) ? data : data?.shops || []));
       
-      if (data.length > 0) {
-        setSelectedShop(data[0].id);
+      const nextShops = activeOnly(Array.isArray(data) ? data : data?.shops || []);
+      if (nextShops.length > 0) {
+        setSelectedShop(nextShops[0].id);
       } else {
         setError('No shops found');
       }
@@ -122,7 +124,7 @@ const ShopInventory = () => {
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      setInventory(data.items || []);
+      setInventory(activeOnly(data.items || []));
       setTotalItems(Number(data.pagination?.totalCount || 0));
       setServerTotalPages(Number(data.pagination?.totalPages || 1));
       setCurrentPage(Number(data.pagination?.page || page));

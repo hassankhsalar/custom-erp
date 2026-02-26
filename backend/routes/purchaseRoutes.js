@@ -5,7 +5,9 @@ const prisma = new PrismaClient();
 const router = express.Router();
 const { createTransaction } = require('../utils/transactionHelper');
 const { createNotification } = require('../utils/notificationHelper');
+const { rollbackAndDeleteTransactionsByWhere } = require('../utils/transactionRollback');
 const { parseDateOnly, mergeIncomingBatch, decrementBatch, getAvailableBatches } = require('../utils/batchDetails');
+const { assertActivePlace, assertActiveItem } = require('../utils/softDelete');
 
 // Generate unique reference for transactions
 const generateTransactionReference = () => {
@@ -143,6 +145,11 @@ router.post("/", async (req, res) => {
           error: "Quantity and unitPrice must be positive numbers" 
         });
       }
+      await assertActiveItem(
+        prisma,
+        item.itemType,
+        item.itemType === "product" ? item.productId : item.materialId
+      );
 
       if (item.receivedQuantity !== undefined && item.receivedQuantity !== null) {
         const receivedQty = parseFloat(item.receivedQuantity);
@@ -420,31 +427,7 @@ router.post("/", async (req, res) => {
 
 // Helper function to validate destination exists
 async function validateDestinationExists(destinationType, destinationId) {
-  switch (destinationType) {
-    case "store":
-      const store = await prisma.store.findUnique({
-        where: { id: destinationId }
-      });
-      if (!store) throw new Error("Store not found");
-      break;
-      
-    case "shop":
-      const shop = await prisma.shop.findUnique({
-        where: { id: destinationId }
-      });
-      if (!shop) throw new Error("Shop not found");
-      break;
-      
-    case "factory":
-      const factory = await prisma.factory.findUnique({
-        where: { id: destinationId }
-      });
-      if (!factory) throw new Error("Factory not found");
-      break;
-      
-    default:
-      throw new Error("Invalid destination type");
-  }
+  await assertActivePlace(prisma, destinationType, destinationId);
 }
 
 // Helper function to get destination details
@@ -453,20 +436,20 @@ async function getDestinationDetails(destinationType, destinationId) {
   
   switch (destinationType) {
     case "store":
-      return await prisma.store.findUnique({
-        where: { id: destinationId },
+      return await prisma.store.findFirst({
+        where: { id: destinationId, deleted_at: false },
         select: { id: true, name: true, address: true }
       });
       
     case "shop":
-      return await prisma.shop.findUnique({
-        where: { id: destinationId },
+      return await prisma.shop.findFirst({
+        where: { id: destinationId, deleted_at: false },
         select: { id: true, name: true, address: true }
       });
       
     case "factory":
-      return await prisma.factory.findUnique({
-        where: { id: destinationId },
+      return await prisma.factory.findFirst({
+        where: { id: destinationId, deleted_at: false },
         select: { id: true, name: true, address: true }
       });
       
@@ -1977,16 +1960,16 @@ router.get('/:id/shipments', async (req, res) => {
     }
 
     // Get account to update balance
-    const account = await prisma.accounts.findUnique({
-      where: { id: parsedAccountId }
+    const account = await prisma.accounts.findFirst({
+      where: { id: parsedAccountId, deleted_at: false }
     });
 
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
     }
 
-    const actor = await prisma.user.findUnique({
-      where: { id: actingUserId },
+    const actor = await prisma.user.findFirst({
+      where: { id: actingUserId, deleted_at: false },
       select: { id: true }
     });
     if (!actor) {
@@ -2940,29 +2923,29 @@ router.get('/returns/damage-items', async (req, res) => {
 
     if (sourceType === 'store') {
       productRows = await prisma.storeProduct.findMany({
-        where: { store_id: sourceId, scrap: { gt: 0 } },
+        where: { store_id: sourceId, scrap: { gt: 0 }, deleted_at: false, product: { deleted_at: false } },
         include: { product: true }
       });
       materialRows = await prisma.storeMaterial.findMany({
-        where: { store_id: sourceId, scrap: { gt: 0 } },
+        where: { store_id: sourceId, scrap: { gt: 0 }, deleted_at: false, material: { deleted_at: false } },
         include: { material: true }
       });
     } else if (sourceType === 'shop') {
       productRows = await prisma.shopProduct.findMany({
-        where: { shop_id: sourceId, scrap: { gt: 0 } },
+        where: { shop_id: sourceId, scrap: { gt: 0 }, deleted_at: false, product: { deleted_at: false } },
         include: { product: true }
       });
       materialRows = await prisma.shopMaterial.findMany({
-        where: { shop_id: sourceId, scrap: { gt: 0 } },
+        where: { shop_id: sourceId, scrap: { gt: 0 }, deleted_at: false, material: { deleted_at: false } },
         include: { material: true }
       });
     } else {
       productRows = await prisma.factoryProduct.findMany({
-        where: { factoryId: sourceId, scrap: { gt: 0 } },
+        where: { factoryId: sourceId, scrap: { gt: 0 }, deleted_at: false, product: { deleted_at: false } },
         include: { product: true }
       });
       materialRows = await prisma.factoryMaterial.findMany({
-        where: { factoryId: sourceId, scrap: { gt: 0 } },
+        where: { factoryId: sourceId, scrap: { gt: 0 }, deleted_at: false, material: { deleted_at: false } },
         include: { material: true }
       });
     }
@@ -3018,29 +3001,29 @@ router.get('/returns/source-items', async (req, res) => {
 
     if (sourceType === 'store') {
       productRows = await prisma.storeProduct.findMany({
-        where: { store_id: sourceId, stock: { gt: 0 } },
+        where: { store_id: sourceId, stock: { gt: 0 }, deleted_at: false, product: { deleted_at: false } },
         include: { product: true }
       });
       materialRows = await prisma.storeMaterial.findMany({
-        where: { store_id: sourceId, stock: { gt: 0 } },
+        where: { store_id: sourceId, stock: { gt: 0 }, deleted_at: false, material: { deleted_at: false } },
         include: { material: true }
       });
     } else if (sourceType === 'shop') {
       productRows = await prisma.shopProduct.findMany({
-        where: { shop_id: sourceId, stock: { gt: 0 } },
+        where: { shop_id: sourceId, stock: { gt: 0 }, deleted_at: false, product: { deleted_at: false } },
         include: { product: true }
       });
       materialRows = await prisma.shopMaterial.findMany({
-        where: { shop_id: sourceId, stock: { gt: 0 } },
+        where: { shop_id: sourceId, stock: { gt: 0 }, deleted_at: false, material: { deleted_at: false } },
         include: { material: true }
       });
     } else {
       productRows = await prisma.factoryProduct.findMany({
-        where: { factoryId: sourceId, stock: { gt: 0 } },
+        where: { factoryId: sourceId, stock: { gt: 0 }, deleted_at: false, product: { deleted_at: false } },
         include: { product: true }
       });
       materialRows = await prisma.factoryMaterial.findMany({
-        where: { factoryId: sourceId, stock: { gt: 0 } },
+        where: { factoryId: sourceId, stock: { gt: 0 }, deleted_at: false, material: { deleted_at: false } },
         include: { material: true }
       });
     }
@@ -3244,7 +3227,132 @@ router.post('/returns/:returnId/payments', async (req, res) => {
   }
 });
 
-// DELETE purchase (only if no payments made)
+router.delete('/returns/:returnId', async (req, res) => {
+  try {
+    const returnId = parseInt(req.params.returnId, 10);
+    if (isNaN(returnId)) return res.status(400).json({ error: 'Invalid return ID' });
+
+    const purchaseReturn = await prisma.purchaseReturn.findUnique({
+      where: { id: returnId },
+      include: {
+        purchase: true,
+        items: true,
+        compensationShipments: { include: { items: true } },
+        compensationPayments: true,
+      },
+    });
+    if (!purchaseReturn) return res.status(404).json({ error: 'Return not found' });
+    const sourceItemCount = (purchaseReturn.items || []).length;
+    const sourceQtyTotal = (purchaseReturn.items || []).reduce((sum, it) => sum + (parseFloat(it.quantity || 0) || 0), 0);
+    const shipmentItemCount = (purchaseReturn.compensationShipments || []).reduce((sum, sh) => sum + ((sh.items || []).length), 0);
+    const shipmentQtyTotal = (purchaseReturn.compensationShipments || []).reduce(
+      (sum, sh) => sum + (sh.items || []).reduce((s, it) => s + (parseFloat(it.quantity || 0) || 0), 0),
+      0
+    );
+    const paymentCount = (purchaseReturn.compensationPayments || []).length;
+    const paymentAmountTotal = (purchaseReturn.compensationPayments || []).reduce((sum, p) => sum + (parseFloat(p.amount || 0) || 0), 0);
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (purchaseReturn.purchase?.destinationType && purchaseReturn.purchase?.destinationId) {
+      ensureIdScope(scope, purchaseReturn.purchase.destinationType, purchaseReturn.purchase.destinationId);
+    } else if (purchaseReturn.sourceType && purchaseReturn.sourceId) {
+      ensureIdScope(scope, purchaseReturn.sourceType, purchaseReturn.sourceId);
+    } else {
+      ensureHasAnyScope(scope);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const sourceType = purchaseReturn.sourceType || purchaseReturn.purchase?.destinationType;
+      const sourceId = purchaseReturn.sourceId || purchaseReturn.purchase?.destinationId;
+
+      for (const item of purchaseReturn.items || []) {
+        const qty = parseFloat(item.quantity || 0);
+        if (qty <= 0 || !sourceType || !sourceId) continue;
+        const batchInfo = {
+          batchNumber: item.batchNumber,
+          expiryDate: parseDateOnly(item.expiryDate),
+          quantity: qty,
+          unitCost: parseFloat(item.unitPrice || 0),
+        };
+        if (item.itemType === 'product' && item.productId) {
+          await updateProductStock(tx, sourceType, sourceId, item.productId, qty, parseFloat(item.unitPrice || 0), batchInfo);
+        } else if (item.itemType === 'material' && item.materialId) {
+          await updateMaterialStock(tx, sourceType, sourceId, item.materialId, qty, parseFloat(item.unitPrice || 0), batchInfo);
+        }
+      }
+
+      for (const shipment of purchaseReturn.compensationShipments || []) {
+        for (const item of shipment.items || []) {
+          const qty = parseFloat(item.quantity || 0);
+          if (qty <= 0) continue;
+          const batchInfo = {
+            batchNumber: item.batchNumber,
+            expiryDate: parseDateOnly(item.expiryDate),
+          };
+          if (item.itemType === 'product' && item.productId) {
+            await decrementProductStock(tx, shipment.destinationType, shipment.destinationId, item.productId, qty, batchInfo);
+          } else if (item.itemType === 'material' && item.materialId) {
+            await decrementMaterialStock(tx, shipment.destinationType, shipment.destinationId, item.materialId, qty, batchInfo);
+          }
+        }
+      }
+
+      await rollbackAndDeleteTransactionsByWhere(tx, {
+        purpose: {
+          in: [
+            'Purchase Return Compensation',
+            'Damage Return Compensation',
+            'Purchase Return Compensation Payment',
+            'Damage Return Compensation Payment',
+          ],
+        },
+        note: { contains: purchaseReturn.reference || '' },
+      }, { reverseBalances: true });
+
+      await tx.purchaseReturnCompensationItem.deleteMany({
+        where: { shipment: { purchaseReturnId: returnId } },
+      });
+      await tx.purchaseReturnCompensationShipment.deleteMany({
+        where: { purchaseReturnId: returnId },
+      });
+      await tx.purchaseReturnPayment.deleteMany({
+        where: { purchaseReturnId: returnId },
+      });
+      await tx.purchaseReturnItem.deleteMany({
+        where: { purchaseReturnId: returnId },
+      });
+      await tx.purchaseReturn.delete({
+        where: { id: returnId },
+      });
+    });
+
+    const summary = {
+      returnId,
+      reference: purchaseReturn.reference,
+      sourceItemCount,
+      sourceQtyTotal,
+      shipmentItemCount,
+      shipmentQtyTotal,
+      paymentCount,
+      paymentAmountTotal,
+    };
+
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "purchase return",
+      entityId: returnId,
+      description: `Deleted purchase return ${purchaseReturn.reference || `#${returnId}`}: restored ${sourceItemCount} source items and rolled back ${paymentCount} payments (${paymentAmountTotal}).`,
+      details: summary,
+    });
+
+    res.json({ success: true, message: 'Return deleted successfully', summary });
+  } catch (error) {
+    if (error.status === 403) return res.status(403).json({ error: 'Forbidden' });
+    res.status(400).json({ error: error.message || 'Failed to delete return' });
+  }
+});
+
+// DELETE purchase with stock and payment rollback
 router.delete('/:id', async (req, res) => {
   try {
     const purchaseId = parseInt(req.params.id);
@@ -3255,41 +3363,174 @@ router.delete('/:id', async (req, res) => {
 
     // Check if purchase exists
     const purchase = await prisma.purchase.findUnique({
-      where: { id: purchaseId }
+      where: { id: purchaseId },
+      include: {
+        purchaseItems: true,
+        purchaseShipments: { include: { items: true } },
+        purchaseReturns: {
+          include: {
+            items: true,
+            compensationShipments: { include: { items: true } },
+            compensationPayments: true,
+          },
+        },
+      },
     });
 
     if (!purchase) {
       return res.status(404).json({ error: 'Purchase not found' });
     }
+    const purchaseItemCount = (purchase.purchaseItems || []).length;
+    const purchaseQtyTotal = (purchase.purchaseItems || []).reduce((sum, item) => sum + (parseFloat(item.quantity || 0) || 0), 0);
+    const returnCount = (purchase.purchaseReturns || []).length;
+    const returnItemCount = (purchase.purchaseReturns || []).reduce((sum, r) => sum + ((r.items || []).length), 0);
+    const compensationPaymentCount = (purchase.purchaseReturns || []).reduce((sum, r) => sum + ((r.compensationPayments || []).length), 0);
+    const compensationPaymentAmount = (purchase.purchaseReturns || []).reduce(
+      (sum, r) => sum + (r.compensationPayments || []).reduce((s, p) => s + (parseFloat(p.amount || 0) || 0), 0),
+      0
+    );
+    const linkedTransactions = await prisma.transactions.findMany({
+      where: { purchaseId },
+      select: { id: true, amount: true },
+    });
+    const purchaseRollbackAmount = linkedTransactions.reduce((sum, tx) => sum + (parseFloat(tx.amount || 0) || 0), 0);
 
-    // Check if purchase has payments
-    if (purchase.paidAmount > 0) {
-      return res.status(400).json({ 
-        error: 'Cannot delete purchase with existing payments. Refund payments first.' 
-      });
+    const receivedByPurchaseItemId = {};
+    for (const shipment of purchase.purchaseShipments || []) {
+      for (const shipmentItem of shipment.items || []) {
+        if (!shipmentItem.purchaseItemId) continue;
+        receivedByPurchaseItemId[shipmentItem.purchaseItemId] =
+          (receivedByPurchaseItemId[shipmentItem.purchaseItemId] || 0) + (parseFloat(shipmentItem.received_quantity) || 0);
+      }
     }
 
     // Delete in transaction
-    await prisma.$transaction(async (prisma) => {
-      // Delete purchase items first
-      await prisma.purchaseItem.deleteMany({
-        where: { purchaseId: purchaseId }
-      });
+    await prisma.$transaction(async (tx) => {
+      for (const purchaseReturn of purchase.purchaseReturns || []) {
+        const sourceType = purchaseReturn.sourceType || purchase.destinationType;
+        const sourceId = purchaseReturn.sourceId || purchase.destinationId;
 
-      // Delete any transactions linked to this purchase
-      await prisma.transactions.deleteMany({
-        where: { purchaseId: purchaseId }
-      });
+        for (const item of purchaseReturn.items || []) {
+          const qty = parseFloat(item.quantity || 0);
+          if (qty <= 0 || !sourceType || !sourceId) continue;
+          const batchInfo = {
+            batchNumber: item.batchNumber,
+            expiryDate: parseDateOnly(item.expiryDate),
+            quantity: qty,
+            unitCost: parseFloat(item.unitPrice || 0),
+          };
+          if (item.itemType === 'product' && item.productId) {
+            await updateProductStock(tx, sourceType, sourceId, item.productId, qty, parseFloat(item.unitPrice || 0), batchInfo);
+          } else if (item.itemType === 'material' && item.materialId) {
+            await updateMaterialStock(tx, sourceType, sourceId, item.materialId, qty, parseFloat(item.unitPrice || 0), batchInfo);
+          }
+        }
 
-      // Delete the purchase
-      await prisma.purchase.delete({
-        where: { id: purchaseId }
-      });
+        for (const shipment of purchaseReturn.compensationShipments || []) {
+          for (const item of shipment.items || []) {
+            const qty = parseFloat(item.quantity || 0);
+            if (qty <= 0) continue;
+            const batchInfo = {
+              batchNumber: item.batchNumber,
+              expiryDate: parseDateOnly(item.expiryDate),
+            };
+            if (item.itemType === 'product' && item.productId) {
+              await decrementProductStock(tx, shipment.destinationType, shipment.destinationId, item.productId, qty, batchInfo);
+            } else if (item.itemType === 'material' && item.materialId) {
+              await decrementMaterialStock(tx, shipment.destinationType, shipment.destinationId, item.materialId, qty, batchInfo);
+            }
+          }
+        }
+
+        await rollbackAndDeleteTransactionsByWhere(tx, {
+          purpose: {
+            in: [
+              'Purchase Return Compensation',
+              'Damage Return Compensation',
+              'Purchase Return Compensation Payment',
+              'Damage Return Compensation Payment',
+            ],
+          },
+          note: { contains: purchaseReturn.reference || '' },
+        }, { reverseBalances: true });
+
+        await tx.purchaseReturnCompensationItem.deleteMany({
+          where: { shipment: { purchaseReturnId: purchaseReturn.id } },
+        });
+        await tx.purchaseReturnCompensationShipment.deleteMany({
+          where: { purchaseReturnId: purchaseReturn.id },
+        });
+        await tx.purchaseReturnPayment.deleteMany({
+          where: { purchaseReturnId: purchaseReturn.id },
+        });
+        await tx.purchaseReturnItem.deleteMany({
+          where: { purchaseReturnId: purchaseReturn.id },
+        });
+        await tx.purchaseReturn.delete({
+          where: { id: purchaseReturn.id },
+        });
+      }
+
+      for (const item of purchase.purchaseItems || []) {
+        const receivedQty = parseFloat(receivedByPurchaseItemId[item.id] || 0);
+        if (receivedQty <= 0) continue;
+        const batchInfo = {
+          batchNumber: item.batchNumber,
+          expiryDate: parseDateOnly(item.expiryDate),
+        };
+        if (item.itemType === 'product') {
+          await decrementProductStock(
+            tx,
+            purchase.destinationType,
+            purchase.destinationId,
+            item.productId,
+            receivedQty,
+            batchInfo
+          );
+        } else if (item.itemType === 'material') {
+          await decrementMaterialStock(
+            tx,
+            purchase.destinationType,
+            purchase.destinationId,
+            item.materialId,
+            receivedQty,
+            batchInfo
+          );
+        }
+      }
+
+      await rollbackAndDeleteTransactionsByWhere(tx, { purchaseId }, { reverseBalances: true });
+      await tx.purchaseShipmentItem.deleteMany({ where: { shipment: { purchaseId } } });
+      await tx.purchaseShipment.deleteMany({ where: { purchaseId } });
+      await tx.purchaseItem.deleteMany({ where: { purchaseId } });
+      await tx.purchase.delete({ where: { id: purchaseId } });
+    });
+
+    const summary = {
+      purchaseId,
+      reference: purchase.reference,
+      purchaseItemCount,
+      purchaseQtyTotal,
+      returnCount,
+      returnItemCount,
+      compensationPaymentCount,
+      compensationPaymentAmount,
+      purchaseTransactionRollbackCount: linkedTransactions.length,
+      purchaseRollbackAmount,
+    };
+
+    req.setAuditTrail?.({
+      action: "delete",
+      entity: "purchase",
+      entityId: purchaseId,
+      description: `Deleted purchase ${purchase.reference || `#${purchaseId}`}: rolled back ${purchaseItemCount} purchase items and ${linkedTransactions.length} purchase transactions (${purchaseRollbackAmount}).`,
+      details: summary,
     });
 
     res.json({
       success: true,
-      message: 'Purchase deleted successfully'
+      message: 'Purchase deleted successfully',
+      summary
     });
 
   } catch (error) {
@@ -3381,21 +3622,21 @@ router.get("/destinations/:type", async (req, res) => {
     switch (type) {
       case "store":
         destinations = await prisma.store.findMany({
-          where,
+          where: { ...(where || {}), deleted_at: false },
           select: { id: true, name: true, address: true }
         });
         break;
         
       case "shop":
         destinations = await prisma.shop.findMany({
-          where,
+          where: { ...(where || {}), deleted_at: false },
           select: { id: true, name: true, address: true }
         });
         break;
         
       case "factory":
         destinations = await prisma.factory.findMany({
-          where,
+          where: { ...(where || {}), deleted_at: false },
           select: { id: true, name: true, address: true }
         });
         break;
