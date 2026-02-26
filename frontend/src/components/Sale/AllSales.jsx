@@ -3,10 +3,12 @@ import { useState, useEffect } from "react";
 import { API_ROUTES } from '../../config';
 import { Link, useNavigate } from "react-router-dom";
 import { usePermission } from "../../hooks/usePermission";
+import { useAuth } from "../../App";
 
 export default function AllSales() {
   const navigate = useNavigate();
   const { hasPermission } = usePermission();
+  const { currentUser } = useAuth();
   const canViewEditRequests = hasPermission("sales_open_close");
   const canManageTransaction = hasPermission("sales_open_close");
   const canEditSales = hasPermission(["sales_edit", "sales_edit_today", "sales_edit_any_day", "sales_update"]);
@@ -877,6 +879,13 @@ export default function AllSales() {
                 </tr>
               ) : currentItems.map((item, index) => {
                 const sale = sales[index];
+                const currentUserId = Number(currentUser?.id || currentUser?.userId || 0);
+                const isEditGrantedToCurrentUser = Number(sale?.editGrantedToUserId || 0) === currentUserId;
+                const openedDate = sale?.editOpenedAt ? Date.parse(sale?.editOpenedAt) : null;
+                const availableMinuts = sale?.editAccessDurationMinutes;
+                let isTimeValid = openedDate && availableMinuts && Date.now() - openedDate < availableMinuts * 60 * 1000;
+                if( !availableMinuts ) isTimeValid = true;
+                const canEditThisSale = canEditSales || (isEditGrantedToCurrentUser && isTimeValid);
                 return (
                   <tr
                     key={item.id}
@@ -907,7 +916,7 @@ export default function AllSales() {
                                     {viewLoading ? "Loading..." : "View Details"}
                                   </button>
 
-                                {canEditSales && (
+                                {canEditThisSale && (
                                   <button
                                     onClick={() => handleEdit(sale)}
                                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-600 transition"
@@ -938,7 +947,7 @@ export default function AllSales() {
                                   </button>
                                 )}
 
-                                {!canEditSales && (
+                                {!canEditThisSale && (
                                   <button
                                     onClick={() => handleRequestEditAccess(sale)}
                                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-violet-50 hover:text-violet-700 transition"

@@ -58,7 +58,7 @@ model ActivityLog {
   user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   module      String
   action      String
-  description String?
+  description String?  @db.Text
   entityId    Int?
   status      String   @default("success")
   metadata    Json?

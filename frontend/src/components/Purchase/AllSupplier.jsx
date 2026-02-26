@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowUpDown, Users, Phone, MapPin, Calendar, Hash, Building2, TrendingUp, Search, X, Clock, UserCircle, Trash2 } from "lucide-react";
+import { TbCurrencyTaka } from "react-icons/tb";
 
 import { API_ROUTES } from '../../config';
 
@@ -10,6 +11,12 @@ export default function AllSuppliers() {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [searchQuery, setSearchQuery] = useState("");
   const [deletingId, setDeletingId] = useState(null);
+  const [clearDueModal, setClearDueModal] = useState({
+    isOpen: false,
+    supplier: null,
+    amount: "",
+    saving: false
+  });
 
   useEffect(() => {
   const fetchSuppliers = async () => {
@@ -65,7 +72,9 @@ export default function AllSuppliers() {
       mobile: supplier.mobile || "-",
       address: supplier.address || "-",
       "created at": new Date(supplier.createdAt).toLocaleDateString(),
-      rawDate: supplier.createdAt
+      rawDate: supplier.createdAt,
+      rawDue: parseFloat(supplier.total_due || 0),
+      rawPurchase: parseFloat(supplier.total_purchase || 0)
     }));
   };
 
@@ -106,7 +115,7 @@ export default function AllSuppliers() {
     formatSuppliersData(filteredSuppliers);
 
   const tableHeaders = suppliers.length > 0 ? 
-    Object.keys(formatSuppliersData(suppliers)[0]).filter(key => key !== 'id' && key !== 'rawDate') : 
+    Object.keys(formatSuppliersData(suppliers)[0]).filter((key) => !['id', 'rawDate', 'rawDue', 'rawPurchase'].includes(key)) : 
     ['name', 'mobile', 'address', 'created at'];
 
   const getColumnIcon = (key) => {
@@ -139,6 +148,65 @@ export default function AllSuppliers() {
       alert(err.message || "Failed to delete supplier");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const openClearDueModal = (supplier) => {
+    setClearDueModal({
+      isOpen: true,
+      supplier,
+      amount: String(parseFloat(supplier?.rawDue || supplier?.total_due || 0).toFixed(2)),
+      saving: false
+    });
+  };
+
+  const closeClearDueModal = () => {
+    setClearDueModal({
+      isOpen: false,
+      supplier: null,
+      amount: "",
+      saving: false
+    });
+  };
+
+  const submitClearDue = async () => {
+    if (!clearDueModal.supplier) return;
+
+    const amount = parseFloat(clearDueModal.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      alert("Please enter a valid amount greater than 0.");
+      return;
+    }
+
+    try {
+      setClearDueModal((prev) => ({ ...prev, saving: true }));
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_ROUTES.SUPPLIERS}/${clearDueModal.supplier.id}/clear-due`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ amount })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to clear due");
+
+      setSuppliers((prev) =>
+        prev.map((s) =>
+          s.id === clearDueModal.supplier.id
+            ? {
+                ...s,
+                total_due: Math.max(0, (parseFloat(s.total_due || 0) - (parseFloat(data.appliedAmount) || 0)))
+              }
+            : s
+        )
+      );
+      closeClearDueModal();
+      alert(`Due cleared successfully. Applied: $${(data.appliedAmount || 0).toFixed(2)}`);
+    } catch (err) {
+      alert(err.message || "Failed to clear due");
+      setClearDueModal((prev) => ({ ...prev, saving: false }));
     }
   };
 
@@ -406,6 +474,18 @@ export default function AllSuppliers() {
                     >
                       <Trash2 size={16} />
                     </button>
+                    <button
+                      onClick={() => openClearDueModal(item)}
+                      disabled={parseFloat(item.rawDue || 0) <= 0}
+                      className={`ml-2 p-2 rounded-lg transition-colors disabled:opacity-60 ${
+                        parseFloat(item.rawDue || 0) > 0
+                          ? "bg-amber-50 text-amber-600 hover:bg-amber-100"
+                          : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      }`}
+                      title={parseFloat(item.rawDue || 0) > 0 ? "Clear Due" : "No due"}
+                    >
+                      <TbCurrencyTaka size={16} />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -513,6 +593,46 @@ export default function AllSuppliers() {
                   {filteredSuppliers.filter(s => s.address && s.address !== "-").length}
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {clearDueModal.isOpen && clearDueModal.supplier && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeClearDueModal}></div>
+          <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-2">Clear Supplier Due</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              {clearDueModal.supplier.name} | Current due: ${parseFloat(clearDueModal.supplier.rawDue || clearDueModal.supplier.total_due || 0).toFixed(2)}
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={clearDueModal.amount}
+                onChange={(e) => setClearDueModal((prev) => ({ ...prev, amount: e.target.value }))}
+                className="w-full border border-gray-300 rounded-xl p-3 bg-white/80"
+              />
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={closeClearDueModal}
+                className="px-5 py-2.5 rounded-xl bg-gray-200/70 text-gray-700 hover:bg-gray-300/80"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitClearDue}
+                disabled={clearDueModal.saving}
+                className={`px-5 py-2.5 rounded-xl text-white ${
+                  clearDueModal.saving ? "bg-gray-400" : "bg-gradient-to-r from-amber-500 to-orange-500"
+                }`}
+              >
+                {clearDueModal.saving ? "Clearing..." : "Clear Due"}
+              </button>
             </div>
           </div>
         </div>

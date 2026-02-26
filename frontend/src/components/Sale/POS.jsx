@@ -200,7 +200,7 @@ export default function ShopPOS( props ) {
       (item.category && item.category.toLowerCase().includes(query.toLowerCase()))
     );
 
-    setSearchResults(filtered);
+    setSearchResults(filtered.slice(0, 10));
     setShowSearchResults(true);
   };
 
@@ -449,7 +449,7 @@ export default function ShopPOS( props ) {
       return false;
     }
 
-    if ( (grandTotal.toFixed(2) + 0.001) < parseFloat(paidAmount).toFixed(2) ) {
+    if ( ( parseFloat(paidAmount).toFixed(2) - grandTotal.toFixed(2) ) > 0.01 ) {
       alert("⚠️ Paid amount cannot exceed grand total.");
       return false;
     }

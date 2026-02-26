@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { API_ROUTES } from '../../config';
+import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
 import { activeOnly } from '../../utils/softDelete';
 import {
   Pen,
@@ -641,7 +641,7 @@ const AllMaterials = () => {
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">SKU</p>
-                      <p className="font-medium">{modal.data.sku || 'No SKU'}</p>
+                      <p className="font-medium">{modal.data.barcode || 'No SKU'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Stock Status</p>

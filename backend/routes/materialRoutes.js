@@ -9,6 +9,10 @@ const { withActiveWhere } = require("../utils/softDelete");
 // Create a new material
 router.post('/', async (req, res) => {
   try {
+    if(!req.body.barcode || req.body.barcode === null || req.body.barcode === '') {
+      code = Date.now();
+      req.body.barcode = String(code);
+    }
     const material = await prisma.material.create({
       data: req.body,
     });
