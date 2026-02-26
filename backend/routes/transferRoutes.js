@@ -7,13 +7,14 @@ const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 const { createTransaction } = require('../utils/transactionHelper');
 const { createNotification } = require('../utils/notificationHelper');
+const { rollbackAndDeleteTransactionsByWhere } = require('../utils/transactionRollback');
 const { buildScope, ensureIdScope, buildTransferOrFilter } = require('../utils/associateScope');
 const { getAvailableBatches, mergeIncomingBatch, decrementBatch, parseDateOnly } = require('../utils/batchDetails');
 const { assertActivePlace, assertActiveItem } = require('../utils/softDelete');
 
 const userHasPermission = async (userId, permission) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
+  const user = await prisma.user.findFirst({
+    where: { id: userId, deleted_at: false },
     include: { permission: true }
   });
   if (!user || !user.permission) return false;
@@ -673,8 +674,8 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
 
     // Create a transaction for the shipping cost amount
     if (parseFloat(shipping_cost) > 0) {
-      const fromAccount = await prisma.accounts.findUnique({
-        where: { id: parseInt(fromId) }
+      const fromAccount = await prisma.accounts.findFirst({
+        where: { id: parseInt(fromId), deleted_at: false }
       });
 
       if (fromAccount?.id) {
@@ -1091,6 +1092,15 @@ router.delete('/:id', authenticateToken, async (req, res) => {
           });
         }
       }
+
+      await rollbackAndDeleteTransactionsByWhere(
+        tx,
+        {
+          purpose: 'Shipping cost for transfer',
+          note: { contains: `transfer #${transferId}` },
+        },
+        { reverseBalances: false }
+      );
 
       await tx.transfer.delete({ where: { id: transferId } });
     });

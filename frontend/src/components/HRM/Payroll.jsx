@@ -17,6 +17,7 @@ import {
   Receipt,
   Settings,
   Search,
+  Trash2,
 } from "lucide-react";
 
 export default function Payroll() {
@@ -29,6 +30,7 @@ export default function Payroll() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [calculating, setCalculating] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [filters, setFilters] = useState({
     search: "",
     month: "",
@@ -165,6 +167,28 @@ export default function Payroll() {
       alert(error.message || "Failed to calculate salary");
     } finally {
       setCalculating(false);
+    }
+  };
+
+  const handleDeleteSalary = async (salaryId) => {
+    if (!window.confirm("Delete this salary record? This will rollback linked account/cash/bank effects.")) {
+      return;
+    }
+
+    try {
+      setDeletingId(salaryId);
+      const res = await fetch(`${API_ROUTES.HRM}/payroll/${salaryId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to delete salary");
+      await fetchSalaries(currentPage, "table");
+      await fetchOverview();
+    } catch (error) {
+      alert(error.message || "Failed to delete salary");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -330,6 +354,7 @@ export default function Payroll() {
                     <th className="p-4 text-left font-medium text-gray-700">Deductions</th>
                     <th className="p-4 text-left font-medium text-gray-700">Net Salary</th>
                     <th className="p-4 text-left font-medium text-gray-700">Status</th>
+                    <th className="p-4 text-left font-medium text-gray-700">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -342,6 +367,16 @@ export default function Payroll() {
                       <td className="p-4 font-medium text-red-600">{formatCurrency(parseFloat(salary.deductions) || 0)}</td>
                       <td className="p-4 font-bold text-lg text-emerald-700">{formatCurrency(parseFloat(salary.net) || 0)}</td>
                       <td className="p-4">{getStatusBadge(salary.status)}</td>
+                      <td className="p-4">
+                        <button
+                          onClick={() => handleDeleteSalary(salary.id)}
+                          disabled={deletingId === salary.id}
+                          className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300 disabled:opacity-60"
+                          title="Delete"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

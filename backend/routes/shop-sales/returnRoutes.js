@@ -649,6 +649,84 @@ function registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScop
       res.status(500).json({ error: err.message });
     }
   });
+
+  router.delete("/returns/:id", async (req, res) => {
+    try {
+      const returnId = parseInt(req.params.id, 10);
+      if (!returnId) return res.status(400).json({ error: "Invalid return id" });
+
+      const scope = await buildScope(prisma, req.user?.userId || 0);
+
+      await prisma.$transaction(async (tx) => {
+        const saleReturn = await tx.saleReturn.findUnique({
+          where: { id: returnId },
+          include: {
+            sale: { include: { saleItems: true, saleReturns: { include: { returnItems: true } } } },
+            returnItems: true,
+          },
+        });
+        if (!saleReturn) throw new Error("Sale return not found");
+        ensureIdScope(scope, "shop", saleReturn.shopId);
+
+        for (const item of saleReturn.returnItems || []) {
+          const qty = parseFloat(item.quantity || 0);
+          if (qty <= 0) continue;
+          if (item.productId) {
+            await tx.shopProduct.updateMany({
+              where: { shop_id: saleReturn.shopId, product_id: item.productId },
+              data: { stock: { decrement: qty } },
+            });
+            await tx.product.updateMany({
+              where: { id: item.productId },
+              data: { stock: { decrement: qty } },
+            });
+          }
+          if (item.materialId) {
+            await tx.shopMaterial.updateMany({
+              where: { shop_id: saleReturn.shopId, material_id: item.materialId },
+              data: { stock: { decrement: qty } },
+            });
+            await tx.material.updateMany({
+              where: { id: item.materialId },
+              data: { current_stock: { decrement: qty } },
+            });
+          }
+        }
+
+        await tx.saleReturn.delete({ where: { id: returnId } });
+
+        if (saleReturn.saleId) {
+          const remainingReturns = await tx.saleReturn.findMany({
+            where: { saleId: saleReturn.saleId },
+            include: { returnItems: true },
+          });
+          const returnedQty = new Map();
+          for (const r of remainingReturns) {
+            for (const ri of r.returnItems || []) {
+              const key = ri.productId ? `p-${ri.productId}` : `m-${ri.materialId}`;
+              returnedQty.set(key, (returnedQty.get(key) || 0) + (parseFloat(ri.quantity || 0)));
+            }
+          }
+          const fullyReturned = (saleReturn.sale?.saleItems || []).every((si) => {
+            const key = si.productId ? `p-${si.productId}` : `m-${si.materialId}`;
+            return (returnedQty.get(key) || 0) >= (parseFloat(si.quantity || 0));
+          });
+          await tx.sale.update({
+            where: { id: saleReturn.saleId },
+            data: {
+              isReturned: fullyReturned,
+              returnedAt: fullyReturned ? new Date() : null,
+            },
+          });
+        }
+      });
+
+      res.json({ success: true, message: "Sale return deleted successfully" });
+    } catch (err) {
+      if (err.status === 403) return res.status(403).json({ error: "Forbidden" });
+      res.status(400).json({ error: err.message || "Failed to delete sale return" });
+    }
+  });
 }
 
 module.exports = { registerShopSaleReturnRoutes };

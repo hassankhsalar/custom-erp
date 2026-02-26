@@ -7,6 +7,7 @@ const prisma = new PrismaClient();
 router.get('/', async (req, res) => {
   try {
     const accounts = await prisma.bankAccount.findMany({
+      where: { deleted_at: false },
       orderBy: { id: 'desc' }
     });
     res.json(accounts);
@@ -30,7 +31,7 @@ router.post('/', async (req, res) => {
 
     const cleanAccountNumber = account_number.toString().replace(/\s+/g, '');
     const existing = await prisma.bankAccount.findFirst({
-      where: { account_number: cleanAccountNumber }
+      where: { account_number: cleanAccountNumber, deleted_at: false }
     });
     if (existing) {
       return res.status(400).json({ error: 'Account number already exists' });
@@ -90,13 +91,14 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// Delete bank account
+// Soft delete bank account
 router.delete('/:id', async (req, res) => {
   try {
-    await prisma.bankAccount.delete({
-      where: { id: parseInt(req.params.id) }
+    await prisma.bankAccount.update({
+      where: { id: parseInt(req.params.id) },
+      data: { deleted_at: true }
     });
-    res.json({ message: 'Bank account deleted successfully' });
+    res.json({ message: 'Bank account archived successfully' });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

@@ -17,6 +17,7 @@ model User {
   name        String?
   password    String
   isActive    Boolean  @default(true)
+  deleted_at  Boolean  @default(false)
   bypassGlobalAccessWindow Boolean @default(false)
   sessionVersion Int   @default(0)
   loginStartTime String? @db.VarChar(5)
@@ -113,6 +114,7 @@ model Accounts {
   account_number   String    @unique
   balance     Float     @default(0)
   status      String
+  deleted_at  Boolean  @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   transactions Transactions[]
@@ -133,6 +135,7 @@ model BankAccount {
   starting_balance    Float     @default(0)
   current_balance     Float     @default(0)
   withdraw_charge     Float?
+  deleted_at          Boolean   @default(false)
   transactions        Transactions[]
   sales               Sale[]
   cashRegisterWithdraws CashRegisterWithdraw[]
@@ -199,6 +202,7 @@ model LeaveCategory {
   name        String
   isPaid      Boolean  @default(true)
   maxDays     Int?
+  deleted_at  Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   leaveRequests LeaveRequest[]
@@ -260,6 +264,7 @@ model Salary {
 model ExpenseCategory {
   id        Int      @id @default(autoincrement())
   name      String   @unique
+  deleted_at Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   expenses  Expense[]
@@ -309,6 +314,7 @@ model CashRegister {
   id          Int       @id @default(autoincrement())
   name        String
   status      String
+  deleted_at  Boolean              @default(false)
   cash_in_hand Float              @default(0)
   last_opened DateTime?
   last_closed DateTime?
@@ -750,6 +756,7 @@ model Supplier {
   name      String
   mobile    String?
   address   String?
+  deleted_at Boolean @default(false)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   purchases Purchase[] @relation("SupplierPurchases")
@@ -1540,6 +1547,7 @@ model Customer {
   address         String?
   total_purchase  Float     @default(0)
   total_due       Float     @default(0)
+  deleted_at      Boolean   @default(false)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   sales           Sale[]

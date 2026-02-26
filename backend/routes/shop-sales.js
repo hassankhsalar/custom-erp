@@ -4,6 +4,7 @@ const prisma = new PrismaClient();
 const router = express.Router();
 const { createTransaction } = require('../utils/transactionHelper');
 const { createNotification } = require('../utils/notificationHelper');
+const { rollbackAndDeleteTransactionsByWhere } = require('../utils/transactionRollback');
 const { buildScope, ensureTypeScope, ensureIdScope } = require("../utils/associateScope");
 const { getAvailableBatches, decrementBatch } = require("../utils/batchDetails");
 const { assertActivePlace, assertActiveItem } = require("../utils/softDelete");
@@ -25,8 +26,8 @@ const isSameCalendarDay = (a, b) =>
   a.getDate() === b.getDate();
 
 const getRequesterAccessContext = async (userId) => {
-  const user = await prisma.user.findUnique({
-    where: { id: Number(userId) },
+  const user = await prisma.user.findFirst({
+    where: { id: Number(userId), deleted_at: false },
     include: {
       permission: {
         select: {
@@ -440,8 +441,8 @@ router.post("/", async (req, res) => {
         if (!assignment) {
           throw new Error("Selected cash register is not assigned to this shop");
         }
-        const existingRegister = await tx.cashRegister.findUnique({
-          where: { id: registerId },
+        const existingRegister = await tx.cashRegister.findFirst({
+          where: { id: registerId, deleted_at: false },
           select: { id: true, status: true }
         });
         if (!existingRegister || existingRegister.status !== "active") {
@@ -1051,8 +1052,8 @@ router.post("/:id/payments", async (req, res) => {
         if (!assignment) {
           throw new Error("Selected cash register is not assigned to this shop");
         }
-        const existingRegister = await tx.cashRegister.findUnique({
-          where: { id: registerId },
+        const existingRegister = await tx.cashRegister.findFirst({
+          where: { id: registerId, deleted_at: false },
           select: { id: true, status: true }
         });
         if (!existingRegister || existingRegister.status !== "active") {
@@ -1558,7 +1559,7 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// Delete sale (only if no payments)
+// Delete sale and rollback all linked payment balances
 router.delete("/:id", async (req, res) => {
   try {
     const saleId = parseInt(req.params.id);
@@ -1568,7 +1569,10 @@ router.delete("/:id", async (req, res) => {
 
     const sale = await prisma.sale.findUnique({
       where: { id: saleId },
-      include: { saleItems: true }
+      include: {
+        saleItems: true,
+        saleReturns: { include: { returnItems: true } },
+      }
     });
     if (!sale) {
       return res.status(404).json({ error: "Sale not found" });
@@ -1581,11 +1585,34 @@ router.delete("/:id", async (req, res) => {
     if (!canDelete) {
       return res.status(403).json({ error: "You do not have permission to delete this sale" });
     }
-    if ((parseFloat(sale.paidAmount) || 0) > 0) {
-      return res.status(400).json({ error: "Cannot delete sale with payments" });
-    }
-
     await prisma.$transaction(async (tx) => {
+      for (const saleReturn of sale.saleReturns || []) {
+        for (const item of saleReturn.returnItems || []) {
+          const qty = parseFloat(item.quantity || 0);
+          if (qty <= 0) continue;
+          if (item.productId) {
+            await tx.shopProduct.updateMany({
+              where: { shop_id: sale.shopId, product_id: item.productId },
+              data: { stock: { decrement: qty } },
+            });
+            await tx.product.updateMany({
+              where: { id: item.productId },
+              data: { stock: { decrement: qty } },
+            });
+          }
+          if (item.materialId) {
+            await tx.shopMaterial.updateMany({
+              where: { shop_id: sale.shopId, material_id: item.materialId },
+              data: { stock: { decrement: qty } },
+            });
+            await tx.material.updateMany({
+              where: { id: item.materialId },
+              data: { current_stock: { decrement: qty } },
+            });
+          }
+        }
+      }
+
       for (const item of sale.saleItems) {
         if (item.productId) {
           await tx.shopProduct.update({
@@ -1619,8 +1646,12 @@ router.delete("/:id", async (req, res) => {
         }
       }
 
+      await tx.saleReturnItem.deleteMany({ where: { saleReturn: { saleId } } });
+      await tx.saleReturn.deleteMany({ where: { saleId } });
+      await tx.warrantyClaim.deleteMany({ where: { warranty: { saleId } } });
+      await tx.userWarranty.deleteMany({ where: { saleId } });
+      await rollbackAndDeleteTransactionsByWhere(tx, { saleId }, { reverseBalances: true });
       await tx.saleItem.deleteMany({ where: { saleId } });
-      await tx.transactions.deleteMany({ where: { saleId } });
       await tx.sale.delete({ where: { id: saleId } });
     });
 

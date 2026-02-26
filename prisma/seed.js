@@ -525,7 +525,7 @@ async function main() {
   await prisma.salary.createMany({ data: salaryRecords, skipDuplicates: true });
 
   console.log('Seeding purchases (300000)...');
-  for (let i = 0; i < 300000; i += 1) {
+  for (let i = 0; i < 300; i += 1) {
     const destinationType = pick(['store', 'shop', 'factory']);
     const destinationId =
       destinationType === 'store'
@@ -627,7 +627,7 @@ async function main() {
   }
 
   console.log('Seeding sales (1000000)...');
-  for (let i = 0; i < 1000000; i += 1) {
+  for (let i = 0; i < 1000; i += 1) {
     const shop = pick(shops);
     const itemsCount = randInt(1, 3);
     const saleItems = [];
@@ -714,7 +714,7 @@ async function main() {
 
   console.log('Seeding transfers (30000)...');
   const transferStatuses = ['processing', 'pending', 'on_the_way', 'complete', 'not_received'];
-  for (let i = 0; i < 30000; i += 1) {
+  for (let i = 0; i < 300; i += 1) {
     const fromType = pick(['store', 'shop', 'factory']);
     let toType = pick(['store', 'shop', 'factory']);
     while (toType === fromType) {

@@ -2,7 +2,7 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const jwt = require('jsonwebtoken');
 const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associateScope');
-const { mergeIncomingBatch, parseDateOnly } = require('../utils/batchDetails');
+const { mergeIncomingBatch, parseDateOnly, decrementBatch } = require('../utils/batchDetails');
 const { createNotification } = require('../utils/notificationHelper');
 const { assertActivePlace, assertActiveItem } = require('../utils/softDelete');
 
@@ -444,19 +444,88 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const production = await prisma.production.findUnique({
       where: { id: parseInt(id) },
-      select: { factoryId: true }
+      include: {
+        productionProducts: true,
+        productionMaterials: true,
+      },
     });
     if (!production) {
       return res.status(404).json({ error: 'Production not found' });
     }
     const scope = await buildScope(prisma, req.user.userId);
     ensureIdScope(scope, 'factory', production.factoryId);
-    // Delete associated production products first
-    await prisma.productionProducts.deleteMany({
-      where: { productionId: parseInt(id) },
-    });
-    await prisma.production.delete({
-      where: { id: parseInt(id) },
+    await prisma.$transaction(async (tx) => {
+      for (const material of production.productionMaterials || []) {
+        const qty = parseFloat(material.quantity || 0);
+        if (qty > 0) {
+          await tx.factoryMaterial.updateMany({
+            where: {
+              factoryId: production.factoryId,
+              materialId: material.materialId,
+            },
+            data: {
+              stock: { increment: qty },
+            },
+          });
+        }
+      }
+
+      if (String(production.status || "").toLowerCase() === "production_done") {
+        for (const product of production.productionProducts || []) {
+          const receivedQty = parseFloat(product.received || 0);
+          if (receivedQty > 0) {
+            const existingRow = await tx.factoryProduct.findFirst({
+              where: {
+                factoryId: production.factoryId,
+                productId: product.productId,
+              },
+            });
+            if (existingRow) {
+              const batchInfo = {
+                batchNumber: product.batchNumber || product.code,
+                expiryDate: parseDateOnly(product.expiryDate),
+              };
+              await tx.factoryProduct.update({
+                where: {
+                  factoryId_productId: {
+                    factoryId: production.factoryId,
+                    productId: product.productId,
+                  },
+                },
+                data: {
+                  stock: { decrement: receivedQty },
+                  batchDetails: decrementBatch(existingRow.batchDetails, batchInfo, receivedQty),
+                },
+              });
+            }
+          }
+        }
+
+        for (const material of production.productionMaterials || []) {
+          const fineQty = parseFloat(material.fineMaterial || 0);
+          if (fineQty > 0) {
+            await tx.factoryMaterial.updateMany({
+              where: {
+                factoryId: production.factoryId,
+                materialId: material.materialId,
+              },
+              data: {
+                stock: { decrement: fineQty },
+              },
+            });
+          }
+        }
+      }
+
+      await tx.productionProducts.deleteMany({
+        where: { productionId: parseInt(id) },
+      });
+      await tx.productionMaterial.deleteMany({
+        where: { productionId: parseInt(id) },
+      });
+      await tx.production.delete({
+        where: { id: parseInt(id) },
+      });
     });
     res.status(204).send(); // No content
   } catch (error) {

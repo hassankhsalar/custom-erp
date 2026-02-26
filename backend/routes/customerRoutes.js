@@ -13,13 +13,14 @@ router.get("/", async (req, res) => {
     // Build where clause for search
     const where = search
       ? {
+          deleted_at: false,
           OR: [
             { name: { contains: search } },
             { mobile: { contains: search } },
             { email: { contains: search } },
           ],
         }
-      : {};
+      : { deleted_at: false };
 
     // Get total count for pagination
     const totalCount = await prisma.customer.count({ where });
@@ -51,13 +52,14 @@ router.get("/all-customers", async (req, res) => {
     // Build where clause for search
     const where = search
       ? {
+          deleted_at: false,
           OR: [
             { name: { contains: search } },
             { mobile: { contains: search } },
             { email: { contains: search } },
           ],
         }
-      : {};
+      : { deleted_at: false };
 
     // Get paginated customers
     const customers = await prisma.customer.findMany({
@@ -100,8 +102,8 @@ router.post("/", async (req, res) => {
 router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const customer = await prisma.customer.findUnique({
-      where: { id: parseInt(id) },
+    const customer = await prisma.customer.findFirst({
+      where: { id: parseInt(id), deleted_at: false },
     });
     if (!customer) {
       return res.status(404).json({ error: "Customer not found" });
@@ -133,14 +135,15 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// Delete a customer
+// Soft delete a customer
 router.delete("/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    await prisma.customer.delete({
+    await prisma.customer.update({
       where: { id: parseInt(id) },
+      data: { deleted_at: true },
     });
-    res.status(204).send(); // No content
+    res.status(200).json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -2034,7 +2034,7 @@ export default function AllPurchase() {
                 <button 
                   onClick={handleDeleteSubmit}
                   className="flex-1 bg-gradient-to-r from-red-500 to-red-600 text-white font-medium py-3 rounded-lg hover:from-red-600 hover:to-red-700 transition shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
-                  disabled={deleteLoading || selectedPurchase.paidAmount > 0}
+                  disabled={deleteLoading}
                 >
                   {deleteLoading ? (
                     <>
@@ -2046,15 +2046,6 @@ export default function AllPurchase() {
                   )}
                 </button>
               </div>
-              
-              {selectedPurchase.paidAmount > 0 && (
-                <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-amber-700 text-sm text-center">
-                    ⚠️ Cannot delete purchase with existing payments (${selectedPurchase.paidAmount}). 
-                    Refund payments first.
-                  </p>
-                </div>
-              )}
             </div>
           </div>
         </div>

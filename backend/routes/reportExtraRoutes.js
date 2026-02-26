@@ -59,6 +59,7 @@ router.get("/cash-bank/details", async (req, res) => {
     `;
 
     const cashRegisters = await prisma.cashRegister.findMany({
+      where: { deleted_at: false },
       select: { id: true, name: true, cash_in_hand: true, status: true }
     });
 
@@ -77,8 +78,9 @@ router.get("/cash-bank/details", async (req, res) => {
     const limit = parseInt(req.query.limit || "10", 10);
     const offset = (page - 1) * limit;
 
-    const totalBanks = await prisma.bankAccount.count();
+    const totalBanks = await prisma.bankAccount.count({ where: { deleted_at: false } });
     const bankAccounts = await prisma.bankAccount.findMany({
+      where: { deleted_at: false },
       skip: offset,
       take: limit,
       select: { id: true, name: true, account_number: true, withdraw_charge: true, current_balance: true }
@@ -286,7 +288,7 @@ router.get("/customer/details", async (req, res) => {
       ? Prisma.sql`AND s.createdAt >= ${start} AND s.createdAt <= ${end}`
       : Prisma.sql``;
 
-    const totalCount = await prisma.customer.count();
+    const totalCount = await prisma.customer.count({ where: { deleted_at: false } });
 
     const rows = await prisma.$queryRaw`
       SELECT c.id, c.name, c.mobile, c.email,
@@ -309,6 +311,7 @@ router.get("/customer/details", async (req, res) => {
         ${saleDateClause}
         GROUP BY s.customerId
       ) agg ON agg.customerId = c.id
+      WHERE c.deleted_at = 0
       ORDER BY c.id DESC
       LIMIT ${limit} OFFSET ${offset}
     `;
@@ -341,7 +344,7 @@ router.get("/supplier/details", async (req, res) => {
       ? Prisma.sql`AND p.createdAt >= ${start} AND p.createdAt <= ${end}`
       : Prisma.sql``;
 
-    const totalCount = await prisma.supplier.count();
+    const totalCount = await prisma.supplier.count({ where: { deleted_at: false } });
 
     const rows = await prisma.$queryRaw`
       SELECT s.id, s.name, s.mobile,
@@ -364,6 +367,7 @@ router.get("/supplier/details", async (req, res) => {
         ${purchaseDateClause}
         GROUP BY p.supplierId
       ) agg ON agg.supplierId = s.id
+      WHERE s.deleted_at = 0
       ORDER BY s.id DESC
       LIMIT ${limit} OFFSET ${offset}
     `;

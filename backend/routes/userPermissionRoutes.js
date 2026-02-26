@@ -8,6 +8,7 @@ const prisma = new PrismaClient();
 router.get('/',  async (req, res) => {
   try {
     const users = await prisma.user.findMany({
+      where: { deleted_at: false },
       include: {
         permission: {
           select: {
@@ -36,8 +37,8 @@ router.put('/:userId/permission',  async (req, res) => {
     const { permissionId } = req.body;
 
     // Check if user exists
-    const user = await prisma.user.findUnique({
-      where: { id: parseInt(userId) }
+    const user = await prisma.user.findFirst({
+      where: { id: parseInt(userId), deleted_at: false }
     });
 
     if (!user) {
@@ -85,8 +86,8 @@ router.get('/:userId/permissions',  async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const user = await prisma.user.findUnique({
-      where: { id: parseInt(userId) },
+    const user = await prisma.user.findFirst({
+      where: { id: parseInt(userId), deleted_at: false },
       include: {
         permission: {
           select: {
@@ -121,8 +122,8 @@ router.get('/:userId/has-permission/:permission',  async (req, res) => {
   try {
     const { userId, permission } = req.params;
 
-    const user = await prisma.user.findUnique({
-      where: { id: parseInt(userId) },
+    const user = await prisma.user.findFirst({
+      where: { id: parseInt(userId), deleted_at: false },
       include: {
         permission: true
       }

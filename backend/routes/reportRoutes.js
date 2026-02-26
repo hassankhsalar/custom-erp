@@ -350,7 +350,7 @@ router.get("/trial-balance", async (req, res) => {
     const transactions = await prisma.transactions.findMany({
       select: { accountId: true, amount: true, added_to_account: true }
     });
-    const accounts = await prisma.accounts.findMany({ select: { id: true, name: true, balance: true } });
+    const accounts = await prisma.accounts.findMany({ where: { deleted_at: false }, select: { id: true, name: true, balance: true } });
 
     const totalsByAccount = {};
     transactions.forEach(t => {
@@ -376,8 +376,8 @@ router.get("/trial-balance", async (req, res) => {
 
 router.get("/cash-bank", async (req, res) => {
   try {
-    const accounts = await prisma.accounts.findMany({ select: { id: true, name: true, balance: true } });
-    const banks = await prisma.bankAccount.findMany({ select: { id: true, name: true, current_balance: true } });
+    const accounts = await prisma.accounts.findMany({ where: { deleted_at: false }, select: { id: true, name: true, balance: true } });
+    const banks = await prisma.bankAccount.findMany({ where: { deleted_at: false }, select: { id: true, name: true, current_balance: true } });
     res.json({ accounts, banks });
   } catch (err) {
     res.status(500).json({ error: err.message });

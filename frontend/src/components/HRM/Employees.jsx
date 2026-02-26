@@ -15,6 +15,7 @@ import {
   UserCog,
   Loader2,
   X,
+  Trash2,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -59,6 +60,7 @@ export default function Employees() {
   const [selectedUserName, setSelectedUserName] = useState("");
   const [selectedManagerName, setSelectedManagerName] = useState("");
   const [selectedEmployeeName, setSelectedEmployeeName] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -299,6 +301,27 @@ export default function Employees() {
     } catch (error) {
       console.error("Error assigning manager:", error);
       alert("Failed to assign manager");
+    }
+  };
+
+  const handleDeleteEmployee = async (userId) => {
+    if (!window.confirm("Delete this employee? This removes employee profile and manager mapping.")) {
+      return;
+    }
+
+    try {
+      setDeletingId(userId);
+      const res = await fetch(`${API_ROUTES.HRM}/employees/${userId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to delete employee");
+      await fetchUsers();
+    } catch (error) {
+      alert(error.message || "Failed to delete employee");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -954,6 +977,14 @@ export default function Employees() {
                               title="Edit"
                             >
                               <Edit size={16} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteEmployee(user.id)}
+                              disabled={deletingId === user.id}
+                              className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300 disabled:opacity-60"
+                              title="Delete"
+                            >
+                              <Trash2 size={16} />
                             </button>
                           </div>
                         </td>

@@ -369,6 +369,45 @@ router.put("/:id", authenticateToken, async (req, res) => {
   }
 });
 
+router.delete("/:id", authenticateToken, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ error: "Invalid requisition ID" });
+
+    const existing = await prisma.requisition.findUnique({
+      where: { id },
+      include: { sections: { select: { id: true } } },
+    });
+    if (!existing) return res.status(404).json({ error: "Requisition not found" });
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    ensureIdScope(scope, existing.requesterType, existing.requesterId);
+
+    const requesterId = req.user?.userId || 0;
+    const isCreator = Number(existing.requesterUserId || 0) === Number(requesterId);
+    if (!scope.isAdmin && existing.requesterUserId && !isCreator) {
+      return res.status(403).json({ error: "Only creator can delete this requisition" });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const sectionIds = (existing.sections || []).map((section) => section.id);
+      if (sectionIds.length > 0) {
+        await tx.requisitionSectionItem.deleteMany({
+          where: { sectionId: { in: sectionIds } },
+        });
+      }
+      await tx.requisitionSection.deleteMany({ where: { requisitionId: id } });
+      await tx.requisitionItem.deleteMany({ where: { requisitionId: id } });
+      await tx.requisition.delete({ where: { id } });
+    });
+
+    return res.json({ success: true, message: "Requisition deleted successfully" });
+  } catch (error) {
+    if (error.status === 403) return res.status(403).json({ error: "Forbidden" });
+    return res.status(500).json({ error: error.message || "Failed to delete requisition" });
+  }
+});
+
 router.get("/", authenticateToken, async (req, res) => {
   try {
     const {

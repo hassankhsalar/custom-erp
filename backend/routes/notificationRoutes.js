@@ -5,8 +5,8 @@ const prisma = new PrismaClient();
 const router = express.Router();
 
 const getAllowedRolesForUser = async (userId) => {
-  const user = await prisma.user.findUnique({
-    where: { id: Number(userId) },
+  const user = await prisma.user.findFirst({
+    where: { id: Number(userId), deleted_at: false },
     select: { permission: { select: { name: true } } },
   });
   const role = String(user?.permission?.name || "default").toLowerCase();

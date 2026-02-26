@@ -25,6 +25,7 @@ import {
   Building2,
   User,
   Clock,
+  Trash2,
   Tag,
   FileText,
   ShoppingBag,
@@ -58,6 +59,7 @@ export default function AllReturns() {
   const [selectedReturn, setSelectedReturn] = useState(null);
   const [returnDetails, setReturnDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   const navigate = useNavigate();
 
@@ -176,6 +178,35 @@ export default function AllReturns() {
       setShops(data);
     } catch (err) {
       console.error("Failed to load shops:", err);
+    }
+  };
+
+  const handleDeleteReturn = async (returnItem) => {
+    if (!window.confirm(`Delete return ${returnItem.reference}? This will reverse related stock changes.`)) {
+      return;
+    }
+
+    try {
+      setDeletingId(returnItem.id);
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_ROUTES.SHOP_SALES}/returns/${returnItem.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete return");
+      }
+      if (selectedReturn?.id === returnItem.id) {
+        closeModal();
+      }
+      await fetchReturns();
+    } catch (err) {
+      alert(err.message || "Failed to delete return");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -902,13 +933,23 @@ export default function AllReturns() {
                           </p>
                         </td>
                         <td className="p-4">
-                          <button
-                            onClick={() => openReturnModal(returnItem)}
-                            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-sm font-medium rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all duration-300 shadow-md hover:shadow-lg"
-                          >
-                            <Eye size={16} />
-                            View
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => openReturnModal(returnItem)}
+                              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-sm font-medium rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all duration-300 shadow-md hover:shadow-lg"
+                            >
+                              <Eye size={16} />
+                              View
+                            </button>
+                            <button
+                              onClick={() => handleDeleteReturn(returnItem)}
+                              disabled={deletingId === returnItem.id}
+                              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-rose-500 text-white text-sm font-medium rounded-xl hover:from-red-600 hover:to-rose-600 transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-60"
+                            >
+                              <Trash2 size={16} />
+                              {deletingId === returnItem.id ? "Deleting..." : "Delete"}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
