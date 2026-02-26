@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { API_ROUTES } from "../../config";
+import { downloadExcelFile } from "../../utils/excelExport";
 import {
   Calendar,
   BarChart3,
@@ -35,14 +36,89 @@ const PurchaseReport = () => {
   const [perDateRows, setPerDateRows] = useState([]);
   const [perMonthRows, setPerMonthRows] = useState([]);
   const [allRows, setAllRows] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [places, setPlaces] = useState([]);
+  const [filters, setFilters] = useState({ supplierId: "", placeType: "", placeId: "" });
   const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1 });
   const [loading, setLoading] = useState({ perDate: false, perMonth: false, all: false });
   const token = localStorage.getItem("token");
 
+  const buildCommonFilterParams = () => {
+    const params = new URLSearchParams();
+    if (filters.supplierId) params.append("supplierId", filters.supplierId);
+    if (filters.placeType) params.append("placeType", filters.placeType);
+    if (filters.placeId) params.append("placeId", filters.placeId);
+    return params;
+  };
+
+  const buildPurchasesAllParams = (page, limit, includeExportAll = false) => {
+    const params = buildCommonFilterParams();
+    if (range.startDate) params.append("startDate", range.startDate);
+    if (range.endDate) params.append("endDate", range.endDate);
+    if (includeExportAll) {
+      params.append("exportAll", "true");
+    } else {
+      params.append("page", String(page));
+      params.append("limit", String(limit));
+    }
+    return params;
+  };
+
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      try {
+        const res = await fetch(API_ROUTES.SUPPLIERS, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        const rows = Array.isArray(data) ? data : (data?.suppliers || []);
+        setSuppliers(rows.filter((row) => !row.deleted_at));
+      } catch (error) {
+        console.error("Error fetching suppliers:", error);
+      }
+    };
+
+    fetchSuppliers();
+  }, [token]);
+
+  useEffect(() => {
+    const fetchPlaces = async () => {
+      if (!filters.placeType) {
+        setPlaces([]);
+        return;
+      }
+
+      const endpoint = filters.placeType === "store"
+        ? API_ROUTES.STORES
+        : filters.placeType === "shop"
+          ? API_ROUTES.SHOPS
+          : API_ROUTES.FACTORIES;
+
+      try {
+        const res = await fetch(endpoint, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        let rows = [];
+        if (Array.isArray(data)) rows = data;
+        else if (Array.isArray(data?.stores)) rows = data.stores;
+        else if (Array.isArray(data?.shops)) rows = data.shops;
+        else if (Array.isArray(data?.factories)) rows = data.factories;
+        setPlaces(rows.filter((row) => !row.deleted_at));
+      } catch (error) {
+        console.error("Error fetching places:", error);
+      }
+    };
+
+    fetchPlaces();
+  }, [token, filters.placeType]);
+
   const fetchPerDate = async () => {
     setLoading(prev => ({ ...prev, perDate: true }));
     try {
-      const res = await fetch(`${API_ROUTES.REPORT_PURCHASES_PER_DATE}?month=${month}`, {
+      const params = buildCommonFilterParams();
+      params.append("month", String(month));
+      const res = await fetch(`${API_ROUTES.REPORT_PURCHASES_PER_DATE}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -57,7 +133,9 @@ const PurchaseReport = () => {
   const fetchPerMonth = async () => {
     setLoading(prev => ({ ...prev, perMonth: true }));
     try {
-      const res = await fetch(`${API_ROUTES.REPORT_PURCHASES_PER_MONTH}?year=${year}`, {
+      const params = buildCommonFilterParams();
+      params.append("year", String(year));
+      const res = await fetch(`${API_ROUTES.REPORT_PURCHASES_PER_MONTH}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -72,11 +150,7 @@ const PurchaseReport = () => {
   const fetchAll = async (page = 1, limit = 10) => {
     setLoading(prev => ({ ...prev, all: true }));
     try {
-      const params = new URLSearchParams();
-      if (range.startDate) params.append("startDate", range.startDate);
-      if (range.endDate) params.append("endDate", range.endDate);
-      params.append("page", page);
-      params.append("limit", limit);
+      const params = buildPurchasesAllParams(page, limit);
       const res = await fetch(`${API_ROUTES.REPORT_PURCHASES_ALL}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -92,11 +166,11 @@ const PurchaseReport = () => {
 
   useEffect(() => {
     if (tab === "perDate") fetchPerDate();
-  }, [tab, month]);
+  }, [tab, month, filters.supplierId, filters.placeType, filters.placeId]);
 
   useEffect(() => {
     if (tab === "perMonth") fetchPerMonth();
-  }, [tab, year]);
+  }, [tab, year, filters.supplierId, filters.placeType, filters.placeId]);
 
   useEffect(() => {
     if (tab === "all") fetchAll(pagination.page, pagination.limit);
@@ -140,8 +214,45 @@ const PurchaseReport = () => {
   const perMonthTotals = calculateTotals(perMonthRows);
   const allTotals = calculateTotals(allRows);
 
-  const handleExport = () => {
-    alert("Export functionality would be implemented here");
+  const handleExport = async () => {
+    let data = [];
+
+    if (tab === "perDate") {
+      data = [["Date", "Purchases", "Amount", "Shipping Cost"]];
+      daysOfMonth.forEach((d) => {
+        const stats = perDateMap[d.key] || { purchaseCount: 0, totalAmount: 0, shippingCost: 0 };
+        data.push([d.key, stats.purchaseCount, stats.totalAmount, stats.shippingCost]);
+      });
+    } else if (tab === "perMonth") {
+      data = [["Month", "Purchases", "Amount", "Shipping Cost"]];
+      Array.from({ length: 12 }, (_, i) => {
+        const row = perMonthRows.find((r) => Number(r.month) === i + 1) || { purchaseCount: 0, totalAmount: 0, shippingCost: 0 };
+        data.push([new Date(0, i).toLocaleString("en-US", { month: "long" }), row.purchaseCount, row.totalAmount, row.shippingCost]);
+      });
+    } else {
+      let rowsToExport = allRows;
+      try {
+        const params = buildPurchasesAllParams(1, pagination.limit, true);
+        const res = await fetch(`${API_ROUTES.REPORT_PURCHASES_ALL}?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const exportData = await res.json();
+        rowsToExport = exportData.rows || [];
+      } catch (error) {
+        console.error("Error fetching full purchase export data:", error);
+      }
+      
+      data = [["Date", "Place", "Purchases", "Amount", "Shipping Cost"]];
+      rowsToExport.forEach((r) => {
+        data.push([r.date.slice(0, 10), (filters.placeType && filters.placeId) ? places.find(p => p.id == filters.placeId).name : filters.placeType || "All Places", r.purchaseCount, r.totalAmount, r.shippingCost]);
+      });
+    }
+
+    downloadExcelFile({
+      sheetName: "Purchase Report",
+      fileName: `purchase_report_${tab}_${new Date().toISOString().split("T")[0]}.xls`,
+      rows: data
+    });
   };
 
   const getCardColor = (index) => {
@@ -200,7 +311,7 @@ const PurchaseReport = () => {
                 className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 <Download size={18} />
-                Export
+                Export Excel
               </button>
             </div>
           </div>
@@ -303,13 +414,48 @@ const PurchaseReport = () => {
                     {loading.perDate ? "Loading..." : `${perDateRows.length} days with purchases`}
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   <input
                     type="month"
                     value={month}
                     onChange={(e) => setMonth(e.target.value)}
                     className="backdrop-blur-sm bg-white/80 border border-white/60 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-300 transition-all duration-300"
                   />
+                  <select
+                    value={filters.supplierId}
+                    onChange={(e) => setFilters((prev) => ({ ...prev, supplierId: e.target.value }))}
+                    className="backdrop-blur-sm bg-white/80 border border-white/60 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-300 transition-all duration-300"
+                  >
+                    <option value="">All Suppliers</option>
+                    {suppliers.map((supplier) => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={filters.placeType}
+                    onChange={(e) => setFilters((prev) => ({ ...prev, placeType: e.target.value, placeId: "" }))}
+                    className="backdrop-blur-sm bg-white/80 border border-white/60 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-300 transition-all duration-300"
+                  >
+                    <option value="">All Places</option>
+                    <option value="store">Store</option>
+                    <option value="shop">Shop</option>
+                    <option value="factory">Factory</option>
+                  </select>
+                  <select
+                    value={filters.placeId}
+                    onChange={(e) => setFilters((prev) => ({ ...prev, placeId: e.target.value }))}
+                    disabled={!filters.placeType}
+                    className="backdrop-blur-sm bg-white/80 border border-white/60 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-300 transition-all duration-300 disabled:opacity-60"
+                  >
+                    <option value="">{filters.placeType ? "All Selected Places" : "Select Place Type First"}</option>
+                    {places.map((place) => (
+                      <option key={place.id} value={place.id}>
+                        {place.name}
+                      </option>
+                    ))}
+                  </select>
                   <div className="text-sm text-gray-600">
                     {new Date(month + "-01").toLocaleDateString("en-US", { month: "long", year: "numeric" })}
                   </div>
@@ -394,7 +540,7 @@ const PurchaseReport = () => {
                     {loading.perMonth ? "Loading..." : `${perMonthRows.filter(r => r.purchaseCount > 0).length} months with purchases`}
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   <input
                     type="number"
                     value={year}
@@ -403,6 +549,41 @@ const PurchaseReport = () => {
                     min="2000"
                     max="2100"
                   />
+                  <select
+                    value={filters.supplierId}
+                    onChange={(e) => setFilters((prev) => ({ ...prev, supplierId: e.target.value }))}
+                    className="backdrop-blur-sm bg-white/80 border border-white/60 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-300 transition-all duration-300"
+                  >
+                    <option value="">All Suppliers</option>
+                    {suppliers.map((supplier) => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={filters.placeType}
+                    onChange={(e) => setFilters((prev) => ({ ...prev, placeType: e.target.value, placeId: "" }))}
+                    className="backdrop-blur-sm bg-white/80 border border-white/60 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-300 transition-all duration-300"
+                  >
+                    <option value="">All Places</option>
+                    <option value="store">Store</option>
+                    <option value="shop">Shop</option>
+                    <option value="factory">Factory</option>
+                  </select>
+                  <select
+                    value={filters.placeId}
+                    onChange={(e) => setFilters((prev) => ({ ...prev, placeId: e.target.value }))}
+                    disabled={!filters.placeType}
+                    className="backdrop-blur-sm bg-white/80 border border-white/60 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-300 transition-all duration-300 disabled:opacity-60"
+                  >
+                    <option value="">{filters.placeType ? "All Selected Places" : "Select Place Type First"}</option>
+                    {places.map((place) => (
+                      <option key={place.id} value={place.id}>
+                        {place.name}
+                      </option>
+                    ))}
+                  </select>
                   <div className="text-sm text-gray-600">Year overview for {year}</div>
                 </div>
               </div>
@@ -492,12 +673,12 @@ const PurchaseReport = () => {
                     <h3 className="text-lg font-semibold text-gray-800">Filter Date Range</h3>
                   </div>
                   <div className="text-sm text-gray-600">
-                    {loading.all ? "Loading..." : `${allRows.length} purchase records`}
+                    {loading.all ? "Loading..." : `${pagination.totalCount || 0} purchase records`}
                   </div>
                 </div>
                 
                 <div className="flex flex-col md:flex-row gap-4 items-end">
-                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         <div className="flex items-center gap-2">
@@ -526,6 +707,68 @@ const PurchaseReport = () => {
                         onChange={(e) => setRange(prev => ({ ...prev, endDate: e.target.value }))}
                         className="w-full backdrop-blur-sm bg-white/80 border border-white/60 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-300 transition-all duration-300"
                       />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <div className="flex items-center gap-2">
+                          <Package size={14} />
+                          Supplier
+                        </div>
+                      </label>
+                      <select
+                        value={filters.supplierId}
+                        onChange={(e) => setFilters((prev) => ({ ...prev, supplierId: e.target.value }))}
+                        className="w-full backdrop-blur-sm bg-white/80 border border-white/60 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-300 transition-all duration-300"
+                      >
+                        <option value="">All Suppliers</option>
+                        {suppliers.map((supplier) => (
+                          <option key={supplier.id} value={supplier.id}>
+                            {supplier.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <div className="flex items-center gap-2">
+                          <Package size={14} />
+                          Place Type
+                        </div>
+                      </label>
+                      <select
+                        value={filters.placeType}
+                        onChange={(e) => setFilters((prev) => ({ ...prev, placeType: e.target.value, placeId: "" }))}
+                        className="w-full backdrop-blur-sm bg-white/80 border border-white/60 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-300 transition-all duration-300"
+                      >
+                        <option value="">All Places</option>
+                        <option value="store">Store</option>
+                        <option value="shop">Shop</option>
+                        <option value="factory">Factory</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <div className="flex items-center gap-2">
+                          <Package size={14} />
+                          Place
+                        </div>
+                      </label>
+                      <select
+                        value={filters.placeId}
+                        onChange={(e) => setFilters((prev) => ({ ...prev, placeId: e.target.value }))}
+                        disabled={!filters.placeType}
+                        className="w-full backdrop-blur-sm bg-white/80 border border-white/60 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-300 transition-all duration-300 disabled:opacity-60"
+                      >
+                        <option value="">{filters.placeType ? "All Selected Places" : "Select Place Type First"}</option>
+                        {places.map((place) => (
+                          <option key={place.id} value={place.id}>
+                            {place.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                   
@@ -649,9 +892,9 @@ const PurchaseReport = () => {
                           <div className="text-sm text-gray-700">
                             Showing <span className="font-semibold">{(pagination.page - 1) * pagination.limit + 1}</span> to{" "}
                             <span className="font-semibold">
-                              {Math.min(pagination.page * pagination.limit, allRows.length)}
+                              {Math.min(pagination.page * pagination.limit, pagination.totalCount || 0)}
                             </span>{" "}
-                            of <span className="font-semibold">{allRows.length}</span> records
+                            of <span className="font-semibold">{pagination.totalCount || 0}</span> records
                           </div>
                         </div>
 

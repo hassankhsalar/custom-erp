@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES } from "../../config";
 import { activeOnly } from "../../utils/softDelete";
+import { downloadExcelFile } from "../../utils/excelExport";
 import {
   Factory,
   Filter,
@@ -40,6 +41,27 @@ const WastageReport = () => {
   
   const token = localStorage.getItem("token");
 
+  const formatDateTime = (value) => {
+    const date = value instanceof Date ? value : new Date(value);
+    return date.toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  };
+
+  const buildWastageParams = (page, limit) => {
+    const params = new URLSearchParams();
+    params.append("factoryId", factoryId);
+    params.append("page", String(page));
+    params.append("limit", String(limit));
+    if (dateRange.startDate) params.append("startDate", dateRange.startDate);
+    if (dateRange.endDate) params.append("endDate", dateRange.endDate);
+    return params;
+  };
+
   const fetchFactories = async () => {
     try {
       const res = await fetch(API_ROUTES.FACTORIES, {
@@ -57,12 +79,7 @@ const WastageReport = () => {
     
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      params.append("factoryId", factoryId);
-      params.append("page", page);
-      params.append("limit", limit);
-      if (dateRange.startDate) params.append("startDate", dateRange.startDate);
-      if (dateRange.endDate) params.append("endDate", dateRange.endDate);
+      const params = buildWastageParams(page, limit);
       
       const endpoint = tab === "materials"
         ? API_ROUTES.REPORT_WASTAGE_MATERIALS
@@ -81,6 +98,33 @@ const WastageReport = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchAllRowsForExport = async () => {
+    if (!factoryId) return [];
+
+    const endpoint = tab === "materials"
+      ? API_ROUTES.REPORT_WASTAGE_MATERIALS
+      : API_ROUTES.REPORT_WASTAGE_PRODUCTS;
+    const limit = 500;
+    let page = 1;
+    let totalPages = 1;
+    const all = [];
+
+    while (page <= totalPages) {
+      const params = buildWastageParams(page, limit);
+      const res = await fetch(`${endpoint}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      const batch = activeOnly(data.rows || []);
+      all.push(...batch);
+      totalPages = Number(data.pagination?.totalPages || 1);
+      page += 1;
+      if (batch.length === 0) break;
+    }
+
+    return all;
   };
 
   const calculateSummary = (data) => {
@@ -135,8 +179,56 @@ const WastageReport = () => {
     setSummary({ totalUsed: 0, totalProduced: 0, totalScrap: 0, avgWastage: 0 });
   };
 
-  const handleExport = () => {
-    alert("Export functionality would be implemented here");
+  const handleExport = async () => {
+    const exportRows = await fetchAllRowsForExport();
+    if (!exportRows.length) return;
+
+    const factoryName = getFactoryName();
+    const rangeLabel = dateRange.startDate || dateRange.endDate
+      ? `${dateRange.startDate || "Start"} to ${dateRange.endDate || "End"}`
+      : "All Dates";
+
+    const header = tab === "materials"
+      ? ["Factory", "Material ID", "Material Name", "Brand", "Unit", "Total Used", "Total Scrap", "Wastage %", "Current Scrap"]
+      : ["Factory", "Product ID", "Product Name", "Category", "Total Produced", "Total Scrap", "Wastage %", "Current Scrap"];
+
+    const body = tab === "materials"
+      ? exportRows.map((r) => [
+          factoryName,
+          r.materialId,
+          r.name,
+          r.brand || "",
+          r.unit || "",
+          Number(r.totalUsed || 0),
+          Number(r.totalScrap || 0),
+          Number(r.scrapPercent || 0),
+          Number(r.currentScrap || 0)
+        ])
+      : exportRows.map((r) => [
+          factoryName,
+          r.productId,
+          r.name,
+          r.category || "",
+          Number(r.totalProduced || 0),
+          Number(r.totalScrap || 0),
+          Number(r.scrapPercent || 0),
+          Number(r.currentScrap || 0)
+        ]);
+
+    const rowsForExcel = [
+      ["Factory", factoryName],
+      ["Date Range", rangeLabel],
+      ["Exported At", formatDateTime(new Date())],
+      [],
+      header,
+      ...body
+    ];
+
+    downloadExcelFile({
+      sheetName: tab === "materials" ? "Material Wastage" : "Product Wastage",
+      fileName: `wastage_report_${tab}_${factoryName.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.xls`,
+      rows: rowsForExcel
+    });
   };
 
   const nextPage = () => {
@@ -165,7 +257,7 @@ const WastageReport = () => {
   };
 
   const getFactoryName = () => {
-    const factory = factories.find(f => f.id === factoryId);
+    const factory = factories.find(f => String(f.id) === String(factoryId));
     return factory ? factory.name : "No factory selected";
   };
 
@@ -209,7 +301,7 @@ const WastageReport = () => {
                 className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 <Download size={18} />
-                Export
+                Export Excel
               </button>
             </div>
           </div>

@@ -28,6 +28,16 @@ const parseDateRange = (startDate, endDate) => {
   return { start, end };
 };
 
+const parseOptionalId = (value) => {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const parsePlaceType = (value) => {
+  const normalized = String(value || "").toLowerCase();
+  return ["store", "shop", "factory"].includes(normalized) ? normalized : "";
+};
+
 const toNum = (v, fallback = 0) => {
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : fallback;
@@ -61,7 +71,7 @@ const buildSaleScopeSql = (scope) => {
   if (shopIds.length) clauses.push(Prisma.sql`shopId IN (${Prisma.join(shopIds)})`);
   if (storeIds.length) clauses.push(Prisma.sql`storeId IN (${Prisma.join(storeIds)})`);
   if (!clauses.length) return Prisma.sql`1=0`;
-  return Prisma.sql`(${Prisma.join(clauses, Prisma.sql` OR `)})`;
+  return Prisma.sql`(${Prisma.join(clauses, " OR ")})`;
 };
 
 const buildPurchaseScopeSql = (scope) => {
@@ -74,16 +84,20 @@ const buildPurchaseScopeSql = (scope) => {
   if (storeIds.length) clauses.push(Prisma.sql`(destinationType = 'store' AND destinationId IN (${Prisma.join(storeIds)}))`);
   if (factoryIds.length) clauses.push(Prisma.sql`(destinationType = 'factory' AND destinationId IN (${Prisma.join(factoryIds)}))`);
   if (!clauses.length) return Prisma.sql`1=0`;
-  return Prisma.sql`(${Prisma.join(clauses, Prisma.sql` OR `)})`;
+  return Prisma.sql`(${Prisma.join(clauses, " OR ")})`;
 };
 
 router.get("/sales/per-date", async (req, res) => {
   try {
     const { month } = req.query; // YYYY-MM
+    const shopId = parseOptionalId(req.query.shopId);
     const range = parseMonthRange(month);
     if (!range) return res.status(400).json({ error: "month is required (YYYY-MM)" });
     const scope = await getScope(req);
     const scopeSql = buildSaleScopeSql(scope);
+    const whereSql = shopId
+      ? Prisma.sql`createdAt >= ${range.start} AND createdAt <= ${range.end} AND ${scopeSql} AND shopId = ${shopId}`
+      : Prisma.sql`createdAt >= ${range.start} AND createdAt <= ${range.end} AND ${scopeSql}`;
 
     const rows = await prisma.$queryRaw`
       SELECT DATE(createdAt) as date,
@@ -91,7 +105,7 @@ router.get("/sales/per-date", async (req, res) => {
              SUM(grandTotal) as totalAmount,
              SUM(COALESCE(total_cost, 0)) as totalCost
       FROM \`Sale\`
-      WHERE createdAt >= ${range.start} AND createdAt <= ${range.end} AND ${scopeSql}
+      WHERE ${whereSql}
       GROUP BY DATE(createdAt)
       ORDER BY DATE(createdAt) ASC
     `;
@@ -115,9 +129,13 @@ router.get("/sales/per-date", async (req, res) => {
 router.get("/sales/per-month", async (req, res) => {
   try {
     const year = parseInt(req.query.year, 10);
+    const shopId = parseOptionalId(req.query.shopId);
     if (!year) return res.status(400).json({ error: "year is required" });
     const scope = await getScope(req);
     const scopeSql = buildSaleScopeSql(scope);
+    const whereSql = shopId
+      ? Prisma.sql`YEAR(createdAt) = ${year} AND ${scopeSql} AND shopId = ${shopId}`
+      : Prisma.sql`YEAR(createdAt) = ${year} AND ${scopeSql}`;
 
     const rows = await prisma.$queryRaw`
       SELECT MONTH(createdAt) as month,
@@ -125,7 +143,7 @@ router.get("/sales/per-month", async (req, res) => {
              SUM(grandTotal) as totalAmount,
              SUM(COALESCE(total_cost, 0)) as totalCost
       FROM \`Sale\`
-      WHERE YEAR(createdAt) = ${year} AND ${scopeSql}
+      WHERE ${whereSql}
       GROUP BY MONTH(createdAt)
       ORDER BY MONTH(createdAt) ASC
     `;
@@ -150,6 +168,8 @@ router.get("/sales/per-month", async (req, res) => {
 router.get("/sales/all", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
+    const shopId = parseOptionalId(req.query.shopId);
+    const exportAll = String(req.query.exportAll || "").toLowerCase() === "true" || req.query.exportAll === "1";
     const page = parseInt(req.query.page || "1", 10);
     const limit = parseInt(req.query.limit || "10", 10);
     const offset = (page - 1) * limit;
@@ -157,10 +177,11 @@ router.get("/sales/all", async (req, res) => {
 
     const scope = await getScope(req);
     const scopeSql = buildSaleScopeSql(scope);
-
-    const whereClause = start && end
-      ? Prisma.sql`WHERE createdAt >= ${start} AND createdAt <= ${end} AND ${scopeSql}`
-      : Prisma.sql`WHERE ${scopeSql}`;
+    const whereParts = [scopeSql];
+    if (start && end) whereParts.push(Prisma.sql`createdAt >= ${start} AND createdAt <= ${end}`);
+    if (shopId) whereParts.push(Prisma.sql`shopId = ${shopId}`);
+    const whereClause = Prisma.sql`WHERE ${Prisma.join(whereParts, " AND ")}`;
+    const paginationSql = exportAll ? Prisma.sql`` : Prisma.sql`LIMIT ${limit} OFFSET ${offset}`;
 
     const totalRows = await prisma.$queryRaw`
       SELECT COUNT(*) as count FROM (
@@ -181,8 +202,11 @@ router.get("/sales/all", async (req, res) => {
       ${whereClause}
       GROUP BY DATE(createdAt)
       ORDER BY DATE(createdAt) DESC
-      LIMIT ${limit} OFFSET ${offset}
+      ${paginationSql}
     `;
+    const effectivePage = exportAll ? 1 : page;
+    const effectiveLimit = exportAll ? Number(totalCount || 0) : limit;
+    const totalPages = effectiveLimit > 0 ? Math.ceil(totalCount / effectiveLimit) : 0;
 
     res.json({
       rows: rows.map(r => ({
@@ -192,10 +216,10 @@ router.get("/sales/all", async (req, res) => {
         totalCost: Number(r.totalCost || 0)
       })),
       pagination: {
-        page,
-        limit,
+        page: effectivePage,
+        limit: effectiveLimit,
         totalCount: Number(totalCount || 0),
-        totalPages: Math.ceil(totalCount / limit)
+        totalPages
       }
     });
   } catch (err) {
@@ -214,10 +238,22 @@ router.get("/sales/all", async (req, res) => {
 router.get("/purchases/per-date", async (req, res) => {
   try {
     const { month } = req.query; // YYYY-MM
+    const supplierId = parseOptionalId(req.query.supplierId);
+    const placeType = parsePlaceType(req.query.placeType);
+    const placeId = parseOptionalId(req.query.placeId);
     const range = parseMonthRange(month);
     if (!range) return res.status(400).json({ error: "month is required (YYYY-MM)" });
     const scope = await getScope(req);
     const scopeSql = buildPurchaseScopeSql(scope);
+    const whereParts = [
+      Prisma.sql`createdAt >= ${range.start}`,
+      Prisma.sql`createdAt <= ${range.end}`,
+      scopeSql
+    ];
+    if (supplierId) whereParts.push(Prisma.sql`supplierId = ${supplierId}`);
+    if (placeType) whereParts.push(Prisma.sql`destinationType = ${placeType}`);
+    if (placeType && placeId) whereParts.push(Prisma.sql`destinationId = ${placeId}`);
+    const whereSql = Prisma.sql`${Prisma.join(whereParts, " AND ")}`;
 
     const rows = await prisma.$queryRaw`
       SELECT DATE(createdAt) as date,
@@ -225,7 +261,7 @@ router.get("/purchases/per-date", async (req, res) => {
              SUM(grandTotal) as totalAmount,
              SUM(COALESCE(shippingCost, 0)) as shippingCost
       FROM \`Purchase\`
-      WHERE createdAt >= ${range.start} AND createdAt <= ${range.end} AND ${scopeSql}
+      WHERE ${whereSql}
       GROUP BY DATE(createdAt)
       ORDER BY DATE(createdAt) ASC
     `;
@@ -249,9 +285,20 @@ router.get("/purchases/per-date", async (req, res) => {
 router.get("/purchases/per-month", async (req, res) => {
   try {
     const year = parseInt(req.query.year, 10);
+    const supplierId = parseOptionalId(req.query.supplierId);
+    const placeType = parsePlaceType(req.query.placeType);
+    const placeId = parseOptionalId(req.query.placeId);
     if (!year) return res.status(400).json({ error: "year is required" });
     const scope = await getScope(req);
     const scopeSql = buildPurchaseScopeSql(scope);
+    const whereParts = [
+      Prisma.sql`YEAR(createdAt) = ${year}`,
+      scopeSql
+    ];
+    if (supplierId) whereParts.push(Prisma.sql`supplierId = ${supplierId}`);
+    if (placeType) whereParts.push(Prisma.sql`destinationType = ${placeType}`);
+    if (placeType && placeId) whereParts.push(Prisma.sql`destinationId = ${placeId}`);
+    const whereSql = Prisma.sql`${Prisma.join(whereParts, " AND ")}`;
 
     const rows = await prisma.$queryRaw`
       SELECT MONTH(createdAt) as month,
@@ -259,7 +306,7 @@ router.get("/purchases/per-month", async (req, res) => {
              SUM(grandTotal) as totalAmount,
              SUM(COALESCE(shippingCost, 0)) as shippingCost
       FROM \`Purchase\`
-      WHERE YEAR(createdAt) = ${year} AND ${scopeSql}
+      WHERE ${whereSql}
       GROUP BY MONTH(createdAt)
       ORDER BY MONTH(createdAt) ASC
     `;
@@ -284,6 +331,10 @@ router.get("/purchases/per-month", async (req, res) => {
 router.get("/purchases/all", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
+    const supplierId = parseOptionalId(req.query.supplierId);
+    const placeType = parsePlaceType(req.query.placeType);
+    const placeId = parseOptionalId(req.query.placeId);
+    const exportAll = String(req.query.exportAll || "").toLowerCase() === "true" || req.query.exportAll === "1";
     const page = parseInt(req.query.page || "1", 10);
     const limit = parseInt(req.query.limit || "10", 10);
     const offset = (page - 1) * limit;
@@ -291,10 +342,13 @@ router.get("/purchases/all", async (req, res) => {
 
     const scope = await getScope(req);
     const scopeSql = buildPurchaseScopeSql(scope);
-
-    const whereClause = start && end
-      ? Prisma.sql`WHERE createdAt >= ${start} AND createdAt <= ${end} AND ${scopeSql}`
-      : Prisma.sql`WHERE ${scopeSql}`;
+    const whereParts = [scopeSql];
+    if (start && end) whereParts.push(Prisma.sql`createdAt >= ${start} AND createdAt <= ${end}`);
+    if (supplierId) whereParts.push(Prisma.sql`supplierId = ${supplierId}`);
+    if (placeType) whereParts.push(Prisma.sql`destinationType = ${placeType}`);
+    if (placeType && placeId) whereParts.push(Prisma.sql`destinationId = ${placeId}`);
+    const whereClause = Prisma.sql`WHERE ${Prisma.join(whereParts, " AND ")}`;
+    const paginationSql = exportAll ? Prisma.sql`` : Prisma.sql`LIMIT ${limit} OFFSET ${offset}`;
 
     const totalRows = await prisma.$queryRaw`
       SELECT COUNT(*) as count FROM (
@@ -315,8 +369,11 @@ router.get("/purchases/all", async (req, res) => {
       ${whereClause}
       GROUP BY DATE(createdAt)
       ORDER BY DATE(createdAt) DESC
-      LIMIT ${limit} OFFSET ${offset}
+      ${paginationSql}
     `;
+    const effectivePage = exportAll ? 1 : page;
+    const effectiveLimit = exportAll ? Number(totalCount || 0) : limit;
+    const totalPages = effectiveLimit > 0 ? Math.ceil(totalCount / effectiveLimit) : 0;
 
     res.json({
       rows: rows.map(r => ({
@@ -326,10 +383,10 @@ router.get("/purchases/all", async (req, res) => {
         shippingCost: Number(r.shippingCost || 0)
       })),
       pagination: {
-        page,
-        limit,
+        page: effectivePage,
+        limit: effectiveLimit,
         totalCount: Number(totalCount || 0),
-        totalPages: Math.ceil(totalCount / limit)
+        totalPages
       }
     });
   } catch (err) {

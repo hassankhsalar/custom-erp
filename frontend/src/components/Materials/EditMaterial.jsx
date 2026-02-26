@@ -31,7 +31,6 @@ const EditMaterial = () => {
     unit: '',
     unit_cost: '',
     sale_price: '',
-    current_stock: '',
     alert_quantity: '',
   });
   const [loading, setLoading] = useState(true);
@@ -183,7 +182,6 @@ const EditMaterial = () => {
         ...material,
         unit_cost: parseFloat(material.unit_cost),
         sale_price: material.sale_price ? parseFloat(material.sale_price) : null,
-        current_stock: parseFloat(material.current_stock),
         alert_quantity: material.alert_quantity ? parseFloat(material.alert_quantity) : null,
         image: selectedImageFile ? imageUrl : material.image,
       };
@@ -217,7 +215,6 @@ const EditMaterial = () => {
           description: material.description || '',
           unit: material.unit,
           unit_cost: parseFloat(material.unit_cost),
-          current_stock: parseFloat(material.current_stock),
         };
         
         await axios.put(`${API_ROUTES.MATERIALS}/${id}`, simpleData, {
@@ -424,25 +421,6 @@ const EditMaterial = () => {
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Current Stock <span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <Package className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                        <input
-                          type="number"
-                          name="current_stock"
-                          value={material.current_stock}
-                          onChange={handleChange}
-                          placeholder="Stock quantity"
-                          required
-                          min="0"
-                          step="0.01"
-                          className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                        />
-                      </div>
-                    </div>
                   </div>
 
                   {/* Right Column */}
@@ -546,46 +524,10 @@ const EditMaterial = () => {
               </div>
             </div>
 
-            {/* Stock Status & Pricing Summary */}
+            {/* Pricing Summary */}
             <div className="mt-8 pt-6 border-t border-gray-200/50">
-              <h3 className="text-lg font-medium text-gray-800 mb-4">Stock & Pricing Summary</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Stock Status */}
-                <div className="col-span-1">
-                  <div className={`backdrop-blur-sm rounded-lg p-4 border ${
-                    material.current_stock <= 0 
-                      ? 'bg-red-100/50 border-red-200/50' 
-                      : material.alert_quantity && material.current_stock <= material.alert_quantity
-                        ? 'bg-amber-100/50 border-amber-200/50'
-                        : 'bg-green-100/50 border-green-200/50'
-                  }`}>
-                    <div className="text-sm text-gray-600">Stock Status</div>
-                    <div className={`text-xl font-bold ${
-                      material.current_stock <= 0 
-                        ? 'text-red-700' 
-                        : material.alert_quantity && material.current_stock <= material.alert_quantity
-                          ? 'text-amber-700'
-                          : 'text-green-700'
-                    }`}>
-                      {material.current_stock <= 0 
-                        ? 'Out of Stock' 
-                        : material.alert_quantity && material.current_stock <= material.alert_quantity
-                          ? 'Low Stock'
-                          : 'In Stock'
-                      }
-                    </div>
-                    <div className="text-sm text-gray-600 mt-2">
-                      Current: <span className="font-semibold">{material.current_stock} {material.unit}</span>
-                    </div>
-                    {material.alert_quantity && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        Alert at: {material.alert_quantity} {material.unit}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Cost Summary */}
+              <h3 className="text-lg font-medium text-gray-800 mb-4">Pricing Summary</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="col-span-1">
                   <div className="backdrop-blur-sm bg-white/60 rounded-lg p-4 border border-green-200/50 h-full">
                     <div className="text-sm text-gray-600">Unit Cost</div>
@@ -593,11 +535,6 @@ const EditMaterial = () => {
                       ${parseFloat(material.unit_cost || 0).toFixed(2)}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">Per {material.unit || 'unit'}</div>
-                    <div className="text-sm text-gray-600 mt-2">
-                      Total Value: <span className="font-semibold">
-                        ${(parseFloat(material.current_stock || 0) * parseFloat(material.unit_cost || 0)).toFixed(2)}
-                      </span>
-                    </div>
                   </div>
                 </div>
 

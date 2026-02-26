@@ -71,7 +71,6 @@ const EditProduct = () => {
           sale_price: response.data.sale_price || '',
           wholesale_price: response.data.wholesale_price || '',
           cost: response.data.cost || '',
-          stock: response.data.stock || 0,
           alert_quantity: response.data.alert_quantity || '0',
           category: response.data.category || '',
           barcode: response.data.barcode || '',
@@ -271,7 +270,6 @@ const EditProduct = () => {
         sale_price: parseFloat(product.sale_price),
         wholesale_price: parseFloat(product.wholesale_price),
         cost: parseFloat(product.cost),
-        stock: parseInt(product.stock) || 0,
         alert_quantity: product.alert_quantity ? parseInt(product.alert_quantity) : 0,
         category: product.category || null,
         barcode: product.barcode || null,
@@ -519,22 +517,7 @@ const EditProduct = () => {
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Stock *</label>
-                    <input 
-                      type="number" 
-                      name="stock" 
-                      value={product.stock} 
-                      onChange={handleProductChange} 
-                      placeholder="Stock quantity" 
-                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200" 
-                      required 
-                      min="0"
-                      step="1"
-                    />
-                  </div>
-                  
+                <div className="grid grid-cols-1 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Alert Quantity</label>
                     <input 

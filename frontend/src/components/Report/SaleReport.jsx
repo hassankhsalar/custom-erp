@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { API_ROUTES } from "../../config";
+import { downloadExcelFile } from "../../utils/excelExport";
 import {
   Calendar,
   DollarSign,
@@ -35,15 +36,49 @@ const SaleReport = () => {
   const [perDateRows, setPerDateRows] = useState([]);
   const [perMonthRows, setPerMonthRows] = useState([]);
   const [allRows, setAllRows] = useState([]);
+  const [shops, setShops] = useState([]);
+  const [shopId, setShopId] = useState("");
   const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1 });
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
   const token = localStorage.getItem("token");
+
+  const buildSalesAllParams = (page, limit, includeExportAll = false) => {
+    const params = new URLSearchParams();
+    if (range.startDate) params.append("startDate", range.startDate);
+    if (range.endDate) params.append("endDate", range.endDate);
+    if (shopId) params.append("shopId", shopId);
+    if (includeExportAll) {
+      params.append("exportAll", "true");
+    } else {
+      params.append("page", String(page));
+      params.append("limit", String(limit));
+    }
+    return params;
+  };
+
+  useEffect(() => {
+    const fetchShops = async () => {
+      try {
+        const res = await fetch(API_ROUTES.SHOPS, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        const rows = Array.isArray(data) ? data : (data?.shops || []);
+        setShops(rows.filter((row) => !row.deleted_at));
+      } catch (error) {
+        console.error("Error fetching shops:", error);
+      }
+    };
+
+    fetchShops();
+  }, [token]);
 
   const fetchPerDate = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_ROUTES.REPORT_SALES_PER_DATE}?month=${month}`, {
+      const params = new URLSearchParams({ month: String(month) });
+      if (shopId) params.append("shopId", shopId);
+      const res = await fetch(`${API_ROUTES.REPORT_SALES_PER_DATE}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -58,7 +93,9 @@ const SaleReport = () => {
   const fetchPerMonth = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_ROUTES.REPORT_SALES_PER_MONTH}?year=${year}`, {
+      const params = new URLSearchParams({ year: String(year) });
+      if (shopId) params.append("shopId", shopId);
+      const res = await fetch(`${API_ROUTES.REPORT_SALES_PER_MONTH}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -73,11 +110,7 @@ const SaleReport = () => {
   const fetchAll = async (page = 1, limit = 10) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (range.startDate) params.append("startDate", range.startDate);
-      if (range.endDate) params.append("endDate", range.endDate);
-      params.append("page", page);
-      params.append("limit", limit);
+      const params = buildSalesAllParams(page, limit);
       const res = await fetch(`${API_ROUTES.REPORT_SALES_ALL}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -93,11 +126,11 @@ const SaleReport = () => {
 
   useEffect(() => {
     if (tab === "perDate") fetchPerDate();
-  }, [tab, month]);
+  }, [tab, month, shopId]);
 
   useEffect(() => {
     if (tab === "perMonth") fetchPerMonth();
-  }, [tab, year]);
+  }, [tab, year, shopId]);
 
   useEffect(() => {
     if (tab === "all") fetchAll(pagination.page, pagination.limit);
@@ -174,8 +207,7 @@ const SaleReport = () => {
     return (totalProfit / totalRevenue) * 100;
   }, [totalRevenue, totalProfit]);
 
-  const handleExport = () => {
-    let csvContent = "data:text/csv;charset=utf-8,";
+  const handleExport = async () => {
     let data = [];
     
     switch (tab) {
@@ -196,22 +228,30 @@ const SaleReport = () => {
         });
         break;
       case "all":
-        data = [["Date", "Sales", "Revenue", "Cost", "Profit"]];
-        allRows.forEach(r => {
+        let rowsToExport = allRows;
+        try {
+          const params = buildSalesAllParams(1, pagination.limit, true);
+          const res = await fetch(`${API_ROUTES.REPORT_SALES_ALL}?${params.toString()}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const exportData = await res.json();
+          rowsToExport = exportData.rows || [];
+        } catch (error) {
+          console.error("Error fetching full sales export data:", error);
+        }
+        data = [["Date", "Place", "Sales", "Revenue", "Cost", "Profit"]];
+        rowsToExport.forEach(r => {
           const profit = Number(r.totalAmount || 0) - Number(r.totalCost || 0);
-          data.push([r.date, r.saleCount, r.totalAmount, r.totalCost, profit]);
+          data.push([r.date.slice(0, 10), shopId != "" ? shops[shopId].name : "All Shops", r.saleCount, r.totalAmount, r.totalCost, profit]);
         });
         break;
     }
     
-    csvContent += data.map(e => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `sale_report_${tab}_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadExcelFile({
+      sheetName: "Sale Report",
+      fileName: `sale_report_${tab}_${new Date().toISOString().split("T")[0]}.xls`,
+      rows: data
+    });
   };
 
   const handleRefresh = () => {
@@ -279,7 +319,7 @@ const SaleReport = () => {
   };
 
   const showingStart = (pagination.page - 1) * pagination.limit + 1;
-  const showingEnd = Math.min(pagination.page * pagination.limit, allRows.length);
+  const showingEnd = Math.min(pagination.page * pagination.limit, pagination.totalCount || 0);
 
   return (
     <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
@@ -320,10 +360,10 @@ const SaleReport = () => {
               <button
                 onClick={handleExport}
                 className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-                title="Export to CSV"
+                title="Export to Excel"
               >
                 <Download size={18} />
-                Export CSV
+                Export Excel
               </button>
             </div>
           </div>
@@ -444,6 +484,27 @@ const SaleReport = () => {
                     className="px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-transparent"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <div className="flex items-center gap-2">
+                      <Package size={16} />
+                      Shop
+                    </div>
+                  </label>
+                  <select
+                    value={shopId}
+                    onChange={(e) => setShopId(e.target.value)}
+                    className="px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-transparent min-w-48"
+                  >
+                    <option value="">All Shops</option>
+                    {shops.map((shop) => (
+                      <option key={shop.id} value={shop.id}>
+                        {shop.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 
                 <div className="text-sm bg-white/50 px-4 py-3 rounded-xl border border-white/40">
                   <span className="font-medium text-gray-700">Viewing:</span>
@@ -472,6 +533,27 @@ const SaleReport = () => {
                     className="px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-transparent w-32"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <div className="flex items-center gap-2">
+                      <Package size={16} />
+                      Shop
+                    </div>
+                  </label>
+                  <select
+                    value={shopId}
+                    onChange={(e) => setShopId(e.target.value)}
+                    className="px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-transparent min-w-48"
+                  >
+                    <option value="">All Shops</option>
+                    {shops.map((shop) => (
+                      <option key={shop.id} value={shop.id}>
+                        {shop.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 
                 <div className="text-sm bg-white/50 px-4 py-3 rounded-xl border border-white/40">
                   <span className="font-medium text-gray-700">Viewing:</span>
@@ -483,7 +565,7 @@ const SaleReport = () => {
             )}
 
             {tab === "all" && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     <div className="flex items-center gap-2">
@@ -512,6 +594,27 @@ const SaleReport = () => {
                     onChange={(e) => setRange(prev => ({ ...prev, endDate: e.target.value }))}
                     className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-transparent"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <div className="flex items-center gap-2">
+                      <Package size={16} />
+                      Shop
+                    </div>
+                  </label>
+                  <select
+                    value={shopId}
+                    onChange={(e) => setShopId(e.target.value)}
+                    className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-transparent"
+                  >
+                    <option value="">All Shops</option>
+                    {shops.map((shop) => (
+                      <option key={shop.id} value={shop.id}>
+                        {shop.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="flex items-end">
@@ -755,7 +858,7 @@ const SaleReport = () => {
                           <div className="text-sm text-gray-700">
                             Showing <span className="font-semibold">{showingStart}</span> to{" "}
                             <span className="font-semibold">{showingEnd}</span> of{" "}
-                            <span className="font-semibold">{allRows.length}</span> records
+                            <span className="font-semibold">{pagination.totalCount || 0}</span> records
                           </div>
                         </div>
 
