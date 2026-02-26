@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
-import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X } from "lucide-react";
+import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X, Camera } from "lucide-react";
 import { TbCurrencyTaka } from "react-icons/tb";
-import e from "cors";
 import { activeOnly } from "../../utils/softDelete";
+import { Html5Qrcode } from "html5-qrcode";
 
 export default function ShopPOS( props ) {
   const [shops, setShops] = useState([]);
@@ -30,9 +30,13 @@ export default function ShopPOS( props ) {
   const [editingPriceIndex, setEditingPriceIndex] = useState(null);
   const [tempPrice, setTempPrice] = useState("");
   const [priceModalData, setPriceModalData] = useState({ index: null, currentPrice: 0 });
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState("");
 
   const searchInputRef = useRef(null);
+  const scannerRef = useRef(null);
   const navigate = useNavigate();
+  const SCANNER_ELEMENT_ID = "pos-camera-scanner";
 
   // Function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -59,6 +63,75 @@ export default function ShopPOS( props ) {
       }))
       .filter((u) => u.unitname && Number.isFinite(u.multiplier) && u.multiplier > 0);
   };
+
+  const stopScanner = async () => {
+    if (!scannerRef.current) return;
+    try {
+      await scannerRef.current.stop();
+    } catch (_) {
+      // scanner may already be stopped
+    }
+    try {
+      await scannerRef.current.clear();
+    } catch (_) {
+      // ignore cleanup errors
+    }
+    scannerRef.current = null;
+  };
+
+  const openScanner = () => {
+    if (!shopId) {
+      alert("Please select a shop first.");
+      return;
+    }
+    setScannerError("");
+    setScannerOpen(true);
+  };
+
+  const closeScanner = async () => {
+    await stopScanner();
+    setScannerOpen(false);
+    setScannerError("");
+  };
+
+  useEffect(() => {
+    if (!scannerOpen) return;
+    let cancelled = false;
+
+    const startScanner = async () => {
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error("Camera is not supported in this browser.");
+        }
+
+        const scanner = new Html5Qrcode(SCANNER_ELEMENT_ID, { verbose: false });
+        scannerRef.current = scanner;
+
+        await scanner.start(
+          { facingMode: { ideal: "environment" } },
+          {
+            fps: 10,
+            qrbox: { width: 280, height: 280 },
+            aspectRatio: 1.7778,
+          },
+          (decodedText) => {
+            if (cancelled) return;
+            handleSearch(decodedText);
+            setScannerOpen(false);
+          },
+          () => {}
+        );
+      } catch (error) {
+        setScannerError(error?.message || "Failed to start camera scanner.");
+      }
+    };
+
+    startScanner();
+    return () => {
+      cancelled = true;
+      stopScanner();
+    };
+  }, [scannerOpen]);
 
   // Fetch all shops
   useEffect(() => {
@@ -799,15 +872,27 @@ export default function ShopPOS( props ) {
 
                   {/* Search Card */}
                   <div className="bg-white grow rounded-xl p-5 relative">
-                    <input
-                      ref={searchInputRef}
-                      type="text"
-                      className="w-full border border-gray-300 rounded-lg p-3 focus:ring-1 outline-none focus:ring-green-500 focus:border-green-500 transition"
-                      placeholder="Search products & materials..."
-                      value={searchQuery}
-                      onChange={(e) => handleSearch(e.target.value)}
-                      disabled={!shopId}
-                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        ref={searchInputRef}
+                        type="text"
+                        className="w-full border border-gray-300 rounded-lg p-3 focus:ring-1 outline-none focus:ring-green-500 focus:border-green-500 transition"
+                        placeholder="Search products & materials..."
+                        value={searchQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        disabled={!shopId}
+                      />
+                      <button
+                        type="button"
+                        onClick={openScanner}
+                        disabled={!shopId}
+                        className="p-3 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Scan barcode/QR with camera"
+                      >
+                        <Camera size={18} />
+                      </button>
+                    </div>
+
                     
                     {showSearchResults && searchResults.length > 0 && (
                       <div className="absolute z-10 bg-white border border-gray-200 w-full max-h-80 overflow-y-auto shadow-xl rounded-lg mt-2">
@@ -1193,6 +1278,33 @@ export default function ShopPOS( props ) {
           </div>
         </div>
       </div>
+
+      {scannerOpen && (
+        <div className="fixed inset-0 z-[120] bg-black">
+          <div className="absolute top-0 left-0 right-0 z-10 p-4 flex items-center justify-between bg-black/55">
+            <div className="text-white">
+              <p className="font-semibold">Scan Barcode / QR</p>
+              <p className="text-xs text-gray-200">Align code within the frame</p>
+            </div>
+            <button
+              onClick={closeScanner}
+              className="p-2 rounded-lg bg-white/15 text-white hover:bg-white/25"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="w-full h-full pt-16">
+            <div id={SCANNER_ELEMENT_ID} className="w-full h-full" />
+          </div>
+
+          {scannerError && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-red-600/90 text-white px-4 py-2 rounded-lg text-sm">
+              {scannerError}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

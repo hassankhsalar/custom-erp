@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { Html5Qrcode } from "html5-qrcode";
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
 import { activeOnly } from '../../utils/softDelete';
@@ -19,7 +20,9 @@ import {
   Warehouse,
   CheckCircle,
   AlertCircle,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Camera,
+  X
 } from 'lucide-react';
 
 const NewProduction = () => {
@@ -34,6 +37,8 @@ const NewProduction = () => {
   const [factories, setFactories] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerError, setScannerError] = useState("");
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [selectedMaterials, setSelectedMaterials] = useState([]);
   const [factoryMaterialMap, setFactoryMaterialMap] = useState({});
@@ -200,12 +205,12 @@ const NewProduction = () => {
     return `http://localhost:3001/uploads/${imagePath}`;
   };
 
-  const handleSearch = async (e) => {
-    setSearchTerm(e.target.value);
-    if (e.target.value.length > 2) {
+  const searchProducts = async (value) => {
+    setSearchTerm(value);
+    if (value.length > 2) {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get(`${API_ROUTES.PRODUCTS}?search=${e.target.value}`, {
+        const response = await axios.get(`${API_ROUTES.PRODUCTS}?search=${value}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setSearchResults(activeOnly(response.data.products || []));
@@ -216,6 +221,59 @@ const NewProduction = () => {
       setSearchResults([]);
     }
   };
+
+  const handleSearch = async (e) => {
+    await searchProducts(e.target.value);
+  };
+
+  useEffect(() => {
+    if (!scannerOpen) return undefined;
+
+    const scannerId = "production-create-scanner";
+    let scanner = null;
+    let isActive = true;
+    let hasScanned = false;
+
+    const start = async () => {
+      try {
+        setScannerError("");
+        scanner = new Html5Qrcode(scannerId);
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: 250 },
+          async (decodedText) => {
+            if (hasScanned || !isActive) return;
+            hasScanned = true;
+            await searchProducts(String(decodedText || "").trim());
+            setScannerOpen(false);
+          },
+          () => {}
+        );
+      } catch (error) {
+        if (!isActive) return;
+        setScannerError(error?.message || "Unable to start camera scanner.");
+      }
+    };
+
+    start();
+
+    return () => {
+      isActive = false;
+      if (!scanner) return;
+      Promise.resolve()
+        .then(async () => {
+          if (scanner.isScanning) await scanner.stop();
+        })
+        .catch(() => {})
+        .finally(async () => {
+          try {
+            await scanner.clear();
+          } catch {
+            // ignore scanner cleanup errors
+          }
+        });
+    };
+  }, [scannerOpen]);
 
   const addProductToProduction = (product) => {
     setSelectedProducts(prev => {
@@ -561,12 +619,20 @@ const NewProduction = () => {
                     type="text"
                     value={searchTerm}
                     onChange={handleSearch}
-                    className="w-full pl-12 pr-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all duration-300 placeholder:text-gray-400"
+                    className="w-full pl-12 pr-12 py-3 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all duration-300 placeholder:text-gray-400"
                     placeholder="Search products by name or barcode..."
                   />
                   <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
                     <Search size={20} className="text-gray-400" />
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setScannerOpen(true)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors"
+                    title="Scan barcode/QR"
+                  >
+                    <Camera size={18} />
+                  </button>
                 </div>
 
                 {/* Search Results Dropdown */}
@@ -862,6 +928,28 @@ const NewProduction = () => {
           </div>
         </div>
       </div>
+
+      {scannerOpen && (
+        <div className="fixed inset-0 z-[200] bg-black/90 p-4 md:p-6">
+          <div className="h-full max-w-4xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-800">Scan Barcode / QR</h3>
+              <button
+                type="button"
+                onClick={() => setScannerOpen(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+                title="Close scanner"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 bg-black p-3">
+              <div id="production-create-scanner" className="w-full h-full min-h-[320px]" />
+            </div>
+            {scannerError && <p className="px-4 py-3 text-sm text-red-600">{scannerError}</p>}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
