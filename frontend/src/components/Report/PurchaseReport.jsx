@@ -36,6 +36,7 @@ const PurchaseReport = () => {
   const [perDateRows, setPerDateRows] = useState([]);
   const [perMonthRows, setPerMonthRows] = useState([]);
   const [allRows, setAllRows] = useState([]);
+  const [allOverviewRows, setAllOverviewRows] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [places, setPlaces] = useState([]);
   const [filters, setFilters] = useState({ supplierId: "", placeType: "", placeId: "" });
@@ -164,6 +165,20 @@ const PurchaseReport = () => {
     }
   };
 
+  const fetchAllOverview = async () => {
+    try {
+      const params = buildPurchasesAllParams(1, pagination.limit, true);
+      const res = await fetch(`${API_ROUTES.REPORT_PURCHASES_ALL}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setAllOverviewRows(data.rows || []);
+    } catch (error) {
+      console.error("Error fetching all purchase overview data:", error);
+      setAllOverviewRows([]);
+    }
+  };
+
   useEffect(() => {
     if (tab === "perDate") fetchPerDate();
   }, [tab, month, filters.supplierId, filters.placeType, filters.placeId]);
@@ -173,7 +188,10 @@ const PurchaseReport = () => {
   }, [tab, year, filters.supplierId, filters.placeType, filters.placeId]);
 
   useEffect(() => {
-    if (tab === "all") fetchAll(pagination.page, pagination.limit);
+    if (tab === "all") {
+      fetchAll(pagination.page, pagination.limit);
+      fetchAllOverview();
+    }
   }, [tab]);
 
   const daysOfMonth = useMemo(() => {
@@ -196,7 +214,8 @@ const PurchaseReport = () => {
       map[r.date.slice(0, 10)] = {
         purchaseCount: Number(r.purchaseCount || 0),
         totalAmount: Number(r.totalAmount || 0),
-        shippingCost: Number(r.shippingCost || 0)
+        shippingCost: Number(r.shippingCost || 0),
+        totalDiscount: Number(r.totalDiscount || 0)
       };
     });
     return map;
@@ -206,28 +225,29 @@ const PurchaseReport = () => {
     return data.reduce((acc, row) => ({
       purchases: acc.purchases + Number(row.purchaseCount || 0),
       amount: acc.amount + Number(row.totalAmount || 0),
-      shipping: acc.shipping + Number(row.shippingCost || 0)
-    }), { purchases: 0, amount: 0, shipping: 0 });
+      shipping: acc.shipping + Number(row.shippingCost || 0),
+      discount: acc.discount + Number(row.totalDiscount || 0)
+    }), { purchases: 0, amount: 0, shipping: 0, discount: 0 });
   };
 
   const perDateTotals = calculateTotals(perDateRows);
   const perMonthTotals = calculateTotals(perMonthRows);
-  const allTotals = calculateTotals(allRows);
+  const allTotals = calculateTotals(allOverviewRows);
 
   const handleExport = async () => {
     let data = [];
 
     if (tab === "perDate") {
-      data = [["Date", "Purchases", "Amount", "Shipping Cost"]];
+      data = [["Date", "Purchases", "Amount", "Shipping Cost", "Discount"]];
       daysOfMonth.forEach((d) => {
-        const stats = perDateMap[d.key] || { purchaseCount: 0, totalAmount: 0, shippingCost: 0 };
-        data.push([d.key, stats.purchaseCount, stats.totalAmount, stats.shippingCost]);
+        const stats = perDateMap[d.key] || { purchaseCount: 0, totalAmount: 0, shippingCost: 0, totalDiscount: 0 };
+        data.push([d.key, stats.purchaseCount, stats.totalAmount, stats.shippingCost, stats.totalDiscount]);
       });
     } else if (tab === "perMonth") {
-      data = [["Month", "Purchases", "Amount", "Shipping Cost"]];
+      data = [["Month", "Purchases", "Amount", "Shipping Cost", "Discount"]];
       Array.from({ length: 12 }, (_, i) => {
-        const row = perMonthRows.find((r) => Number(r.month) === i + 1) || { purchaseCount: 0, totalAmount: 0, shippingCost: 0 };
-        data.push([new Date(0, i).toLocaleString("en-US", { month: "long" }), row.purchaseCount, row.totalAmount, row.shippingCost]);
+        const row = perMonthRows.find((r) => Number(r.month) === i + 1) || { purchaseCount: 0, totalAmount: 0, shippingCost: 0, totalDiscount: 0 };
+        data.push([new Date(0, i).toLocaleString("en-US", { month: "long" }), row.purchaseCount, row.totalAmount, row.shippingCost, row.totalDiscount]);
       });
     } else {
       let rowsToExport = allRows;
@@ -242,9 +262,9 @@ const PurchaseReport = () => {
         console.error("Error fetching full purchase export data:", error);
       }
       
-      data = [["Date", "Place", "Purchases", "Amount", "Shipping Cost"]];
+      data = [["Date", "Place", "Purchases", "Amount", "Shipping Cost", "Discount"]];
       rowsToExport.forEach((r) => {
-        data.push([r.date.slice(0, 10), (filters.placeType && filters.placeId) ? places.find(p => p.id == filters.placeId).name : filters.placeType || "All Places", r.purchaseCount, r.totalAmount, r.shippingCost]);
+        data.push([r.date.slice(0, 10), (filters.placeType && filters.placeId) ? places.find(p => p.id == filters.placeId).name : filters.placeType || "All Places", r.purchaseCount, r.totalAmount, r.shippingCost, Number(r.totalDiscount || 0)]);
       });
     }
 
@@ -318,7 +338,7 @@ const PurchaseReport = () => {
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="backdrop-blur-lg bg-gradient-to-br from-emerald-50/60 to-teal-50/60 border border-white/40 rounded-2xl shadow-xl p-5">
             <div className="flex items-center justify-between">
               <div>
@@ -363,6 +383,22 @@ const PurchaseReport = () => {
               </div>
               <div className="p-3 bg-amber-100 rounded-xl">
                 <Truck size={24} className="text-amber-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="backdrop-blur-lg bg-gradient-to-br from-rose-50/60 to-pink-50/60 border border-white/40 rounded-2xl shadow-xl p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Discount</p>
+                <p className="text-2xl font-bold text-rose-600">
+                  ${(tab === "perDate" ? perDateTotals.discount :
+                     tab === "perMonth" ? perMonthTotals.discount :
+                     allTotals.discount).toFixed(2)}
+                </p>
+              </div>
+              <div className="p-3 bg-rose-100 rounded-xl">
+                <TrendingDown size={24} className="text-rose-600" />
               </div>
             </div>
           </div>
@@ -472,7 +508,7 @@ const PurchaseReport = () => {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                   {daysOfMonth.map((d, index) => {
-                    const stats = perDateMap[d.key] || { purchaseCount: 0, totalAmount: 0, shippingCost: 0 };
+                    const stats = perDateMap[d.key] || { purchaseCount: 0, totalAmount: 0, shippingCost: 0, totalDiscount: 0 };
                     const hasPurchases = stats.purchaseCount > 0;
                     
                     return (
@@ -516,6 +552,14 @@ const PurchaseReport = () => {
                               <span className="text-xs text-gray-600">Shipping</span>
                               <span className="text-xs font-medium text-amber-600">
                                 ${stats.shippingCost.toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                          {Number(stats.totalDiscount || 0) > 0 && (
+                            <div className="flex flex-col items-left justify-between">
+                              <span className="text-xs text-gray-600">Discount</span>
+                              <span className="text-xs font-medium text-rose-600">
+                                ${Number(stats.totalDiscount || 0).toFixed(2)}
                               </span>
                             </div>
                           )}
@@ -599,7 +643,7 @@ const PurchaseReport = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {Array.from({ length: 12 }, (_, i) => {
                     const monthName = new Date(0, i).toLocaleString("en-US", { month: "long" });
-                    const row = perMonthRows.find(r => Number(r.month) === i + 1) || { purchaseCount: 0, totalAmount: 0, shippingCost: 0 };
+                    const row = perMonthRows.find(r => Number(r.month) === i + 1) || { purchaseCount: 0, totalAmount: 0, shippingCost: 0, totalDiscount: 0 };
                     const hasPurchases = row.purchaseCount > 0;
                     
                     return (
@@ -652,6 +696,16 @@ const PurchaseReport = () => {
                               </div>
                               <span className="text-sm font-medium text-amber-600">
                                 ${Number(row.shippingCost || 0).toFixed(2)}
+                              </span>
+                            </div>
+                          )}
+                          {Number(row.totalDiscount || 0) > 0 && (
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-600">Discount</span>
+                              </div>
+                              <span className="text-sm font-medium text-rose-600">
+                                ${Number(row.totalDiscount || 0).toFixed(2)}
                               </span>
                             </div>
                           )}
@@ -773,7 +827,10 @@ const PurchaseReport = () => {
                   </div>
                   
                   <button
-                    onClick={() => fetchAll(1, pagination.limit)}
+                    onClick={async () => {
+                      await fetchAll(1, pagination.limit);
+                      await fetchAllOverview();
+                    }}
                     className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 whitespace-nowrap"
                   >
                     <Filter size={18} />
@@ -799,6 +856,7 @@ const PurchaseReport = () => {
                           <th className="p-4 text-left font-medium text-gray-700">Purchase Count</th>
                           <th className="p-4 text-left font-medium text-gray-700">Total Amount</th>
                           <th className="p-4 text-left font-medium text-gray-700">Shipping Cost</th>
+                          <th className="p-4 text-left font-medium text-gray-700">Discount</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -843,12 +901,19 @@ const PurchaseReport = () => {
                                 </span>
                               </div>
                             </td>
+                            <td className="p-4">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-rose-600">
+                                  ${Number(r.totalDiscount || 0).toFixed(2)}
+                                </span>
+                              </div>
+                            </td>
                           </tr>
                         ))}
                         
                         {allRows.length === 0 && !loading.all && (
                           <tr>
-                            <td colSpan="4" className="p-8 text-center">
+                            <td colSpan="5" className="p-8 text-center">
                               <div className="flex flex-col items-center gap-4">
                                 <div className="p-4 bg-white/50 rounded-xl">
                                   <BarChart3 size={48} className="text-gray-300" />

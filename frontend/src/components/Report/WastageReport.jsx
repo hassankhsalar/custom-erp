@@ -92,7 +92,6 @@ const WastageReport = () => {
       const data = await res.json();
       setRows(activeOnly(data.rows || []));
       setPagination(data.pagination || { page: 1, limit, totalPages: 1 });
-      calculateSummary(data.rows || []);
     } catch (error) {
       console.error('Error fetching wastage data:', error);
     } finally {
@@ -155,6 +154,11 @@ const WastageReport = () => {
     });
   };
 
+  const fetchOverviewSummary = async () => {
+    const allRows = await fetchAllRowsForExport();
+    calculateSummary(allRows || []);
+  };
+
   useEffect(() => {
     fetchFactories();
   }, []);
@@ -162,6 +166,7 @@ const WastageReport = () => {
   useEffect(() => {
     if (!factoryId) return;
     fetchRows(1, pagination.limit);
+    fetchOverviewSummary();
   }, [factoryId, tab]);
 
   const applyFilter = () => {
@@ -170,6 +175,7 @@ const WastageReport = () => {
       return;
     }
     fetchRows(1, pagination.limit);
+    fetchOverviewSummary();
   };
 
   const resetFilters = () => {

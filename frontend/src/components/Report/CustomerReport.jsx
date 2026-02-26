@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES } from "../../config";
+import { downloadExcelFile } from "../../utils/excelExport";
 import {
   Calendar,
   DollarSign,
@@ -31,27 +32,45 @@ import {
 const CustomerReport = () => {
   const [range, setRange] = useState({ startDate: "", endDate: "" });
   const [rows, setRows] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1 });
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, totalCount: 0, totalPages: 1 });
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filteredRows, setFilteredRows] = useState([]);
+  const [sortBy, setSortBy] = useState("most_due");
+  const [sortOrder, setSortOrder] = useState("desc");
+  const [overview, setOverview] = useState({
+    totalCustomers: 0,
+    totalItemQty: 0,
+    totalPaid: 0,
+    totalDue: 0,
+    activeCustomers: 0
+  });
   const token = localStorage.getItem("token");
+
+  const buildParams = (page = 1, limit = 10, includeExportAll = false) => {
+    const params = new URLSearchParams();
+    if (range.startDate) params.append("startDate", range.startDate);
+    if (range.endDate) params.append("endDate", range.endDate);
+    if (searchTerm.trim()) params.append("search", searchTerm.trim());
+    params.append("sortBy", sortBy);
+    params.append("sortOrder", sortOrder);
+    if (includeExportAll) params.append("exportAll", "true");
+    else {
+      params.append("page", page);
+      params.append("limit", limit);
+    }
+    return params;
+  };
 
   const fetchRows = async (page = 1, limit = 10) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (range.startDate) params.append("startDate", range.startDate);
-      if (range.endDate) params.append("endDate", range.endDate);
-      params.append("page", page);
-      params.append("limit", limit);
+      const params = buildParams(page, limit);
       const res = await fetch(`${API_ROUTES.REPORT_CUSTOMER_DETAILS}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
       setRows(data.rows || []);
-      setFilteredRows(data.rows || []);
-      setPagination(data.pagination || { page: 1, limit, totalPages: 1 });
+      setPagination(data.pagination || { page: 1, limit, totalCount: 0, totalPages: 1 });
     } catch (error) {
       console.error("Error fetching customer data:", error);
     } finally {
@@ -59,51 +78,114 @@ const CustomerReport = () => {
     }
   };
 
+  const fetchOverview = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (range.startDate) params.append("startDate", range.startDate);
+      if (range.endDate) params.append("endDate", range.endDate);
+      if (searchTerm.trim()) params.append("search", searchTerm.trim());
+      const res = await fetch(`${API_ROUTES.REPORT_CUSTOMER_OVERVIEW}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setOverview({
+        totalCustomers: Number(data?.totalCustomers || 0),
+        totalItemQty: Number(data?.totalItemQty || 0),
+        totalPaid: Number(data?.totalPaid || 0),
+        totalDue: Number(data?.totalDue || 0),
+        activeCustomers: Number(data?.activeCustomers || 0)
+      });
+    } catch (error) {
+      console.error("Error fetching customer overview:", error);
+    }
+  };
+
   useEffect(() => {
-    fetchRows(pagination.page, pagination.limit);
+    fetchRows(1, pagination.limit);
+    fetchOverview();
   }, []);
 
-  useEffect(() => {
-    const filtered = rows.filter(row =>
-      row.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      row.mobile?.includes(searchTerm) ||
-      row.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      row.id?.toString().includes(searchTerm)
-    );
-    setFilteredRows(filtered);
-  }, [searchTerm, rows]);
+  const handleExport = async () => {
+    try {
+      const fetchAllRows = async () => {
+        const firstParams = buildParams(1, pagination.limit, true);
+        const firstRes = await fetch(`${API_ROUTES.REPORT_CUSTOMER_DETAILS}?${firstParams.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const firstData = await firstRes.json();
+        let allRows = firstData.rows || [];
+        const totalCount = Number(firstData?.pagination?.totalCount || 0);
+        if (totalCount > 0 && allRows.length < totalCount) {
+          const pageSize = 200;
+          let currentPage = 1;
+          let totalPages = 1;
+          allRows = [];
+          do {
+            const pageParams = buildParams(currentPage, pageSize, false);
+            const pageRes = await fetch(`${API_ROUTES.REPORT_CUSTOMER_DETAILS}?${pageParams.toString()}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            const pageData = await pageRes.json();
+            const batch = pageData.rows || [];
+            allRows.push(...batch);
+            totalPages = Number(pageData?.pagination?.totalPages || 1);
+            currentPage += 1;
+          } while (currentPage <= totalPages);
+        }
+        return allRows;
+      };
 
-  const handleExport = () => {
-    if (!rows.length) return;
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [["Customer", "Mobile", "Email", "Items (Qty)", "Item Types", "Total Paid", "Total Due"], 
-         ...rows.map(r => [r.name, r.mobile, r.email || "-", r.totalItemQty, r.itemTypeCount, r.totalPaid, r.totalDue])]
-          .map(e => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `customer_report_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const exportRows = await fetchAllRows();
+      if (!exportRows.length) return;
+      const excelRows = [
+        ["Name", "Mobile", "Email", "Items (Qty)", "Item Types", "Total Paid", "Total Due"],
+        ...exportRows.map((r) => [
+          r.name || "",
+          r.mobile || "",
+          r.email || "-",
+          Number(r.totalItemQty || 0),
+          Number(r.itemTypeCount || 0),
+          Number(r.totalPaid || 0).toFixed(2),
+          Number(r.totalDue || 0).toFixed(2)
+        ])
+      ];
+      downloadExcelFile({
+        sheetName: "Customer Report",
+        fileName: `customer_report_${new Date().toISOString().split("T")[0]}.xls`,
+        rows: excelRows
+      });
+    } catch (error) {
+      console.error("Error exporting customer report:", error);
+    }
   };
 
   const handleRefresh = () => {
     fetchRows(pagination.page, pagination.limit);
+    fetchOverview();
+  };
+
+  const applyFilters = async () => {
+    await fetchRows(1, pagination.limit);
+    await fetchOverview();
   };
 
   const resetFilter = () => {
     setRange({ startDate: "", endDate: "" });
     setSearchTerm("");
-    fetchRows(1, pagination.limit);
+    setSortBy("most_due");
+    setSortOrder("desc");
+    setTimeout(() => {
+      fetchRows(1, pagination.limit);
+      fetchOverview();
+    }, 0);
   };
 
   // Calculate statistics
-  const totalCustomers = rows.length;
-  const totalItems = rows.reduce((sum, r) => sum + Number(r.totalItemQty || 0), 0);
-  const totalPaid = rows.reduce((sum, r) => sum + Number(r.totalPaid || 0), 0);
-  const totalDue = rows.reduce((sum, r) => sum + Number(r.totalDue || 0), 0);
-  const activeCustomers = rows.filter(r => Number(r.totalItemQty || 0) > 0).length;
+  const totalCustomers = Number(overview.totalCustomers || 0);
+  const totalItems = Number(overview.totalItemQty || 0);
+  const totalPaid = Number(overview.totalPaid || 0);
+  const totalDue = Number(overview.totalDue || 0);
+  const activeCustomers = Number(overview.activeCustomers || 0);
   const avgSpend = totalCustomers > 0 ? totalPaid / totalCustomers : 0;
 
   const getCustomerStatus = (totalDue, totalPaid) => {
@@ -168,8 +250,8 @@ const CustomerReport = () => {
     }
   };
 
-  const showingStart = (pagination.page - 1) * pagination.limit + 1;
-  const showingEnd = Math.min(pagination.page * pagination.limit, filteredRows.length);
+  const showingStart = pagination.totalCount > 0 ? ((pagination.page - 1) * pagination.limit + 1) : 0;
+  const showingEnd = Math.min(pagination.page * pagination.limit, pagination.totalCount || 0);
 
   return (
     <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
@@ -211,10 +293,10 @@ const CustomerReport = () => {
                 onClick={handleExport}
                 disabled={!rows.length}
                 className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Export to CSV"
+                title="Export to Excel"
               >
                 <Download size={18} />
-                Export CSV
+                Export Excel
               </button>
             </div>
           </div>
@@ -298,7 +380,7 @@ const CustomerReport = () => {
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 <div className="flex items-center gap-2">
@@ -330,12 +412,43 @@ const CustomerReport = () => {
             </div>
 
             <div className="flex items-end">
+              <div className="w-full">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-transparent"
+                >
+                  <option value="most_due">Most Due</option>
+                  <option value="most_paid">Most Paid</option>
+                  <option value="most_items">Most Items</option>
+                  <option value="most_item_types">Most Item Types</option>
+                  <option value="name">Name</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-end">
+              <div className="w-full">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Order</label>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-transparent"
+                >
+                  <option value="desc">Descending</option>
+                  <option value="asc">Ascending</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-end">
               <button
-                onClick={() => fetchRows(1, pagination.limit)}
+                onClick={applyFilters}
                 className="w-full px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2"
               >
                 <Filter size={18} />
-                Apply Filter
+                Apply Filters
               </button>
             </div>
           </div>
@@ -364,7 +477,7 @@ const CustomerReport = () => {
                 <p className="text-gray-600">Loading customer data...</p>
               </div>
             </div>
-          ) : filteredRows.length > 0 ? (
+          ) : rows.length > 0 ? (
             <>
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
                 <div>
@@ -373,7 +486,7 @@ const CustomerReport = () => {
                     Customer Details
                   </h2>
                   <p className="text-gray-600 mt-1">
-                    Showing {showingStart}-{showingEnd} of {filteredRows.length} customers
+                    Showing {showingStart}-{showingEnd} of {pagination.totalCount || 0} customers
                   </p>
                 </div>
 
@@ -382,7 +495,7 @@ const CustomerReport = () => {
                   <span className="ml-2 text-gray-600">
                     {range.startDate && `From ${range.startDate}`} 
                     {range.endDate && ` to ${range.endDate}`}
-                    {searchTerm && ` • Search: "${searchTerm}"`}
+                    {searchTerm && ` | Search: "${searchTerm}"`}
                   </span>
                 </div>
               </div>
@@ -398,7 +511,7 @@ const CustomerReport = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRows.map((r, idx) => {
+                    {rows.map((r, idx) => {
                       const status = getCustomerStatus(r.totalDue, r.totalPaid);
                       const loyalty = getLoyaltyLevel(r.totalItemQty, r.totalPaid);
                       return (
@@ -500,7 +613,7 @@ const CustomerReport = () => {
                     <div className="text-sm text-gray-700">
                       Showing <span className="font-semibold">{showingStart}</span> to{" "}
                       <span className="font-semibold">{showingEnd}</span> of{" "}
-                      <span className="font-semibold">{filteredRows.length}</span> customers
+                      <span className="font-semibold">{pagination.totalCount || 0}</span> customers
                     </div>
                   </div>
 

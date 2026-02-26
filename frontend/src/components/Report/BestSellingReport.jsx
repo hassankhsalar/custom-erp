@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
 import { activeOnly } from "../../utils/softDelete";
+import { downloadExcelFile } from "../../utils/excelExport";
 import { 
   BarChart3, 
   Filter, 
@@ -18,7 +19,8 @@ import {
   Loader2,
   Calendar,
   SortAsc,
-  SortDesc
+  SortDesc,
+  Download
 } from "lucide-react";
 
 export default function BestSellingReport() {
@@ -26,7 +28,8 @@ export default function BestSellingReport() {
   const [sortBy, setSortBy] = useState("amount");
   const [order, setOrder] = useState("desc");
   const [range, setRange] = useState({ startDate: "", endDate: "" });
-  const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1 });
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, totalCount: 0, totalPages: 1 });
+  const [overview, setOverview] = useState({ itemCount: 0, totalQty: 0, totalAmount: 0, totalProfit: 0 });
   const [loading, setLoading] = useState(false);
   const token = localStorage.getItem("token");
 
@@ -37,16 +40,24 @@ export default function BestSellingReport() {
     return `${MEDIA_BASE_URL}/uploads/${imagePath}`;
   };
 
-  const fetchRows = async (page = 1, limit = 10) => {
-    setLoading(true);
+  const buildParams = (page = 1, limit = 10, includeExportAll = false) => {
     const params = new URLSearchParams();
     params.append("sortBy", sortBy);
     params.append("order", order);
     if (range.startDate) params.append("startDate", range.startDate);
     if (range.endDate) params.append("endDate", range.endDate);
-    params.append("page", page);
-    params.append("limit", limit);
-    
+    if (includeExportAll) params.append("exportAll", "true");
+    else {
+      params.append("page", page);
+      params.append("limit", limit);
+    }
+    return params;
+  };
+
+  const fetchRows = async (page = 1, limit = 10) => {
+    setLoading(true);
+    const params = buildParams(page, limit);
+
     try {
       const res = await fetch(`${API_ROUTES.REPORT_BEST_SELLING_DETAILS}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -61,15 +72,75 @@ export default function BestSellingReport() {
     }
   };
 
+  const fetchOverview = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (range.startDate) params.append("startDate", range.startDate);
+      if (range.endDate) params.append("endDate", range.endDate);
+      const res = await fetch(`${API_ROUTES.REPORT_BEST_SELLING_OVERVIEW}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setOverview({
+        itemCount: Number(data?.itemCount || 0),
+        totalQty: Number(data?.totalQty || 0),
+        totalAmount: Number(data?.totalAmount || 0),
+        totalProfit: Number(data?.totalProfit || 0)
+      });
+    } catch (error) {
+      console.error("Error fetching best selling overview:", error);
+    }
+  };
+
   useEffect(() => {
-    fetchRows(pagination.page, pagination.limit);
+    fetchRows(1, pagination.limit);
+    fetchOverview();
   }, []);
 
   // Calculate statistics
-  const totalAmount = rows.reduce((sum, r) => sum + (r.totalAmount || 0), 0);
-  const totalProfit = rows.reduce((sum, r) => sum + (r.totalProfit || 0), 0);
-  const totalQuantity = rows.reduce((sum, r) => sum + (r.totalQty || 0), 0);
-  const topPerforming = rows.length > 0 ? rows[0] : null;
+  const totalAmount = Number(overview.totalAmount || 0);
+  const totalProfit = Number(overview.totalProfit || 0);
+  const totalQuantity = Number(overview.totalQty || 0);
+
+  const applyFilters = async () => {
+    await fetchRows(1, pagination.limit);
+    await fetchOverview();
+  };
+
+  const handleExport = async () => {
+    try {
+      const params = buildParams(1, pagination.limit, true);
+      const res = await fetch(`${API_ROUTES.REPORT_BEST_SELLING_DETAILS}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      const exportRows = activeOnly(data.rows || []);
+      if (!exportRows.length) return;
+
+      const rowsForExcel = [
+        ["Name", "Category", "Brand", "Total Unit Sold", "Total Revenue", "Total Profit"],
+        ...exportRows.map((r) => {
+          const qty = Number(r.totalQty || 0);
+          const unit = r.unit || "";
+          return [
+            r.name || "",
+            r.category || "",
+            r.brand || "",
+            unit ? `${qty} ${unit}` : `${qty}`,
+            Number(r.totalAmount || 0).toFixed(2),
+            Number(r.totalProfit || 0).toFixed(2)
+          ];
+        })
+      ];
+      downloadExcelFile({
+        sheetName: "Sales Performance",
+        fileName: `sales_performance_${new Date().toISOString().split("T")[0]}.xls`,
+        rows: rowsForExcel
+      });
+    } catch (error) {
+      console.error("Error exporting sales performance report:", error);
+    }
+  };
 
   return (
     <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
@@ -95,6 +166,13 @@ export default function BestSellingReport() {
                 <p className="text-gray-600 mt-2">Analyze product performance by sales metrics</p>
               </div>
             </div>
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+            >
+              <Download size={18} />
+              Export Excel
+            </button>
           </div>
         </div>
 
@@ -140,7 +218,7 @@ export default function BestSellingReport() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Products Analyzed</p>
-                <p className="text-2xl font-bold text-purple-600">{rows.length}</p>
+                <p className="text-2xl font-bold text-purple-600">{Number(overview.itemCount || 0)}</p>
               </div>
               <div className="p-3 bg-purple-100 rounded-xl">
                 <Layers size={24} className="text-purple-600" />
@@ -218,7 +296,7 @@ export default function BestSellingReport() {
           <div className=" flex items-end justify-end gap-4">
             <button 
               className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-              onClick={() => fetchRows(1, pagination.limit)}
+              onClick={applyFilters}
               disabled={loading}
             >
               {loading ? (
@@ -258,6 +336,7 @@ export default function BestSellingReport() {
                       <th className="p-4 text-left font-medium text-gray-700">Rank</th>
                       <th className="p-4 text-left font-medium text-gray-700">Product</th>
                       <th className="p-4 text-left font-medium text-gray-700">Category</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Brand</th>
                       <th className="p-4 text-left font-medium text-gray-700">Quantity</th>
                       <th className="p-4 text-left font-medium text-gray-700">Total Amount</th>
                       <th className="p-4 text-left font-medium text-gray-700">Profit</th>
@@ -324,6 +403,15 @@ export default function BestSellingReport() {
                               <span className="text-gray-400">-</span>
                             )}
                           </td>
+                          <td className="p-4">
+                            {r.brand ? (
+                              <span className="px-3 py-1.5 bg-gradient-to-r from-cyan-100 to-blue-100 text-cyan-800 text-xs font-medium rounded-full">
+                                {r.brand}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
                           <td className="p-4 font-medium">
                             <div className="flex items-center gap-2">
                               <div className="p-2 bg-blue-50 rounded-lg">
@@ -331,7 +419,7 @@ export default function BestSellingReport() {
                               </div>
                               <div>
                                 <span className="text-gray-900 text-lg">{Number(r.totalQty || 0).toLocaleString()}</span>
-                                <p className="text-xs text-gray-500">units</p>
+                                <p className="text-xs text-gray-500">{r.unit || "units"}</p>
                               </div>
                             </div>
                           </td>
@@ -401,11 +489,11 @@ export default function BestSellingReport() {
 
                     {/* Page info */}
                     <div className="text-sm text-gray-700">
-                      Showing <span className="font-semibold">{(pagination.page - 1) * pagination.limit + 1}</span> to{" "}
+                      Showing <span className="font-semibold">{pagination.totalCount ? ((pagination.page - 1) * pagination.limit + 1) : 0}</span> to{" "}
                       <span className="font-semibold">
-                        {Math.min(pagination.page * pagination.limit, rows.length)}
+                        {Math.min(pagination.page * pagination.limit, pagination.totalCount || 0)}
                       </span>{" "}
-                      of <span className="font-semibold">{rows.length}</span> products
+                      of <span className="font-semibold">{pagination.totalCount || 0}</span> products
                     </div>
                   </div>
 

@@ -148,6 +148,9 @@ router.get("/purchase-sales/details", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const { start, end } = parseDateRange(startDate, endDate);
+    const sortBy = String(req.query.sortBy || "most_sold").toLowerCase();
+    const sortOrder = String(req.query.sortOrder || "desc").toLowerCase() === "asc" ? "ASC" : "DESC";
+    const exportAll = String(req.query.exportAll || "").toLowerCase() === "true" || req.query.exportAll === "1";
     const page = parseInt(req.query.page || "1", 10);
     const limit = parseInt(req.query.limit || "10", 10);
     const offset = (page - 1) * limit;
@@ -159,6 +162,14 @@ router.get("/purchase-sales/details", async (req, res) => {
     const saleDateClause = start && end
       ? Prisma.sql`AND s.createdAt >= ${start} AND s.createdAt <= ${end}`
       : Prisma.sql``;
+    const sortColumn = sortBy === "most_expensive"
+      ? "avgSalePrice"
+      : sortBy === "most_profitable"
+        ? "unitProfit"
+        : sortBy === "most_profitable_total"
+          ? "profit"
+          : "saleQty";
+    const paginationSql = exportAll ? Prisma.sql`` : Prisma.sql`LIMIT ${limit} OFFSET ${offset}`;
 
     const totalRows = await prisma.$queryRaw`
       SELECT COUNT(*) as count FROM (
@@ -205,15 +216,39 @@ router.get("/purchase-sales/details", async (req, res) => {
     const totalCount = Number(totalRows[0]?.count || 0);
 
     const rows = await prisma.$queryRaw`
-      SELECT itemType, itemId, name, category, image,
-             SUM(purchaseQty) as purchaseQty,
-             SUM(purchaseAmount) as purchaseAmount,
-             SUM(saleQty) as saleQty,
-             SUM(saleAmount) as saleAmount
+      SELECT
+        itemType, itemId, name, category, image, unit,
+        SUM(purchaseQty) as purchaseQty,
+        SUM(purchaseAmount) as purchaseAmount,
+        SUM(saleQty) as saleQty,
+        SUM(saleAmount) as saleAmount,
+        SUM(saleCostAmount) as saleCostAmount,
+        CASE WHEN SUM(saleQty) > 0 THEN SUM(saleAmount) / SUM(saleQty) ELSE 0 END as avgSalePrice,
+        CASE
+          WHEN SUM(saleCostQty) > 0 THEN SUM(saleCostAmount) / SUM(saleCostQty)
+          WHEN SUM(purchaseQty) > 0 THEN SUM(purchaseCostAmount) / SUM(purchaseQty)
+          ELSE 0
+        END as avgCost,
+        (SUM(saleAmount) - SUM(saleCostAmount)) as profit,
+        CASE WHEN SUM(saleAmount) > 0 THEN ((SUM(saleAmount) - SUM(saleCostAmount)) / SUM(saleAmount)) * 100 ELSE 0 END as profitMargin,
+        (
+          (CASE WHEN SUM(saleQty) > 0 THEN SUM(saleAmount) / SUM(saleQty) ELSE 0 END)
+          -
+          (CASE
+            WHEN SUM(saleCostQty) > 0 THEN SUM(saleCostAmount) / SUM(saleCostQty)
+            WHEN SUM(purchaseQty) > 0 THEN SUM(purchaseCostAmount) / SUM(purchaseQty)
+            ELSE 0
+          END)
+        ) as unitProfit
       FROM (
-        SELECT 'product' as itemType, p.id as itemId, p.name, p.category, p.image,
-               SUM(pi.quantity) as purchaseQty, SUM(pi.totalPrice) as purchaseAmount,
-               0 as saleQty, 0 as saleAmount
+        SELECT 'product' as itemType, p.id as itemId, p.name, p.category, p.image, COALESCE(p.unit, '') as unit,
+               SUM(pi.quantity) as purchaseQty,
+               SUM(pi.totalPrice) as purchaseAmount,
+               0 as saleQty,
+               0 as saleAmount,
+               SUM(COALESCE(pi.unitPrice, 0) * COALESCE(pi.quantity, 0)) as purchaseCostAmount,
+               0 as saleCostAmount,
+               0 as saleCostQty
         FROM \`PurchaseItem\` pi
         JOIN \`Purchase\` pu ON pu.id = pi.purchaseId
         JOIN \`Product\` p ON p.id = pi.productId
@@ -222,9 +257,14 @@ router.get("/purchase-sales/details", async (req, res) => {
         ${purchaseDateClause}
         GROUP BY p.id
         UNION ALL
-        SELECT 'product' as itemType, p.id as itemId, p.name, p.category, p.image,
-               0 as purchaseQty, 0 as purchaseAmount,
-               SUM(si.quantity) as saleQty, SUM(si.totalPrice) as saleAmount
+        SELECT 'product' as itemType, p.id as itemId, p.name, p.category, p.image, COALESCE(p.unit, '') as unit,
+               0 as purchaseQty,
+               0 as purchaseAmount,
+               SUM(si.quantity) as saleQty,
+               SUM(si.totalPrice) as saleAmount,
+               0 as purchaseCostAmount,
+               SUM(COALESCE(si.avg_cost, p.cost, 0) * COALESCE(si.quantity, 0)) as saleCostAmount,
+               SUM(COALESCE(si.quantity, 0)) as saleCostQty
         FROM \`SaleItem\` si
         JOIN \`Sale\` s ON s.id = si.saleId
         JOIN \`Product\` p ON p.id = si.productId
@@ -233,9 +273,14 @@ router.get("/purchase-sales/details", async (req, res) => {
         ${saleDateClause}
         GROUP BY p.id
         UNION ALL
-        SELECT 'material' as itemType, m.id as itemId, m.name, m.brand as category, m.image,
-               SUM(pi.quantity) as purchaseQty, SUM(pi.totalPrice) as purchaseAmount,
-               0 as saleQty, 0 as saleAmount
+        SELECT 'material' as itemType, m.id as itemId, m.name, m.brand as category, m.image, COALESCE(m.unit, '') as unit,
+               SUM(pi.quantity) as purchaseQty,
+               SUM(pi.totalPrice) as purchaseAmount,
+               0 as saleQty,
+               0 as saleAmount,
+               SUM(COALESCE(pi.unitPrice, 0) * COALESCE(pi.quantity, 0)) as purchaseCostAmount,
+               0 as saleCostAmount,
+               0 as saleCostQty
         FROM \`PurchaseItem\` pi
         JOIN \`Purchase\` pu ON pu.id = pi.purchaseId
         JOIN \`Material\` m ON m.id = pi.materialId
@@ -244,9 +289,14 @@ router.get("/purchase-sales/details", async (req, res) => {
         ${purchaseDateClause}
         GROUP BY m.id
         UNION ALL
-        SELECT 'material' as itemType, m.id as itemId, m.name, m.brand as category, m.image,
-               0 as purchaseQty, 0 as purchaseAmount,
-               SUM(si.quantity) as saleQty, SUM(si.totalPrice) as saleAmount
+        SELECT 'material' as itemType, m.id as itemId, m.name, m.brand as category, m.image, COALESCE(m.unit, '') as unit,
+               0 as purchaseQty,
+               0 as purchaseAmount,
+               SUM(si.quantity) as saleQty,
+               SUM(si.totalPrice) as saleAmount,
+               0 as purchaseCostAmount,
+               SUM(COALESCE(si.avg_cost, m.unit_cost, 0) * COALESCE(si.quantity, 0)) as saleCostAmount,
+               SUM(COALESCE(si.quantity, 0)) as saleCostQty
         FROM \`SaleItem\` si
         JOIN \`Sale\` s ON s.id = si.saleId
         JOIN \`Material\` m ON m.id = si.materialId
@@ -255,10 +305,14 @@ router.get("/purchase-sales/details", async (req, res) => {
         ${saleDateClause}
         GROUP BY m.id
       ) t
-      GROUP BY itemType, itemId, name, category, image
-      ORDER BY saleAmount DESC
-      LIMIT ${limit} OFFSET ${offset}
+      GROUP BY itemType, itemId, name, category, image, unit
+      ORDER BY ${Prisma.raw(sortColumn)} ${Prisma.raw(sortOrder)}
+      ${paginationSql}
     `;
+
+    const effectivePage = exportAll ? 1 : page;
+    const effectiveLimit = exportAll ? Number(totalCount || 0) : limit;
+    const totalPages = effectiveLimit > 0 ? Math.ceil(totalCount / effectiveLimit) : 0;
 
     res.json({
       rows: rows.map(r => ({
@@ -267,9 +321,86 @@ router.get("/purchase-sales/details", async (req, res) => {
         purchaseAmount: Number(r.purchaseAmount || 0),
         saleQty: Number(r.saleQty || 0),
         saleAmount: Number(r.saleAmount || 0),
-        profit: Number(r.saleAmount || 0) - Number(r.purchaseAmount || 0)
+        saleCostAmount: Number(r.saleCostAmount || 0),
+        avgSalePrice: Number(r.avgSalePrice || 0),
+        avgCost: Number(r.avgCost || 0),
+        profit: Number(r.profit || 0),
+        profitMargin: Number(r.profitMargin || 0),
+        unitProfit: Number(r.unitProfit || 0)
       })),
-      pagination: { page, limit, totalCount, totalPages: Math.ceil(totalCount / limit) }
+      pagination: { page: effectivePage, limit: effectiveLimit, totalCount, totalPages }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/purchase-sales/overview", async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const { start, end } = parseDateRange(startDate, endDate);
+
+    const purchaseDateClause = start && end
+      ? Prisma.sql`AND pu.createdAt >= ${start} AND pu.createdAt <= ${end}`
+      : Prisma.sql``;
+    const saleDateClause = start && end
+      ? Prisma.sql`AND s.createdAt >= ${start} AND s.createdAt <= ${end}`
+      : Prisma.sql``;
+
+    const [purchaseRows, saleRows] = await Promise.all([
+      prisma.$queryRaw`
+        SELECT
+          SUM(pi.quantity) as purchaseQty,
+          SUM(pi.totalPrice) as purchaseAmount
+        FROM \`PurchaseItem\` pi
+        JOIN \`Purchase\` pu ON pu.id = pi.purchaseId
+        LEFT JOIN \`Product\` p ON p.id = pi.productId
+        LEFT JOIN \`Material\` m ON m.id = pi.materialId
+        WHERE (
+          (pi.productId IS NOT NULL AND p.deleted_at = 0)
+          OR
+          (pi.materialId IS NOT NULL AND m.deleted_at = 0)
+        )
+        ${purchaseDateClause}
+      `,
+      prisma.$queryRaw`
+        SELECT
+          SUM(si.quantity) as saleQty,
+          SUM(si.totalPrice) as saleAmount,
+          SUM(
+            (
+              CASE
+                WHEN si.productId IS NOT NULL THEN COALESCE(si.avg_cost, p.cost, 0)
+                WHEN si.materialId IS NOT NULL THEN COALESCE(si.avg_cost, m.unit_cost, 0)
+                ELSE 0
+              END
+            ) * COALESCE(si.quantity, 0)
+          ) as saleCostAmount
+        FROM \`SaleItem\` si
+        JOIN \`Sale\` s ON s.id = si.saleId
+        LEFT JOIN \`Product\` p ON p.id = si.productId
+        LEFT JOIN \`Material\` m ON m.id = si.materialId
+        WHERE (
+          (si.productId IS NOT NULL AND p.deleted_at = 0)
+          OR
+          (si.materialId IS NOT NULL AND m.deleted_at = 0)
+        )
+        ${saleDateClause}
+      `
+    ]);
+
+    const purchaseQty = Number(purchaseRows[0]?.purchaseQty || 0);
+    const purchaseAmount = Number(purchaseRows[0]?.purchaseAmount || 0);
+    const saleQty = Number(saleRows[0]?.saleQty || 0);
+    const saleAmount = Number(saleRows[0]?.saleAmount || 0);
+    const totalProfit = saleAmount - Number(saleRows[0]?.saleCostAmount || 0);
+
+    res.json({
+      totalPurchaseQty: purchaseQty,
+      totalPurchaseAmount: purchaseAmount,
+      totalSaleQty: saleQty,
+      totalSaleAmount: saleAmount,
+      totalProfit
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -280,6 +411,10 @@ router.get("/customer/details", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const { start, end } = parseDateRange(startDate, endDate);
+    const sortBy = String(req.query.sortBy || "most_due").toLowerCase();
+    const sortOrder = String(req.query.sortOrder || "desc").toLowerCase() === "asc" ? "ASC" : "DESC";
+    const exportAll = String(req.query.exportAll || "").toLowerCase() === "true" || req.query.exportAll === "1";
+    const search = String(req.query.search || "").trim();
     const page = parseInt(req.query.page || "1", 10);
     const limit = parseInt(req.query.limit || "10", 10);
     const offset = (page - 1) * limit;
@@ -287,8 +422,27 @@ router.get("/customer/details", async (req, res) => {
     const saleDateClause = start && end
       ? Prisma.sql`AND s.createdAt >= ${start} AND s.createdAt <= ${end}`
       : Prisma.sql``;
+    const searchClause = search
+      ? Prisma.sql`AND (c.name LIKE ${`%${search}%`} OR c.mobile LIKE ${`%${search}%`} OR c.email LIKE ${`%${search}%`})`
+      : Prisma.sql``;
+    const sortColumn = sortBy === "name"
+      ? "c.name"
+      : sortBy === "most_paid"
+        ? "COALESCE(agg.totalPaid, 0)"
+        : sortBy === "most_items"
+          ? "COALESCE(agg.totalItemQty, 0)"
+          : sortBy === "most_item_types"
+            ? "COALESCE(agg.itemTypeCount, 0)"
+            : "COALESCE(agg.totalDue, 0)";
+    const paginationSql = exportAll ? Prisma.sql`` : Prisma.sql`LIMIT ${limit} OFFSET ${offset}`;
 
-    const totalCount = await prisma.customer.count({ where: { deleted_at: false } });
+    const totalRows = await prisma.$queryRaw`
+      SELECT COUNT(*) as count
+      FROM \`Customer\` c
+      WHERE c.deleted_at = 0
+      ${searchClause}
+    `;
+    const totalCount = Number(totalRows[0]?.count || 0);
 
     const rows = await prisma.$queryRaw`
       SELECT c.id, c.name, c.mobile, c.email,
@@ -312,9 +466,13 @@ router.get("/customer/details", async (req, res) => {
         GROUP BY s.customerId
       ) agg ON agg.customerId = c.id
       WHERE c.deleted_at = 0
-      ORDER BY c.id DESC
-      LIMIT ${limit} OFFSET ${offset}
+      ${searchClause}
+      ORDER BY ${Prisma.raw(sortColumn)} ${Prisma.raw(sortOrder)}, c.id DESC
+      ${paginationSql}
     `;
+    const effectivePage = exportAll ? 1 : page;
+    const effectiveLimit = exportAll ? Number(totalCount || 0) : limit;
+    const totalPages = effectiveLimit > 0 ? Math.ceil(totalCount / effectiveLimit) : 0;
 
     res.json({
       rows: rows.map(r => ({
@@ -325,7 +483,7 @@ router.get("/customer/details", async (req, res) => {
         totalItemQty: Number(r.totalItemQty || 0),
         itemTypeCount: Number(r.itemTypeCount || 0)
       })),
-      pagination: { page, limit, totalCount: Number(totalCount || 0), totalPages: Math.ceil(totalCount / limit) }
+      pagination: { page: effectivePage, limit: effectiveLimit, totalCount, totalPages }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -336,6 +494,10 @@ router.get("/supplier/details", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const { start, end } = parseDateRange(startDate, endDate);
+    const sortBy = String(req.query.sortBy || "most_due").toLowerCase();
+    const sortOrder = String(req.query.sortOrder || "desc").toLowerCase() === "asc" ? "ASC" : "DESC";
+    const exportAll = String(req.query.exportAll || "").toLowerCase() === "true" || req.query.exportAll === "1";
+    const search = String(req.query.search || "").trim();
     const page = parseInt(req.query.page || "1", 10);
     const limit = parseInt(req.query.limit || "10", 10);
     const offset = (page - 1) * limit;
@@ -343,11 +505,30 @@ router.get("/supplier/details", async (req, res) => {
     const purchaseDateClause = start && end
       ? Prisma.sql`AND p.createdAt >= ${start} AND p.createdAt <= ${end}`
       : Prisma.sql``;
+    const searchClause = search
+      ? Prisma.sql`AND (s.name LIKE ${`%${search}%`} OR s.mobile LIKE ${`%${search}%`})`
+      : Prisma.sql``;
+    const sortColumn = sortBy === "name"
+      ? "s.name"
+      : sortBy === "most_paid"
+        ? "COALESCE(agg.totalPaid, 0)"
+        : sortBy === "most_items"
+          ? "COALESCE(agg.totalItemQty, 0)"
+          : sortBy === "most_item_types"
+            ? "COALESCE(agg.itemTypeCount, 0)"
+            : "COALESCE(agg.totalDue, 0)";
+    const paginationSql = exportAll ? Prisma.sql`` : Prisma.sql`LIMIT ${limit} OFFSET ${offset}`;
 
-    const totalCount = await prisma.supplier.count({ where: { deleted_at: false } });
+    const totalRows = await prisma.$queryRaw`
+      SELECT COUNT(*) as count
+      FROM \`Supplier\` s
+      WHERE s.deleted_at = 0
+      ${searchClause}
+    `;
+    const totalCount = Number(totalRows[0]?.count || 0);
 
     const rows = await prisma.$queryRaw`
-      SELECT s.id, s.name, s.mobile,
+      SELECT s.id, s.name, s.mobile, NULL as email,
              COALESCE(agg.totalAmount, 0) as totalAmount,
              COALESCE(agg.totalPaid, 0) as totalPaid,
              COALESCE(agg.totalDue, 0) as totalDue,
@@ -368,9 +549,13 @@ router.get("/supplier/details", async (req, res) => {
         GROUP BY p.supplierId
       ) agg ON agg.supplierId = s.id
       WHERE s.deleted_at = 0
-      ORDER BY s.id DESC
-      LIMIT ${limit} OFFSET ${offset}
+      ${searchClause}
+      ORDER BY ${Prisma.raw(sortColumn)} ${Prisma.raw(sortOrder)}, s.id DESC
+      ${paginationSql}
     `;
+    const effectivePage = exportAll ? 1 : page;
+    const effectiveLimit = exportAll ? Number(totalCount || 0) : limit;
+    const totalPages = effectiveLimit > 0 ? Math.ceil(totalCount / effectiveLimit) : 0;
 
     res.json({
       rows: rows.map(r => ({
@@ -381,7 +566,101 @@ router.get("/supplier/details", async (req, res) => {
         totalItemQty: Number(r.totalItemQty || 0),
         itemTypeCount: Number(r.itemTypeCount || 0)
       })),
-      pagination: { page, limit, totalCount: Number(totalCount || 0), totalPages: Math.ceil(totalCount / limit) }
+      pagination: { page: effectivePage, limit: effectiveLimit, totalCount, totalPages }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/customer/overview", async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const { start, end } = parseDateRange(startDate, endDate);
+    const search = String(req.query.search || "").trim();
+    const saleDateClause = start && end
+      ? Prisma.sql`AND s.createdAt >= ${start} AND s.createdAt <= ${end}`
+      : Prisma.sql``;
+    const searchClause = search
+      ? Prisma.sql`AND (c.name LIKE ${`%${search}%`} OR c.mobile LIKE ${`%${search}%`} OR c.email LIKE ${`%${search}%`})`
+      : Prisma.sql``;
+
+    const rows = await prisma.$queryRaw`
+      SELECT
+        COUNT(*) as totalCustomers,
+        SUM(COALESCE(agg.totalItemQty, 0)) as totalItemQty,
+        SUM(COALESCE(agg.totalPaid, 0)) as totalPaid,
+        SUM(COALESCE(agg.totalDue, 0)) as totalDue,
+        SUM(CASE WHEN COALESCE(agg.totalItemQty, 0) > 0 THEN 1 ELSE 0 END) as activeCustomers
+      FROM \`Customer\` c
+      LEFT JOIN (
+        SELECT s.customerId,
+               SUM(s.paidAmount) as totalPaid,
+               SUM(s.grandTotal - s.paidAmount) as totalDue,
+               SUM(si.quantity) as totalItemQty
+        FROM \`Sale\` s
+        LEFT JOIN \`SaleItem\` si ON si.saleId = s.id
+        WHERE s.customerId IS NOT NULL
+        ${saleDateClause}
+        GROUP BY s.customerId
+      ) agg ON agg.customerId = c.id
+      WHERE c.deleted_at = 0
+      ${searchClause}
+    `;
+    const overview = rows[0] || {};
+    res.json({
+      totalCustomers: Number(overview.totalCustomers || 0),
+      totalItemQty: Number(overview.totalItemQty || 0),
+      totalPaid: Number(overview.totalPaid || 0),
+      totalDue: Number(overview.totalDue || 0),
+      activeCustomers: Number(overview.activeCustomers || 0)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/supplier/overview", async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const { start, end } = parseDateRange(startDate, endDate);
+    const search = String(req.query.search || "").trim();
+    const purchaseDateClause = start && end
+      ? Prisma.sql`AND p.createdAt >= ${start} AND p.createdAt <= ${end}`
+      : Prisma.sql``;
+    const searchClause = search
+      ? Prisma.sql`AND (s.name LIKE ${`%${search}%`} OR s.mobile LIKE ${`%${search}%`})`
+      : Prisma.sql``;
+
+    const rows = await prisma.$queryRaw`
+      SELECT
+        COUNT(*) as totalSuppliers,
+        SUM(COALESCE(agg.totalItemQty, 0)) as totalItemQty,
+        SUM(COALESCE(agg.totalPaid, 0)) as totalPaid,
+        SUM(COALESCE(agg.totalDue, 0)) as totalDue,
+        SUM(CASE WHEN COALESCE(agg.totalItemQty, 0) > 0 THEN 1 ELSE 0 END) as activeSuppliers
+      FROM \`Supplier\` s
+      LEFT JOIN (
+        SELECT p.supplierId,
+               SUM(p.paidAmount) as totalPaid,
+               SUM(p.grandTotal - p.paidAmount) as totalDue,
+               SUM(pi.quantity) as totalItemQty
+        FROM \`Purchase\` p
+        LEFT JOIN \`PurchaseItem\` pi ON pi.purchaseId = p.id
+        WHERE p.supplierId IS NOT NULL
+        ${purchaseDateClause}
+        GROUP BY p.supplierId
+      ) agg ON agg.supplierId = s.id
+      WHERE s.deleted_at = 0
+      ${searchClause}
+    `;
+    const overview = rows[0] || {};
+    res.json({
+      totalSuppliers: Number(overview.totalSuppliers || 0),
+      totalItemQty: Number(overview.totalItemQty || 0),
+      totalPaid: Number(overview.totalPaid || 0),
+      totalDue: Number(overview.totalDue || 0),
+      activeSuppliers: Number(overview.activeSuppliers || 0)
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -392,6 +671,7 @@ router.get("/best-selling/details", async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const { start, end } = parseDateRange(startDate, endDate);
+    const exportAll = String(req.query.exportAll || "").toLowerCase() === "true" || req.query.exportAll === "1";
     const page = parseInt(req.query.page || "1", 10);
     const limit = parseInt(req.query.limit || "10", 10);
     const offset = (page - 1) * limit;
@@ -407,6 +687,7 @@ router.get("/best-selling/details", async (req, res) => {
       : sortBy === "profit"
         ? "totalProfit"
         : "totalAmount";
+    const paginationSql = exportAll ? Prisma.sql`` : Prisma.sql`LIMIT ${limit} OFFSET ${offset}`;
 
     const totalRows = await prisma.$queryRaw`
       SELECT COUNT(*) as count FROM (
@@ -435,12 +716,12 @@ router.get("/best-selling/details", async (req, res) => {
     const totalCount = Number(totalRows[0]?.count || 0);
 
     const rows = await prisma.$queryRaw`
-      SELECT itemType, itemId, name, category, image,
+      SELECT itemType, itemId, name, category, brand, unit, image,
              SUM(quantity) as totalQty,
              SUM(totalPrice) as totalAmount,
              SUM(totalPrice - (costPerUnit * quantity)) as totalProfit
       FROM (
-        SELECT 'product' as itemType, p.id as itemId, p.name, p.category, p.image,
+        SELECT 'product' as itemType, p.id as itemId, p.name, p.category, p.brand, COALESCE(p.unit, '') as unit, p.image,
                si.quantity, si.totalPrice,
                COALESCE(si.avg_cost, p.cost, 0) as costPerUnit
         FROM \`SaleItem\` si
@@ -450,7 +731,7 @@ router.get("/best-selling/details", async (req, res) => {
           AND p.deleted_at = 0
         ${saleDateClause}
         UNION ALL
-        SELECT 'material' as itemType, m.id as itemId, m.name, m.brand as category, m.image,
+        SELECT 'material' as itemType, m.id as itemId, m.name, m.category, m.brand, COALESCE(m.unit, '') as unit, m.image,
                si.quantity, si.totalPrice,
                COALESCE(si.avg_cost, m.unit_cost, 0) as costPerUnit
         FROM \`SaleItem\` si
@@ -460,10 +741,13 @@ router.get("/best-selling/details", async (req, res) => {
           AND m.deleted_at = 0
         ${saleDateClause}
       ) t
-      GROUP BY itemType, itemId, name, category, image
+      GROUP BY itemType, itemId, name, category, brand, unit, image
       ORDER BY ${Prisma.raw(sortColumn)} ${Prisma.raw(order)}
-      LIMIT ${limit} OFFSET ${offset}
+      ${paginationSql}
     `;
+    const effectivePage = exportAll ? 1 : page;
+    const effectiveLimit = exportAll ? Number(totalCount || 0) : limit;
+    const totalPages = effectiveLimit > 0 ? Math.ceil(totalCount / effectiveLimit) : 0;
 
     res.json({
       rows: rows.map(r => ({
@@ -472,7 +756,55 @@ router.get("/best-selling/details", async (req, res) => {
         totalAmount: Number(r.totalAmount || 0),
         totalProfit: Number(r.totalProfit || 0)
       })),
-      pagination: { page, limit, totalCount, totalPages: Math.ceil(totalCount / limit) }
+      pagination: { page: effectivePage, limit: effectiveLimit, totalCount, totalPages }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/best-selling/overview", async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const { start, end } = parseDateRange(startDate, endDate);
+    const saleDateClause = start && end
+      ? Prisma.sql`AND s.createdAt >= ${start} AND s.createdAt <= ${end}`
+      : Prisma.sql``;
+
+    const rows = await prisma.$queryRaw`
+      SELECT
+        COUNT(DISTINCT CONCAT(itemType, '-', itemId)) as itemCount,
+        SUM(quantity) as totalQty,
+        SUM(totalPrice) as totalAmount,
+        SUM(totalPrice - (costPerUnit * quantity)) as totalProfit
+      FROM (
+        SELECT 'product' as itemType, p.id as itemId,
+               si.quantity, si.totalPrice,
+               COALESCE(si.avg_cost, p.cost, 0) as costPerUnit
+        FROM \`SaleItem\` si
+        JOIN \`Sale\` s ON s.id = si.saleId
+        JOIN \`Product\` p ON p.id = si.productId
+        WHERE si.productId IS NOT NULL
+          AND p.deleted_at = 0
+        ${saleDateClause}
+        UNION ALL
+        SELECT 'material' as itemType, m.id as itemId,
+               si.quantity, si.totalPrice,
+               COALESCE(si.avg_cost, m.unit_cost, 0) as costPerUnit
+        FROM \`SaleItem\` si
+        JOIN \`Sale\` s ON s.id = si.saleId
+        JOIN \`Material\` m ON m.id = si.materialId
+        WHERE si.materialId IS NOT NULL
+          AND m.deleted_at = 0
+        ${saleDateClause}
+      ) t
+    `;
+    const overview = rows[0] || {};
+    res.json({
+      itemCount: Number(overview.itemCount || 0),
+      totalQty: Number(overview.totalQty || 0),
+      totalAmount: Number(overview.totalAmount || 0),
+      totalProfit: Number(overview.totalProfit || 0)
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

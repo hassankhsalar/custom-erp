@@ -103,7 +103,8 @@ router.get("/sales/per-date", async (req, res) => {
       SELECT DATE(createdAt) as date,
              COUNT(*) as saleCount,
              SUM(grandTotal) as totalAmount,
-             SUM(COALESCE(total_cost, 0)) as totalCost
+             SUM(COALESCE(total_cost, 0)) as totalCost,
+             SUM(COALESCE(discount, 0)) as totalDiscount
       FROM \`Sale\`
       WHERE ${whereSql}
       GROUP BY DATE(createdAt)
@@ -115,7 +116,8 @@ router.get("/sales/per-date", async (req, res) => {
         ...r,
         saleCount: Number(r.saleCount || 0),
         totalAmount: Number(r.totalAmount || 0),
-        totalCost: Number(r.totalCost || 0)
+        totalCost: Number(r.totalCost || 0),
+        totalDiscount: Number(r.totalDiscount || 0)
       }))
     });
   } catch (err) {
@@ -141,7 +143,8 @@ router.get("/sales/per-month", async (req, res) => {
       SELECT MONTH(createdAt) as month,
              COUNT(*) as saleCount,
              SUM(grandTotal) as totalAmount,
-             SUM(COALESCE(total_cost, 0)) as totalCost
+             SUM(COALESCE(total_cost, 0)) as totalCost,
+             SUM(COALESCE(discount, 0)) as totalDiscount
       FROM \`Sale\`
       WHERE ${whereSql}
       GROUP BY MONTH(createdAt)
@@ -154,7 +157,8 @@ router.get("/sales/per-month", async (req, res) => {
         month: Number(r.month || 0),
         saleCount: Number(r.saleCount || 0),
         totalAmount: Number(r.totalAmount || 0),
-        totalCost: Number(r.totalCost || 0)
+        totalCost: Number(r.totalCost || 0),
+        totalDiscount: Number(r.totalDiscount || 0)
       }))
     });
   } catch (err) {
@@ -197,7 +201,8 @@ router.get("/sales/all", async (req, res) => {
       SELECT DATE(createdAt) as date,
              COUNT(*) as saleCount,
              SUM(grandTotal) as totalAmount,
-             SUM(COALESCE(total_cost, 0)) as totalCost
+             SUM(COALESCE(total_cost, 0)) as totalCost,
+             SUM(COALESCE(discount, 0)) as totalDiscount
       FROM \`Sale\`
       ${whereClause}
       GROUP BY DATE(createdAt)
@@ -213,7 +218,8 @@ router.get("/sales/all", async (req, res) => {
         ...r,
         saleCount: Number(r.saleCount || 0),
         totalAmount: Number(r.totalAmount || 0),
-        totalCost: Number(r.totalCost || 0)
+        totalCost: Number(r.totalCost || 0),
+        totalDiscount: Number(r.totalDiscount || 0)
       })),
       pagination: {
         page: effectivePage,
@@ -259,7 +265,14 @@ router.get("/purchases/per-date", async (req, res) => {
       SELECT DATE(createdAt) as date,
              COUNT(*) as purchaseCount,
              SUM(grandTotal) as totalAmount,
-             SUM(COALESCE(shippingCost, 0)) as shippingCost
+             SUM(COALESCE(shippingCost, 0)) as shippingCost,
+             SUM(
+              CASE
+                WHEN COALESCE(discount, 0) > 0 AND COALESCE(discount, 0) < 100
+                  THEN ((COALESCE(grandTotal, 0) - COALESCE(shippingCost, 0)) * COALESCE(discount, 0)) / (100 - COALESCE(discount, 0))
+                ELSE 0
+              END
+             ) as totalDiscount
       FROM \`Purchase\`
       WHERE ${whereSql}
       GROUP BY DATE(createdAt)
@@ -271,7 +284,8 @@ router.get("/purchases/per-date", async (req, res) => {
         ...r,
         purchaseCount: Number(r.purchaseCount || 0),
         totalAmount: Number(r.totalAmount || 0),
-        shippingCost: Number(r.shippingCost || 0)
+        shippingCost: Number(r.shippingCost || 0),
+        totalDiscount: Number(r.totalDiscount || 0)
       }))
     });
   } catch (err) {
@@ -304,7 +318,14 @@ router.get("/purchases/per-month", async (req, res) => {
       SELECT MONTH(createdAt) as month,
              COUNT(*) as purchaseCount,
              SUM(grandTotal) as totalAmount,
-             SUM(COALESCE(shippingCost, 0)) as shippingCost
+             SUM(COALESCE(shippingCost, 0)) as shippingCost,
+             SUM(
+              CASE
+                WHEN COALESCE(discount, 0) > 0 AND COALESCE(discount, 0) < 100
+                  THEN ((COALESCE(grandTotal, 0) - COALESCE(shippingCost, 0)) * COALESCE(discount, 0)) / (100 - COALESCE(discount, 0))
+                ELSE 0
+              END
+             ) as totalDiscount
       FROM \`Purchase\`
       WHERE ${whereSql}
       GROUP BY MONTH(createdAt)
@@ -317,7 +338,8 @@ router.get("/purchases/per-month", async (req, res) => {
         month: Number(r.month || 0),
         purchaseCount: Number(r.purchaseCount || 0),
         totalAmount: Number(r.totalAmount || 0),
-        shippingCost: Number(r.shippingCost || 0)
+        shippingCost: Number(r.shippingCost || 0),
+        totalDiscount: Number(r.totalDiscount || 0)
       }))
     });
   } catch (err) {
@@ -364,7 +386,14 @@ router.get("/purchases/all", async (req, res) => {
       SELECT DATE(createdAt) as date,
              COUNT(*) as purchaseCount,
              SUM(grandTotal) as totalAmount,
-             SUM(COALESCE(shippingCost, 0)) as shippingCost
+             SUM(COALESCE(shippingCost, 0)) as shippingCost,
+             SUM(
+              CASE
+                WHEN COALESCE(discount, 0) > 0 AND COALESCE(discount, 0) < 100
+                  THEN ((COALESCE(grandTotal, 0) - COALESCE(shippingCost, 0)) * COALESCE(discount, 0)) / (100 - COALESCE(discount, 0))
+                ELSE 0
+              END
+             ) as totalDiscount
       FROM \`Purchase\`
       ${whereClause}
       GROUP BY DATE(createdAt)
@@ -380,7 +409,8 @@ router.get("/purchases/all", async (req, res) => {
         ...r,
         purchaseCount: Number(r.purchaseCount || 0),
         totalAmount: Number(r.totalAmount || 0),
-        shippingCost: Number(r.shippingCost || 0)
+        shippingCost: Number(r.shippingCost || 0),
+        totalDiscount: Number(r.totalDiscount || 0)
       })),
       pagination: {
         page: effectivePage,
@@ -822,10 +852,10 @@ router.get("/stock/products", async (req, res) => {
       const rows = await prisma.product.findMany({
         where: { deleted_at: false },
         ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
-        select: { id: true, name: true, category: true, image: true, stock: true, alert_quantity: true },
+        select: { id: true, name: true, category: true, brand: true, unit: true, image: true, stock: true, cost: true, alert_quantity: true },
         ...(sortBy === "stock" ? { orderBy: { stock: sortOrder } } : {})
       });
-      const mappedRows = rows.map(r => ({ ...r, scrap: 0, brand: null, unit: null }));
+      const mappedRows = rows.map(r => ({ ...r, scrap: 0, avg_cost: toNum(r.cost, 0) }));
       if (useLowStockWiseSort) {
         const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
         return res.json(paginateRows(sorted, page, limit));
@@ -865,8 +895,9 @@ router.get("/stock/products", async (req, res) => {
         stock: r.stock,
         scrap: r.scrap || 0,
         alert_quantity: toNum(r.alert_quantity, toNum(r.product?.alert_quantity, 0)),
-        brand: null,
-        unit: null
+        brand: r.product?.brand || null,
+        unit: r.product?.unit || null,
+        avg_cost: toNum(r.avg_cost, toNum(r.product?.cost, 0))
       }));
       if (useLowStockWiseSort) {
         const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
@@ -907,8 +938,9 @@ router.get("/stock/products", async (req, res) => {
         stock: r.stock,
         alert_quantity: toNum(r.alert_quantity, toNum(r.product?.alert_quantity, 0)),
         scrap: r.scrap || 0,
-        brand: null,
-        unit: null
+        brand: r.product?.brand || null,
+        unit: r.product?.unit || null,
+        avg_cost: toNum(r.avg_cost, toNum(r.product?.cost, 0))
       }));
       if (useLowStockWiseSort) {
         const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
@@ -949,8 +981,9 @@ router.get("/stock/products", async (req, res) => {
         stock: r.stock,
         alert_quantity: toNum(r.alert_quantity, toNum(r.product?.alert_quantity, 0)),
         scrap: r.scrap || 0,
-        brand: null,
-        unit: null
+        brand: r.product?.brand || null,
+        unit: r.product?.unit || null,
+        avg_cost: toNum(r.avg_cost, toNum(r.product?.cost, 0))
       }));
       if (useLowStockWiseSort) {
         const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
@@ -994,10 +1027,10 @@ router.get("/stock/materials", async (req, res) => {
       const rows = await prisma.material.findMany({
         where: { deleted_at: false },
         ...(useLowStockWiseSort ? {} : { skip: offset, take: limit }),
-        select: { id: true, name: true, brand: true, category: true, image: true, current_stock: true, unit: true, alert_quantity: true },
+        select: { id: true, name: true, brand: true, category: true, image: true, current_stock: true, unit: true, unit_cost: true, alert_quantity: true },
         ...(sortBy === "stock" ? { orderBy: { current_stock: sortOrder } } : {})
       });
-      const mappedRows = rows.map(r => ({ ...r, stock: r.current_stock, scrap: 0 }));
+      const mappedRows = rows.map(r => ({ ...r, stock: r.current_stock, scrap: 0, avg_cost: toNum(r.unit_cost, 0) }));
       if (useLowStockWiseSort) {
         const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
         return res.json(paginateRows(sorted, page, limit));
@@ -1038,7 +1071,8 @@ router.get("/stock/materials", async (req, res) => {
         alert_quantity: toNum(r.alert_quantity, toNum(r.material?.alert_quantity, 0)),
         unit: r.material?.unit,
         scrap: r.scrap || 0,
-        category: null
+        category: null,
+        avg_cost: toNum(r.avg_cost, toNum(r.material?.unit_cost, 0))
       }));
       if (useLowStockWiseSort) {
         const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
@@ -1080,7 +1114,8 @@ router.get("/stock/materials", async (req, res) => {
         alert_quantity: toNum(r.alert_quantity, toNum(r.material?.alert_quantity, 0)),
         unit: r.material?.unit,
         scrap: r.scrap || 0,
-        category: null
+        category: null,
+        avg_cost: toNum(r.avg_cost, toNum(r.material?.unit_cost, 0))
       }));
       if (useLowStockWiseSort) {
         const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);
@@ -1122,7 +1157,8 @@ router.get("/stock/materials", async (req, res) => {
         alert_quantity: toNum(r.alert_quantity, toNum(r.material?.alert_quantity, 0)),
         unit: r.material?.unit,
         scrap: r.scrap || 0,
-        category: null
+        category: null,
+        avg_cost: toNum(r.avg_cost, toNum(r.material?.unit_cost, 0))
       }));
       if (useLowStockWiseSort) {
         const sorted = sortRowsByLowStockWise(mappedRows, sortOrder);

@@ -36,6 +36,7 @@ const SaleReport = () => {
   const [perDateRows, setPerDateRows] = useState([]);
   const [perMonthRows, setPerMonthRows] = useState([]);
   const [allRows, setAllRows] = useState([]);
+  const [allOverviewRows, setAllOverviewRows] = useState([]);
   const [shops, setShops] = useState([]);
   const [shopId, setShopId] = useState("");
   const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1 });
@@ -124,6 +125,20 @@ const SaleReport = () => {
     }
   };
 
+  const fetchAllOverview = async () => {
+    try {
+      const params = buildSalesAllParams(1, pagination.limit, true);
+      const res = await fetch(`${API_ROUTES.REPORT_SALES_ALL}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setAllOverviewRows(data.rows || []);
+    } catch (error) {
+      console.error("Error fetching sales overview data:", error);
+      setAllOverviewRows([]);
+    }
+  };
+
   useEffect(() => {
     if (tab === "perDate") fetchPerDate();
   }, [tab, month, shopId]);
@@ -133,7 +148,10 @@ const SaleReport = () => {
   }, [tab, year, shopId]);
 
   useEffect(() => {
-    if (tab === "all") fetchAll(pagination.page, pagination.limit);
+    if (tab === "all") {
+      fetchAll(pagination.page, pagination.limit);
+      fetchAllOverview();
+    }
   }, [tab]);
 
   const daysOfMonth = useMemo(() => {
@@ -156,7 +174,8 @@ const SaleReport = () => {
       map[r.date.slice(0, 10)] = {
         saleCount: Number(r.saleCount || 0),
         totalAmount: Number(r.totalAmount || 0),
-        totalCost: Number(r.totalCost || 0)
+        totalCost: Number(r.totalCost || 0),
+        totalDiscount: Number(r.totalDiscount || 0)
       };
     });
     return map;
@@ -170,11 +189,11 @@ const SaleReport = () => {
       case "perMonth":
         return perMonthRows.reduce((sum, r) => sum + Number(r.saleCount || 0), 0);
       case "all":
-        return allRows.reduce((sum, r) => sum + Number(r.saleCount || 0), 0);
+        return allOverviewRows.reduce((sum, r) => sum + Number(r.saleCount || 0), 0);
       default:
         return 0;
     }
-  }, [tab, perDateRows, perMonthRows, allRows]);
+  }, [tab, perDateRows, perMonthRows, allOverviewRows]);
 
   const totalRevenue = useMemo(() => {
     switch (tab) {
@@ -183,11 +202,11 @@ const SaleReport = () => {
       case "perMonth":
         return perMonthRows.reduce((sum, r) => sum + Number(r.totalAmount || 0), 0);
       case "all":
-        return allRows.reduce((sum, r) => sum + Number(r.totalAmount || 0), 0);
+        return allOverviewRows.reduce((sum, r) => sum + Number(r.totalAmount || 0), 0);
       default:
         return 0;
     }
-  }, [tab, perDateRows, perMonthRows, allRows]);
+  }, [tab, perDateRows, perMonthRows, allOverviewRows]);
 
   const totalProfit = useMemo(() => {
     switch (tab) {
@@ -196,11 +215,24 @@ const SaleReport = () => {
       case "perMonth":
         return perMonthRows.reduce((sum, r) => sum + (Number(r.totalAmount || 0) - Number(r.totalCost || 0)), 0);
       case "all":
-        return allRows.reduce((sum, r) => sum + (Number(r.totalAmount || 0) - Number(r.totalCost || 0)), 0);
+        return allOverviewRows.reduce((sum, r) => sum + (Number(r.totalAmount || 0) - Number(r.totalCost || 0)), 0);
       default:
         return 0;
     }
-  }, [tab, perDateRows, perMonthRows, allRows]);
+  }, [tab, perDateRows, perMonthRows, allOverviewRows]);
+
+  const totalDiscount = useMemo(() => {
+    switch (tab) {
+      case "perDate":
+        return perDateRows.reduce((sum, r) => sum + Number(r.totalDiscount || 0), 0);
+      case "perMonth":
+        return perMonthRows.reduce((sum, r) => sum + Number(r.totalDiscount || 0), 0);
+      case "all":
+        return allOverviewRows.reduce((sum, r) => sum + Number(r.totalDiscount || 0), 0);
+      default:
+        return 0;
+    }
+  }, [tab, perDateRows, perMonthRows, allOverviewRows]);
 
   const profitMargin = useMemo(() => {
     if (totalRevenue === 0) return 0;
@@ -212,19 +244,19 @@ const SaleReport = () => {
     
     switch (tab) {
       case "perDate":
-        data = [["Date", "Sales", "Revenue", "Cost", "Profit"]];
+        data = [["Date", "Sales", "Revenue", "Cost", "Discount", "Profit"]];
         daysOfMonth.forEach(d => {
-          const stats = perDateMap[d.key] || { saleCount: 0, totalAmount: 0, totalCost: 0 };
+          const stats = perDateMap[d.key] || { saleCount: 0, totalAmount: 0, totalCost: 0, totalDiscount: 0 };
           const profit = stats.totalAmount - stats.totalCost;
-          data.push([d.key, stats.saleCount, stats.totalAmount, stats.totalCost, profit]);
+          data.push([d.key, stats.saleCount, stats.totalAmount, stats.totalCost, stats.totalDiscount, profit]);
         });
         break;
       case "perMonth":
-        data = [["Month", "Sales", "Revenue", "Cost", "Profit"]];
+        data = [["Month", "Sales", "Revenue", "Cost", "Discount", "Profit"]];
         Array.from({ length: 12 }, (_, i) => {
-          const row = perMonthRows.find(r => Number(r.month) === i + 1) || { saleCount: 0, totalAmount: 0, totalCost: 0 };
+          const row = perMonthRows.find(r => Number(r.month) === i + 1) || { saleCount: 0, totalAmount: 0, totalCost: 0, totalDiscount: 0 };
           const profit = Number(row.totalAmount || 0) - Number(row.totalCost || 0);
-          data.push([new Date(0, i).toLocaleString("en-US", { month: "long" }), row.saleCount, row.totalAmount, row.totalCost, profit]);
+          data.push([new Date(0, i).toLocaleString("en-US", { month: "long" }), row.saleCount, row.totalAmount, row.totalCost, row.totalDiscount, profit]);
         });
         break;
       case "all":
@@ -239,10 +271,11 @@ const SaleReport = () => {
         } catch (error) {
           console.error("Error fetching full sales export data:", error);
         }
-        data = [["Date", "Place", "Sales", "Revenue", "Cost", "Profit"]];
+        const selectedShopName = shops.find((s) => String(s.id) === String(shopId))?.name || "All Shops";
+        data = [["Date", "Place", "Sales", "Revenue", "Cost", "Discount", "Profit"]];
         rowsToExport.forEach(r => {
           const profit = Number(r.totalAmount || 0) - Number(r.totalCost || 0);
-          data.push([r.date.slice(0, 10), shopId != "" ? shops[shopId].name : "All Shops", r.saleCount, r.totalAmount, r.totalCost, profit]);
+          data.push([r.date.slice(0, 10), selectedShopName, r.saleCount, r.totalAmount, r.totalCost, Number(r.totalDiscount || 0), profit]);
         });
         break;
     }
@@ -254,19 +287,6 @@ const SaleReport = () => {
     });
   };
 
-  const handleRefresh = () => {
-    switch (tab) {
-      case "perDate":
-        fetchPerDate();
-        break;
-      case "perMonth":
-        fetchPerMonth();
-        break;
-      case "all":
-        fetchAll(pagination.page, pagination.limit);
-        break;
-    }
-  };
 
   const getDayColor = (stats) => {
     const profit = stats.totalAmount - stats.totalCost;
@@ -346,16 +366,11 @@ const SaleReport = () => {
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleRefresh}
-                disabled={loading}
-                className="flex items-center gap-2 px-4 py-3 bg-white/60 text-gray-700 font-medium rounded-xl hover:bg-white/80 transition-all duration-300 border border-white/40 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Refresh Data"
-              >
-                <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
-                Refresh
-              </button>
+            <div className="flex items-center gap-4">
+              <div>
+                <p className="text-sm text-gray-600">Total Sales</p>
+                <p className="text-2xl font-bold text-blue-600">{totalSales}</p>
+              </div>
               
               <button
                 onClick={handleExport}
@@ -371,18 +386,7 @@ const SaleReport = () => {
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div className="backdrop-blur-lg bg-gradient-to-br from-blue-50/60 to-cyan-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Sales</p>
-                <p className="text-2xl font-bold text-blue-600">{totalSales}</p>
-              </div>
-              <div className="p-3 bg-blue-100/80 rounded-xl">
-                <ShoppingBag size={24} className="text-blue-600" />
-              </div>
-            </div>
-          </div>
-          
+
           <div className="backdrop-blur-lg bg-gradient-to-br from-emerald-50/60 to-green-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
             <div className="flex items-center justify-between">
               <div>
@@ -407,6 +411,20 @@ const SaleReport = () => {
               </div>
               <div className="p-3 bg-amber-100/80 rounded-xl">
                 <TrendingUp size={24} className="text-amber-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="backdrop-blur-lg bg-gradient-to-br from-rose-50/60 to-pink-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total Discount</p>
+                <p className="text-2xl font-bold text-rose-600">
+                  ${totalDiscount.toFixed(2)}
+                </p>
+              </div>
+              <div className="p-3 bg-rose-100/80 rounded-xl">
+                <Award size={24} className="text-rose-600" />
               </div>
             </div>
           </div>
@@ -619,7 +637,10 @@ const SaleReport = () => {
 
                 <div className="flex items-end">
                   <button
-                    onClick={() => fetchAll(1, pagination.limit)}
+                    onClick={async () => {
+                      await fetchAll(1, pagination.limit);
+                      await fetchAllOverview();
+                    }}
                     className="w-full px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2"
                   >
                     <Filter size={18} />
@@ -643,7 +664,7 @@ const SaleReport = () => {
               {tab === "perDate" && (
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                   {daysOfMonth.map(d => {
-                    const stats = perDateMap[d.key] || { saleCount: 0, totalAmount: 0, totalCost: 0 };
+                    const stats = perDateMap[d.key] || { saleCount: 0, totalAmount: 0, totalCost: 0, totalDiscount: 0 };
                     const profit = stats.totalAmount - stats.totalCost;
                     const isToday = new Date().toLocaleDateString("en-CA").slice(0, 10) === d.key;
                     
@@ -678,6 +699,12 @@ const SaleReport = () => {
                                 ${stats.totalAmount.toFixed(2)}
                               </div>
                             </div>
+                            <div className="mb-2">
+                              <div className="text-xs text-gray-500">Discount</div>
+                              <div className="text-sm font-medium text-rose-600">
+                                ${Number(stats.totalDiscount || 0).toFixed(2)}
+                              </div>
+                            </div>
                             <div>
                               <div className="text-xs text-gray-500">Profit</div>
                               <div className={`text-sm font-bold ${getProfitColor(profit)} flex items-center gap-1`}>
@@ -700,7 +727,7 @@ const SaleReport = () => {
               {tab === "perMonth" && (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                   {Array.from({ length: 12 }, (_, i) => {
-                    const row = perMonthRows.find(r => Number(r.month) === i + 1) || { saleCount: 0, totalAmount: 0, totalCost: 0 };
+                    const row = perMonthRows.find(r => Number(r.month) === i + 1) || { saleCount: 0, totalAmount: 0, totalCost: 0, totalDiscount: 0 };
                     const profit = Number(row.totalAmount || 0) - Number(row.totalCost || 0);
                     const isCurrentMonth = new Date().getMonth() === i && new Date().getFullYear() === year;
                     
@@ -741,6 +768,12 @@ const SaleReport = () => {
                                   ${Number(row.totalCost || 0).toFixed(2)}
                                 </span>
                               </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-600">Discount</span>
+                                <span className="text-sm font-medium text-rose-600">
+                                  ${Number(row.totalDiscount || 0).toFixed(2)}
+                                </span>
+                              </div>
                               <div className="pt-2 border-t border-white/40">
                                 <div className="flex items-center justify-between">
                                   <span className="text-sm font-medium text-gray-700">Profit</span>
@@ -776,6 +809,7 @@ const SaleReport = () => {
                           <th className="p-4 text-left font-medium text-gray-700">Sales</th>
                           <th className="p-4 text-left font-medium text-gray-700">Revenue</th>
                           <th className="p-4 text-left font-medium text-gray-700">Cost</th>
+                          <th className="p-4 text-left font-medium text-gray-700">Discount</th>
                           <th className="p-4 text-left font-medium text-gray-700">Profit</th>
                         </tr>
                       </thead>
@@ -814,6 +848,11 @@ const SaleReport = () => {
                               <td className="p-4">
                                 <div className="text-sm font-medium text-red-600">
                                   ${Number(r.totalCost || 0).toFixed(2)}
+                                </div>
+                              </td>
+                              <td className="p-4">
+                                <div className="text-sm font-medium text-rose-600">
+                                  ${Number(r.totalDiscount || 0).toFixed(2)}
                                 </div>
                               </td>
                               <td className="p-4">

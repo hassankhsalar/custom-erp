@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
 import { activeOnly } from "../../utils/softDelete";
+import { downloadExcelFile } from "../../utils/excelExport";
 import {
   Truck,
   Package,
@@ -41,7 +42,7 @@ const TransferReport = () => {
   const [topReceiver, setTopReceiver] = useState([]);
   const [topMode, setTopMode] = useState("transfer");
   const [topItems, setTopItems] = useState([]);
-  const [topItemsPagination, setTopItemsPagination] = useState({ page: 1, limit: 10, totalPages: 1 });
+  const [topItemsPagination, setTopItemsPagination] = useState({ page: 1, limit: 10, totalPages: 1, totalCount: 0 });
   const [loading, setLoading] = useState(false);
   const token = localStorage.getItem("token");
 
@@ -119,7 +120,7 @@ const TransferReport = () => {
       });
       const data = await res.json();
       setTopItems(activeOnly(data.rows || []));
-      setTopItemsPagination(data.pagination || { page: 1, limit, totalPages: 1 });
+      setTopItemsPagination(data.pagination || { page: 1, limit, totalPages: 1, totalCount: 0 });
     } catch (error) {
       console.error('Error fetching top items:', error);
     } finally {
@@ -173,7 +174,105 @@ const TransferReport = () => {
   };
 
   const handleExport = () => {
-    alert("Export functionality would be implemented here");
+    const fileDate = new Date().toISOString().split("T")[0];
+
+    if (tab === "overview") {
+      const rows = [
+        ["Metric", "Value"],
+        ["Total Transfers", Number(overview.totalCount || 0)],
+        ...Object.entries(overview.byStatus || {}).map(([status, count]) => [`Status: ${status}`, Number(count || 0)])
+      ];
+      downloadExcelFile({
+        sheetName: "Transfer Overview",
+        fileName: `transfer_overview_${fileDate}.xls`,
+        rows
+      });
+      return;
+    }
+
+    if (tab === "topSender") {
+      const rows = [
+        ["Place Type", "Place Name", "Transfers", "Items", "Item Types", "Shipping Cost"],
+        ...topSender.map((r) => [
+          r.placeType || "",
+          r.placeName || "",
+          Number(r.totalTransfers || 0),
+          Number(r.totalItems || 0),
+          Number(r.itemTypeCount || 0),
+          Number(r.totalShippingCost || 0)
+        ])
+      ];
+      downloadExcelFile({
+        sheetName: "Top Sender",
+        fileName: `transfer_top_sender_${fileDate}.xls`,
+        rows
+      });
+      return;
+    }
+
+    if (tab === "topReceiver") {
+      const rows = [
+        ["Place Type", "Place Name", "Transfers", "Items", "Item Types", "Shipping Cost"],
+        ...topReceiver.map((r) => [
+          r.placeType || "",
+          r.placeName || "",
+          Number(r.totalTransfers || 0),
+          Number(r.totalItems || 0),
+          Number(r.itemTypeCount || 0),
+          Number(r.totalShippingCost || 0)
+        ])
+      ];
+      downloadExcelFile({
+        sheetName: "Top Receiver",
+        fileName: `transfer_top_receiver_${fileDate}.xls`,
+        rows
+      });
+      return;
+    }
+
+    const fetchAllTopItemsForExport = async () => {
+      const limit = 500;
+      let page = 1;
+      let totalPages = 1;
+      const allRows = [];
+
+      while (page <= totalPages) {
+        const params = withRange(new URLSearchParams());
+        params.append("page", String(page));
+        params.append("limit", String(limit));
+        const res = await fetch(`${API_ROUTES.REPORT_TRANSFER_TOP_ITEMS}?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        const batch = activeOnly(data.rows || []);
+        allRows.push(...batch);
+        totalPages = Number(data.pagination?.totalPages || 1);
+        page += 1;
+        if (batch.length === 0) break;
+      }
+
+      const rows = [
+        ["Item Type", "Item ID", "Item Name", "Category", "Unit", "Quantity Transferred"],
+        ...allRows.map((r) => [
+          r.itemType || "",
+          r.itemId || "",
+          r.name || "",
+          r.category || "",
+          r.unit || "",
+          Number(r.totalQty || 0)
+        ])
+      ];
+
+      downloadExcelFile({
+        sheetName: "Top Items",
+        fileName: `transfer_top_items_${fileDate}.xls`,
+        rows
+      });
+    };
+
+    fetchAllTopItemsForExport().catch((error) => {
+      console.error("Error exporting all top items:", error);
+    });
   };
 
   const nextPage = () => {
@@ -403,7 +502,7 @@ const TransferReport = () => {
                     <div className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-5">
                       <div className="flex items-center gap-3 mb-4">
                         <ArrowUpRight size={20} className="text-blue-600" />
-                        <h3 className="text-lg font-semibold text-gray-800">Transfer From</h3>
+                        <h3 className="text-lg font-semibold text-gray-800">Transfer Sender</h3>
                       </div>
                       
                       {["shops", "stores", "factories"].map((group) => (
@@ -446,7 +545,7 @@ const TransferReport = () => {
                     <div className="backdrop-blur-sm bg-white/50 border border-white/40 rounded-xl p-5">
                       <div className="flex items-center gap-3 mb-4">
                         <ArrowDownRight size={20} className="text-emerald-600" />
-                        <h3 className="text-lg font-semibold text-gray-800">Destination</h3>
+                        <h3 className="text-lg font-semibold text-gray-800">Transfer Reciever</h3>
                       </div>
                       
                       {["shops", "stores", "factories"].map((group) => (
@@ -762,9 +861,9 @@ const TransferReport = () => {
                           <div className="text-sm text-gray-700">
                             Showing <span className="font-semibold">{(topItemsPagination.page - 1) * topItemsPagination.limit + 1}</span> to{" "}
                             <span className="font-semibold">
-                              {Math.min(topItemsPagination.page * topItemsPagination.limit, topItems.length)}
+                              {Math.min(topItemsPagination.page * topItemsPagination.limit, topItemsPagination.totalCount || 0)}
                             </span>{" "}
-                            of <span className="font-semibold">{topItems.length}</span> items
+                            of <span className="font-semibold">{topItemsPagination.totalCount || 0}</span> items
                           </div>
                         </div>
 
