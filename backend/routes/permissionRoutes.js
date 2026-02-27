@@ -66,6 +66,10 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Name and permissions are required' });
     }
 
+    if (name === 'admin' || name == 'superadmin') {
+      return res.status(400).json({ error: 'Cannot create admin permission' });
+    }
+
     // Check if permission with same name exists
     const existingPermission = await prisma.permission.findUnique({
       where: { name }
