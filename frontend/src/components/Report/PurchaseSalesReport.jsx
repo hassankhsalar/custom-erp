@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
+import { downloadExcelFile } from "../../utils/excelExport";
 import { activeOnly } from "../../utils/softDelete";
 import {
   TrendingUp,
@@ -27,8 +28,10 @@ import {
 const PurchaseSalesReport = () => {
   const [range, setRange] = useState({ startDate: "", endDate: "" });
   const [rows, setRows] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, limit: 10, totalPages: 1 });
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, totalCount: 0, totalPages: 1 });
   const [loading, setLoading] = useState(false);
+  const [sortBy, setSortBy] = useState("most_sold");
+  const [sortOrder, setSortOrder] = useState("desc");
   const [stats, setStats] = useState({
     totalPurchaseQty: 0,
     totalPurchaseAmount: 0,
@@ -53,35 +56,14 @@ const PurchaseSalesReport = () => {
       if (range.endDate) params.append("endDate", range.endDate);
       params.append("page", page);
       params.append("limit", limit);
+      params.append("sortBy", sortBy);
+      params.append("sortOrder", sortOrder);
       const res = await fetch(`${API_ROUTES.REPORT_PURCHASE_SALES_DETAILS}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
       setRows(activeOnly(data.rows || []));
-      setPagination(data.pagination || { page: 1, limit, totalPages: 1 });
-      
-      // Calculate statistics
-      const totals = data.rows?.reduce((acc, r) => ({
-        totalPurchaseQty: acc.totalPurchaseQty + Number(r.purchaseQty || 0),
-        totalPurchaseAmount: acc.totalPurchaseAmount + Number(r.purchaseAmount || 0),
-        totalSaleQty: acc.totalSaleQty + Number(r.saleQty || 0),
-        totalSaleAmount: acc.totalSaleAmount + Number(r.saleAmount || 0),
-        totalProfit: acc.totalProfit + Number(r.profit || 0)
-      }), {
-        totalPurchaseQty: 0,
-        totalPurchaseAmount: 0,
-        totalSaleQty: 0,
-        totalSaleAmount: 0,
-        totalProfit: 0
-      }) || {
-        totalPurchaseQty: 0,
-        totalPurchaseAmount: 0,
-        totalSaleQty: 0,
-        totalSaleAmount: 0,
-        totalProfit: 0
-      };
-      
-      setStats(totals);
+      setPagination(data.pagination || { page: 1, limit, totalCount: 0, totalPages: 1 });
     } catch (error) {
       console.error('Error fetching purchase vs sales data:', error);
     } finally {
@@ -89,12 +71,89 @@ const PurchaseSalesReport = () => {
     }
   };
 
+  const fetchOverview = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (range.startDate) params.append("startDate", range.startDate);
+      if (range.endDate) params.append("endDate", range.endDate);
+      const res = await fetch(`${API_ROUTES.REPORT_PURCHASE_SALES_OVERVIEW}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setStats({
+        totalPurchaseQty: Number(data?.totalPurchaseQty || 0),
+        totalPurchaseAmount: Number(data?.totalPurchaseAmount || 0),
+        totalSaleQty: Number(data?.totalSaleQty || 0),
+        totalSaleAmount: Number(data?.totalSaleAmount || 0),
+        totalProfit: Number(data?.totalProfit || 0)
+      });
+    } catch (error) {
+      console.error("Error fetching purchase vs sales overview:", error);
+    }
+  };
+
   useEffect(() => {
-    fetchRows(pagination.page, pagination.limit);
+    fetchRows(1, pagination.limit);
+    fetchOverview();
   }, []);
 
-  const handleExport = () => {
-    alert("Export functionality would be implemented here");
+  const applyFilters = async () => {
+    await fetchRows(1, pagination.limit);
+    await fetchOverview();
+  };
+
+  const handleExport = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (range.startDate) params.append("startDate", range.startDate);
+      if (range.endDate) params.append("endDate", range.endDate);
+      params.append("sortBy", sortBy);
+      params.append("sortOrder", sortOrder);
+      params.append("exportAll", "true");
+
+      const res = await fetch(`${API_ROUTES.REPORT_PURCHASE_SALES_DETAILS}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      const exportRows = activeOnly(data.rows || []);
+      if (!exportRows.length) return;
+
+      const rowsForExcel = [
+        [
+          "Item Name",
+          "Category",
+          "Sold Quantity",
+          "Sold Amount",
+          "Purchase Quantity",
+          "Purchase Amount",
+          "Profit",
+          "Profit Margin (%)"
+        ],
+        ...exportRows.map((r) => {
+          const unit = r.unit || "";
+          const soldQty = Number(r.saleQty || 0);
+          const purchaseQty = Number(r.purchaseQty || 0);
+          return [
+            r.name || "",
+            r.category || "",
+            `${soldQty}${unit}`,
+            Number(r.saleAmount || 0).toFixed(2),
+            `${purchaseQty}${unit}`,
+            Number(r.purchaseAmount || 0).toFixed(2),
+            Number(r.profit || 0).toFixed(2),
+            Number(r.profitMargin || 0).toFixed(2)
+          ];
+        })
+      ];
+
+      downloadExcelFile({
+        sheetName: "Purchase vs Sales",
+        fileName: "purchase_vs_sales_report.xls",
+        rows: rowsForExcel
+      });
+    } catch (error) {
+      console.error("Error exporting purchase vs sales report:", error);
+    }
   };
 
   const goToPage = (page) => {
@@ -165,7 +224,7 @@ const PurchaseSalesReport = () => {
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 2xl:grid-cols-4 gap-4 mb-6">
           <div className="backdrop-blur-lg bg-gradient-to-br from-blue-50/60 to-cyan-50/60 border border-white/40 rounded-2xl shadow-xl p-5">
             <div className="flex items-center justify-between">
               <div className="flex space-x-3 items-center">
@@ -253,12 +312,12 @@ const PurchaseSalesReport = () => {
             </div>
             
             <div className="text-sm text-gray-600">
-              Showing {rows.length} products • Page {pagination.page} of {pagination.totalPages}
+              Showing {pagination.totalCount} items • Page {pagination.page} of {pagination.totalPages}
             </div>
           </div>
 
           <div className="flex flex-col md:flex-row gap-4 items-end">
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <div className="flex items-center gap-2">
@@ -288,10 +347,36 @@ const PurchaseSalesReport = () => {
                   className="w-full backdrop-blur-sm bg-white/80 border border-white/60 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-300 transition-all duration-300"
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="w-full backdrop-blur-sm bg-white/80 border border-white/60 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-300 transition-all duration-300"
+                >
+                  <option value="most_sold">Most Sold</option>
+                  <option value="most_profitable">Most Profitable (Per Unit)</option>
+                  <option value="most_profitable_total">Most Profitable (Total)</option>
+                  <option value="most_expensive">Most Expensive</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Sort Order</label>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  className="w-full backdrop-blur-sm bg-white/80 border border-white/60 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-300 transition-all duration-300"
+                >
+                  <option value="desc">Descending</option>
+                  <option value="asc">Ascending</option>
+                </select>
+              </div>
             </div>
             
             <button
-              onClick={() => fetchRows(1, pagination.limit)}
+              onClick={applyFilters}
               className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 whitespace-nowrap"
             >
               <Filter size={18} />
@@ -318,6 +403,8 @@ const PurchaseSalesReport = () => {
                       <th className="p-4 text-left font-medium text-gray-700">Product</th>
                       <th className="p-4 text-left font-medium text-gray-700">Purchase</th>
                       <th className="p-4 text-left font-medium text-gray-700">Sales</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Per Unit Profit</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Profit Margin</th>
                       <th className="p-4 text-left font-medium text-gray-700">Profit Analysis</th>
                     </tr>
                   </thead>
@@ -325,7 +412,9 @@ const PurchaseSalesReport = () => {
                     {rows.map((r, idx) => {
                       const imageUrl = getImageUrl(r.image);
                       const profit = Number(r.profit || 0);
-                      const profitMargin = r.saleAmount > 0 ? (profit / r.saleAmount) * 100 : 0;
+                      const profitMargin = Number(r.profitMargin || 0);
+                      const unitProfit = Number(r.unitProfit || 0);
+                      const unit = r.unit || "";
                       
                       return (
                         <tr key={idx} className={`border-t border-white/50 hover:bg-white/30 transition-colors duration-200 ${
@@ -371,7 +460,7 @@ const PurchaseSalesReport = () => {
                                   <span className="text-sm text-gray-600">Qty:</span>
                                 </div>
                                 <span className="font-bold text-lg text-blue-600">
-                                  {Number(r.purchaseQty || 0)}
+                                  {`${Number(r.purchaseQty || 0)}${unit}`}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between">
@@ -393,7 +482,7 @@ const PurchaseSalesReport = () => {
                                   <span className="text-sm text-gray-600">Qty:</span>
                                 </div>
                                 <span className="font-bold text-lg text-emerald-600">
-                                  {Number(r.saleQty || 0)}
+                                  {`${Number(r.saleQty || 0)}${unit}`}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between">
@@ -408,6 +497,28 @@ const PurchaseSalesReport = () => {
                             </div>
                           </td>
                           <td className="p-4">
+                            <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg ${
+                              unitProfit > 0 ? "text-emerald-700 bg-emerald-50" :
+                              unitProfit < 0 ? "text-rose-700 bg-rose-50" :
+                              "text-gray-700 bg-gray-50"
+                            }`}>
+                              {getProfitIcon(unitProfit)}
+                              <span className="font-semibold">
+                                ${Math.abs(unitProfit).toFixed(2)}{unit ? `/${unit}` : ""}
+                                {unitProfit < 0 ? " loss" : ""}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <span className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-semibold ${
+                              profitMargin > 0 ? "text-emerald-700 bg-emerald-50" :
+                              profitMargin < 0 ? "text-rose-700 bg-rose-50" :
+                              "text-gray-700 bg-gray-50"
+                            }`}>
+                              {profitMargin.toFixed(2)}%
+                            </span>
+                          </td>
+                          <td className="p-4">
                             <div className="space-y-3">
                               <div className={`flex items-center justify-between px-3 py-2 rounded-lg ${getProfitClass(profit)}`}>
                                 <div className="flex items-center gap-2">
@@ -419,33 +530,6 @@ const PurchaseSalesReport = () => {
                                   {profit < 0 && " loss"}
                                 </span>
                               </div>
-                              {r.saleAmount > 0 && (
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <Percent size={14} className="text-indigo-500" />
-                                    <span className="text-xs text-gray-600">Margin:</span>
-                                  </div>
-                                  <span className={`text-sm font-medium ${
-                                    profitMargin > 0 ? "text-emerald-600" :
-                                    profitMargin < 0 ? "text-rose-600" :
-                                    "text-gray-600"
-                                  }`}>
-                                    {profitMargin.toFixed(1)}%
-                                  </span>
-                                </div>
-                              )}
-                              {profit > 0 && (
-                                <div className="text-xs text-emerald-600 flex items-center gap-1">
-                                  <TrendingUp size={12} />
-                                  Profitable
-                                </div>
-                              )}
-                              {profit < 0 && (
-                                <div className="text-xs text-rose-600 flex items-center gap-1">
-                                  <AlertCircle size={12} />
-                                  Loss
-                                </div>
-                              )}
                             </div>
                           </td>
                         </tr>
@@ -454,7 +538,7 @@ const PurchaseSalesReport = () => {
                     
                     {rows.length === 0 && !loading && (
                       <tr>
-                        <td colSpan="4" className="p-8 text-center">
+                        <td colSpan="6" className="p-8 text-center">
                           <div className="flex flex-col items-center gap-4">
                             <div className="p-4 bg-white/50 rounded-xl">
                               <BarChart3 size={48} className="text-gray-300" />
@@ -496,11 +580,11 @@ const PurchaseSalesReport = () => {
 
                       {/* Page info */}
                       <div className="text-sm text-gray-700">
-                        Showing <span className="font-semibold">{(pagination.page - 1) * pagination.limit + 1}</span> to{" "}
+                        Showing <span className="font-semibold">{pagination.totalCount ? ((pagination.page - 1) * pagination.limit + 1) : 0}</span> to{" "}
                         <span className="font-semibold">
-                          {Math.min(pagination.page * pagination.limit, rows.length)}
+                          {Math.min(pagination.page * pagination.limit, pagination.totalCount)}
                         </span>{" "}
-                        of <span className="font-semibold">{rows.length}</span> products
+                        of <span className="font-semibold">{pagination.totalCount}</span> products
                       </div>
                     </div>
 

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { API_ROUTES } from "../../config";
+import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
 import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X, Camera } from "lucide-react";
 import { TbCurrencyTaka } from "react-icons/tb";
 import { activeOnly } from "../../utils/softDelete";
@@ -44,7 +44,7 @@ export default function ShopPOS( props ) {
     
     if (imagePath.startsWith('http')) return imagePath;
     
-    const baseUrl = 'http://localhost:3001';
+    const baseUrl = MEDIA_BASE_URL;
     
     if (imagePath.startsWith('/uploads')) {
       return `${baseUrl}${imagePath}`;
@@ -138,20 +138,11 @@ export default function ShopPOS( props ) {
           devices[0];
 
         await scanner.start(
-          backCamera.id,
+          { facingMode: { ideal: "environment" } },
           {
-            fps: 15,
-            disableFlip: true,
-            aspectRatio: 1.777,
-            qrbox: (viewfinderWidth, viewfinderHeight) => {
-              const edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.7);
-              return { width: edge, height: Math.floor(edge * 0.5) };
-            },
-            videoConstraints: {
-              facingMode: { ideal: "environment" },
-              width: { ideal: 1920 },
-              height: { ideal: 1080 },
-            },
+            fps: 10,
+            qrbox: { width: 340, height: 340 },
+            aspectRatio: 1,
           },
           (decodedText) => {
             if (cancelled) return;
@@ -1334,8 +1325,10 @@ export default function ShopPOS( props ) {
             </button>
           </div>
 
-          <div className="w-full h-full pt-16">
-            <div id={SCANNER_ELEMENT_ID} className="w-full h-full" />
+          <div className="w-full h-full pt-16 flex items-center justify-center px-4">
+            <div className="w-[min(88vw,560px)] h-[min(88vw,560px)] rounded-2xl overflow-hidden border-2 border-white/30 shadow-2xl bg-black">
+              <div id={SCANNER_ELEMENT_ID} className="w-full h-full" />
+            </div>
           </div>
 
           {scannerError && (

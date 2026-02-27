@@ -3,6 +3,7 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const router = express.Router();
 const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associateScope');
+const { seedShopInventoryForAllItems } = require("../utils/inventoryBootstrap");
 const STOCK_EPSILON = 1e-9;
 const parsePositiveInt = (value, fallback) => {
   const parsed = parseInt(value, 10);
@@ -322,37 +323,12 @@ router.post("/", async (req, res) => {
         }
       });
 
-      // Create shop products if provided
-      if (shopProducts && shopProducts.length > 0) {
-        await Promise.all(
-          shopProducts.map(async (product) => {
-            await tx.shopProduct.create({
-              data: {
-                shop_id: shop.id,
-                product_id: product.product_id,
-                stock: product.stock,
-                deleted_at: false
-              }
-            });
-          })
-        );
-      }
-
-      // Create shop materials if provided
-      if (shopMaterials && shopMaterials.length > 0) {
-        await Promise.all(
-          shopMaterials.map(async (material) => {
-            await tx.shopMaterial.create({
-              data: {
-                shop_id: shop.id,
-                material_id: material.material_id,
-                stock: material.stock,
-                deleted_at: false
-              }
-            });
-          })
-        );
-      }
+      await seedShopInventoryForAllItems(
+        tx,
+        shop.id,
+        Array.isArray(shopProducts) ? shopProducts : [],
+        Array.isArray(shopMaterials) ? shopMaterials : []
+      );
 
       return shop;
     });

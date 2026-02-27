@@ -173,25 +173,42 @@ app.post('/api/login', async (req, res) => {
 app.get('/api/profile', authenticateToken, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.user.userId },
-    include: { profile: true },
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      name: true,
+      profile: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
   res.json(user);
 });
 
 // Update user profile
-app.put('/api/profile', authenticateToken, hasPermission('profile'), async (req, res) => {
-  const { bio } = req.body;
+app.put('/api/profile', authenticateToken, async (req, res) => {
+  const { bio, image, name } = req.body;
   const user = await prisma.user.update({
     where: { id: req.user.userId },
     data: {
+      ...(typeof name === 'string' ? { name } : {}),
       profile: {
         upsert: {
-          create: { bio },
-          update: { bio },
+          create: { bio: bio || null, image: image || null },
+          update: { bio: bio || null, image: image || null },
         },
       },
     },
-    include: { profile: true },
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      name: true,
+      profile: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
   res.json(user);
 });

@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 const router = express.Router();
 const { buildScope, ensureIdScope } = require("../utils/associateScope");
 const { withActiveWhere } = require("../utils/softDelete");
+const { seedProductIntoAllPlaces } = require("../utils/inventoryBootstrap");
 
 // Create a new product with materials
 router.post('/', async (req, res) => {
@@ -16,21 +17,27 @@ router.post('/', async (req, res) => {
     productData.barcode = String(code);
   }
   try {
-    const product = await prisma.product.create({
-      data: {
-        ...productData,
-        materials: {
-          create: materials.map(material => ({
-            material_id: material.material_id,
-            material_quantity: material.material_quantity,
-            price: material.price
-          })),
+    const product = await prisma.$transaction(async (tx) => {
+      const created = await tx.product.create({
+        data: {
+          ...productData,
+          materials: {
+            create: (Array.isArray(materials) ? materials : []).map(material => ({
+              material_id: material.material_id,
+              material_quantity: material.material_quantity,
+              price: material.price
+            })),
+          },
         },
-      },
-      include: {
-        materials: true,
-      },
+        include: {
+          materials: true,
+        },
+      });
+
+      await seedProductIntoAllPlaces(tx, created);
+      return created;
     });
+
     res.status(201).json(product);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -39,16 +46,42 @@ router.post('/', async (req, res) => {
 
 // Get all products with pagination
 router.get('/', async (req, res) => {
-  const { page = 1, limit = 10, search } = req.query;
-  const skip = (page - 1) * limit;
-  const take = parseInt(limit);
-  const where = {};
-  where.deleted_at = false;
+  const {
+    page = 1,
+    limit = 10,
+    search = '',
+    sortBy = 'created_at',
+    sortDir = 'desc',
+  } = req.query;
 
-  if (search) {
-    where.name = {
-      contains: search,
-    };
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const take = Math.max(1, parseInt(limit, 10) || 10);
+  const skip = (pageNum - 1) * take;
+
+  const allowedSortBy = new Set([
+    'created_at',
+    'name',
+    'sale_price',
+    'wholesale_price',
+    'cost',
+    'stock',
+    'alert_quantity',
+    'category',
+    'barcode',
+  ]);
+
+  const orderField = allowedSortBy.has(sortBy) ? sortBy : 'created_at';
+  const orderDirection = String(sortDir).toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+  const where = { deleted_at: false };
+  const searchText = String(search || '').trim();
+  if (searchText) {
+    where.OR = [
+      { name: { contains: searchText, mode: 'insensitive' } },
+      { category: { contains: searchText, mode: 'insensitive' } },
+      { barcode: { contains: searchText, mode: 'insensitive' } },
+      { description: { contains: searchText, mode: 'insensitive' } },
+    ];
   }
 
   try {
@@ -57,7 +90,7 @@ router.get('/', async (req, res) => {
         skip,
         take,
         where,
-        orderBy: { created_at: "desc" },
+        orderBy: { [orderField]: orderDirection },
         include: {
           materials: {
             include: {
@@ -68,7 +101,63 @@ router.get('/', async (req, res) => {
       }),
       prisma.product.count({ where }),
     ]);
-    res.json({ products, totalCount });
+
+    res.json({
+      products,
+      totalCount,
+      totalPages: Math.ceil(totalCount / take),
+      currentPage: pageNum,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get products overview counts (separate from paginated table data)
+router.get('/overview', async (req, res) => {
+  const { search = '' } = req.query;
+  const searchText = String(search || '').trim();
+  const where = { deleted_at: false };
+
+  if (searchText) {
+    where.OR = [
+      { name: { contains: searchText, mode: 'insensitive' } },
+      { category: { contains: searchText, mode: 'insensitive' } },
+      { barcode: { contains: searchText, mode: 'insensitive' } },
+      { description: { contains: searchText, mode: 'insensitive' } },
+    ];
+  }
+
+  try {
+    const [totalProducts, outOfStockProducts, stockRows] = await prisma.$transaction([
+      prisma.product.count({ where }),
+      prisma.product.count({
+        where: {
+          ...where,
+          stock: { lte: 0 },
+        },
+      }),
+      prisma.product.findMany({
+        where,
+        select: {
+          stock: true,
+          alert_quantity: true,
+        },
+      }),
+    ]);
+
+    const lowStockProducts = stockRows.filter((row) => {
+      const stock = Number(row.stock || 0);
+      const alertQty = Number(row.alert_quantity || 0);
+      return stock > 0 && alertQty > 0 && stock <= alertQty;
+    }).length;
+
+    res.json({
+      totalProducts,
+      lowStockProducts,
+      outOfStockProducts,
+      inStockProducts: Math.max(0, totalProducts - outOfStockProducts),
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -77,21 +166,29 @@ router.get('/', async (req, res) => {
 
 // Get all products without pagination
 router.get('/all-products', async (req, res) => {
-  const { search } = req.query;
+  const { search = '', sortBy = 'created_at', sortDir = 'desc' } = req.query;
   const where = {};
   where.deleted_at = false;
 
-  if (search) {
-    where.name = {
-      contains: search,
-    };
+  const searchText = String(search || '').trim();
+  if (searchText) {
+    where.OR = [
+      { name: { contains: searchText, mode: 'insensitive' } },
+      { category: { contains: searchText, mode: 'insensitive' } },
+      { barcode: { contains: searchText, mode: 'insensitive' } },
+      { description: { contains: searchText, mode: 'insensitive' } },
+    ];
   }
+
+  const allowedSortBy = new Set(['created_at', 'name', 'sale_price', 'wholesale_price', 'cost', 'stock', 'category', 'barcode']);
+  const orderField = allowedSortBy.has(sortBy) ? sortBy : 'created_at';
+  const orderDirection = String(sortDir).toLowerCase() === 'asc' ? 'asc' : 'desc';
 
   try {
     const [products, totalCount] = await prisma.$transaction([
       prisma.product.findMany({
         where,
-        orderBy: { created_at: "desc" },
+        orderBy: { [orderField]: orderDirection },
       }),
       prisma.product.count({ where }),
     ]);

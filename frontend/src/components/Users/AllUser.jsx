@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
 import { Users, UserPlus, Edit, Trash2, Save, X, Building, Store, ShoppingCart, Plus, Minus, ToggleLeft, ToggleRight, Key, Shield, Mail, User as UserIcon, LogOut, Clock } from 'lucide-react';
 import { useAuth } from '../../App';
 
 const AllUser = () => {
+  const location = useLocation();
   const { socket, currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [factories, setFactories] = useState([]);
@@ -57,6 +58,11 @@ const AllUser = () => {
     fetchPermissions();
     fetchGlobalAccessWindow();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    setUserListMode(params.get('mode') === 'active' ? 'active' : 'all');
+  }, [location.search]);
 
   useEffect(() => {
     if (!canManageSessions) return;

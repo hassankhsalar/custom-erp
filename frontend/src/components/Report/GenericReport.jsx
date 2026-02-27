@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES } from "../../config";
+import { downloadExcelFile } from "../../utils/excelExport";
 import {
   Download,
   FileText,
@@ -80,16 +81,23 @@ export default function GenericReport({ title, endpoint }) {
   };
 
   const handleExport = () => {
-    if (!data?.rows) return;
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [Object.keys(data.rows[0]), ...data.rows.map(row => Object.values(row))].map(e => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${title.toLowerCase().replace(/\s+/g, '_')}_report.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (!filteredData.length) return;
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const visibleRows = filteredData.slice(startIndex, endIndex);
+    if (!visibleRows.length) return;
+
+    const headers = Object.keys(visibleRows[0]);
+    const rows = [
+      headers,
+      ...visibleRows.map((row) => headers.map((header) => row[header]))
+    ];
+
+    downloadExcelFile({
+      sheetName: title,
+      fileName: `${title.toLowerCase().replace(/\s+/g, "_")}_report_page_${currentPage}.xls`,
+      rows
+    });
   };
 
   const renderTable = (rows) => {
@@ -218,10 +226,10 @@ export default function GenericReport({ title, endpoint }) {
               <button
                 onClick={handleExport}
                 className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-                title="Export to CSV"
+                title="Export visible rows to Excel"
               >
                 <Download size={18} />
-                Export CSV
+                Export Excel
               </button>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES } from "../../config";
+import { downloadExcelFile } from "../../utils/excelExport";
 import { 
   DollarSign, 
   CreditCard, 
@@ -103,6 +104,44 @@ const CashBankReport = () => {
     }
   };
 
+  const handleExport = () => {
+    if (tab === "cash") {
+      if (!cash.cashRegisters.length) return;
+      const rows = [
+        ["Cash Register", "Status", "Current Cash"],
+        ...cash.cashRegisters.map((register) => [
+          register.name || "",
+          register.status || "",
+          Number(register.cash_in_hand || 0)
+        ])
+      ];
+      downloadExcelFile({
+        sheetName: "Cash Report",
+        fileName: `cash_report_${new Date().toISOString().split("T")[0]}.xls`,
+        rows
+      });
+      return;
+    }
+
+    if (!bank.rows.length) return;
+    const rows = [
+      ["Bank", "Account Number", "Transaction Count", "Total Receive", "Total Withdrawable", "Total Paid"],
+      ...bank.rows.map((row) => [
+        row.name || "",
+        row.account_number || "",
+        Number(row.receiveCount || 0) + Number(row.paidCount || 0),
+        Number(row.totalReceive || 0),
+        Number(row.totalWithdrawable || 0),
+        Number(row.totalPaid || 0)
+      ])
+    ];
+    downloadExcelFile({
+      sheetName: "Bank Report",
+      fileName: `bank_report_page_${bank.pagination.page}_${new Date().toISOString().split("T")[0]}.xls`,
+      rows
+    });
+  };
+
   return (
     <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
       {/* Background decorative elements */}
@@ -128,6 +167,13 @@ const CashBankReport = () => {
             </div>
             
             <div className="flex items-center gap-3">
+              <button
+                onClick={handleExport}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+              >
+                <Download size={16} />
+                Export Excel
+              </button>
               <button
                 onClick={resetFilter}
                 className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-gray-100 to-gray-200 hover:from-gray-200 hover:to-gray-300 text-gray-700 font-medium rounded-xl shadow-sm hover:shadow transition-all duration-300"

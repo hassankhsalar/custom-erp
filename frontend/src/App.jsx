@@ -253,6 +253,87 @@ const AuthenticatedLayout = () => {
 };
 
 function App() {
+  useEffect(() => {
+    const replaceDollarIcons = (root) => {
+      if (!root || !root.querySelectorAll) return;
+      root.querySelectorAll("svg.lucide-dollar-sign").forEach((svg) => {
+        if (svg.dataset?.takaReplaced === "1") return;
+        const span = document.createElement("span");
+        span.textContent = "৳";
+        span.className = `${svg.className?.baseVal || svg.getAttribute("class") || ""} currency-taka-icon`;
+        const iconSize = Number(svg.getAttribute("width") || svg.getAttribute("height") || 16);
+        span.style.display = "inline-flex";
+        span.style.alignItems = "center";
+        span.style.justifyContent = "center";
+        span.style.width = `${iconSize}px`;
+        span.style.height = `${iconSize}px`;
+        span.style.fontSize = `${Math.max(12, iconSize - 1)}px`;
+        span.style.fontWeight = "700";
+        span.style.lineHeight = "1";
+        svg.dataset.takaReplaced = "1";
+        svg.replaceWith(span);
+      });
+    };
+
+    const replaceDollarWithTaka = (root) => {
+      if (!root) return;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const textNodes = [];
+      while (walker.nextNode()) textNodes.push(walker.currentNode);
+      textNodes.forEach((node) => {
+        if (node.nodeValue && node.nodeValue.includes("$")) {
+          node.nodeValue = node.nodeValue.replace(/\$/g, "৳");
+        }
+      });
+
+      if (root.querySelectorAll) {
+        root.querySelectorAll("[placeholder],[title],[aria-label]").forEach((el) => {
+          ["placeholder", "title", "aria-label"].forEach((attr) => {
+            const value = el.getAttribute(attr);
+            if (value && value.includes("$")) {
+              el.setAttribute(attr, value.replace(/\$/g, "৳"));
+            }
+          });
+        });
+      }
+
+      replaceDollarIcons(root);
+    };
+
+    replaceDollarWithTaka(document.body);
+
+    let rafId = null;
+    const observer = new MutationObserver((mutations) => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        mutations.forEach((mutation) => {
+          if (mutation.type === "childList") {
+            mutation.addedNodes.forEach((node) => {
+              if (node.nodeType === 3 && node.nodeValue?.includes("$")) {
+                node.nodeValue = node.nodeValue.replace(/\$/g, "৳");
+              } else if (node.nodeType === 1) {
+                replaceDollarWithTaka(node);
+              }
+            });
+          } else if (mutation.type === "characterData" && mutation.target?.nodeValue?.includes("$")) {
+            mutation.target.nodeValue = mutation.target.nodeValue.replace(/\$/g, "৳");
+          }
+        });
+      });
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
+  }, []);
+
   return (
     <AuthProvider>
       <Routes>
@@ -599,7 +680,8 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="notification_read" />}>
               <Route path="/notifications" element={<Notifications />} />
             </Route>
-            <Route path="/userprofile" element={<UserProfile />} />
+            <Route path="/profile" element={<UserProfile />} />
+            <Route path="/userprofile" element={<Navigate to="/profile" replace />} />
             {/* Default route for authenticated users */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>

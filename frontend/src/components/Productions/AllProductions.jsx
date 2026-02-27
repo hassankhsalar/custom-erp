@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
-import { API_ROUTES } from '../../config';
+import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
 import { 
   Eye, 
   Edit, 
@@ -328,8 +328,8 @@ const AllProductions = () => {
   const getImageUrl = (imagePath) => {
     if (!imagePath) return null;
     if (imagePath.startsWith('http')) return imagePath;
-    if (imagePath.startsWith('/uploads/')) return `http://localhost:3001${imagePath}`;
-    return `http://localhost:3001/uploads/${imagePath}`;
+    if (imagePath.startsWith('/uploads/')) return `${MEDIA_BASE_URL}${imagePath}`;
+    return `${MEDIA_BASE_URL}${imagePath}`;
   };
 
   // Get status color and icon

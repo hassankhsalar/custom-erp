@@ -19,6 +19,7 @@
   "description": "",
   "dependencies": {
     "@prisma/client": "^6.16.2",
+    "@syncfusion/ej2-react-barcode-generator": "^32.2.3",
     "@tailwindcss/vite": "^4.1.13",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
@@ -31,6 +32,8 @@
     "node-cache": "^5.1.2",
     "node-cron": "^4.2.1",
     "prisma": "^6.16.2",
+    "react-barcode": "^1.6.1",
+    "react-qr-code": "^2.0.18",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.3",
     "tailwindcss": "^4.1.13"

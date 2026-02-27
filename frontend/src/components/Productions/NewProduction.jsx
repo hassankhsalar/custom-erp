@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Html5Qrcode } from "html5-qrcode";
 import { useNavigate, useLocation } from 'react-router-dom';
-import { API_ROUTES } from '../../config';
+import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
 import { activeOnly } from '../../utils/softDelete';
 import { 
   Factory, 
@@ -201,8 +201,8 @@ const NewProduction = () => {
   const getImageUrl = (imagePath) => {
     if (!imagePath) return null;
     if (imagePath.startsWith('http')) return imagePath;
-    if (imagePath.startsWith('/uploads/')) return `http://localhost:3001${imagePath}`;
-    return `http://localhost:3001/uploads/${imagePath}`;
+    if (imagePath.startsWith('/uploads/')) return `${MEDIA_BASE_URL}${imagePath}`;
+    return `${MEDIA_BASE_URL}/uploads/${imagePath}`;
   };
 
   const searchProducts = async (value) => {

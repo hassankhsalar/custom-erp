@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
@@ -24,17 +24,71 @@ import {
   Factory
 } from 'lucide-react';
 
+const ProductOverviewCards = memo(function ProductOverviewCards({ overview }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <div className="backdrop-blur-lg bg-gradient-to-br from-blue-50/60 to-cyan-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">Total Products</p>
+            <p className="text-2xl font-bold text-blue-600">{overview.totalProducts}</p>
+          </div>
+          <div className="p-3 bg-blue-100 rounded-xl">
+            <Package size={24} className="text-blue-600" />
+          </div>
+        </div>
+      </div>
+
+      <div className="backdrop-blur-lg bg-gradient-to-br from-amber-50/60 to-orange-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">Low Stock</p>
+            <p className="text-2xl font-bold text-amber-600">{overview.lowStockProducts}</p>
+          </div>
+          <div className="p-3 bg-amber-100 rounded-xl">
+            <AlertCircle size={24} className="text-amber-600" />
+          </div>
+        </div>
+      </div>
+
+      <div className="backdrop-blur-lg bg-gradient-to-br from-red-50/60 to-rose-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">Out of Stock</p>
+            <p className="text-2xl font-bold text-red-600">{overview.outOfStockProducts}</p>
+          </div>
+          <div className="p-3 bg-red-100 rounded-xl">
+            <AlertTriangle size={24} className="text-red-600" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 const AllProducts = () => {
   const [products, setProducts] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [expandedProductId, setExpandedProductId] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingTable, setLoadingTable] = useState(false);
+  const [loadingOverview, setLoadingOverview] = useState(false);
   const [modal, setModal] = useState({ isOpen: false, type: null, data: null });
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
-  const [ totalProducts, setTotalProducts ] = useState(0);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [overview, setOverview] = useState({
+    totalProducts: 0,
+    lowStockProducts: 0,
+    outOfStockProducts: 0,
+  });
+  const [searchInput, setSearchInput] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [sortBy, setSortBy] = useState('created_at');
+  const [sortDir, setSortDir] = useState('desc');
+  const [appliedSortBy, setAppliedSortBy] = useState('created_at');
+  const [appliedSortDir, setAppliedSortDir] = useState('desc');
 
   // Function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -51,42 +105,79 @@ const AllProducts = () => {
     }
   };
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get(API_ROUTES.PRODUCTS, {
-          params: { page: currentPage, limit: itemsPerPage },
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        setProducts(activeOnly(response.data.products));
-        setTotalPages(Math.ceil(response.data.totalCount / itemsPerPage));
-        setTotalProducts(response.data.totalCount);
-      } catch (error) {
-        console.error('Error fetching products:', error);
-        
-        if (error.response?.status === 401) {
-          alert('Session expired. Please login again.');
-          localStorage.removeItem('token');
-          navigate('/login');
-        } else if (error.response?.status === 403) {
-          alert('Permission denied. You do not have access to products.');
-        }
-      } finally {
-        setLoading(false);
+  const fetchProductsTable = useCallback(async () => {
+    try {
+      setLoadingTable(true);
+      const response = await axios.get(API_ROUTES.PRODUCTS, {
+        params: {
+          page: currentPage,
+          limit: itemsPerPage,
+          search: appliedSearch || undefined,
+          sortBy: appliedSortBy,
+          sortDir: appliedSortDir,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const rows = activeOnly(response.data.products || []);
+      setProducts(rows);
+      setTotalPages(Number(response.data.totalPages || Math.ceil((response.data.totalCount || 0) / itemsPerPage) || 1));
+      setTotalProducts(Number(response.data.totalCount || 0));
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      if (error.response?.status === 401) {
+        alert('Session expired. Please login again.');
+        localStorage.removeItem('token');
+        navigate('/login');
+      } else if (error.response?.status === 403) {
+        alert('Permission denied. You do not have access to products.');
       }
-    };
-    
-    if (token) {
-      fetchProducts();
-    } else {
+    } finally {
+      setLoadingTable(false);
+    }
+  }, [appliedSearch, appliedSortBy, appliedSortDir, currentPage, itemsPerPage, navigate, token]);
+
+  const fetchProductsOverview = useCallback(async () => {
+    try {
+      setLoadingOverview(true);
+      const response = await axios.get(`${API_ROUTES.PRODUCTS}/overview`, {
+        params: {
+          search: appliedSearch || undefined,
+          sortBy: appliedSortBy,
+          sortDir: appliedSortDir,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      setOverview({
+        totalProducts: Number(response.data.totalProducts || 0),
+        lowStockProducts: Number(response.data.lowStockProducts || 0),
+        outOfStockProducts: Number(response.data.outOfStockProducts || 0),
+      });
+    } catch (error) {
+      console.error('Error fetching products overview:', error);
+    } finally {
+      setLoadingOverview(false);
+    }
+  }, [appliedSearch, appliedSortBy, appliedSortDir, token]);
+
+  useEffect(() => {
+    if (!token) {
       alert('Authentication required. Please login.');
       navigate('/login');
+      return;
     }
-  }, [currentPage, itemsPerPage, token, navigate]);
+    fetchProductsTable();
+  }, [fetchProductsTable, navigate, token]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetchProductsOverview();
+  }, [fetchProductsOverview, token]);
 
   const handleDelete = async (id) => {
     if (!token) {
@@ -103,16 +194,7 @@ const AllProducts = () => {
           },
         });
         
-        const response = await axios.get(API_ROUTES.PRODUCTS, {
-          params: { page: currentPage, limit: itemsPerPage },
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        setProducts(activeOnly(response.data.products));
-        setTotalPages(Math.ceil(response.data.totalCount / itemsPerPage));
-        setTotalProducts(response.data.totalCount);
+        await Promise.all([fetchProductsTable(), fetchProductsOverview()]);
       } catch (error) {
         console.error('Error deleting product:', error);
         
@@ -141,7 +223,7 @@ const AllProducts = () => {
 
   const getStockStatus = (stock) => {
     if (stock <= 0) return { 
-      text: 'Out of Stock', 
+      text: 'Stock Out', 
       color: 'bg-gradient-to-r from-red-500 to-rose-500',
       icon: <AlertCircle size={14} />
     };
@@ -156,10 +238,6 @@ const AllProducts = () => {
       icon: <CheckCircle size={14} />
     };
   };
-
-  // Calculate statistics
-  const lowStockProducts = products.filter(p => p.stock < p.alert_quantity && p.stock > 0).length;
-  const outOfStockProducts = products.filter(p => p.stock <= 0).length;
 
   // Pagination controls
   const nextPage = () => {
@@ -218,47 +296,11 @@ const AllProducts = () => {
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="backdrop-blur-lg bg-gradient-to-br from-blue-50/60 to-cyan-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Products</p>
-                <p className="text-2xl font-bold text-blue-600">{totalProducts}</p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <Package size={24} className="text-blue-600" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="backdrop-blur-lg bg-gradient-to-br from-amber-50/60 to-orange-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Low Stock</p>
-                <p className="text-2xl font-bold text-amber-600">{lowStockProducts}</p>
-              </div>
-              <div className="p-3 bg-amber-100 rounded-xl">
-                <AlertCircle size={24} className="text-amber-600" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="backdrop-blur-lg bg-gradient-to-br from-red-50/60 to-rose-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Out of Stock</p>
-                <p className="text-2xl font-bold text-red-600">{outOfStockProducts}</p>
-              </div>
-              <div className="p-3 bg-red-100 rounded-xl">
-                <AlertTriangle size={24} className="text-red-600" />
-              </div>
-            </div>
-          </div>
-        </div>
+        <ProductOverviewCards overview={overview} />
 
         {/* Main Content */}
         <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
-          {loading ? (
+          {loadingTable ? (
             <div className="flex items-center justify-center py-12">
               <div className="flex flex-col items-center gap-4">
                 <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-600 rounded-full animate-spin"></div>
@@ -267,11 +309,214 @@ const AllProducts = () => {
             </div>
           ) : (
             <>
+              <div className="mb-4 grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                <div className="md:col-span-2">
+                  <label className="block text-xs text-gray-600 mb-1">Search</label>
+                  <input
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        setCurrentPage(1);
+                        setAppliedSearch(searchInput.trim());
+                        setAppliedSortBy(sortBy);
+                        setAppliedSortDir(sortDir);
+                      }
+                    }}
+                    placeholder="Name / category / barcode"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white/80 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Sort By</label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white/80 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                  >
+                    <option value="created_at">Created Date</option>
+                    <option value="name">Name</option>
+                    <option value="sale_price">Sale Price</option>
+                    <option value="wholesale_price">Wholesale Price</option>
+                    <option value="cost">Cost</option>
+                    <option value="stock">Stock</option>
+                    <option value="category">Category</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Order</label>
+                  <select
+                    value={sortDir}
+                    onChange={(e) => setSortDir(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white/80 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                  >
+                    <option value="desc">Descending</option>
+                    <option value="asc">Ascending</option>
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setCurrentPage(1);
+                      setAppliedSearch(searchInput.trim());
+                      setAppliedSortBy(sortBy);
+                      setAppliedSortDir(sortDir);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                  >
+                    Apply
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSearchInput('');
+                      setAppliedSearch('');
+                      setSortBy('created_at');
+                      setSortDir('desc');
+                      setAppliedSortBy('created_at');
+                      setAppliedSortDir('desc');
+                      setCurrentPage(1);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-white/80 border border-gray-300 text-gray-700 hover:bg-white transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              {/* Pagination Controls */}
+              {products.length > 0 && (
+                <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl p-4 mt-4">
+                  <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      {/* Items per page selector */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">Show:</span>
+                        <select
+                          value={itemsPerPage}
+                          onChange={(e) => {
+                            setItemsPerPage(Number(e.target.value));
+                            setCurrentPage(1);
+                          }}
+                          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white/80 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                        >
+                          <option value="5">5</option>
+                          <option value="10">10</option>
+                          <option value="20">20</option>
+                          <option value="50">50</option>
+                          <option value="100">100</option>
+                        </select>
+                        <span className="text-sm text-gray-600">per page</span>
+                      </div>
+
+                      {/* Page info */}
+                      <div className="text-sm text-gray-700">
+                        Showing <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
+                        <span className="font-semibold">
+                          {Math.min(currentPage * itemsPerPage, totalProducts)}
+                        </span>{" "}
+                        of <span className="font-semibold">{totalProducts}</span> products
+                      </div>
+                    </div>
+
+                    {/* Pagination buttons */}
+                    <div className="flex items-center gap-2">
+                      {/* First page */}
+                      <button
+                        onClick={() => goToPage(1)}
+                        disabled={currentPage === 1}
+                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                        title="First page"
+                      >
+                        <ChevronsLeft size={16} className="text-gray-600" />
+                      </button>
+
+                      {/* Previous page */}
+                      <button
+                        onClick={prevPage}
+                        disabled={currentPage === 1}
+                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                        title="Previous page"
+                      >
+                        <ChevronLeft size={16} className="text-gray-600" />
+                      </button>
+
+                      {/* Page numbers */}
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let pageNum;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => goToPage(pageNum)}
+                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                                currentPage === pageNum
+                                  ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+                                  : "hover:bg-white/50 text-gray-700"
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        })}
+
+                        {totalPages > 5 && currentPage < totalPages - 2 && (
+                          <>
+                            <span className="mx-1 text-gray-400">...</span>
+                            <button
+                              onClick={() => goToPage(totalPages)}
+                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                                currentPage === totalPages
+                                  ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white"
+                                  : "hover:bg-white/50 text-gray-700"
+                              }`}
+                            >
+                              {totalPages}
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Next page */}
+                      <button
+                        onClick={nextPage}
+                        disabled={currentPage === totalPages}
+                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                        title="Next page"
+                      >
+                        <ChevronRight size={16} className="text-gray-600" />
+                      </button>
+
+                      {/* Last page */}
+                      <button
+                        onClick={() => goToPage(totalPages)}
+                        disabled={currentPage === totalPages}
+                        className="p-2 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/50 transition-colors border border-white/30"
+                        title="Last page"
+                      >
+                        <ChevronsRight size={16} className="text-gray-600" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="overflow-x-auto rounded-xl border border-white/60">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-100/80">
                     <tr>
                       <th className="p-4 text-left font-medium text-gray-700">Product</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Category</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Brand</th>
                       <th className="p-4 text-left font-medium text-gray-700">Price Info</th>
                       <th className="p-4 text-left font-medium text-gray-700">Stock</th>
                       <th className="p-4 text-left font-medium text-gray-700">Actions</th>
@@ -312,14 +557,25 @@ const AllProducts = () => {
                                 </div>
                                 <div>
                                   <p className="font-semibold text-gray-800">{product.name}</p>
+                                  {product.barcode && (
+                                    <p className="text-xs text-gray-500 mt-1 line-clamp-1">{product.barcode}</p>
+                                  )}
                                   {product.description && (
                                     <p className="text-xs text-gray-500 mt-1 line-clamp-1">{product.description}</p>
                                   )}
-                                  {product.category && (
-                                    <p className="text-xs text-gray-400 mt-1">{product.category}</p>
-                                  )}
                                 </div>
                               </div>
+                            </td>
+                            <td className="p-4">
+                              {product.category && (
+                                <p className="text-gray-800 mt-1">{product.category}</p>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              {product.brand ? (
+                                <p className="text-gray-800 mt-1">{product.brand}</p>
+                              ) : "---"
+                              }
                             </td>
                             <td className="p-4">
                               <div className="space-y-2">
@@ -345,11 +601,11 @@ const AllProducts = () => {
                             </td>
                             <td className="p-4">
                               <div className="flex flex-col items-start gap-2">
+                                <p className="font-bold text-lg text-gray-900">{product.stock} {product.unit}</p>
                                 <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white text-xs font-semibold ${stockStatus.color}`}>
                                   {stockStatus.icon}
                                   {stockStatus.text}
                                 </div>
-                                <p className="font-bold text-lg text-gray-900">{product.stock}</p>
                               </div>
                             </td>
                             <td className="p-4">
@@ -443,7 +699,7 @@ const AllProducts = () => {
                   </tbody>
                 </table>
                 
-                {products.length === 0 && !loading && (
+                {products.length === 0 && !loadingTable && (
                   <div className="text-center py-12">
                     <div className="p-4 bg-white/50 rounded-xl inline-block mb-4">
                       <Package size={48} className="text-gray-300" />
@@ -490,7 +746,7 @@ const AllProducts = () => {
                       <div className="text-sm text-gray-700">
                         Showing <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
                         <span className="font-semibold">
-                          {Math.min(currentPage * itemsPerPage, products.length)}
+                          {Math.min(currentPage * itemsPerPage, totalProducts)}
                         </span>{" "}
                         of <span className="font-semibold">{totalProducts}</span> products
                       </div>

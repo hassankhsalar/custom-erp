@@ -288,9 +288,9 @@ const RevenueChart = ({ data }) => {
   const maxHeight = 200;
 
   const formatCompact = (value) => {
-    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-    return `$${value.toFixed(0)}`;
+    if (value >= 1000000) return `৳${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `৳${(value / 1000).toFixed(0)}K`;
+    return `৳${value.toFixed(0)}`;
   };
 
   return (
@@ -376,7 +376,7 @@ const TopProductsTable = ({ data }) => (
           </div>
           <div className="text-right">
             <span className="font-semibold text-green-600 text-lg">
-              ${(product.revenue / 1000).toFixed(1)}K
+              ৳{(product.revenue / 1000).toFixed(1)}K
             </span>
             <div className="text-xs text-emerald-500 flex items-center gap-1 mt-1">
               <TrendingUp size={12} />
@@ -535,7 +535,7 @@ const RecentActivity = ({ data }) => (
           <span className={`text-sm font-medium ${
             activity.amount > 0 ? "text-emerald-600" : "text-gray-600"
           }`}>
-            {activity.amount > 0 ? `+$${activity.amount.toFixed(2)}` : ""}
+            {activity.amount > 0 ? `+৳${activity.amount.toFixed(2)}` : ""}
           </span>
         </div>
       ))}
@@ -573,7 +573,7 @@ const ShopPerformance = ({ data }) => (
           </div>
           <div className="text-right">
             <p className="font-semibold text-gray-900">
-              ${(shop.revenue / 1000).toFixed(1)}K
+              ৳{(shop.revenue / 1000).toFixed(1)}K
             </p>
             <div className={`flex items-center text-sm ${shop.efficiency >= 80 ? 'text-emerald-500' : shop.efficiency >= 60 ? 'text-amber-500' : 'text-red-500'}`}>
               <Percent size={12} />

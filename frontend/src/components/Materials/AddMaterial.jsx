@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES } from '../../config';
+import SearchableSelect from '../common/SearchableSelect';
 import { 
   Image as ImageIcon, 
   Upload, 
@@ -50,6 +51,9 @@ const AddMaterial = () => {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [selectedImageFile, setSelectedImageFile] = useState(null);
+  const categoryOptions = categories.map((category) => ({ value: category.name, label: category.name }));
+  const brandOptions = brands.map((brand) => ({ value: brand.name, label: brand.name }));
+  const unitOptions = units.map((unit) => ({ value: unit.name, label: unit.name }));
 
   useEffect(() => {
     const fetchMasterData = async () => {
@@ -394,17 +398,15 @@ const AddMaterial = () => {
                         </label>
                         <div className="relative">
                           <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                          <select 
+                          <SearchableSelect
                             name="unit"
-                            onChange={handleChange} 
-                            id="material-unit-list"
-                            required
                             value={material.unit}
-                            className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200">
-                            {units.map((unit) => (
-                              <option key={unit.id} value={unit.name}> {unit.name} </option>
-                            ))}
-                          </select>
+                            onChange={handleChange}
+                            options={unitOptions}
+                            placeholder="Select a unit"
+                            required
+                            className="pl-6"
+                          />
                         </div>
                       </div>
 
@@ -492,17 +494,14 @@ const AddMaterial = () => {
                       </label>
                       <div className="relative">
                         <SeparatorVertical className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                        <select
+                        <SearchableSelect
                           name="category"
                           value={material.category}
                           onChange={handleChange}
-                          className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 transition-all duration-200"
-                          id="material-brand-list">
-                          <option value="">Select a category</option>
-                          {categories.map((category) => (
-                            <option key={category.id} value={category.name}> {category.name} </option>
-                          ))}
-                        </select>
+                          options={categoryOptions}
+                          placeholder="Select a category"
+                          className="pl-6"
+                        />
                       </div>
                     </div>
 
@@ -513,17 +512,14 @@ const AddMaterial = () => {
                       <div className="relative">
                         <Factory className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
 
-                        <select
+                        <SearchableSelect
                           name="brand"
                           value={material.brand}
                           onChange={handleChange}
-                          className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-teal-500/30 focus:border-teal-500 transition-all duration-200"
-                          id="material-brand-list">
-                          <option value="">Select a brand</option>
-                          {brands.map((brand) => (
-                            <option key={brand.id} value={brand.name}> {brand.name} </option>
-                          ))}
-                        </select>
+                          options={brandOptions}
+                          placeholder="Select a brand"
+                          className="pl-6"
+                        />
                       </div>
                     </div>
 

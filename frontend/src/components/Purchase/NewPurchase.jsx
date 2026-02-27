@@ -380,7 +380,7 @@ const fetchBankAccounts = async () => {
             alternativeUnits: toAltUnits(m.alternative_units),
             standardPrice: m.unit_cost,
             image: m.image || m.photo,
-          }));
+          })).slice(0, 5);
 
         // Filter products
         const filteredProducts = products
@@ -400,7 +400,7 @@ const fetchBankAccounts = async () => {
             alternativeUnits: toAltUnits(p.alternative_units),
             standardPrice: p.cost,
             image: p.image || p.photo || p.thumbnail,
-          }));
+          })).slice(0, 5);
 
         results = [...filteredMaterials, ...filteredProducts];
         showResults = true;
@@ -891,10 +891,10 @@ const fetchBankAccounts = async () => {
                 } else {
                   // If no search term, show all items when focused
                   const allItems = [
-                    ...materials.map(m => ({
+                    ...materials.slice(0, 10).map(m => ({
                       type: "material", id: m.id, name: m.name, unit: m.unit, standardPrice: m.unit_cost, image: m.image || m.photo,
                     })),
-                    ...products.map(p => ({
+                    ...products.slice(0, 10).map(p => ({
                       type: "product", id: p.id, name: p.name, unit: "unit", standardPrice: p.cost, image: p.image || p.photo || p.thumbnail,
                     }))
                   ];
@@ -909,21 +909,25 @@ const fetchBankAccounts = async () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Search Material or Product
                 </label>
-                <input
-                  type="text"
-                  placeholder="Search materials or products by name/barcode..."
-                  value={searchState.searchTerm}
-                  onChange={(e) => handleSearchInputChange(e.target.value)}
-                  className="w-full p-2 pr-12 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
-                />
-                <button
-                  type="button"
-                  onClick={() => setScannerOpen(true)}
-                  className="absolute right-2 top-[41px] p-2 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"
-                  title="Scan barcode/QR"
-                >
-                  <Camera size={18} />
-                </button>
+                <div className="flex justify-between items-center gap-2">
+                  <div className="grow">
+                    <input
+                      type="text"
+                      placeholder="Search materials or products by name/barcode..."
+                      value={searchState.searchTerm}
+                      onChange={(e) => handleSearchInputChange(e.target.value)}
+                      className="w-full p-2 pr-12 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setScannerOpen(true)}
+                    className="p-3 rounded-lg text-blue-600 hover:bg-blue-200 cursor-pointer transition-colors"
+                    title="Scan barcode/QR"
+                  >
+                    <Camera size={18} />
+                  </button>
+                </div>
 
                 {/* Search Results Dropdown */}
                 {searchState.showSearchResults && searchState.filteredResults.length > 0 && (

@@ -76,6 +76,7 @@ model ActivityLog {
 model Profile {
   id   Int     @id @default(autoincrement())
   bio  String?
+  image String?
   user User?
 }
 

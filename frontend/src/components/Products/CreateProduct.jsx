@@ -3,6 +3,7 @@ import axios from "axios";
 import { API_ROUTES } from "../../config";
 import { Upload, X, Eye, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import SearchableSelect from "../common/SearchableSelect";
 
 const emptyAltUnit = { unitname: "", multiplier: "" };
 
@@ -44,6 +45,9 @@ const CreateProduct = () => {
   const [imagePreview, setImagePreview] = useState("");
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const categoryOptions = categories.map((category) => ({ value: category.name, label: category.name }));
+  const brandOptions = brands.map((brand) => ({ value: brand.name, label: brand.name }));
+  const unitOptions = units.map((unit) => ({ value: unit.name, label: unit.name }));
 
   useEffect(() => {
     if (!token) {
@@ -313,42 +317,34 @@ const CreateProduct = () => {
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                    <select 
+                    <SearchableSelect
                       name="category"
-                      id="product-category-list"
-                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0"
-                      onChange={handleProductChange}>
-                        <option value="">Select a category</option>
-                      {categories.map((category) => (
-                        <option key={category.id} value={category.name} > {category.name} </option>
-                      ))}
-                    </select>
+                      value={product.category}
+                      onChange={handleProductChange}
+                      options={categoryOptions}
+                      placeholder="Select a category"
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Brand</label>
-                    <select 
+                    <SearchableSelect
                       name="brand"
-                      id="product-brand-list" 
-                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0" 
-                      onChange={handleProductChange}>
-                        <option value="">Select a brand</option>
-                      {brands.map((brand) => (
-                        <option key={brand.id} value={brand.name} className="capitalize" > {brand.name} </option>
-                      ))}
-                    </select>
+                      value={product.brand}
+                      onChange={handleProductChange}
+                      options={brandOptions}
+                      placeholder="Select a brand"
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
-                    <select 
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit *</label>
+                    <SearchableSelect
                       name="unit"
+                      value={product.unit}
                       onChange={handleProductChange}
-                      id="product-unit-list" 
-                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0">
-                        <option value="">Select a unit</option>
-                      {units.map((unit) => (
-                        <option key={unit.id} value={unit.name} className="capitalize"> {unit.name} </option>
-                      ))}
-                    </select>
+                      options={unitOptions}
+                      placeholder="Select a unit"
+                      required
+                    />
                   </div>
                 </div>
 
@@ -373,14 +369,13 @@ const CreateProduct = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Alternative Units</label>
                   <div className="grid grid-cols-2 gap-2">
-                    <select name="alternative_unit"
-                      list="product-unit-list"
+                    <SearchableSelect
+                      name="alternative_unit"
                       onChange={(e) => setAltUnitDraft((prev) => ({ ...prev, unitname: e.target.value }))}
-                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0" >
-                      {units.map((unit) => (
-                        <option key={unit.id} value={unit.name} className="capitalize"> {unit.name} </option>
-                      ))}
-                    </select>
+                      options={unitOptions}
+                      placeholder="Select a unit"
+                      required
+                    />
                     <input
                       type="number"
                       min="0.000001"

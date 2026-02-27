@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { API_ROUTES } from '../../config';
+import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
+import SearchableSelect from '../common/SearchableSelect';
 import { 
   Image as ImageIcon, 
   X, 
@@ -25,19 +26,22 @@ const EditMaterial = () => {
   const [material, setMaterial] = useState({
     name: '',
     description: '',
+    category: '',
     brand: '',
     barcode: '',
     image: '',
     unit: '',
     unit_cost: '',
     sale_price: '',
-    current_stock: '',
     alert_quantity: '',
   });
   const [loading, setLoading] = useState(true);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [selectedImageFile, setSelectedImageFile] = useState(null);
+  const [units, setUnits] = useState([]);
+  const [brands, setBrands] = useState([]);
+  const [categories, setCategories] = useState([]);
   const token = localStorage.getItem('token');
 
   // Function to get full image URL
@@ -56,6 +60,22 @@ const EditMaterial = () => {
   };
 
   useEffect(() => {
+    const fetchMasterData = async () => {
+      if (!token) return;
+      try {
+        const [unitsRes, brandsRes, categoriesRes] = await Promise.all([
+          axios.get(`${API_ROUTES.MASTER_DATA_UNITS}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_ROUTES.MASTER_DATA_BRANDS}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(`${API_ROUTES.MASTER_DATA_PRODUCT_CATEGORIES}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
+        ]);
+        setUnits(unitsRes.data.items || []);
+        setBrands(brandsRes.data.items || []);
+        setCategories(categoriesRes.data.items || []);
+      } catch (error) {
+        console.error('Error loading master data:', error);
+      }
+    };
+
     const fetchMaterial = async () => {
       try {
         const response = await axios.get(`${API_ROUTES.MATERIALS}/${id}`, {
@@ -87,6 +107,7 @@ const EditMaterial = () => {
     };
     
     if (token) {
+      fetchMasterData();
       fetchMaterial();
     } else {
       alert('No authentication token found. Please login.');
@@ -183,7 +204,6 @@ const EditMaterial = () => {
         ...material,
         unit_cost: parseFloat(material.unit_cost),
         sale_price: material.sale_price ? parseFloat(material.sale_price) : null,
-        current_stock: parseFloat(material.current_stock),
         alert_quantity: material.alert_quantity ? parseFloat(material.alert_quantity) : null,
         image: selectedImageFile ? imageUrl : material.image,
       };
@@ -217,7 +237,6 @@ const EditMaterial = () => {
           description: material.description || '',
           unit: material.unit,
           unit_cost: parseFloat(material.unit_cost),
-          current_stock: parseFloat(material.current_stock),
         };
         
         await axios.put(`${API_ROUTES.MATERIALS}/${id}`, simpleData, {
@@ -248,6 +267,18 @@ const EditMaterial = () => {
   };
 
   const margin = calculateMargin();
+  const categoryOptions = categories.map((category) => ({ value: category.name, label: category.name }));
+  const brandOptions = brands.map((brand) => ({ value: brand.name, label: brand.name }));
+  const unitOptions = units.map((unit) => ({ value: unit.name, label: unit.name }));
+  const mergedCategoryOptions = material?.category && !categoryOptions.some((option) => option.value === material.category)
+    ? [{ value: material.category, label: material.category }, ...categoryOptions]
+    : categoryOptions;
+  const mergedBrandOptions = material?.brand && !brandOptions.some((option) => option.value === material.brand)
+    ? [{ value: material.brand, label: material.brand }, ...brandOptions]
+    : brandOptions;
+  const mergedUnitOptions = material?.unit && !unitOptions.some((option) => option.value === material.unit)
+    ? [{ value: material.unit, label: material.unit }, ...unitOptions]
+    : unitOptions;
 
   if (loading) {
     return (
@@ -408,41 +439,19 @@ const EditMaterial = () => {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Unit Type <span className="text-red-500">*</span>
+                        Unit
                       </label>
-                      <div className="relative">
-                        <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                        <input
-                          type="text"
-                          name="unit"
-                          value={material.unit}
-                          onChange={handleChange}
-                          placeholder="kg/piece/litre"
-                          required
-                          className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-green-500/30 focus:border-green-500 transition-all duration-200"
-                        />
-                      </div>
+                      <SearchableSelect
+                        name="unit"
+                        value={material.unit || ''}
+                        onChange={handleChange}
+                        options={mergedUnitOptions}
+                        placeholder="Unit"
+                        disabled
+                      />
+                      <p className="mt-1 text-xs text-amber-700">Unit cannot be changed after stock exists.</p>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Current Stock <span className="text-red-500">*</span>
-                      </label>
-                      <div className="relative">
-                        <Package className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                        <input
-                          type="number"
-                          name="current_stock"
-                          value={material.current_stock}
-                          onChange={handleChange}
-                          placeholder="Stock quantity"
-                          required
-                          min="0"
-                          step="0.01"
-                          className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200"
-                        />
-                      </div>
-                    </div>
                   </div>
 
                   {/* Right Column */}
@@ -451,17 +460,26 @@ const EditMaterial = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Brand
                       </label>
-                      <div className="relative">
-                        <Factory className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                        <input
-                          type="text"
-                          name="brand"
-                          value={material.brand}
-                          onChange={handleChange}
-                          placeholder="Brand name"
-                          className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 transition-all duration-200"
-                        />
-                      </div>
+                      <SearchableSelect
+                        name="brand"
+                        value={material.brand || ''}
+                        onChange={handleChange}
+                        options={mergedBrandOptions}
+                        placeholder="Select brand"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Category
+                      </label>
+                      <SearchableSelect
+                        name="category"
+                        value={material.category || ''}
+                        onChange={handleChange}
+                        options={mergedCategoryOptions}
+                        placeholder="Select category"
+                      />
                     </div>
 
                     <div>
@@ -546,46 +564,10 @@ const EditMaterial = () => {
               </div>
             </div>
 
-            {/* Stock Status & Pricing Summary */}
+            {/* Pricing Summary */}
             <div className="mt-8 pt-6 border-t border-gray-200/50">
-              <h3 className="text-lg font-medium text-gray-800 mb-4">Stock & Pricing Summary</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Stock Status */}
-                <div className="col-span-1">
-                  <div className={`backdrop-blur-sm rounded-lg p-4 border ${
-                    material.current_stock <= 0 
-                      ? 'bg-red-100/50 border-red-200/50' 
-                      : material.alert_quantity && material.current_stock <= material.alert_quantity
-                        ? 'bg-amber-100/50 border-amber-200/50'
-                        : 'bg-green-100/50 border-green-200/50'
-                  }`}>
-                    <div className="text-sm text-gray-600">Stock Status</div>
-                    <div className={`text-xl font-bold ${
-                      material.current_stock <= 0 
-                        ? 'text-red-700' 
-                        : material.alert_quantity && material.current_stock <= material.alert_quantity
-                          ? 'text-amber-700'
-                          : 'text-green-700'
-                    }`}>
-                      {material.current_stock <= 0 
-                        ? 'Out of Stock' 
-                        : material.alert_quantity && material.current_stock <= material.alert_quantity
-                          ? 'Low Stock'
-                          : 'In Stock'
-                      }
-                    </div>
-                    <div className="text-sm text-gray-600 mt-2">
-                      Current: <span className="font-semibold">{material.current_stock} {material.unit}</span>
-                    </div>
-                    {material.alert_quantity && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        Alert at: {material.alert_quantity} {material.unit}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Cost Summary */}
+              <h3 className="text-lg font-medium text-gray-800 mb-4">Pricing Summary</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="col-span-1">
                   <div className="backdrop-blur-sm bg-white/60 rounded-lg p-4 border border-green-200/50 h-full">
                     <div className="text-sm text-gray-600">Unit Cost</div>
@@ -593,11 +575,6 @@ const EditMaterial = () => {
                       ${parseFloat(material.unit_cost || 0).toFixed(2)}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">Per {material.unit || 'unit'}</div>
-                    <div className="text-sm text-gray-600 mt-2">
-                      Total Value: <span className="font-semibold">
-                        ${(parseFloat(material.current_stock || 0) * parseFloat(material.unit_cost || 0)).toFixed(2)}
-                      </span>
-                    </div>
                   </div>
                 </div>
 

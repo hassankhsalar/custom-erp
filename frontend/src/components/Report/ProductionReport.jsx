@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES } from "../../config";
 import { activeOnly } from "../../utils/softDelete";
+import { downloadExcelFile } from "../../utils/excelExport";
 import {
   Factory,
   Calendar,
@@ -33,6 +34,39 @@ const ProductionReport = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredProducts, setFilteredProducts] = useState([]);
   const token = localStorage.getItem("token");
+
+  const formatDateTime = (value) => {
+    const date = value instanceof Date ? value : new Date(value);
+    return date.toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  };
+
+  const formatHoursToTime = (hoursValue) => {
+    const totalMinutes = Math.max(0, Math.round(Number(hoursValue || 0) * 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+  };
+
+  const getFactoryName = () => {
+    const factory = factories.find((f) => String(f.id) === String(factoryId));
+    return factory?.name || "Unknown Factory";
+  };
+
+  const buildProductParams = (page, limit) => {
+    const params = new URLSearchParams();
+    params.append("factoryId", factoryId);
+    params.append("page", String(page));
+    params.append("limit", String(limit));
+    if (dateRange.startDate) params.append("startDate", dateRange.startDate);
+    if (dateRange.endDate) params.append("endDate", dateRange.endDate);
+    return params;
+  };
 
   const fetchFactories = async () => {
     try {
@@ -67,12 +101,7 @@ const ProductionReport = () => {
     if (!factoryId) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      params.append("factoryId", factoryId);
-      params.append("page", page);
-      params.append("limit", limit);
-      if (dateRange.startDate) params.append("startDate", dateRange.startDate);
-      if (dateRange.endDate) params.append("endDate", dateRange.endDate);
+      const params = buildProductParams(page, limit);
       const res = await fetch(`${API_ROUTES.REPORT_PRODUCTION_PRODUCTS}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -86,6 +115,29 @@ const ProductionReport = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchAllProductsForExport = async () => {
+    if (!factoryId) return [];
+    const limit = 500;
+    let page = 1;
+    let totalPages = 1;
+    const all = [];
+
+    while (page <= totalPages) {
+      const params = buildProductParams(page, limit);
+      const res = await fetch(`${API_ROUTES.REPORT_PRODUCTION_PRODUCTS}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      const batch = activeOnly(data.rows || []);
+      all.push(...batch);
+      totalPages = Number(data.pagination?.totalPages || 1);
+      page += 1;
+      if (batch.length === 0) break;
+    }
+
+    return all;
   };
 
   useEffect(() => {
@@ -121,19 +173,36 @@ const ProductionReport = () => {
     setFilteredProducts([]);
   };
 
-  const handleExport = () => {
-    if (!products.length) return;
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + [["Product", "Avg Cost", "Current Stock", "Processing Stock", "Damaged (Scrap)", "Avg Time (hrs)"], 
-         ...products.map(p => [p.name, p.avgCost, p.currentStock, p.processingStock, p.currentScrap, p.avgHours])]
-          .map(e => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `production_report_${factoryId}_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleExport = async () => {
+    const exportRows = await fetchAllProductsForExport();
+    if (!exportRows.length) return;
+
+    const factoryName = getFactoryName();
+    const rangeLabel = dateRange.startDate || dateRange.endDate
+      ? `${dateRange.startDate || "Start"} to ${dateRange.endDate || "End"}`
+      : "All Dates";
+    const rows = [
+      ["Factory", factoryName],
+      ["Date Range", rangeLabel],
+      ["Exported At", formatDateTime(new Date())],
+      [],
+      ["Factory", "Product", "Avg Cost", "Current Stock", "Processing Stock", "Damaged (Scrap)", "Avg Time (HH:MM)"],
+      ...exportRows.map((p) => [
+        factoryName,
+        p.name,
+        Number(p.avgCost || 0),
+        Number(p.currentStock || 0),
+        Number(p.processingStock || 0),
+        Number(p.currentScrap || 0),
+        formatHoursToTime(p.avgHours)
+      ])
+    ];
+
+    downloadExcelFile({
+      sheetName: "Production Report",
+      fileName: `production_report_${factoryName.replace(/\s+/g, "_")}_${new Date().toISOString().split("T")[0]}.xls`,
+      rows
+    });
   };
 
   const handleRefresh = () => {
@@ -226,10 +295,10 @@ const ProductionReport = () => {
                 onClick={handleExport}
                 disabled={!products.length}
                 className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Export to CSV"
+                title="Export to Excel"
               >
                 <Download size={18} />
-                Export CSV
+                Export Excel
               </button>
             </div>
           </div>
@@ -348,7 +417,7 @@ const ProductionReport = () => {
         ) : (
           <>
             {/* Statistics Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
               <div className="backdrop-blur-lg bg-gradient-to-br from-blue-50/60 to-cyan-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
                 <div className="flex items-center justify-between">
                   <div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
@@ -28,17 +28,83 @@ import {
   Gauge
 } from 'lucide-react';
 
+const MaterialOverviewCards = memo(function MaterialOverviewCards({ overview }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+      <div className="backdrop-blur-lg bg-gradient-to-br from-blue-50/60 to-cyan-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">Total Materials</p>
+            <p className="text-2xl font-bold text-blue-600">{overview.totalMaterials}</p>
+          </div>
+          <div className="p-3 bg-blue-100 rounded-xl">
+            <Box size={24} className="text-blue-600" />
+          </div>
+        </div>
+      </div>
+
+      <div className="backdrop-blur-lg bg-gradient-to-br from-emerald-50/60 to-green-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">In Stock</p>
+            <p className="text-2xl font-bold text-emerald-600">{overview.inStockMaterials}</p>
+          </div>
+          <div className="p-3 bg-emerald-100 rounded-xl">
+            <CheckCircle size={24} className="text-emerald-600" />
+          </div>
+        </div>
+      </div>
+
+      <div className="backdrop-blur-lg bg-gradient-to-br from-amber-50/60 to-orange-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">Low Stock</p>
+            <p className="text-2xl font-bold text-amber-600">{overview.lowStockMaterials}</p>
+          </div>
+          <div className="p-3 bg-amber-100 rounded-xl">
+            <AlertCircle size={24} className="text-amber-600" />
+          </div>
+        </div>
+      </div>
+
+      <div className="backdrop-blur-lg bg-gradient-to-br from-red-50/60 to-rose-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">Out of Stock</p>
+            <p className="text-2xl font-bold text-red-600">{overview.outOfStockMaterials}</p>
+          </div>
+          <div className="p-3 bg-red-100 rounded-xl">
+            <AlertTriangle size={24} className="text-red-600" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 const AllMaterials = () => {
   const [materials, setMaterials] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
-  const [expandedMaterialId, setExpandedMaterialId] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingTable, setLoadingTable] = useState(false);
+  const [loadingOverview, setLoadingOverview] = useState(false);
   const [modal, setModal] = useState({ isOpen: false, type: null, data: null });
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
   const [totalMaterials, setTotalMaterials] = useState(0);
+  const [overview, setOverview] = useState({
+    totalMaterials: 0,
+    inStockMaterials: 0,
+    lowStockMaterials: 0,
+    outOfStockMaterials: 0,
+  });
+  const [searchInput, setSearchInput] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [sortBy, setSortBy] = useState('name');
+  const [sortDir, setSortDir] = useState('asc');
+  const [appliedSortBy, setAppliedSortBy] = useState('name');
+  const [appliedSortDir, setAppliedSortDir] = useState('asc');
 
   // Function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -55,42 +121,76 @@ const AllMaterials = () => {
     }
   };
 
-  useEffect(() => {
-    const fetchMaterials = async () => {
-      try {
-        setLoading(true);
-        const response = await axios.get(API_ROUTES.MATERIALS, {
-          params: { page: currentPage, limit: itemsPerPage },
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        setMaterials(activeOnly(response.data.materials));
-        setTotalPages(Math.ceil(response.data.totalCount / itemsPerPage));
-        setTotalMaterials(response.data.totalCount);
-      } catch (error) {
-        console.error('Error fetching materials:', error);
-        
-        if (error.response?.status === 401) {
-          alert('Session expired. Please login again.');
-          localStorage.removeItem('token');
-          navigate('/login');
-        } else if (error.response?.status === 403) {
-          alert('Permission denied. You do not have access to materials.');
-        }
-      } finally {
-        setLoading(false);
+  const fetchMaterialsTable = useCallback(async () => {
+    try {
+      setLoadingTable(true);
+      const response = await axios.get(API_ROUTES.MATERIALS, {
+        params: {
+          page: currentPage,
+          limit: itemsPerPage,
+          search: appliedSearch || undefined,
+          sortBy: appliedSortBy,
+          sortDir: appliedSortDir,
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const rows = activeOnly(response.data.materials || []);
+      setMaterials(rows);
+      setTotalPages(Number(response.data.totalPages || Math.ceil((response.data.totalCount || 0) / itemsPerPage) || 1));
+      setTotalMaterials(Number(response.data.totalCount || 0));
+    } catch (error) {
+      console.error('Error fetching materials:', error);
+      if (error.response?.status === 401) {
+        alert('Session expired. Please login again.');
+        localStorage.removeItem('token');
+        navigate('/login');
+      } else if (error.response?.status === 403) {
+        alert('Permission denied. You do not have access to materials.');
       }
-    };
-    
-    if (token) {
-      fetchMaterials();
-    } else {
+    } finally {
+      setLoadingTable(false);
+    }
+  }, [appliedSearch, appliedSortBy, appliedSortDir, currentPage, itemsPerPage, navigate, token]);
+
+  const fetchMaterialsOverview = useCallback(async () => {
+    try {
+      setLoadingOverview(true);
+      const response = await axios.get(`${API_ROUTES.MATERIALS}/overview`, {
+        params: { search: appliedSearch || undefined },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      setOverview({
+        totalMaterials: Number(response.data.totalMaterials || 0),
+        inStockMaterials: Number(response.data.inStockMaterials || 0),
+        lowStockMaterials: Number(response.data.lowStockMaterials || 0),
+        outOfStockMaterials: Number(response.data.outOfStockMaterials || 0),
+      });
+    } catch (error) {
+      console.error('Error fetching materials overview:', error);
+    } finally {
+      setLoadingOverview(false);
+    }
+  }, [appliedSearch, appliedSortBy, appliedSortDir, token]);
+
+  useEffect(() => {
+    if (!token) {
       alert('Authentication required. Please login.');
       navigate('/login');
+      return;
     }
-  }, [currentPage, itemsPerPage, token, navigate]);
+    fetchMaterialsTable();
+  }, [fetchMaterialsTable, navigate, token]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetchMaterialsOverview();
+  }, [fetchMaterialsOverview, token]);
 
   const handleDelete = async (id) => {
     if (!token) {
@@ -107,16 +207,7 @@ const AllMaterials = () => {
           },
         });
         
-        const response = await axios.get(API_ROUTES.MATERIALS, {
-          params: { page: currentPage, limit: itemsPerPage },
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-        setMaterials(activeOnly(response.data.materials));
-        setTotalPages(Math.ceil(response.data.totalCount / itemsPerPage));
-        setTotalMaterials(response.data.totalCount);
+        await Promise.all([fetchMaterialsTable(), fetchMaterialsOverview()]);
       } catch (error) {
         console.error('Error deleting material:', error);
         
@@ -129,10 +220,6 @@ const AllMaterials = () => {
         }
       }
     }
-  };
-
-  const toggleDetails = (id) => {
-    setExpandedMaterialId(expandedMaterialId === id ? null : id);
   };
 
   const openDetailsModal = (material) => {
@@ -160,11 +247,6 @@ const AllMaterials = () => {
       icon: <CheckCircle size={14} />
     };
   };
-
-  // Calculate statistics
-  const lowStockMaterials = materials.filter(m => m.alert_quantity && m.current_stock <= m.alert_quantity && m.current_stock > 0).length;
-  const outOfStockMaterials = materials.filter(m => m.current_stock <= 0).length;
-  const inStockMaterials = materials.filter(m => m.current_stock > 0).length;
 
   // Pagination controls
   const nextPage = () => {
@@ -223,59 +305,11 @@ const AllMaterials = () => {
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div className="backdrop-blur-lg bg-gradient-to-br from-blue-50/60 to-cyan-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Total Materials</p>
-                <p className="text-2xl font-bold text-blue-600">{totalMaterials}</p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <Box size={24} className="text-blue-600" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="backdrop-blur-lg bg-gradient-to-br from-emerald-50/60 to-green-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">In Stock</p>
-                <p className="text-2xl font-bold text-emerald-600">{inStockMaterials}</p>
-              </div>
-              <div className="p-3 bg-emerald-100 rounded-xl">
-                <CheckCircle size={24} className="text-emerald-600" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="backdrop-blur-lg bg-gradient-to-br from-amber-50/60 to-orange-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Low Stock</p>
-                <p className="text-2xl font-bold text-amber-600">{lowStockMaterials}</p>
-              </div>
-              <div className="p-3 bg-amber-100 rounded-xl">
-                <AlertCircle size={24} className="text-amber-600" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="backdrop-blur-lg bg-gradient-to-br from-red-50/60 to-rose-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">Out of Stock</p>
-                <p className="text-2xl font-bold text-red-600">{outOfStockMaterials}</p>
-              </div>
-              <div className="p-3 bg-red-100 rounded-xl">
-                <AlertTriangle size={24} className="text-red-600" />
-              </div>
-            </div>
-          </div>
-        </div>
+        <MaterialOverviewCards overview={overview} />
 
         {/* Main Content */}
         <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
-          {loading ? (
+          {loadingTable ? (
             <div className="flex items-center justify-center py-12">
               <div className="flex flex-col items-center gap-4">
                 <div className="w-12 h-12 border-4 border-amber-500/30 border-t-amber-600 rounded-full animate-spin"></div>
@@ -284,6 +318,80 @@ const AllMaterials = () => {
             </div>
           ) : (
             <>
+              <div className="mb-4 grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                <div className="md:col-span-2">
+                  <label className="block text-xs text-gray-600 mb-1">Search</label>
+                  <input
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        setCurrentPage(1);
+                        setAppliedSearch(searchInput.trim());
+                        setAppliedSortBy(sortBy);
+                        setAppliedSortDir(sortDir);
+                      }
+                    }}
+                    placeholder="Name / brand / category / barcode"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white/80 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Sort By</label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white/80 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                  >
+                    <option value="name">Name</option>
+                    <option value="created_at">Created Date</option>
+                    <option value="unit_cost">Unit Cost</option>
+                    <option value="sale_price">Sale Price</option>
+                    <option value="current_stock">Current Stock</option>
+                    <option value="brand">Brand</option>
+                    <option value="category">Category</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Order</label>
+                  <select
+                    value={sortDir}
+                    onChange={(e) => setSortDir(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white/80 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                  >
+                    <option value="asc">Ascending</option>
+                    <option value="desc">Descending</option>
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setCurrentPage(1);
+                      setAppliedSearch(searchInput.trim());
+                      setAppliedSortBy(sortBy);
+                      setAppliedSortDir(sortDir);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                  >
+                    Apply
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSearchInput('');
+                      setAppliedSearch('');
+                      setSortBy('name');
+                      setSortDir('asc');
+                      setAppliedSortBy('name');
+                      setAppliedSortDir('asc');
+                      setCurrentPage(1);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-white/80 border border-gray-300 text-gray-700 hover:bg-white transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
               <div className="overflow-x-auto rounded-xl border border-white/60">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-100/80">
@@ -419,7 +527,7 @@ const AllMaterials = () => {
                   </tbody>
                 </table>
                 
-                {materials.length === 0 && !loading && (
+                {materials.length === 0 && !loadingTable && (
                   <div className="text-center py-12">
                     <div className="p-4 bg-white/50 rounded-xl inline-block mb-4">
                       <Warehouse size={48} className="text-gray-300" />
@@ -466,7 +574,7 @@ const AllMaterials = () => {
                       <div className="text-sm text-gray-700">
                         Showing <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
                         <span className="font-semibold">
-                          {Math.min(currentPage * itemsPerPage, materials.length)}
+                          {Math.min(currentPage * itemsPerPage, totalMaterials)}
                         </span>{" "}
                         of <span className="font-semibold">{totalMaterials}</span> materials
                       </div>

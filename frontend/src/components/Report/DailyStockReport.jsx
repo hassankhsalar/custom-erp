@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
+import { downloadExcelFile } from "../../utils/excelExport";
 import {
   Calendar,
   Download,
@@ -122,6 +123,63 @@ const DailyStockReport = () => {
   }, [selectedSnapshotId]);
 
   const fileUrl = selectedSnapshot?.filePath ? `${MEDIA_BASE_URL}${selectedSnapshot.filePath}` : "";
+
+  const fetchAllItemsForExcel = async () => {
+    if (!selectedSnapshotId) return [];
+
+    const limit = 500;
+    let page = 1;
+    let totalPages = 1;
+    const allRows = [];
+
+    while (page <= totalPages) {
+      const params = new URLSearchParams();
+      if (filters.placeType) params.append("placeType", filters.placeType);
+      if (filters.placeId) params.append("placeId", filters.placeId);
+      if (filters.itemType) params.append("itemType", filters.itemType);
+      if (filters.search.trim()) params.append("search", filters.search.trim());
+      params.append("page", String(page));
+      params.append("limit", String(limit));
+
+      const res = await fetch(`${API_ROUTES.REPORT_DAILY_STOCK_BY_ID(selectedSnapshotId)}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      const batch = data.rows || [];
+      allRows.push(...batch);
+      totalPages = Number(data.pagination?.totalPages || 1);
+      page += 1;
+      if (batch.length === 0) break;
+    }
+
+    return allRows;
+  };
+
+  const handleExcelExport = async () => {
+    const excelRows = await fetchAllItemsForExcel();
+    if (!excelRows.length) return;
+    const sheetRows = [
+      ["Place Name", "Place Type", "Place ID", "Item Name", "Item Type", "Item ID", "Unit", "Stock", "Avg Cost", "Scrap"],
+      ...excelRows.map((r) => [
+        r.placeName || "",
+        r.placeType || "",
+        r.placeId || "",
+        r.itemName || "",
+        r.itemType || "",
+        r.itemId || "",
+        r.unit || "",
+        Number(r.stock || 0),
+        r.avgCost == null ? "" : Number(r.avgCost),
+        Number(r.scrap || 0)
+      ])
+    ];
+
+    downloadExcelFile({
+      sheetName: "Daily Stock",
+      fileName: `daily_stock_${selectedSnapshot?.snapshotDate?.slice?.(0, 10) || new Date().toISOString().split("T")[0]}.xls`,
+      rows: sheetRows
+    });
+  };
 
   return (
     <div className="min-h-screen rounded-t-2xl w-full bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 p-4 md:p-6">
@@ -265,18 +323,30 @@ const DailyStockReport = () => {
                 <Filter size={16} />
                 Apply
               </button>
-              {fileUrl && (
-                <a
-                  href={fileUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 text-white font-semibold flex items-center justify-center gap-2"
-                >
-                  <Download size={16} />
-                  CSV
-                </a>
-              )}
             </div>
+          </div>
+          <div className="mt-4 flex items-center justify-end gap-2">
+              {fileUrl && (
+                <>
+                  <a
+                    href={fileUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 text-white font-semibold flex items-center justify-center gap-2"
+                  >
+                    <Download size={16} />
+                    CSV
+                  </a>
+                  <button
+                    onClick={handleExcelExport}
+                    disabled={!rows.length}
+                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    <Download size={16} />
+                    Excel
+                  </button>
+                </>
+              )}
           </div>
         </div>
 

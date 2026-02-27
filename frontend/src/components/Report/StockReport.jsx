@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
 import { activeOnly } from "../../utils/softDelete";
+import { downloadExcelFile } from "../../utils/excelExport";
 import {
   Package,
   Layers,
@@ -50,6 +51,23 @@ const StockReport = () => {
   });
   const token = localStorage.getItem("token");
 
+  const buildStockParams = (page, limit) => {
+    const params = new URLSearchParams();
+    if (placeType) params.append("placeType", placeType);
+    if (placeId) params.append("placeId", placeId);
+    if (stockSort === "asc" || stockSort === "desc") {
+      params.append("sortBy", "stock");
+      params.append("sortOrder", stockSort);
+    }
+    if (stockSort === "low_stock_wise_asc" || stockSort === "low_stock_wise_desc") {
+      params.append("sortBy", "low_stock_wise");
+      params.append("sortOrder", stockSort.endsWith("_asc") ? "asc" : "desc");
+    }
+    params.append("page", String(page));
+    params.append("limit", String(limit));
+    return params;
+  };
+
   const placeLabel = useMemo(() => {
     if (placeType === "store") return "Store";
     if (placeType === "shop") return "Shop";
@@ -85,19 +103,7 @@ const StockReport = () => {
   const fetchRows = async (page = 1, limit = 10) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (placeType) params.append("placeType", placeType);
-      if (placeId) params.append("placeId", placeId);
-      if (stockSort === "asc" || stockSort === "desc") {
-        params.append("sortBy", "stock");
-        params.append("sortOrder", stockSort);
-      }
-      if (stockSort === "low_stock_wise_asc" || stockSort === "low_stock_wise_desc") {
-        params.append("sortBy", "low_stock_wise");
-        params.append("sortOrder", stockSort.endsWith("_asc") ? "asc" : "desc");
-      }
-      params.append("page", page);
-      params.append("limit", limit);
+      const params = buildStockParams(page, limit);
       const endpoint = tab === "products" ? API_ROUTES.REPORT_STOCK_PRODUCTS : API_ROUTES.REPORT_STOCK_MATERIALS;
       const res = await fetch(`${endpoint}?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -105,18 +111,6 @@ const StockReport = () => {
       const data = await res.json();
       setRows(activeOnly(data.rows || []));
       setPagination(data.pagination || { page: 1, limit, totalPages: 1 });
-      
-      // Calculate statistics
-      const totalStock = data.rows?.reduce((sum, r) => sum + Number(r.stock || 0), 0) || 0;
-      const scrapCount = data.rows?.reduce((sum, r) => sum + Number(r.scrap || 0), 0) || 0;
-      const lowStock = data.rows?.filter(r => Number(r.stock || 0) < 10).length || 0;
-      
-      setStats({
-        totalItems: data.rows?.length || 0,
-        totalStock,
-        lowStock,
-        scrapCount
-      });
     } catch (error) {
       console.error('Error fetching stock data:', error);
     } finally {
@@ -124,8 +118,55 @@ const StockReport = () => {
     }
   };
 
+  const fetchAllRowsForEndpoint = async (endpoint) => {
+    const limit = 500;
+    let page = 1;
+    let totalPages = 1;
+    const all = [];
+
+    while (page <= totalPages) {
+      const params = buildStockParams(page, limit);
+      const res = await fetch(`${endpoint}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      const batch = activeOnly(data.rows || []);
+      all.push(...batch);
+      totalPages = Number(data.pagination?.totalPages || 1);
+      page += 1;
+      if (batch.length === 0) break;
+    }
+
+    return all;
+  };
+
+  const fetchOverview = async () => {
+    try {
+      const endpoint = tab === "products" ? API_ROUTES.REPORT_STOCK_PRODUCTS : API_ROUTES.REPORT_STOCK_MATERIALS;
+      const allRows = await fetchAllRowsForEndpoint(endpoint);
+      const totalStock = allRows.reduce((sum, r) => sum + Number(r.stock || 0), 0);
+      const scrapCount = allRows.reduce((sum, r) => sum + Number(r.scrap || 0), 0);
+      const lowStock = allRows.filter((r) => Number(r.stock || 0) < 10).length;
+      setStats({
+        totalItems: allRows.length,
+        totalStock,
+        lowStock,
+        scrapCount
+      });
+    } catch (error) {
+      console.error("Error fetching stock overview:", error);
+      setStats({
+        totalItems: 0,
+        totalStock: 0,
+        lowStock: 0,
+        scrapCount: 0
+      });
+    }
+  };
+
   useEffect(() => {
     fetchRows(1, pagination.limit);
+    fetchOverview();
   }, [tab, stockSort]);
 
   useEffect(() => {
@@ -135,6 +176,7 @@ const StockReport = () => {
 
   const applyFilter = () => {
     fetchRows(1, pagination.limit);
+    fetchOverview();
   };
 
   const getStockStatus = (stock, alertQty = 1) => {
@@ -170,8 +212,42 @@ const StockReport = () => {
     }
   };
 
-  const handleExport = () => {
-    alert("Export functionality would be implemented here");
+  const handleExport = async () => {
+    const [productRows, materialRows] = await Promise.all([
+      fetchAllRowsForEndpoint(API_ROUTES.REPORT_STOCK_PRODUCTS),
+      fetchAllRowsForEndpoint(API_ROUTES.REPORT_STOCK_MATERIALS)
+    ]);
+    const exportRows = [...productRows, ...materialRows];
+    if (!exportRows.length) return;
+
+    const selectedPlaceName = placeId
+      ? places.find((p) => String(p.id) === String(placeId))?.name || placeLabel
+      : placeLabel;
+    const withUnit = (value, unit) => `${Number(value || 0)}${unit || ""}`;
+    const rowsForExcel = [
+      ["Place Name", "Product/Material Name", "Category", "Brand", "Current Stock", "Current Damage", "Current Stock Value", "Current Damage Value"],
+      ...exportRows.map((r) => {
+        const stock = Number(r.stock || 0);
+        const damage = Number(r.scrap || 0);
+        const avgCost = Number(r.avg_cost || 0);
+        return [
+          selectedPlaceName,
+          r.name || "",
+          r.category || "",
+          r.brand || "",
+          withUnit(stock, r.unit),
+          withUnit(damage, r.unit),
+          Number((stock * avgCost).toFixed(2)),
+          Number((damage * avgCost).toFixed(2))
+        ];
+      })
+    ];
+
+    downloadExcelFile({
+      sheetName: "Stock Report",
+      fileName: `stock_report_${new Date().toISOString().split("T")[0]}.xls`,
+      rows: rowsForExcel
+    });
   };
 
   const nextPage = () => {
@@ -223,7 +299,7 @@ const StockReport = () => {
                 className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 <Download size={18} />
-                Export
+                Export Excel
               </button>
             </div>
           </div>
