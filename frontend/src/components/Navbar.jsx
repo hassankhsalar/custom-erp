@@ -4,6 +4,7 @@ import logo from "/logo.png";
 import { Bell, CircleUserRound, Home, Zap, Newspaper, Store, Sun, Moon, LogOut } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { API_ROUTES, MEDIA_BASE_URL } from "../config";
+import Sidebar from "./Sidebar";
 
 import { useAuth } from "../App";
 
@@ -267,9 +268,6 @@ const Navbar = () => {
                     {/* Mobile Sidebar Header */}
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500/10 to-purple-500/10 backdrop-blur-md bg-white/90 shadow-[0_4px_12px_rgba(0,0,0,0.05)]">
-                                <img src={logo} alt="Logo" className="w-10 h-10" />
-                            </div>
                             <div>
                                 <h2 className="font-bold text-lg text-gray-800">Menu</h2>
                                 <p className="text-xs text-gray-500">Navigation</p>
@@ -285,70 +283,16 @@ const Navbar = () => {
 
                     {/* Mobile Navigation */}
                     <nav className="space-y-1 mb-8">
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-2">
-                            Navigation
-                        </h3>
-                        {navItems.map((item) => (
-                            <Link
-                                key={item.name}
-                                to={item.path}
-                                onClick={() => setMobileSidebarOpen(false)}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                                    isActive(item.path)
-                                        ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-600 border border-blue-500/30'
-                                        : 'text-gray-700 hover:bg-white/30'
-                                }`}
-                            >
-                                <div className={`p-2 rounded-lg ${
-                                    isActive(item.path) 
-                                        ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-[0_4px_12px_rgba(59,157,248,0.3)]' 
-                                        : 'bg-gray-100/50 text-gray-600'
-                                }`}>
-                                    {item.icon}
-                                </div>
-                                <span className="font-medium">{item.name}</span>
-                            </Link>
-                        ))}
+                        {/* Sidebar for mobile */}
+                        <div>
+                            <Sidebar />
+                        </div>
                     </nav>
-
-                    {/* Quick Actions */}
-                    <div className="mb-8">
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-2">
-                            Quick Actions
-                        </h3>
-                        <div className="grid grid-cols-2 gap-2">
-                            <button className="p-3 rounded-xl text-center hover:bg-white/20 transition-colors backdrop-blur-sm bg-white/70 border border-white/20">
-                                <div className="p-2 rounded-lg bg-gradient-to-r from-green-500/10 to-green-600/10 text-green-600 inline-flex mb-2">
-                                    <Zap size={18} />
-                                </div>
-                                <p className="text-xs font-medium text-gray-700">New Order</p>
-                            </button>
-                            <button className="p-3 rounded-xl text-center hover:bg-white/20 transition-colors backdrop-blur-sm bg-white/70 border border-white/20">
-                                <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500/10 to-blue-600/10 text-blue-600 inline-flex mb-2">
-                                    <Store size={18} />
-                                </div>
-                                <p className="text-xs font-medium text-gray-700">Add Product</p>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* System Status */}
-                    <div className="p-4 rounded-xl mb-8 bg-gradient-to-r from-blue-500/5 to-purple-500/5 backdrop-blur-sm bg-white/70 border border-white/20">
-                        <h4 className="font-medium text-gray-800 mb-2">System Status</h4>
-                        <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-600">Uptime</span>
-                            <span className="font-semibold text-green-600">99.8%</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm mt-1">
-                            <span className="text-gray-600">Users Online</span>
-                            <span className="font-semibold text-blue-600">24</span>
-                        </div>
-                    </div>
 
                     {/* Footer */}
                     <div className="pt-4 border-t border-white/10">
                         <p className="text-xs text-gray-500 text-center">
-                            © 2024 Business Suite Pro. All rights reserved.
+                            ©{new Date().getFullYear()} Codesbreak. All rights reserved.
                         </p>
                     </div>
                 </div>

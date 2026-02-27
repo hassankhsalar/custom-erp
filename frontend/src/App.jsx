@@ -237,7 +237,7 @@ const AuthenticatedLayout = () => {
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar  */}
-      <div className="h-screen overflow-y-auto">
+      <div className="h-screen overflow-y-auto hidden sm:hidden md:block">
         <Sidebar />
       </div>
       
