@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { API_ROUTES } from '../../config';
 import { Link, useNavigate } from "react-router-dom";
 import { usePermission } from "../../hooks/usePermission";
-import { useAuth } from "../../App";
+import { useAuth } from "../../context/AuthContext";
 
 export default function AllSales() {
   const navigate = useNavigate();

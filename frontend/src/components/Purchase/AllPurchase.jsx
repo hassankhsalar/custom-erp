@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
+import SearchableSelect from '../common/SearchableSelect';
 
 export default function AllPurchase() {
   const navigate = useNavigate();
@@ -876,16 +877,17 @@ export default function AllPurchase() {
             </div>
             <div>
               <label htmlFor="supplier" className="text-sm text-gray-600">Supplier</label>
-              <select
+              <SearchableSelect
+                name="supplier"
                 value={filters.supplierId}
                 onChange={(e) => setFilters((prev) => ({ ...prev, supplierId: e.target.value }))}
-                className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-              >
-                <option value="">All Suppliers</option>
-                {suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
+                options={suppliers.map((s) => ({
+                  value: s.id,
+                  label: `${s.name} (${s.mobile || 'N/A'})`
+                }))}
+                placeholder="Search supplier..."
+                className=""
+              />
             </div>
             <div>
               <label htmlFor="destinationType" className="text-sm text-gray-600">Destination Type</label>

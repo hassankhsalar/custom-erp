@@ -31,7 +31,7 @@ import {
   ArrowUpDown,
   Trash2
 } from "lucide-react";
-import { useAuth } from "../../App";
+import { useAuth } from "../../context/AuthContext";
 
 const RequisitionList = () => {
   const navigate = useNavigate();

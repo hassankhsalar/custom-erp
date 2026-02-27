@@ -6,7 +6,7 @@ import { Link, useLocation } from "react-router-dom";
 import { API_ROUTES, MEDIA_BASE_URL } from "../config";
 import Sidebar from "./Sidebar";
 
-import { useAuth } from "../App";
+import { useAuth } from "../context/AuthContext";
 
 const Navbar = () => {
     const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -264,7 +264,7 @@ const Navbar = () => {
                     mobileSidebarOpen ? "translate-x-0" : "translate-x-full"
                 } md:hidden`}
             >
-                <div className="p-6 h-full overflow-y-auto">
+                <div className="p-6 min-h-full max-h-screen overflow-y-auto">
                     {/* Mobile Sidebar Header */}
                     <div className="flex items-center justify-between mb-8">
                         <div className="flex items-center gap-3">

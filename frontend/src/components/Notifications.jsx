@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { API_ROUTES } from "../config";
-import { useAuth } from "../App";
+import { useAuth } from "../context/AuthContext";
 
 const Notifications = () => {
   const [rows, setRows] = useState([]);

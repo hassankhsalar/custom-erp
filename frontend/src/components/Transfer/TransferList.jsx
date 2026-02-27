@@ -639,23 +639,29 @@ const TransferList = ({ fromType, toType, title }) => {
               </div>
             </div>
 
-            <div className="flex justify-between items-center gap-3">
-              <div className="relative md:grow ">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Search transfers by reference, note..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="w-full pl-10 pr-4 py-3 bg-white/80 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                />
+            <div className="flex justify-between items-center flex-col lg:flex-row gap-3">
+              <div className='md:grow w-full'>
+                <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="search-query">Search transfers</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    id="search-query"
+                    placeholder="Search transfers by reference, note..."
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full pl-10 pr-4 py-3 bg-white/80 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                  />
+                </div>
               </div>
-              <div>
+              <div className='w-full'>
+                <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="date-from">From Date</label>
                 <input
                   type="datetime-local"
+                  id="date-from"
                   value={dateFrom}
                   onChange={(e) => {
                     setDateFrom(e.target.value);
@@ -664,9 +670,11 @@ const TransferList = ({ fromType, toType, title }) => {
                   className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                 />
               </div>
-              <div className="flex gap-2">
+              <div className='w-full'>
+                <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="date-to">To Date</label>
                 <input
                   type="datetime-local"
+                  id="date-to"
                   value={dateTo}
                   onChange={(e) => {
                     setDateTo(e.target.value);
@@ -675,7 +683,7 @@ const TransferList = ({ fromType, toType, title }) => {
                   className="w-full px-3 py-3 bg-white/80 backdrop-blur-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                 />
               </div>
-              <div className='flex items-center gap-4'>
+              <div className='flex items-center self-end gap-4'>
                 <button
                   onClick={handleApplyFilters}
                   className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl hover:from-blue-600 hover:to-purple-600 transition-colors duration-200"

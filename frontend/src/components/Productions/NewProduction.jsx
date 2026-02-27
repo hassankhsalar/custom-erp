@@ -4,6 +4,7 @@ import { Html5Qrcode } from "html5-qrcode";
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
 import { activeOnly } from '../../utils/softDelete';
+import SearchableSelect from '../common/SearchableSelect';
 import { 
   Factory, 
   Calendar, 
@@ -41,7 +42,13 @@ const NewProduction = () => {
   const [scannerError, setScannerError] = useState("");
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [selectedMaterials, setSelectedMaterials] = useState([]);
+  const [allMaterials, setAllMaterials] = useState([]);
   const [factoryMaterialMap, setFactoryMaterialMap] = useState({});
+  const [manualMaterial, setManualMaterial] = useState({
+    materialId: '',
+    quantity: '',
+    price: '',
+  });
   const [loading, setLoading] = useState(false);
   const [requisitionLink, setRequisitionLink] = useState({
     requisitionId: null,
@@ -55,10 +62,16 @@ const NewProduction = () => {
       try {
         setLoading(true);
         const token = localStorage.getItem('token');
-        const factoryResponse = await axios.get(API_ROUTES.FACTORIES, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const [factoryResponse, materialResponse] = await Promise.all([
+          axios.get(API_ROUTES.FACTORIES, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get(API_ROUTES.MATERIALS_ALL, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
         setFactories(activeOnly(factoryResponse.data.factories || factoryResponse.data || []));
+        setAllMaterials(activeOnly(materialResponse.data.materials || []));
       } catch (error) {
         console.error('Error fetching initial data:', error);
       } finally {
@@ -99,16 +112,19 @@ const NewProduction = () => {
     const newMaterials = Array.from(materialsMap.values());
 
     setSelectedMaterials(prevMaterials => {
-      return newMaterials.map(newMat => {
+      const autoMaterials = newMaterials.map(newMat => {
         const existingMat = prevMaterials.find(prevMat => prevMat.materialId === newMat.materialId);
         if (existingMat) {
           return {
             ...newMat,
             price: newMat.price,
+            isManual: false,
           };
         }
-        return newMat;
+        return { ...newMat, isManual: false };
       });
+      const manuallyAdded = prevMaterials.filter((pm) => pm.isManual && !materialsMap.has(pm.materialId));
+      return [...autoMaterials, ...manuallyAdded];
     });
   }, [selectedProducts, factoryMaterialMap]);
 
@@ -329,6 +345,56 @@ const NewProduction = () => {
     setSelectedMaterials(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleAddManualMaterial = () => {
+    const materialId = parseInt(manualMaterial.materialId, 10);
+    const quantity = parseFloat(manualMaterial.quantity);
+    const priceInput = parseFloat(manualMaterial.price);
+
+    if (!Number.isFinite(materialId) || materialId <= 0) {
+      alert('Please select a material.');
+      return;
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      alert('Please enter a valid quantity.');
+      return;
+    }
+
+    const selectedMaterial = allMaterials.find((m) => Number(m.id) === materialId);
+    if (!selectedMaterial) {
+      alert('Invalid material selected.');
+      return;
+    }
+    if (selectedMaterials.some((m) => Number(m.materialId) === materialId)) {
+      alert('This material is already in the list. Edit quantity/price from the table.');
+      return;
+    }
+
+    const factoryInfo = factoryMaterialMap[materialId];
+    const availableStock = factoryInfo?.stock ?? 0;
+    const fallbackPrice = factoryInfo?.avg_cost && factoryInfo.avg_cost > 0
+      ? factoryInfo.avg_cost
+      : (selectedMaterial.unit_cost || 0);
+    const price = Number.isFinite(priceInput) && priceInput >= 0 ? priceInput : fallbackPrice;
+
+    setSelectedMaterials((prev) => [
+      ...prev,
+      {
+        materialId,
+        name: selectedMaterial.name,
+        quantity,
+        price,
+        availableStock,
+        isManual: true,
+      },
+    ]);
+
+    setManualMaterial({
+      materialId: '',
+      quantity: '',
+      price: '',
+    });
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -357,7 +423,12 @@ const NewProduction = () => {
           unit_cost: p.unit_cost,
           moved_to_store: p.moved_to_store,
         })),
-        materials: selectedMaterials.map((material) => material),
+        materials: selectedMaterials.map((material) => ({
+          materialId: material.materialId,
+          quantity: material.quantity,
+          price: material.price,
+          name: material.name,
+        })),
       };
       await axios.post(API_ROUTES.PRODUCTIONS, payload, {
         headers: { Authorization: `Bearer ${token}` },
@@ -699,7 +770,7 @@ const NewProduction = () => {
                 </div>
 
                 {selectedProducts.length > 0 ? (
-                  <div className="overflow-hidden rounded-xl border border-white/60">
+                  <div className="overflow-auto rounded-xl border border-white/60">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-100/80">
                         <tr>
@@ -803,13 +874,52 @@ const NewProduction = () => {
                   </div>
                   Required Materials ({selectedMaterials.length})
                 </h2>
-                <div className="px-3 py-1 bg-amber-50 text-amber-700 rounded-lg text-sm">
-                  Auto-calculated
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5 p-4 bg-white/40 rounded-xl border border-white/50">
+                <SearchableSelect
+                  name="manualMaterialId"
+                  value={manualMaterial.materialId}
+                  onChange={(e) => setManualMaterial((prev) => ({ ...prev, materialId: e.target.value }))}
+                  options={allMaterials.map((material) => ({
+                    value: String(material.id),
+                    label: `${material.name} (${material.barcode || 'No barcode'})`,
+                  }))}
+                  placeholder="Search material by name or barcode..."
+                  className="md:col-span-2"
+                />
+                <input
+                  type="number"
+                  value={manualMaterial.quantity}
+                  onChange={(e) => setManualMaterial((prev) => ({ ...prev, quantity: e.target.value }))}
+                  className="px-3 py-2 bg-white/70 border border-gray-200/60 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                  placeholder="Qty"
+                  step="0.01"
+                  min="0"
+                />
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={manualMaterial.price}
+                    onChange={(e) => setManualMaterial((prev) => ({ ...prev, price: e.target.value }))}
+                    className="w-full px-3 py-2 bg-white/70 border border-gray-200/60 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                    placeholder="Unit price"
+                    step="0.01"
+                    min="0"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddManualMaterial}
+                    className="inline-flex items-center gap-1 px-3 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                  >
+                    <Plus size={14} />
+                    Add
+                  </button>
                 </div>
               </div>
 
               {selectedMaterials.length > 0 ? (
-                <div className="overflow-hidden rounded-xl border border-white/60">
+                <div className="overflow-x-auto rounded-xl border border-white/60">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-100/80">
                       <tr>
@@ -898,7 +1008,7 @@ const NewProduction = () => {
               <h3 className="text-lg font-semibold text-gray-800">Ready to Create Production</h3>
               <p className="text-gray-600">Review all details before submitting</p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center flex-col md:flex-row gap-4">
               <button
                 type="button"
                 onClick={() => navigate('/productions/all')}
@@ -920,7 +1030,7 @@ const NewProduction = () => {
                 ) : (
                   <>
                     <CheckCircle size={20} />
-                    Create Production Order
+                    Create Production
                   </>
                 )}
               </button>

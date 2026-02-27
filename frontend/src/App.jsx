@@ -1,4 +1,4 @@
-import React, { useState, createContext, useContext, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -120,8 +120,7 @@ import FactoryInventory from "./components/Factory/FactoryInventory";
 import StoreInventory from "./components/Stores/StoreInventory";
 import ShopInventory from "./components/Shop/ShopInventory";
 import EditShop from "./components/Shop/EditShop";
-
-const AuthContext = createContext(null);
+import { AuthContext, useAuth } from "./context/AuthContext";
 
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("token"));
@@ -208,8 +207,6 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
-
-export const useAuth = () => useContext(AuthContext);
 
 const PrivateRoute = () => {
   // This component will now render an Outlet

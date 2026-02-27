@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { Camera, Save, UserCircle2 } from "lucide-react";
 import { API_ROUTES, MEDIA_BASE_URL } from "../config";
-import { useAuth } from "../App";
+import { useAuth } from "../context/AuthContext";
 
 const UserProfile = () => {
   const { refetch } = useAuth();

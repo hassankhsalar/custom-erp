@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Link, useLocation } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
 import { Users, UserPlus, Edit, Trash2, Save, X, Building, Store, ShoppingCart, Plus, Minus, ToggleLeft, ToggleRight, Key, Shield, Mail, User as UserIcon, LogOut, Clock } from 'lucide-react';
-import { useAuth } from '../../App';
+import { useAuth } from '../../context/AuthContext';
 
 const AllUser = () => {
   const location = useLocation();

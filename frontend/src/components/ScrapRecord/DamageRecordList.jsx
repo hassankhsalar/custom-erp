@@ -14,7 +14,7 @@ import {
   ChevronsRight,
 } from "lucide-react";
 import { API_ROUTES } from "../../config";
-import { useAuth } from "../../App";
+import { useAuth } from "../../context/AuthContext";
 
 const defaultPageSize = 20;
 

@@ -1,7 +1,9 @@
-import { useAuth } from '../App';
+import { useAuth } from '../context/AuthContext';
 
 export const usePermission = () => {
-  const { currentUser, loading } = useAuth();
+  const auth = useAuth();
+  const currentUser = auth?.currentUser;
+  const loading = auth?.loading ?? true;
 
   const hasPermission = (requiredPermission) => {
     if (loading || !currentUser || !currentUser.permission) {

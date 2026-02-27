@@ -77,10 +77,10 @@ router.get('/', async (req, res) => {
   const searchText = String(search || '').trim();
   if (searchText) {
     where.OR = [
-      { name: { contains: searchText, mode: 'insensitive' } },
-      { category: { contains: searchText, mode: 'insensitive' } },
-      { barcode: { contains: searchText, mode: 'insensitive' } },
-      { description: { contains: searchText, mode: 'insensitive' } },
+      { name: { contains: searchText } },
+      { category: { contains: searchText } },
+      { barcode: { contains: searchText } },
+      { description: { contains: searchText } },
     ];
   }
 
@@ -121,10 +121,10 @@ router.get('/overview', async (req, res) => {
 
   if (searchText) {
     where.OR = [
-      { name: { contains: searchText, mode: 'insensitive' } },
-      { category: { contains: searchText, mode: 'insensitive' } },
-      { barcode: { contains: searchText, mode: 'insensitive' } },
-      { description: { contains: searchText, mode: 'insensitive' } },
+      { name: { contains: searchText } },
+      { category: { contains: searchText } },
+      { barcode: { contains: searchText } },
+      { description: { contains: searchText } },
     ];
   }
 
@@ -173,10 +173,10 @@ router.get('/all-products', async (req, res) => {
   const searchText = String(search || '').trim();
   if (searchText) {
     where.OR = [
-      { name: { contains: searchText, mode: 'insensitive' } },
-      { category: { contains: searchText, mode: 'insensitive' } },
-      { barcode: { contains: searchText, mode: 'insensitive' } },
-      { description: { contains: searchText, mode: 'insensitive' } },
+      { name: { contains: searchText } },
+      { category: { contains: searchText } },
+      { barcode: { contains: searchText } },
+      { description: { contains: searchText } },
     ];
   }
 
@@ -332,9 +332,9 @@ router.get('/search', async (req, res) => {
       where: {
         deleted_at: false,
         OR: [
-          { name: { contains: q, mode: 'insensitive' } },
-          { barcode: { contains: q, mode: 'insensitive' } },
-          { description: { contains: q, mode: 'insensitive' } }
+          { name: { contains: q } },
+          { barcode: { contains: q } },
+          { description: { contains: q } }
         ]
       },
       take: 10,

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { usePermission } from '../hooks/usePermission'; // Import usePermission
 import { API_ROUTES } from '../config';
-import { useAuth } from '../App';
+import { useAuth } from '../context/AuthContext';
 import { 
   ChevronDown, ChevronRight, ChevronLeft, ChevronRightIcon,
   Home, ShoppingCart, Factory, Package, 

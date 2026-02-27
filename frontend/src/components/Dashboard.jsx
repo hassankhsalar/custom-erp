@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { API_ROUTES } from "../config";
-import { useAuth } from '../App';
+import { useAuth } from '../context/AuthContext';
 import { usePermission } from '../hooks/usePermission';
 import {
   TrendingUp,
@@ -449,9 +449,6 @@ const TransferStatus = ({ data }) => (
         </h3>
         <p className="text-sm text-gray-500 mt-1">Current transfer overview</p>
       </div>
-      <button className="text-sm text-indigo-600 hover:text-indigo-700 font-medium">
-        View All
-      </button>
     </div>
     <div className="space-y-4">
       {Object.entries(data.statusOverview).map(([status, count]) => {
@@ -467,20 +464,20 @@ const TransferStatus = ({ data }) => (
         const colors = statusColors[status] || { bg: 'from-gray-500 to-gray-600', text: 'text-gray-600' };
         
         return (
-          <div key={status} className="flex items-center justify-between group">
+          <div key={status} className="flex items-start md:items-center flex-col md:flex-row justify-between group">
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-xl bg-gradient-to-r ${colors.bg} flex items-center justify-center`}>
                 <Truck size={16} className="text-white" />
               </div>
               <div>
                 <span className="capitalize text-gray-700 font-medium">
-                  {status.replace("_", " ")}
+                  {status.replaceAll("_", " ")}
                 </span>
                 <div className="text-xs text-gray-500">Transfers</div>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="w-32 bg-gray-200/50 rounded-full h-2">
+            <div className="flex items-center space-x-4 grow md:grow-0">
+              <div className="w-40 md:w-32 bg-gray-200/50 rounded-full h-2">
                 <div
                   className={`h-2 rounded-full bg-gradient-to-r ${colors.bg} transition-all duration-1000`}
                   style={{ width: `${percentage}%` }}
@@ -554,7 +551,7 @@ const ShopPerformance = ({ data }) => (
         </h3>
         <p className="text-sm text-gray-500 mt-1">Sales efficiency by shop</p>
       </div>
-      <button className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
+      <button className="text-sm text-blue-600 hover:text-blue-700 font-medium items-center gap-1 hidden sm:hidden md:flex">
         <Target size={14} />
         Efficiency
       </button>

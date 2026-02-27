@@ -699,13 +699,13 @@ export default function ShopPOS( props ) {
               </h1>
             </div>
           </div>
-          <div className="mt-2 md:mt-0">
-            {shopId && (
+          {shopId && (
+            <div className="mt-2 md:mt-0">
               <div className="text-md font-semibold bg-gray-300/30 px-3 py-1 mr-4 rounded-full text-emerald-600">
                 {shops.find(s => s.id === parseInt(shopId))?.name || "Shop"}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -883,7 +883,7 @@ export default function ShopPOS( props ) {
             <div className="bg-white rounded-xl shadow-md overflow-hidden">
               {/* Cart Header */}
               <div className="p-6 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center flex-col sm:flex-col md:flex-row">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg">
                       <span className="text-white text-xl"><ShoppingCart /></span>

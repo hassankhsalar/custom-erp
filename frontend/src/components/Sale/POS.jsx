@@ -890,7 +890,7 @@ export default function ShopPOS( props ) {
             <div className="bg-white rounded-xl shadow-md overflow-hidden">
               {/* Cart Header */}
               <div className="p-6 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center flex-col sm:flex-col md:flex-row">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg">
                       <span className="text-white text-xl"><ShoppingCart /></span>

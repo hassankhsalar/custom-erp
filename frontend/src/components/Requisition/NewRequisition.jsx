@@ -390,34 +390,35 @@ const NewRequisition = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Currency</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., BDT, USD"
-                    value={form.currency}
-                    onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
-                    className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
-                  />
-                </div>
-              </div>
-
               {form.requestType === "money" && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 animate-fadeIn">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Requested Amount</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={form.requestedAmount}
-                        onChange={(e) => setForm((p) => ({ ...p, requestedAmount: e.target.value }))}
-                        className="w-full pl-8 p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
-                      />
+                    <div className="flex gap-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Requested Amount</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={form.requestedAmount}
+                            onChange={(e) => setForm((p) => ({ ...p, requestedAmount: e.target.value }))}
+                            className="w-full pl-8 p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm focus:ring-2 focus:ring-indigo-500/30 focus:border-transparent transition-all duration-300"
+                          />
+                        </div>
+                      </div>
+                      <div className="max-w-18 flex items-end">
+                        <input
+                          type="text"
+                          placeholder="e.g., BDT, USD"
+                          value={form.currency}
+                          readOnly
+                          onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
+                          className="w-full p-3 rounded-xl border border-gray-300 bg-white/70 backdrop-blur-sm  focus:border-transparent outline-none transition-all duration-300 text-gray-500"
+                        />
+                      </div>
                     </div>
                   </div>
                   <div>

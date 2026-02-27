@@ -3,7 +3,7 @@ import { AlertTriangle, Camera, Save, Search, Trash2, X } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
-import { useAuth } from "../../App";
+import { useAuth } from "../../context/AuthContext";
 
 export default function AddDamageRecord() {
   const { token } = useAuth();

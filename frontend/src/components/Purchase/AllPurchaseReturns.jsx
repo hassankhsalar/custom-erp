@@ -252,7 +252,7 @@ export default function AllPurchaseReturns() {
   return (
     <div className="min-h-screen rounded-t-2xl bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-4 md:p-6">
       <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl mb-6 p-6">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center justify-start flex-col md:flex-row gap-4">
           <div className="p-4 bg-gradient-to-br from-violet-500 to-indigo-500 rounded-2xl shadow-lg">
             <Package className="text-white" size={32} />
           </div>
