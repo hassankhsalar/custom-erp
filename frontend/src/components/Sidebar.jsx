@@ -357,7 +357,7 @@ const Sidebar = () => {
 
   return (
   <div className={`${isCollapsed ? 'w-24' : 'w-64'} h-screen flex flex-col bg-gradient-to-br from-white via-gray-50 to-white text-gray-800 shadow-2xl backdrop-blur-sm border-r border-gray-200/50 transition-all duration-300 relative overflow-hidden`}>
-    {/* Collapse Toggle Button - Adjusted position */}
+    {/* Collapse Toggle Button - */}
     <button
       onClick={() => setIsCollapsed(!isCollapsed)}
       className={`absolute ${isCollapsed ? '-right-3' : '-right-2'} top-26 py-1 px-1.5 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-all hover:scale-110 z-20`}
@@ -389,7 +389,7 @@ const Sidebar = () => {
       </div>
     </div>
 
-    {/* Navigation Menu - Scrollable with padding adjusted */}
+    {/* Navigation Menu - */}
     <div className="flex-1 overflow-y-auto px-2">
       <nav className="space-y-1 pb-4">
         {menuItems.map((item) => {
@@ -474,7 +474,7 @@ const Sidebar = () => {
       </nav>
     </div>
 
-    {/* Footer Section - Adjusted padding */}
+    {/* Footer Section */}
     {!isCollapsed && (
       <div className="flex-shrink-0 p-4 pt-0">
         {/* Quick Actions */}
@@ -508,7 +508,7 @@ const Sidebar = () => {
               </div>
             </Link>
           ) : (
-            <div className="flex items-center justify-between p-3 mb-8 rounded-xl bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200/50">
+            <div className="flex items-center justify-between p-3 mb-3 rounded-xl bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200/50">
               <p className="text-xs text-gray-600">Active Users</p>
               <div className="flex items-center gap-1">
                 <div className='h-2 w-2 rounded-full bg-green-600'></div>
