@@ -356,7 +356,7 @@ const Sidebar = () => {
   ];
 
   return (
-    <div className={`${isCollapsed ? 'w-24' : 'w-64'} max-h-[100vh] overflow-y-auto bg-gradient-to-br from-white via-gray-50 to-white text-gray-800 p-6 min-h-full shadow-2xl backdrop-blur-sm border-r border-gray-200/50 transition-all duration-300 relative`}>
+    <div className={`${isCollapsed ? 'w-24' : 'w-64'} max-h-[100vh] overflow-y-auto bg-gradient-to-br from-white via-gray-50 to-white text-gray-800 pl-2 pr-4 min-h-full shadow-2xl backdrop-blur-sm border-r border-gray-200/50 transition-all duration-300 relative`}>
       {/* Collapse Toggle Button */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
@@ -508,23 +508,16 @@ const Sidebar = () => {
               </div>
             </div>
           )}
-          
+          {!isCollapsed && (
           <div className="flex items-center justify-between">
             <p className="text-xs text-gray-500">
               © 2026 codesbreak
             </p>
           </div>
+          )}
         </div>
       )}
 
-      {/* Collapsed Footer */}
-      {isCollapsed && (
-        <div className="absolute bottom-6 left-0 right-0 flex justify-center">
-          <p className="text-xs text-gray-500 rotate-90 whitespace-nowrap">
-            © 2026
-          </p>
-        </div>
-      )}
     </div>
   );
 };

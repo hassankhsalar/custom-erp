@@ -235,17 +235,22 @@ const PermissionRoute = ({ requiredPermission }) => {
 // Layout component for authenticated users
 const AuthenticatedLayout = () => {
   return (
-    <div className="flex">
-      
-      <div>
-          <Sidebar />
-        </div>
-      <div className="w-full">
-        <div className="h-25 w-full mx-auto px-2">
-        <Navbar />
+    <div className="flex h-screen overflow-hidden">
+      {/* Sidebar  */}
+      <div className="h-screen overflow-y-auto">
+        <Sidebar />
       </div>
-        <div className="rounded-t-2xl mx-2" style={{ flexGrow: 1, padding: "0px" }}>
-          <Outlet /> {/* This is where nested routes will render */}
+      
+      {/* Main Content*/}
+      <div className="flex flex-col flex-1 h-screen overflow-hidden">
+        <div className="h-25 w-full mx-auto px-2">
+          <Navbar />
+        </div>
+        <div 
+          className="rounded-t-2xl mx-2 flex-1 overflow-y-auto" 
+          style={{ padding: "0px" }}
+        >
+          <Outlet />
         </div>
       </div>
     </div>

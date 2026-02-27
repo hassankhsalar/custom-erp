@@ -131,6 +131,15 @@ tr:hover {
   animation: spin 1s linear infinite;
  } 
 
+ .left-scrollbar-vertical {
+  overflow-y: auto;
+  overflow-x: hidden;
+  direction: rtl; /* This moves the vertical scrollbar to the left */
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 #f1f1f1;
+  position: relative;
+}
+
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
