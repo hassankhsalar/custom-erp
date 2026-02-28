@@ -13,12 +13,63 @@ const { withRequestContext } = require('./utils/requestContext');
 const prisma = new PrismaClient();
 const app = express();
 const server = http.createServer(app);
-app.use(cors());
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : ['http://localhost:5173'];
+  
+
+const corsOptions = {
+
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 app.use(express.json());
+// Temporary request-trace middleware (disabled).
+// Uncomment if you need to persist every request/response in ActivityLog again.
+// app.use((req, res, next) => {
+//   const startedAt = Date.now();
+//
+//   res.on('finish', () => {
+//     const durationMs = Date.now() - startedAt;
+//     const origin = req.headers.origin || null;
+//     const normalizedOrigin = origin ? String(origin).trim() : null;
+//     const originAllowed = !normalizedOrigin || allowedOrigins.includes(normalizedOrigin);
+//
+//     logActivity({
+//       userId: req.user?.userId || null,
+//       module: 'request_trace',
+//       action: req.method.toLowerCase(),
+//       description: `${req.method} ${req.originalUrl} -> ${res.statusCode}`,
+//       status: res.statusCode < 400 ? 'success' : 'failed',
+//       metadata: {
+//         origin: normalizedOrigin,
+//         originAllowed,
+//         method: req.method,
+//         path: req.originalUrl,
+//         statusCode: res.statusCode,
+//         headersSent: res.headersSent,
+//         durationMs,
+//       },
+//       ipAddress: req.headers['x-forwarded-for'] || req.ip || null,
+//       userAgent: req.headers['user-agent'] || null,
+//     });
+//   });
+//
+//   next();
+// });
 app.use(withRequestContext);
 app.use(activityLoggerMiddleware);
 
-const JWT_SECRET = 'your-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // Middleware to protect routes
 const authenticateToken = async (req, res, next) => {
@@ -91,6 +142,7 @@ const hasPermission = (permission) => {
 
 // Register a new user
 app.post('/api/register', authenticateToken, hasPermission('create_user'), async (req, res) => {
+  return false;
   const { email, password, name, username } = req.body;
   const hashedPassword = await bcrypt.hash(password, 10);
   try {
@@ -324,10 +376,7 @@ app.use('/uploads', express.static('uploads'));
 
 
 const io = new Server(server, {
-  cors: {
-    origin: true,
-    credentials: true,
-  },
+  cors: corsOptions,
 });
 
 const sessionTracker = createSessionTracker({
@@ -340,7 +389,8 @@ setRealtimeIo(io);
 app.set('io', io);
 app.set('sessionTracker', sessionTracker);
 
-const port = 3001;
+const port = process.env.PORT || 3001;
+
 server.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
 });

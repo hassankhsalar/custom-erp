@@ -1,5 +1,8 @@
 export const API_BASE_URL = 'http://localhost:3001/api';
 export const MEDIA_BASE_URL = 'http://localhost:3001';
+
+// export const API_BASE_URL = 'https://bspbackend.codesbreak.com/api';
+// export const MEDIA_BASE_URL = 'https://bspbackend.codesbreak.com';
 export const SOCKET_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
 export const API_ROUTES = {

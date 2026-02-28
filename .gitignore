@@ -5,3 +5,4 @@ gemini.md
 /generated/prisma
 /prisma/migrations
 /uploads/*
+/web_data

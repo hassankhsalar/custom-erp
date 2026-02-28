@@ -22,7 +22,7 @@
     "@syncfusion/ej2-react-barcode-generator": "^32.2.3",
     "@tailwindcss/vite": "^4.1.13",
     "bcryptjs": "^3.0.2",
-    "cors": "^2.8.5",
+    "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "html5-qrcode": "^2.3.8",
