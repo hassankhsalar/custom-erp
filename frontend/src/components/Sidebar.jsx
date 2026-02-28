@@ -356,41 +356,42 @@ const Sidebar = () => {
   ];
 
   return (
-    <div className={`${isCollapsed ? 'w-24' : 'w-64'} max-h-[100vh] overflow-y-auto overflow-x-hidden bg-gradient-to-br from-white via-gray-50 to-white text-gray-800 pl-2 pr-4 min-h-full shadow-none sm:shadow-none md:shadow-2xl backdrop-blur-sm border-r border-gray-200/50 transition-all duration-300 relative`}>
-      {/* Collapse Toggle Button */}
-      <button
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute -right-2 top-26 py-1 px-1.5 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-all hover:scale-110 z-10 hidden sm:hidden md:block"
-      >
-        {isCollapsed ? (
-          <ChevronRight size={18} className="text-gray-600" />
-        ) : (
-          <ChevronLeft size={18} className="text-gray-600" />
-        )}
-      </button>
+  <div className={`${isCollapsed ? 'w-24' : 'w-64'} h-screen flex flex-col bg-gradient-to-br from-white via-gray-50 to-white text-gray-800 shadow-2xl backdrop-blur-sm border-r border-gray-200/50 transition-all duration-300 relative overflow-hidden`}>
+    {/* Collapse Toggle Button - */}
+    <button
+      onClick={() => setIsCollapsed(!isCollapsed)}
+      className={`absolute ${isCollapsed ? '-right-3' : '-right-2'} top-26 py-1 px-1.5 bg-white rounded-full shadow-lg border border-gray-200 hover:bg-gray-50 transition-all hover:scale-110 z-20`}
+    >
+      {isCollapsed ? (
+        <ChevronRight size={18} className="text-gray-600" />
+      ) : (
+        <ChevronLeft size={18} className="text-gray-600" />
+      )}
+    </button>
 
-      {/* Sidebar Header */}
-      <div className="mb-8">
-        {/* User Info Card */}
-        <div className={`p-4 rounded-2xl mb-4 bg-gradient-to-r from-white to-gray-50/80 backdrop-blur-sm border border-gray-200/70 shadow-sm ${isCollapsed ? 'hidden' : ''}`}>
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 shadow-sm">
-              <Users size={18} className="text-white" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-800">
-                {currentUser?.name || 'Admin User'}
-              </p>
-              <p className="text-xs text-gray-600">
-                {currentUser?.permission?.name || 'Administrator'}
-              </p>
-            </div>
+    {/* Sidebar Header */}
+    <div className="flex-shrink-0 p-4 pb-0">
+      {/* User Info Card */}
+      <div className={`p-4 rounded-2xl mb-4 bg-gradient-to-r from-white to-gray-50/80 backdrop-blur-sm border border-gray-200/70 shadow-sm ${isCollapsed ? 'hidden' : ''}`}>
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 shadow-sm">
+            <Users size={18} className="text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-800 truncate">
+              {currentUser?.name || 'Admin User'}
+            </p>
+            <p className="text-xs text-gray-600 truncate">
+              {currentUser?.permission?.name || 'Administrator'}
+            </p>
           </div>
         </div>
       </div>
+    </div>
 
-      {/* Navigation Menu */}
-      <nav className="space-y-1">
+    {/* Navigation Menu - */}
+    <div className="flex-1 overflow-y-auto px-2">
+      <nav className="space-y-1 pb-4">
         {menuItems.map((item) => {
           // Determine if the top-level item should be displayed at all
           const shouldShowTopLevelItem = item.path 
@@ -409,12 +410,14 @@ const Sidebar = () => {
                   to={item.path}
                   className="group flex items-center gap-3 p-3 rounded-xl hover:bg-white/80 hover:border-gray-200/70 border border-transparent transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
                 >
-                  <div className={`p-2 rounded-lg bg-gradient-to-r ${item.color} shadow-sm`}>
+                  <div className={`flex-shrink-0 p-2 rounded-lg bg-gradient-to-r ${item.color} shadow-sm`}>
                     {item.icon}
                   </div>
-                  {!isCollapsed && (<span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all`}>
-                    {item.name}
-                  </span>)}
+                  {!isCollapsed && (
+                    <span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all truncate`}>
+                      {item.name}
+                    </span>
+                  )}
                 </Link>
               ) : (
                 // Render dropdown if subItems exist
@@ -423,22 +426,26 @@ const Sidebar = () => {
                     onClick={() => toggleMenu(item.name.toLowerCase())}
                     className="group text-left w-full flex items-center justify-between p-3 rounded-xl hover:bg-white/80 hover:border-gray-200/70 border border-transparent transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg bg-gradient-to-r ${item.color} shadow-sm`}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`flex-shrink-0 p-2 rounded-lg bg-gradient-to-r ${item.color} shadow-sm`}>
                         {item.icon}
                       </div>
-                      {!isCollapsed && (<span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all`}>
-                        {item.name}
-                      </span>)}
+                      {!isCollapsed && (
+                        <span className={`font-medium ${item.textColor} group-hover:${item.textColor} group-hover:brightness-125 transition-all truncate`}>
+                          {item.name}
+                        </span>
+                      )}
                     </div>
-                    {openMenus[item.name.toLowerCase()] ? (
-                      <ChevronDown size={16} className="text-gray-500 group-hover:text-gray-700 transition-colors" />
-                    ) : (
-                      <ChevronRight size={16} className="text-gray-500 group-hover:text-gray-700 transition-colors" />
+                    {!isCollapsed && (
+                      openMenus[item.name.toLowerCase()] ? (
+                        <ChevronDown size={16} className="flex-shrink-0 text-gray-500 group-hover:text-gray-700 transition-colors" />
+                      ) : (
+                        <ChevronRight size={16} className="flex-shrink-0 text-gray-500 group-hover:text-gray-700 transition-colors" />
+                      )
                     )}
                   </button>
                   
-                  {openMenus[item.name.toLowerCase()] && item.subItems && (
+                  {!isCollapsed && openMenus[item.name.toLowerCase()] && item.subItems && (
                     <div className="ml-4 mt-2 pl-6 border-l border-gray-200/50 space-y-1">
                       {item.subItems.map((subItem) => (
                         // Conditionally render sub-item
@@ -448,10 +455,10 @@ const Sidebar = () => {
                           to={subItem.path}
                           className="group flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50/70 hover:pl-4 transition-all duration-200"
                         >
-                          <div className="p-1.5 rounded-md bg-gray-100/50 group-hover:bg-white shadow-sm">
+                          <div className="flex-shrink-0 p-1.5 rounded-md bg-gray-100/50 group-hover:bg-white shadow-sm">
                             {subItem.icon}
                           </div>
-                          <span className="text-sm text-gray-600 group-hover:text-gray-800 group-hover:font-medium transition-all">
+                          <span className="text-sm text-gray-600 group-hover:text-gray-800 group-hover:font-medium transition-all truncate">
                             {subItem.name}
                           </span>
                         </Link>
@@ -465,33 +472,34 @@ const Sidebar = () => {
           );
         })}
       </nav>
+    </div>
 
-      {/* Quick Actions - Hidden when collapsed */}
-      {!isCollapsed && (
+    {/* Footer Section */}
+    {!isCollapsed && (
+      <div className="flex-shrink-0 p-4 pt-0">
+        {/* Quick Actions */}
         <div className="mt-6 p-3 rounded-xl bg-gradient-to-r from-blue-50/50 to-blue-100/30 border border-blue-200/50">
           <p className="text-xs font-medium text-blue-700 mb-2">Quick Actions</p>
           <div className="flex gap-2">
             {hasPermission('general_settings_edit') && (
-              <Link to="/report/bestselling">
-                <button className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium hover:from-blue-600 hover:to-blue-700 transition-all hover:shadow-md">
-                  sales Report
+              <Link to="/report/bestselling" className="flex-1">
+                <button className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium hover:from-blue-600 hover:to-blue-700 transition-all hover:shadow-md">
+                  Sales Report
                 </button>
               </Link>
             )}
             {hasPermission('purchase_create') && (
-              <Link to="/purchase/new">
-                <button className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-medium hover:from-emerald-600 hover:to-green-700 transition-all hover:shadow-md">
+              <Link to="/purchase/new" className="flex-1">
+                <button className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-medium hover:from-emerald-600 hover:to-green-700 transition-all hover:shadow-md">
                   Add Stock
                 </button>
               </Link>
             )}
           </div>
         </div>
-      )}
 
-      {/* Footer Stats - Hidden when collapsed */}
-      {!isCollapsed && (
-        <div className="mt-8 pt-6 border-t border-gray-200/50">
+        {/* Footer Stats */}
+        <div className="mt-1 pt-4 border-t border-gray-200/50">
           {canViewActiveUsers ? (
             <Link
               to="/users/all?mode=active"
@@ -504,7 +512,7 @@ const Sidebar = () => {
               </div>
             </Link>
           ) : (
-            <div className="flex items-center justify-between p-3 mb-8 rounded-xl bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200/50">
+            <div className="flex items-center justify-between p-3 mb-3 rounded-xl bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200/50">
               <p className="text-xs text-gray-600">Active Users</p>
               <div className="flex items-center gap-1">
                 <div className='h-2 w-2 rounded-full bg-green-600'></div>
@@ -518,12 +526,11 @@ const Sidebar = () => {
               ©{new Date().getFullYear()} Codesbreak. <br /> All rights reserved.
             </p>
           </div>
-          )}
         </div>
-      )}
-
-    </div>
-  );
+      </div>
+    )}
+  </div>
+);
 };
 
 export default Sidebar;
