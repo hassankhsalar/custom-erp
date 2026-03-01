@@ -34,7 +34,7 @@ const hasTransferAccess = (scope, transfer) => {
   return false;
 };
 
-const JWT_SECRET = 'your-secret-key'; // Replace with a strong secret key
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const MANUAL_STATUSES = ['processing', 'pending', 'on_the_way', 'complete', 'not_received'];
 const FINAL_STATUSES = ['complete', 'not_received'];
 const buildTransferPlaceForeignKeys = (fromType, fromId, toType, toId) => ({
@@ -73,6 +73,9 @@ const canReturnForSource = (scope, transfer) => {
 
 // Middleware to protect routes
 const authenticateToken = (req, res, next) => {
+  // If upstream middleware already authenticated the request, reuse it.
+  if (req.user?.userId) return next();
+
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -410,6 +413,14 @@ router.get('/', authenticateToken, async (req, res) => {
               selectedQuantity: true,
             },
           },
+          receipts: {
+            select: {
+              receiptType: true,
+              createdById: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'asc' },
+          },
         },
         orderBy: { [finalSortBy]: finalSortDir },
       }),
@@ -417,6 +428,21 @@ router.get('/', authenticateToken, async (req, res) => {
     ]);
 
   const totalPages = Math.ceil(totalItems / pageSize);
+
+  const receiptCreatorIds = Array.from(new Set(
+    transfers
+      .flatMap((transfer) => (transfer.receipts || []).map((receipt) => receipt.createdById))
+      .filter((id) => Number.isFinite(id))
+  ));
+  const receiptCreators = receiptCreatorIds.length > 0
+    ? await prisma.user.findMany({
+      where: { id: { in: receiptCreatorIds }, deleted_at: false },
+      select: { id: true, name: true, username: true, email: true },
+    })
+    : [];
+  const receiptCreatorNameMap = new Map(
+    receiptCreators.map((user) => [user.id, user.name || user.username || user.email || `User #${user.id}`])
+  );
 
   const transfersWithNamesAndTotalProducts = transfers.map(transfer => {
     const fromName =
@@ -444,12 +470,26 @@ router.get('/', authenticateToken, async (req, res) => {
     }));
 
     const summary = computeTransferSummary(transfer.transferItems);
+    const createdReceipt =
+      (transfer.receipts || []).find((receipt) => receipt.receiptType === 'created' && receipt.createdById) ||
+      (transfer.receipts || []).find((receipt) => receipt.createdById);
+    const firstReceivedReceipt = (transfer.receipts || []).find(
+      (receipt) => receipt.receiptType === 'receive' && receipt.createdById
+    );
+    const transferBy = createdReceipt?.createdById
+      ? (receiptCreatorNameMap.get(createdReceipt.createdById) || `User #${createdReceipt.createdById}`)
+      : null;
+    const receivedBy = firstReceivedReceipt?.createdById
+      ? (receiptCreatorNameMap.get(firstReceivedReceipt.createdById) || `User #${firstReceivedReceipt.createdById}`)
+      : null;
 
     return {
       ...transfer,
       status: normalizeTransferStatus(transfer.status),
       fromName,
       toName,
+      transferBy,
+      receivedBy,
       totalProducts,
       totalItems,
       transferItems,
@@ -546,6 +586,13 @@ router.get('/overview', authenticateToken, async (req, res) => {
       byStatus,
     });
   } catch (error) {
+    if (error.status === 403) {
+      return res.json({
+        totalCount: 0,
+        totalShippingCost: 0,
+        byStatus: {},
+      });
+    }
     console.error('Error fetching transfer overview:', error);
     res.status(500).json({ error: 'Failed to fetch transfer overview' });
   }
@@ -595,7 +642,13 @@ router.get('/available-items', authenticateToken, async (req, res) => {
           ...productWhere,
           deleted_at: false,
           product: search
-            ? { deleted_at: false, name: { contains: search } }
+            ? {
+              deleted_at: false,
+              OR: [
+                { name: { contains: search } },
+                { barcode: { contains: search } },
+              ],
+            }
             : { deleted_at: false },
         },
         include: productInclude,
@@ -669,6 +722,17 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
         status: normalizeTransferStatus(status || 'processing'),
         requisitionId: requisitionId ? parseInt(requisitionId) : null,
         requisitionSectionId: requisitionSectionId ? parseInt(requisitionSectionId) : null,
+      },
+    });
+
+    await prisma.transferReceipt.create({
+      data: {
+        transferId: transfer.id,
+        reference: `TR-CRT-${Date.now()}-${transfer.id}`,
+        receiptType: 'created',
+        status: normalizeTransferStatus(status || 'processing'),
+        note: 'Transfer created',
+        createdById: req.user?.userId || null,
       },
     });
 
@@ -1231,7 +1295,10 @@ router.get('/:id/receipts', authenticateToken, async (req, res) => {
     }
 
     const receipts = await prisma.transferReceipt.findMany({
-      where: { transferId },
+      where: {
+        transferId,
+        receiptType: { not: 'created' },
+      },
       include: {
         items: {
           include: {

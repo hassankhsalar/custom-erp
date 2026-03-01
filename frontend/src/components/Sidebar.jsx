@@ -356,7 +356,7 @@ const Sidebar = () => {
   ];
 
   return (
-  <div className={`${isCollapsed ? 'w-24' : 'w-64'} h-screen flex flex-col bg-gradient-to-br from-white via-gray-50 to-white text-gray-800 shadow-2xl backdrop-blur-sm border-r border-gray-200/50 transition-all duration-300 relative overflow-hidden`}>
+  <div className={`${isCollapsed ? 'w-24' : 'w-64'} h-screen flex flex-col bg-gradient-to-br from-white via-gray-50 to-white text-gray-800 transition-all duration-300 relative overflow-hidden`}>
     {/* Collapse Toggle Button - */}
     <button
       onClick={() => setIsCollapsed(!isCollapsed)}
@@ -478,13 +478,13 @@ const Sidebar = () => {
     {!isCollapsed && (
       <div className="flex-shrink-0 p-4 pt-0">
         {/* Quick Actions */}
-        <div className="mt-6 p-3 rounded-xl bg-gradient-to-r from-blue-50/50 to-blue-100/30 border border-blue-200/50">
+        <div className="mt-2 p-3 rounded-xl bg-gradient-to-r from-blue-50/50 to-blue-100/30 border border-blue-200/50">
           <p className="text-xs font-medium text-blue-700 mb-2">Quick Actions</p>
           <div className="flex gap-2">
-            {hasPermission('general_settings_edit') && (
-              <Link to="/report/bestselling" className="flex-1">
+            {hasPermission('sales_report') && (
+              <Link to="/report/best-selling" className="flex-1">
                 <button className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium hover:from-blue-600 hover:to-blue-700 transition-all hover:shadow-md">
-                  Sales Report
+                  Sales
                 </button>
               </Link>
             )}
@@ -499,11 +499,11 @@ const Sidebar = () => {
         </div>
 
         {/* Footer Stats */}
-        <div className="mt-1 pt-4 border-t border-gray-200/50">
+        <div className="mt-1 pt-1 border-t border-gray-200/50">
           {canViewActiveUsers ? (
             <Link
               to="/users/all?mode=active"
-              className="flex items-center justify-between p-3 mb-8 rounded-xl bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200/50 hover:shadow-md transition-all"
+              className="flex items-center justify-between p-3 mb-2 rounded-xl bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200/50 hover:shadow-md transition-all"
             >
               <p className="text-xs text-gray-600">Active Users</p>
               <div className="flex items-center gap-1">
@@ -512,7 +512,7 @@ const Sidebar = () => {
               </div>
             </Link>
           ) : (
-            <div className="flex items-center justify-between p-3 mb-3 rounded-xl bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200/50">
+            <div className="flex items-center justify-between p-3 mb-2 rounded-xl bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200/50">
               <p className="text-xs text-gray-600">Active Users</p>
               <div className="flex items-center gap-1">
                 <div className='h-2 w-2 rounded-full bg-green-600'></div>
@@ -522,10 +522,11 @@ const Sidebar = () => {
           )}
           {!isCollapsed && (
           <div className="flex items-center justify-between hidden sm:hidden md:flex md:justify-center">
-            <p className="text-xs text-gray-500 mb-4">
+            <p className="text-xs text-gray-500 mb-1">
               ©{new Date().getFullYear()} Codesbreak. <br /> All rights reserved.
             </p>
           </div>
+          )}
         </div>
       </div>
     )}

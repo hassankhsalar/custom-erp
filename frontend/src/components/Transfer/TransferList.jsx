@@ -739,6 +739,8 @@ const TransferList = ({ fromType, toType, title }) => {
                       <tr>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Reference</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">From ? To</th>
+                        <th className="p-4 text-left text-sm font-semibold text-gray-700">Transfer By</th>
+                        <th className="p-4 text-left text-sm font-semibold text-gray-700">Received By</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Shipping Cost</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Items</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Status</th>
@@ -785,6 +787,9 @@ const TransferList = ({ fromType, toType, title }) => {
                                     <div className="min-w-0">
                                       <div className="text-sm font-medium text-gray-900 truncate">{transfer.fromName}</div>
                                       <div className="text-xs text-gray-500 truncate">({transfer.from})</div>
+                                      <div className="text-[11px] text-gray-500 truncate">
+                                        By: {transfer.transferBy || 'N/A'}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
@@ -807,10 +812,19 @@ const TransferList = ({ fromType, toType, title }) => {
                                     <div className="min-w-0">
                                       <div className="text-sm font-medium text-gray-900 truncate">{transfer.toName}</div>
                                       <div className="text-xs text-gray-500 truncate">({transfer.to})</div>
+                                      <div className="text-[11px] text-gray-500 truncate">
+                                        Received: {transfer.receivedBy || 'N/A'}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
                               </div>
+                            </td>
+                            <td className="p-4">
+                              <span className="text-sm text-gray-700">{transfer.transferBy || 'N/A'}</span>
+                            </td>
+                            <td className="p-4">
+                              <span className="text-sm text-gray-700">{transfer.receivedBy || 'N/A'}</span>
                             </td>
                             <td className="p-4">
                               <div className="flex items-center gap-2">

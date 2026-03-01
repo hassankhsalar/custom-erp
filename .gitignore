@@ -6,3 +6,4 @@ gemini.md
 /prisma/migrations
 /uploads/*
 /web_data
+/prisma/seed_data

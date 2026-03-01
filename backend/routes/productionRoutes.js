@@ -9,7 +9,7 @@ const { assertActivePlace, assertActiveItem } = require('../utils/softDelete');
 const prisma = new PrismaClient();
 const router = express.Router();
 
-const JWT_SECRET = 'your-secret-key'; // Replace with a strong secret key
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // Middleware to protect routes
 const authenticateToken = (req, res, next) => {

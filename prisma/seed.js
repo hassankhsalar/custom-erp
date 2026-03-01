@@ -1,7 +1,209 @@
-﻿const { PrismaClient } = require("@prisma/client");
+const fs = require("fs");
+const path = require("path");
+const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 
 const prisma = new PrismaClient();
+const seedDataDir = path.join(__dirname, "seed_data");
+
+const bnDigitMap = {
+  "০": "0",
+  "১": "1",
+  "২": "2",
+  "৩": "3",
+  "৪": "4",
+  "৫": "5",
+  "৬": "6",
+  "৭": "7",
+  "৮": "8",
+  "৯": "9",
+};
+
+function normalizeText(value) {
+  const raw = String(value ?? "").replace(/\uFEFF/g, "").trim();
+  if (!raw) return "";
+  if (/(?:à¦|à§|Ã)/.test(raw)) {
+    try {
+      const repaired = Buffer.from(raw, "latin1").toString("utf8").trim();
+      if (repaired) return repaired;
+    } catch (_) {}
+  }
+  return raw;
+}
+
+function normalizeDigits(value) {
+  return String(value ?? "").replace(/[০-৯]/g, (d) => bnDigitMap[d] || d);
+}
+
+function parseCSV(content) {
+  const rows = [];
+  let cell = "";
+  let row = [];
+  let inQuotes = false;
+
+  for (let i = 0; i < content.length; i += 1) {
+    const char = content[i];
+    const next = content[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        cell += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      row.push(cell);
+      cell = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (char === "\r" && next === "\n") i += 1;
+      row.push(cell);
+      const hasData = row.some((c) => String(c).trim() !== "");
+      if (hasData) rows.push(row);
+      row = [];
+      cell = "";
+      continue;
+    }
+
+    cell += char;
+  }
+
+  if (cell.length || row.length) {
+    row.push(cell);
+    const hasData = row.some((c) => String(c).trim() !== "");
+    if (hasData) rows.push(row);
+  }
+
+  return rows;
+}
+
+function loadCSV(fileName) {
+  const fullPath = path.join(seedDataDir, fileName);
+  const content = fs.readFileSync(fullPath, "utf8");
+  const rows = parseCSV(content);
+  if (rows.length === 0) return [];
+  const header = rows[0].map((h) => normalizeText(h));
+  return rows.slice(1).map((cols) => {
+    const rowObj = {};
+    for (let i = 0; i < header.length; i += 1) {
+      rowObj[header[i]] = cols[i] ?? "";
+    }
+    if (cols.length > header.length) {
+      rowObj.__extra = cols.slice(header.length);
+    }
+    return rowObj;
+  });
+}
+
+function toNumber(value) {
+  if (value === null || value === undefined) return 0;
+  const cleaned = normalizeDigits(String(value)).replace(/,/g, "").trim();
+  const num = parseFloat(cleaned);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function isMoneyTokens(tokens) {
+  if (!tokens.length) return false;
+  const joined = tokens.join(",");
+  return /^\d{1,3}(,\d{3})*(\.\d+)?$/.test(joined) || /^\d+(\.\d+)?$/.test(joined);
+}
+
+function splitPurchaseDue(tokens) {
+  if (!tokens.length) return { totalPurchase: 0, totalDue: 0 };
+  if (tokens.length === 1) return { totalPurchase: toNumber(tokens[0]), totalDue: 0 };
+
+  let best = null;
+  for (let i = 1; i < tokens.length; i += 1) {
+    const p = tokens.slice(0, i);
+    const d = tokens.slice(i);
+    if (!isMoneyTokens(p) || !isMoneyTokens(d)) continue;
+    const dueJoined = d.join(",");
+    const score = (/\.\d+$/.test(dueJoined) ? 10 : 0) + d.length;
+    if (!best || score > best.score) {
+      best = { p, d, score };
+    }
+  }
+
+  if (!best) {
+    return {
+      totalPurchase: toNumber(tokens[0]),
+      totalDue: toNumber(tokens.slice(1).join(",")),
+    };
+  }
+
+  return {
+    totalPurchase: toNumber(best.p.join(",")),
+    totalDue: toNumber(best.d.join(",")),
+  };
+}
+
+function extractProductNameAndCode(rawProduct, fallbackCode) {
+  const productText = normalizeText(rawProduct);
+  const codeFallback = normalizeText(fallbackCode);
+
+  const match = productText.match(/^(.*?)(?:\s*-\s*|\s+)([A-Za-z0-9]+)$/);
+  if (match) {
+    return {
+      name: normalizeText(match[1]),
+      code: normalizeText(match[2]),
+    };
+  }
+
+  return {
+    name: productText,
+    code: codeFallback,
+  };
+}
+
+function makeUniqueCode(code, usedCodes, prefix = "AUTO") {
+  const base = normalizeText(code).replace(/\s+/g, "");
+  let candidate = base || `${prefix}000001`;
+  let counter = 1;
+  while (!candidate || usedCodes.has(candidate)) {
+    if (base) {
+      candidate = `${base}-${counter}`;
+    } else {
+      candidate = `${prefix}${String(counter).padStart(6, "0")}`;
+    }
+    counter += 1;
+  }
+  usedCodes.add(candidate);
+  return candidate;
+}
+
+function extractMobile(rawPhone, rawName, index, usedMobiles) {
+  const sources = [rawPhone, rawName]
+    .map((s) => normalizeDigits(normalizeText(s)))
+    .filter(Boolean);
+
+  let picked = "";
+  for (const source of sources) {
+    const matches = source.match(/\d{7,15}/g);
+    if (matches && matches.length) {
+      picked = matches[0];
+      break;
+    }
+  }
+
+  if (!picked) {
+    picked = `CUST${String(index + 1).padStart(6, "0")}`;
+  }
+
+  let unique = picked;
+  let n = 1;
+  while (usedMobiles.has(unique)) {
+    unique = `${picked}-${n}`;
+    n += 1;
+  }
+  usedMobiles.add(unique);
+  return unique;
+}
 
 async function safeDelete(model) {
   if (!prisma[model] || typeof prisma[model].deleteMany !== "function") return;
@@ -87,6 +289,10 @@ async function main() {
     "factory",
     "product",
     "material",
+    "productCategory",
+    "brand",
+    "unit",
+    "unitRelation",
     "bankAccount",
     "accounts",
     "cashRegister",
@@ -123,556 +329,127 @@ async function main() {
     },
   });
 
+  const brandRows = loadCSV("brand.csv");
+  const unitRows = loadCSV("unit.csv");
+  const productRows = loadCSV("product.csv");
+  const customerRows = loadCSV("customer.csv");
 
-  const productData = [
-    { name: '৬/১৪ বনপাখা ৪পাতা পি.এন.জি', barcode: '00000002', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ বনপাখা ৩ পাতা পি.এন.জি', barcode: '00000003', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ বনপাখা বি সুপার ৩ পাতা', barcode: '00000004', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ বনপাখা বি সুপার ৪ পাতা', barcode: '00000005', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালী বনপাখা ৩ পাতা', barcode: '00000006', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালী বনপাখা ৪ পাতা', barcode: '00000007', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৫ ইতালী বনপাখা ৩ পাতা', barcode: '00000008', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৫ ইতালী বনপাখা ৪ পাতা', barcode: '00000009', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ বনপাখা ৩ গেফ ৩ পাতা', barcode: '00000010', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ বনপাখা ৩ গেফ ৪ পাতা', barcode: '00000011', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ বনপাখা ৩.৫ গেফ ৪ পাতা ৪ গুনা', barcode: '00000012', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ বনপাখা ৩.৫ গেফ ৩ পাতা ৪ গুনা', barcode: '00000013', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ বনপাখা ৩.৫ গেপ ৩ পাতা (৭০ গুনা)', barcode: '00000014', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ বনপাখা ৩.৫ গেপ ৪ পাতা (৭০ গুনা)', barcode: '00000015', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৩ পাতা (৭৩ গুনা)', barcode: '00000016', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৩ পাতা (৭০ গুনা)', barcode: '00000017', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৩ পাতা (৪ গুনা)', barcode: '00000018', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৪ পাতা (৭০ গুনা)', barcode: '00000019', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৪ পাতা (৪ গুনা)', barcode: '00000020', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ বনপাকা ৫ গ্যাপ ৩ পাতা (৭০ গুনা)', barcode: '00000021', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ বনপাকা ৫ গ্যাপ ৩ গ্যাপ (৪ গুনা)', barcode: '00000022', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২/২২ বনপাখা ৪ গেপ ৩ পাতা', barcode: '00000023', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১০/২০ বনপাখা ৪.৫ গেফ ৩ পাতা (৮০)', barcode: '00000024', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/২০ বনপাখা ৪ গেপ ৩ পাতা (৭০ গুনা)', barcode: '00000025', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/২০ বনপাখা ৪ গেপ ৩ পাতা (৭৩ গুনা)', barcode: '00000026', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৩ বনপাখা ৪ পাতা পি.এন.জি', barcode: '00000028', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৪ বনপাখা ৩ পাতা (বি-সুপার গুনা)', barcode: '00000029', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৪ বনপাখা ৪ পাতা (বি-সুপার গুনা)', barcode: '00000031', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৩ ইতালী বনপাখা', barcode: '00000465', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ ইতালী বনপাখা', barcode: '00000466', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২/২২ বনপাখা ৬.৫ হাই ৩ পাতা (৮০)', barcode: '00001054', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ বনপাখা ৩ পাতা গুনা ছাড়া', barcode: '00000642', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ বনপাখা ৩.৫ গ্যাপ ৩ পাতা ২ গুনা', barcode: '00000032', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ বনপাখা ৩.৫ গ্যাপ ৪ পাতা ২ গুনা', barcode: '00000033', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১১ বনপাখা ৪ পাতা কলার পানি', barcode: '00000555', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ বনপাখা ৪ গ্যাপ ৩ পাতা ৬\'\' হাই টেপার', barcode: '00000928', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৩ পাতা (৭০ গুনা)', barcode: '00000782', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৪ পাতা (৭৩ গুনা)', barcode: '00000945', unit: 'PC', category: 'বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ বনপাখা ৬ গ্যাপ ৩ পাতা ( ৬৫ গুনা)', barcode: '00000911', unit: 'PC', category: 'বনপাখা আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২/২০ বনপাখা কলার ৫ পাতা ৬.৫ গেপ ৮ হাই', barcode: '00000643', unit: 'PC', category: 'বনপাখা আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২/২০ বনপাখা কলার ৬ গ্যাপ ৮ হাই ৫ পাতা', barcode: '00000832', unit: 'PC', category: 'বনপাখা আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৬ বনপাখা ৫ পাতা কলার ৪.৫ গেপ ৬ হাই', barcode: '00000686', unit: 'PC', category: 'বনপাখা আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালী বনপাখা ৩ পাতা ৪ গুনা হার্ড', barcode: '00000700', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ বনপাখা ৩ পাতা পি.এন.জি হার্ড', barcode: '00000558', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ বনপাখা ৪ পাতা পি.এন.জি হার্ড', barcode: '00000559', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ বনপাখা ৩.৫ গেফ ৪ পাতা হার্ড (৭০)', barcode: '00000554', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ বনপাখা ৬ গ্যাপ 4 পাতা (৭০ গুনা) হার্ড', barcode: '00000989', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ বনপাখা ৩ পাতা স্টিল ৪ গুনা পাথর', barcode: '00000656', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৫ বনপাখা পাথর ৩ পাতা স্টিল', barcode: '00000865', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ বনপাখা ৪ পাতা স্টিল বি-সুপার গুনা পাথর', barcode: '00000988', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ বনপাখা ৩ পাতা স্টিল বি-সুপার গুনা পাথর', barcode: '00000535', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ বনপাখা ৪ পাতা স্টিল বি সুপার গুনা', barcode: '00000907', unit: 'PC', category: 'হার্ড বনপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ হাই স্পীড ইতালী পাম্প হার্ড', barcode: '00000840', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২/২২ হাই স্পীড হার্ড পাম্প', barcode: '00001001', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/১০ সুপার পাম্প (৬৩০৭)', barcode: '00000134', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/১০ সুপার পাম্প (৬৩০৮)', barcode: '00000135', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/৯ সুপার পাম্প', barcode: '00000139', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০ সুপার পাম্প', barcode: '00000497', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০.৫ সুপার পাম্প', barcode: '00000130', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ সুপার নিউ মডেল পাম্প', barcode: '00000129', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৩ সুপার নিউ মডেল পাম্প', barcode: '00000126', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ হাই স্পীড ইতালী পাম্প', barcode: '00000122', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ হাই স্পীড ইতালী বি পাম্প', barcode: '00000123', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৫ হাই স্পীড ইতালী পাম্প', barcode: '00000121', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ হাই স্পীড ইতালী হার্ড পাম্প', barcode: '00000802', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৮.৫ সুপার পাম্প', barcode: '00000138', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৯.৫ সুপার পাম্প (৬৩০৭)', barcode: '00000132', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৯.৫ সুপার পাম্প (৬৩০৮)', barcode: '00000133', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৬ হাই স্পীড ইতালী পাম্প', barcode: '00000118', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৬ হাই স্পীড ইতালী হার্ড পাম্প', barcode: '00000803', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/২০ হাই স্পীড ইতালী হার্ড পাম্প (৬৩১৯)', barcode: '00000794', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৩ সুপার পাম্প', barcode: '00000503', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/১০ স্টিল মডেল পাম্প (ঢালাই)', barcode: '00000664', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০ স্টিল মডেল পাম্প (ঢালাই)', barcode: '00000663', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৯ স্টিল পাম্প', barcode: '00000550', unit: 'PC', category: 'পাম্প', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ সুপার নিউ মডেল বডি', barcode: '00000156', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৪/১৬ ইতালী বডি', barcode: '00000699', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৪/৯ সুপার বডি', barcode: '00000170', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/১০ সুপার বডি', barcode: '00000165', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/৯ সুপার বডি', barcode: '00000169', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০ পানির বডি', barcode: '00000166', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০ সুপার বডি', barcode: '00000176', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০.৫ সুপার বডি', barcode: '00000161', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ নরমাল বডি ৪৫*৬০', barcode: '00000585', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ সুপার নিউ মডেল বডি', barcode: '00000160', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ সুপার বডি ওল্ড মডেল', barcode: '00000298', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৩ সুপার নিউ মডেল বডি', barcode: '00000158', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৩ সুপার বডি', barcode: '00000297', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ নরমাল বডি ৫০*৭০', barcode: '00000672', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ সুপার বডি', barcode: '00000296', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ হাই স্পীড ইতালী বডি', barcode: '00000153', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ হাই স্পীড ইতালী বি বডি', barcode: '00000155', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ হাই স্পীড ইতালী স্টিল বডি', barcode: '00000175', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৫ হাই স্পীড ইতালী বডি', barcode: '00000154', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৮.৫ পানির বডি', barcode: '00000168', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৮.৫ সুপার বডি', barcode: '00000167', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৯.৫ সুপার বডি (৬৩০৭)', barcode: '00000162', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৯.৫ সুপার বডি (৬৩০৮)', barcode: '00000163', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১১ পানির বডি', barcode: '00000174', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৬ হাই স্পীড ইতালী বডি', barcode: '00000151', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ হাই স্পীড ইতালী ৫ গেফ বডি (৬৩১৬)', barcode: '00000150', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ হাই স্পীড ইতালী ৬ গেফ বডি (৬৩১৬)', barcode: '00000149', unit: 'PC', category: 'বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩২০ বেয়ারিং কেইস', barcode: 'GEN000001', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১৯ বেয়ারিং কেইস', barcode: 'GEN000002', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১৬ বেয়ারিং কেইস', barcode: 'GEN000003', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১৪ বেয়ারিং কেইস', barcode: 'GEN000004', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১২ বেয়ারিং কেইস', barcode: 'GEN000005', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১০ বেয়ারিং কেইস', barcode: 'GEN000006', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩০৯ বেয়ারিং কেইস', barcode: 'GEN000007', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩০৮ বেয়ারিং কেইস', barcode: 'GEN000008', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩০৭ বেয়ারিং কেইস', barcode: 'GEN000009', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১০ বেয়ারিং কেইস ষ্টীল পাম্প', barcode: 'GEN000010', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১২ বেয়ারিং কেইস ষ্টীল পাম্প', barcode: 'GEN000011', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১৪ বেয়ারিং কেইস ষ্টীল পাম্প', barcode: 'GEN000012', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১৬ বেয়ারিং কেইস ষ্টীল পাম্প', barcode: 'GEN000013', unit: 'PC', category: 'স্ট্যাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ সাকশন ১৬ মিলি', barcode: '00000063', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ সাকশন ২০ মিলি', barcode: '00000064', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৬ সাকশন', barcode: '00000065', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ সাকশন', barcode: '00000066', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৫ সাকশন', barcode: '00000067', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালী সাকশন', barcode: '00000069', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সুপার সাকশন', barcode: '00000070', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৩ সাকশন', barcode: '00000071', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ সাকশন', barcode: '00000072', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০.৫ সাকশন', barcode: '00000074', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৯.৫ সাকশন', barcode: '00000076', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৮.৫ সাকশন পানি', barcode: '00000078', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ সাকশন চাপা', barcode: '00000955', unit: 'PC', category: 'সিলিপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ সাকশন কম্পঃ ৬৩১৯', barcode: '00001076', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১০/১৮ সাকশন', barcode: '00000814', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২/২২ সাকশন', barcode: '00000060', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২/২২ সাকশন চাপা (৮০)', barcode: '00000959', unit: 'PC', category: 'সিলিিপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩২০ সাকশন ফ্ল্যান্স', barcode: '00000954', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৩/৪ সাকশন', barcode: '00000083', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৪/৫ সাকশন', barcode: '00000082', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/১০ সাকশন', barcode: '00000079', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/৯ সাকশন', barcode: '00000080', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০ সুপার সাকশন', barcode: '00000652', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০ সাকশন পানি', barcode: '00000075', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ স্টিল পাম্পের সাকশন প্লেট', barcode: '00000682', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৫ স্টিল পাম্পের সাকশন প্লেট', barcode: '00000899', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৮.৫ সাকশন', barcode: '00000077', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১১ সাকশন পানি', barcode: '00000073', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ সাকশন (৮০)- 00000923', barcode: 'GEN000014', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ সাকশন ফ্ল্যান্স ৬৩১৯', barcode: '00000956', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/২০ সেকশনের মুখের ফ্লান্স', barcode: '00000768', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ সিলিপ', barcode: '00000034', unit: 'PC', category: 'সিলিপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৬ সিলিপ', barcode: '00000035', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ সিলিপ', barcode: '00000036', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৫ সিলিপ', barcode: '00000037', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৪ সিলিপ', barcode: '00000038', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৩ সিলিপ', barcode: '00000039', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ সিলিপ', barcode: '00000040', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০.৫ সিলিপ', barcode: '00000041', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৯.৫ সিলিপ', barcode: '00000042', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৮.৫ সিলিপ', barcode: '00000043', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/১০ সিলিপ', barcode: '00000044', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/২০ সিলিপ', barcode: '00000046', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৪ সিলিপ', barcode: '00000047', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০ সিলিপ', barcode: '00000584', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২/২২ নিউ মডেল সিলিপ (হার্ড)', barcode: '00000927', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/১১ সিলিপ', barcode: '00000587', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/৯ সিলিপ', barcode: '00000045', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১১ সিলিপ', barcode: '00000641', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ সিলিপ হার্ড', barcode: '00000688', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৬ সিলিপ হার্ড', barcode: '00000689', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ নিউ মডেল সিলিপ', barcode: '00000925', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ সিলিপ হার্ড', barcode: '00000687', unit: 'PC', category: 'সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ খোলাপাখা ৬ গ্যাপ ৭০ গুনা', barcode: '00000178', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ খোলাপাখা ৬ গ্যাপ ৪ গুনা', barcode: '00000179', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ খোলাপাখা ৫ গ্যাপ ৪ গুনা', barcode: '00000180', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ খোলাপাখা ৩.৫ গেফ ৪ পাতা ৪ গুনা', barcode: '00000181', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ খোলাপাখা ৩.৫ গেফ ৪ পাতা ৭০ গুনা', barcode: '00000182', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালী খোলাপাখা ৩ পাতা', barcode: '00000187', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ বি-সুপার খোলাপাখা ৪ পাতা', barcode: '00000188', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ খোলপাখা ৪ পাতা (পি.এন.জি)', barcode: '00000189', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৩ খোলাপাখা ৪ পাতা', barcode: '00000190', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ খোলপাখা ৫ পাতা এমটি (পি.এন.জি)', barcode: '00000191', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০.৫ খোলাপাখা ৩ গেফ', barcode: '00000426', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০ খোলাপাখা পানি', barcode: '00000427', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৯.৫ খোলাপাখা ৫ পাতা ৭ গুনা', barcode: '00000428', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৯.৫ খোলপাখা ৫ পাতা পিএনজি', barcode: '00000429', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/১০ খোলপাখা ৫ পাতা পিএনজি', barcode: '00000431', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৮.৫ খোলাপাখা', barcode: '00000432', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/৯ খোলাপাখা', barcode: '00000433', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৪ খোলাপাখা ৩ পাতা বি সুপার গুনা', barcode: '00000435', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ খোলপাখা ৫ পাতা এমটি পি.এন.জি কলার ছাড়া', barcode: '00000468', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/১০ ইতালী খোলাপাখা', barcode: '00000474', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০ খোলাপাখা ৩ গেপ ৫ পাতা PNG', barcode: '00000766', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ খোলাপাখা ৫ পাতা পি এন জি হার্ড কলার ছাড়া', barcode: '00001070', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/১০ খোলাপাখা ৫ পাতা ৭ গুনা', barcode: '00000430', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ খোলাপাখা ৪ পাতা পি. এন.জি কলার', barcode: '00000921', unit: 'PC', category: 'খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ খোলপাখা ৪ পাতা এম.টি পি.এন.জি', barcode: '00000469', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০ খোলাপাখা ৩ গেপ ৪ পাতা পি.এন.জি (2 গুনা)', barcode: '00000878', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০ খোলাপাখা ৫ পাতা ৫ গুনা হাই স্পিট', barcode: '00000485', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১১ খোলাপাখা ৩.৫ গেপ ৫.৫ গুনা', barcode: '00000481', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১১ খোলাপাখা ৩.৫ গেপ পি.এন.জি ৫ পাতা', barcode: '00000480', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ ইতালি খোলাপাখা', barcode: '00000588', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ খোলপাখা ৫ পাতা এমটি ৫.৫ গুনা', barcode: '00000467', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ খোলপাখা ৫ পাতা পিটি পি.এন.জি', barcode: '00000471', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ খোলপাখা ৪ পাতা ৮ গুনা', barcode: '00000913', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ খোলাপাখা ৩.৫ গেফ ৪ পাতা ৮ গুনা', barcode: '00000914', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১১ খোলাপাখা', barcode: '00000461', unit: 'PC', category: 'আনসাইজ খোলাপাখা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ খোলাপাখা ৩.৫ গেফ ৩ পাতা ৪ গুনা স্টীল', barcode: '00000183', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালি খোলপাখা স্টীল ৩ পাতা', barcode: '00000415', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ খোলপাখা ৪ পাতা স্টীল পিএনজি', barcode: '00000417', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ খোলপাখা ৩ পাতা স্টীল পিএনজি', barcode: '00000418', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ ইতালী খোলপাখা ৪ পাতা স্টীল', barcode: '00000421', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৫ খোলাপাখা ৪ পাতা স্টীল', barcode: '00000425', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ খোলাপাখা ৪ পাতা স্টিল বি সুপার গুনা', barcode: '00000472', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ খোলাপাখা ৫ পাতা স্টিল ৬ গুনা', barcode: '00000716', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ খোলাপাখা ৩.৫ গেফ ৪ পাতা ৭০ গুনা স্টীল', barcode: '00000838', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/১০ ইতালী ষ্টীল খোলাপাখা ৪ পাতা', barcode: '00000906', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১১ খোলাপাখা ৪ পাতা ষ্টীল ৩.৫ গ্যাপ ৪" হাই', barcode: '00000985', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ খোলাপাখা ৩ পাতা স্টিল বি সুপার গুনা', barcode: '00001007', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ ষ্টীল খোলাপাখা ৪ পাতা ৬\'\' হাই', barcode: '00001061', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০ ষ্টীল খোলাপাখা পানি ৫ পাতা', barcode: '00000905', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০.৫ খোলাপাখা ৩ গেপ স্টীল ৪ পাতা ৫.৫ গুনা', barcode: '00000424', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০.৫ খোলাপাখা ৩ গেপ স্টীল ৫ পাতা ৫.৫ গুনা', barcode: '00001006', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০.৫ খোলাপাখা স্টীল ঢালাই', barcode: '00000645', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ খোলপাখা ৪ পাতা স্টীল', barcode: '00000646', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৩ খোলাপাখা স্টীল ৩ পাতা', barcode: '00000420', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৩ খোলাপাখা স্টীল ৪ পাতা', barcode: '00000419', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালি খোলপাখা স্টীল ৩ পাতা ৫\'\'-২ হাই', barcode: '00000879', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালি খোলপাখা স্টীল ৪ পাতা', barcode: '00000416', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ খোলপাখা স্টীল ৩ পাতা পাথর ৬" হাই', barcode: '00001062', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ খোলপাখা স্টীল ৪ পাতা পাথর ৬" হাই', barcode: '00000942', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৫ খোলাপাখা ৩ পাতা স্টীল', barcode: '00000714', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ খোলাপাখা ৩.৫ গেফ ৩ পাতা ষ্টিল ৭০ গুনা', barcode: '00000675', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ খোলাপাখা ৩.৫ গেফ ৪ পাতা ৪ গুনা স্টীল', barcode: '00000184', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ খোলাপাখা ৬ গেপ ৪ পাতা ৭৩ গুনা স্টীল', barcode: '00000644', unit: 'PC', category: 'খোলপাখা স্টীল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩২০ বেয়ারিং সেব (৮০) গুনা', barcode: '00001074', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১৯ বেয়ারিং সেব (৭৩) গুনা', barcode: '00001075', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ নরমাল সেব ৬৩১৪', barcode: '00000354', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালি সেব বি গুনা ৬৩১৪', barcode: '00000356', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ বি-সুপার সেব ৬৩১২', barcode: '00000357', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১০ সুপার সেব', barcode: '00000358', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০.৫ সেব ৬৩০৯', barcode: '00000360', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৯.৫ সেব ৬৩০৭', barcode: '00000361', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৯.৫ সেব ৬৩০৮', barcode: '00000362', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৮.৫ পানি পাম্পের সেব ৬৩০৭', barcode: '00000363', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৩/৪ সেব পানি পাম্পের ৬৩০৭', barcode: '00000365', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩০৮ স্টিল পাম্পের সেব', barcode: '00000696', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১১ পানির সেব (৬৩১০)', barcode: '00000960', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩২০ বেয়ারিং সেব (৮০) গুনা', barcode: 'GEN000015', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১৯ বেয়ারিং সেব (৮০)', barcode: 'GEN000016', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১০/২০ সেব ৭৩ গুনা ৬৩২০', barcode: '00000350', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '২৬/৪০ কাটিং ড্রেজার সেব', barcode: '00000651', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ সুপার সেব ৬৩১০', barcode: '00000359', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালি সেব ৪ গুনা ৬৩১৪', barcode: '00000355', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১৬ সেব ২ মাথা গুনা', barcode: '00000650', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/২০ সেব ৭৩ গুনা ৬৩১৯', barcode: '00000852', unit: 'PC', category: 'সেব', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ ইতালি প্যাকিং কোমা ৯৫*১২৫', barcode: '00000368', unit: 'PC', category: 'প্যাকিং কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ ইতালি প্যাকিং চাপা ৯৫*১২৫', barcode: '00000369', unit: 'PC', category: 'প্যাকিং কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালি প্যাকিং কোমা ১১০*১০৫', barcode: '00000370', unit: 'PC', category: 'প্যাকিং কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালি প্যাকিং চাপা ১১০*১০৫', barcode: '00000371', unit: 'PC', category: 'প্যাকিং কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১০/২০ প্যাকিং চাপা ১৫০*১৫৫', barcode: '00000367', unit: 'PC', category: 'প্যাকিং কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২/২২ প্যাকিং কোমা', barcode: '00000937', unit: 'PC', category: 'প্যাকিং কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২০.৯৫ ওয়েলসেল কোমা', barcode: '00000265', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৯৫.৭০ ওয়েলসেল কোমা', barcode: '00000267', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৫.৮৫ ওয়েলসেল কোমা', barcode: '00000269', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৯.৫০ ওয়েলসেল কোমা', barcode: '00000270', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৩০.২*১১০.২ সিল কোমা', barcode: '00001079', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১০০.৭৫ ওয়েলসেল কোমা', barcode: '00000266', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ নরমাল ৭০.৯৫ কোমা', barcode: '00000268', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৫.৮৫ ওয়েলসেল কোমা স্টিল পাম্পের', barcode: '00000703', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/২০ ওয়েলসেল কোমা নিউ মডেল', barcode: '00000856', unit: 'PC', category: 'ওয়েলসেল কোমা', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সেববুস ৭২*৯৫*৬"-৬', barcode: '00000308', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সেববুস ৭২*৯৫*৭"', barcode: '00000309', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সেববুস ৭২*৯৫*৮"', barcode: '00000310', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সেববুস ৭২*৯৫*৯"', barcode: '00000311', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সেববুস ৯০*১২০*৯"', barcode: '00000313', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সেববুস ৯২*১২০*৮"১', barcode: '00000314', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ইতালি সেববুস ৬০*৭৫*৬"৪', barcode: '00000317', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সেববুস ৫৫*৭০*৬"৪', barcode: '00000318', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সেববুস ৬০*৮০*৬"৪', barcode: '00000319', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বি সুপার সেববুস ৫১*৬৫*৬"', barcode: '00000320', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বি সুপার সেববুস ৫১*৬০*৬"', barcode: '00000321', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সুপার সেববুস ৪০*৫০*৬', barcode: '00000322', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ সুপার সেববুস ৪০*৫০*৫.৫"', barcode: '00000323', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সেববুস ৩৬*৪৫*৫.৫"', barcode: '00000324', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সেববুস ৩১*৪০*৪\'\'', barcode: '00000326', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সেববুস ২৮*৩৫*৪"', barcode: '00000327', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৯০*১১২*৯" সেববুস', barcode: '00000868', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২/২২ সেববুশ ৯০*১১২*২৪০', barcode: '00001058', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ সেববুস ৭২*৯৫*৬"-৬ ষ্টিল', barcode: '00000842', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বি সুপার সেববুস ৫১*৬৫*৪"৪ সুতা', barcode: '00000739', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সেববুস ৪০*৫০*৪"৪', barcode: '00000325', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সেববুস স্টিল পাম্পের ৫১*৬৫*৪"১ সুতা', barcode: '00000738', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সেববুস স্টিল পাম্পের ৫১*৬৫*৫"', barcode: '00000990', unit: 'PC', category: 'সেববুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'টেপারবুস ১২০*১৫০ ওয়েলসেল ছাড়া', barcode: '00000372', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'টেপারবুস ১২০*১৫০ ওয়েলসেল ওয়ালা', barcode: '00000373', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালি ১০৫*১১০ টেপারবুস', barcode: '00000374', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ ইতালি বডিবুস ৯৫*১৪০ ডাবল ওয়েলসিল', barcode: '00000375', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৯৫.১২৫ টেপারবুস', barcode: '00000376', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বডিবুস ১২০*৯৫', barcode: '00000377', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালি বডিবুস ৭৫*১০০', barcode: '00000378', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বডিবুস ৭০*৯৫', barcode: '00000379', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ বি সুপার বডিবুস ৬৫*৮৫', barcode: '00000380', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ বি সুপার বডিবুস ৬০*৮০', barcode: '00000381', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সুপার বডিবুস ৬৯*৫০', barcode: '00000383', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০.৫ বডিবুস ৪৫*৬০', barcode: '00000384', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/১০ বডিবুস ৪০*৬০', barcode: '00000385', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/১০ বডিবুস ৩৫*৬০', barcode: '00000386', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৩৫*৫০ বডিবুস', barcode: '00000387', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '112*142 বডিবুস', barcode: '00000867', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৯৫.১২৫ টেপারবুস সেল সিস্টেম', barcode: '00000729', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বডিবুস ৫০*৭০', barcode: '00000382', unit: 'PC', category: 'বডিবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ ইতালি বডিবুস ৬০*৯০', barcode: '00000580', unit: 'PC', category: 'বডিবুস আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালি বডিবুস ৭৫*১০০ সিল ছাড়া', barcode: '00000578', unit: 'PC', category: 'বডিবুস আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ ইতালি বডিবুস ৯৫*১২০ সিল ছাড়া', barcode: '00000577', unit: 'PC', category: 'বডিবুস আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৭৫*১০১*১১১ টেপারবুস', barcode: '00001077', unit: 'PC', category: 'বডিবুস আন সাইজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১৬ ইতালি বেয়ারিং কবার ৯”', barcode: '00000254', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১৪ ইতালি বেয়ারিং কবার', barcode: '00000255', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১৪ নরমাল বেয়ারিং কবার', barcode: '00000256', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩০৮ নরমাল বেয়ারিং কবার', barcode: '00000260', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩০৭ নরমাল বেয়ারিং কবার', barcode: '00000261', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩০৯ নরমাল বেয়ারিং কবার', barcode: '00000259', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১০ নরমাল বেয়ারিং কবার', barcode: '00000258', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১২ নরমাল বেয়ারিং কবার', barcode: '00000257', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১৬ ইতালি বেয়ারিং কবার ১১”', barcode: '00000253', unit: 'PC', category: 'বেয়ারিং কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ ইতালী ডিক্স', barcode: '00000272', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ ইতালী ডিক্স', barcode: '00000273', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৫ ইতালী ডিক্স', barcode: '00000274', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালী ডিক্স', barcode: '00000275', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২/২২ নিউ মডেল ডিক্স', barcode: '00000924', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/১০ ইতালি ডিক্স', barcode: '00000843', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ নিউ মডেল ষ্টিল ডিক্স (৬৩১৯)', barcode: '00000948', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/২০ নিউ মডেল ডিক্স', barcode: '00000900', unit: 'PC', category: 'ডিক্স', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২০*৯৫ কোমার গেছকেট', barcode: '00000220', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালী কোমার গেছকেট', barcode: '00000221', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৪ সুপার কোমার গেছকেট', barcode: '00000222', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ গেছকেট', barcode: '00000227', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ সুতার গেছকেট', barcode: '00000228', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৬ গেছকেট', barcode: '00000229', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ সুতার গেছকেট', barcode: '00000230', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৫ গেছকেট', barcode: '00000231', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৫ সুতার গেছকেট', barcode: '00000232', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৪ গেছকেট', barcode: '00000233', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৪ সুতার গেছকেট', barcode: '00000234', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৩ গেছকেট', barcode: '00000235', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ গেছকেট', barcode: '00000236', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১০\'\' গেছকেট', barcode: '00000237', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৯.৫ গেছকেট', barcode: '00000238', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৮.৫ গেছকেট', barcode: '00000239', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৩/৪ গেছকেট', barcode: '00000240', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮" পাইপ গেছকেট', barcode: '00000242', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮" টেপার গেছকেট', barcode: '00000243', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮" সুতার গেছকেট', barcode: '00000244', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬" সুতার গেছকেট', barcode: '00000245', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১০/২০ গেছকেট', barcode: '00000225', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২" সুতার গেছকেট', barcode: '00000736', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৪ ইতালি সুতার গেছকেট', barcode: '00000748', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬" টেপার গেছকেট', barcode: '00000247', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬" পাইপ গেছকেট', barcode: '00000246', unit: 'PC', category: 'গেছকেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৭৫ বোরিং ১৪\'\' আউট', barcode: '00000328', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৯০ বোরিং ১৪\'\' আউট', barcode: '00000329', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৫ বোরিং ১৪\'\' আউট', barcode: '00000330', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৭৫ বোরিং ১২\'\' আউট', barcode: '00000331', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৭৫ বোরিং ১১\'\' আউট', barcode: '00000332', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৫ বোরিং ১২\'\' আউট', barcode: '00000334', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৫ বোরিং ১১\'\' আউট', barcode: '00000335', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৫ বোরিং ১০\'\' আউট', barcode: '00000336', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫৫ বোরিং ১১\'\' আউট', barcode: '00000337', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫৫ বোরিং ১০\'\' আউট', barcode: '00000338', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৪২ বোরিং ১০\'\' আউট', barcode: '00000339', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৩২ বোরিং ৬\'\' আউট', barcode: '00000341', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৩২ বোরিং ৮\'\' আউট', barcode: '00000342', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৩৮ বোরিং ৮\'\' আউট', barcode: '00000343', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১০ ইঞ্জিল কবলিং', barcode: '00000345', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১১ ইঞ্জিল কবলিং', barcode: '00000346', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৪২ বোরিং ৮.৫\'\' আউট', barcode: '00000817', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৩২ বোরিং ৫ আউট', barcode: '00000653', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৩৮ বোরিং ৫ আউট', barcode: '00000654', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৪২ বোরিং ১১ আউট', barcode: '00000583', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫৫ বোরিং ১০.৫ আউট', barcode: '00000655', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৭৫ বোরিং ১০\'\' আউট', barcode: '00000333', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৯৫ বোরিং ১৫\'\' আউট', barcode: '00001063', unit: 'PC', category: 'কবলিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৩৫.৫০.১০', barcode: '00000084', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৪০.৬০.১০', barcode: '00000086', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৪৫.৬০.১০', barcode: '00000087', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৫০.৬৯.১০ সুপার', barcode: '00000088', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৬৫.৮৫.১২', barcode: '00000089', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৭৫.১০০.১২', barcode: '00000090', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৯৫.১২০.১২', barcode: '00000091', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৭০.৯৫.১২', barcode: '00000092', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৬০.৮০.১২', barcode: '00000093', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৮০.১০৫.১২', barcode: '00000095', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৪৫.৭০.১০', barcode: '00000563', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল- ৭০.৯০.১২', barcode: '00000594', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৬৫.৮০.১০', barcode: '00000595', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসিল ১১০*৯৫*১২', barcode: '00000604', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসিল ১২০*১৪০*১২', barcode: '00000605', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসিল ৩৫.৪৫.০৮', barcode: '00000614', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৪০.৭২.১০', barcode: '00000615', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৬০.৮৫.১২', barcode: '00000616', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৭৫.৯৫.১২', barcode: '00000617', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৬৫.৯০.১২', barcode: '00000618', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসিল ১৩০.২*১১০.২*১.২', barcode: '00000747', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ১০.২*৭.৫*১.২ নতুন', barcode: '00000962', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসিল ৭৫*৯০*১২', barcode: '00000603', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ১০০.১২৫.১২', barcode: '00000096', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ১১০.১৩০.১২', barcode: '00000562', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৩৫.৬০.১০', barcode: '00000085', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৫০.৭০.১০', barcode: '00000094', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল ৬০.৯০.১২', barcode: '00000593', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ওয়েলসেল লাল ৯৫.১২০.১২', barcode: '00000596', unit: 'PC', category: 'ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বেয়ারিং ৬৩২০', barcode: '00000097', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বেয়ারিং ৬৩১৬', barcode: '00000098', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বেয়ারিং ৬৩১৪', barcode: '00000099', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বেয়ারিং ৬৩১২', barcode: '00000100', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বেয়ারিং ৬৩১০', barcode: '00000101', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বেয়ারিং ৬৩০৯', barcode: '00000102', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বেয়ারিং ৬৩০৮', barcode: '00000103', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বেয়ারিং ৬৩০৭', barcode: '00000104', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বেয়ারিং ৬৩১৯', barcode: '00000108', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বেয়ারিং ৬০০৭', barcode: '00000464', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩০৭ নতুন বেয়ারিং', barcode: '00000997', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বেয়ারিং ৬০৩৪', barcode: '00000106', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বেয়ারিং ৬০৩৬', barcode: '00000107', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বেয়ারিং FND ৬৩১৬', barcode: '00000683', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বেয়ারিং কেজি ৬৩১৬', barcode: '00000623', unit: 'PC', category: 'বেয়ারিং', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮\'\' ফুটবল', barcode: '00000211', unit: 'PC', category: 'ফুটবল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬\'\' ফুটবল', barcode: '00000213', unit: 'PC', category: 'ফুটবল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৭" ফুটবল লেদার', barcode: '00000216', unit: 'PC', category: 'ফুটবল লেদার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৯" ফুটবল লেদার', barcode: '00000218', unit: 'PC', category: 'ফুটবল লেদার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬" ফ্ল্যাঞ্জ', barcode: '00000204', unit: 'PC', category: 'ফ্ল্যাঞ্জ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮" ফ্ল্যাঞ্জ', barcode: '00000203', unit: 'PC', category: 'ফ্ল্যাঞ্জ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮" নিপেল', barcode: '00000197', unit: 'PC', category: 'নিপেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬" নিপেল', barcode: '00000198', unit: 'PC', category: 'নিপেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৯" নিপেল', barcode: '00000933', unit: 'PC', category: 'নিপেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'পি.ভি.সি হুইস পাইপ ১.৫\'\' এন.এস', barcode: '00000300', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'পি.ভি.সি হুইস পাইপ ২\'\' এন.এস', barcode: '00000301', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'পি.ভি.সি হুইস পাইপ ২.৫\'\' এন.এস', barcode: '00000302', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'পি.ভি.সি হুইস পাইপ ৩\'\' এন.এস (গ্রিন)', barcode: '00000303', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'পি.ভি.সি হুইস পাইপ ৬\'\' স্পেশাল', barcode: '00000304', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'পি.ভি.সি হুইস পাইপ ৮\'\'-৪০\' স্পেশাল', barcode: '00000305', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'পি.ভি.সি হুইস পাইপ ৫\'\' এস পি', barcode: '00000395', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ইউ. পি.ভি.সি ৬” ড্রেজার পাইপ', barcode: '00000548', unit: 'PC', category: '', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ইউ. পি.ভি.সি ৮” ড্রেজার পাইপ', barcode: '00000549', unit: 'PC', category: '', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'পি.ভি.সি হুইস পাইপ ৮\'\'-২০\' স্পেশাল', barcode: '00000639', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'পি.ভি.সি হুইস পাইপ ৮\'\'-২৫\' স্পেশাল', barcode: '00000640', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'পি.ভি.সি হুইস পাইপ ৮\'\'-৩০\' স্পেশাল', barcode: '00000693', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'পি.ভি.সি হুইস পাইপ ৩\'\' স্পেসাল (সাদা)', barcode: '00000793', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'পি.ভি.সি হুইস পাইপ ৬\'\'- ৩৫\' স্পেশাল', barcode: '00000862', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'পি.ভি.সি হুইস পাইপ ৬\'\'- ৪০\' স্পেশাল', barcode: '00000863', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ইউ. পি.ভি.সি ৭” ড্রেজার পাইপ', barcode: 'GEN000017', unit: 'PC', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'পি.ভি.সি হুইস পাইপ ৮\'\'-৩৫\' স্পেশাল', barcode: '00000943', unit: 'Feet', category: 'আর.এফ.এল পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ছোট গ্রীজ ক্যাপ', barcode: '00000058', unit: 'PC', category: 'গ্রীজ ক্যাপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বড় গ্রীজ ক্যাপ', barcode: '00000059', unit: 'PC', category: 'গ্রীজ ক্যাপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বড় গ্রীজ ক্যাপ মাথা', barcode: '00000440', unit: 'PC', category: 'গ্রীজ ক্যাপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বড় গ্রীজ ক্যাপ বাটি', barcode: '00000441', unit: 'PC', category: 'গ্রীজ ক্যাপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ছোট গ্রীজ ক্যাপ বাটি', barcode: '00000439', unit: 'PC', category: 'গ্রীজ ক্যাপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ছোট গ্রীজ ক্যাপ মাথা', barcode: '00000438', unit: 'PC', category: 'গ্রীজ ক্যাপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সাদা গ্রীজ', barcode: '00000671', unit: 'kg', category: 'গ্রীজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'সবুজ গ্রীজ', barcode: '00000111', unit: 'kg', category: 'গ্রীজ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮\'\' ব্যান্ডপাইপ বড় কম্পিলিট', barcode: '00000192', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮\'\' ব্যান্ডপাইপ ছোট কম্পিলিট', barcode: '00000193', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬\'\' ব্যান্ডপাইপ বড় কম্পিলিট', barcode: '00000194', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬\'\' ব্যান্ডপাইপ ছোট কম্পিলিট', barcode: '00000195', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫\'\' ব্যান্ডপাইপ বড়', barcode: '00000196', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬\'\' ব্যান্ডপাইপ বড় কম্পিলিট ছাড়া', barcode: '00000719', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮\'\' ব্যান্ডপাইপ ছোট কম্পিলিট ছাড়া', barcode: '00000746', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮\'\' ব্যান্ডপাইপ বড় কম্পিলিট ছাড়া', barcode: '00000718', unit: 'PC', category: 'ব্যান্ডপাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'এ্যারোলাট গাম', barcode: '00000248', unit: 'Set', category: 'গাম', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'হাতী গাম', barcode: '00000249', unit: 'Set', category: 'গাম', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'এক্সসেল গাম', barcode: '00000250', unit: 'Set', category: 'গাম', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'বি.এস.পি ঘাম', barcode: '00000621', unit: 'Set', category: 'গাম', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'ল্যাপক্স', barcode: '00000561', unit: 'Set', category: 'গাম', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ ইতালী ডিক্স প্লেট', barcode: '00000282', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৬ ইতালী ডিক্স প্লেট', barcode: '00000283', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১০/১৮ ইতালি ডিক্স চাপা', barcode: '00000281', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২/২২ ডিক্স প্লেট টেপার (হার্ড)', barcode: '00000926', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ স্টীল পাম্পের ভাজের প্লেট', barcode: '00000908', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৫ স্টীল পাম্পের ডিক্স প্লেট', barcode: '00000898', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ নিউ মডেল ডিক্স চাপা', barcode: '00000946', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ নিউ মডেল ডিক্স প্লেট', barcode: '00000934', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/২০ ইতালী ডিক্স সিলিপ হার্ড', barcode: '00000901', unit: 'PC', category: 'ডিক্স প্লেট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২০.৯৫ ওয়েলসেল কোমার কভার', barcode: '00000285', unit: 'PC', category: 'কোমার কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৭০.৯৫ ওয়েলসেল কোমার কভার', barcode: '00000287', unit: 'PC', category: 'কোমার কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৫.৮৫ ওয়েলসেল কোমার কভার', barcode: '00000288', unit: 'PC', category: 'কোমার কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৯.৫০ ওয়েলসেল কোমার কভার', barcode: '00000289', unit: 'PC', category: 'কোমার কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৭৫.১০০ ওয়েলসেল কোমার কভার', barcode: '00000286', unit: 'PC', category: 'কোমার কভার', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '২২\'\' বেইল', barcode: '00000388', unit: 'PC', category: 'টায়ার বেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '২০\'\' বেইল', barcode: '00000389', unit: 'PC', category: 'টায়ার বেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৮ \'\' বেইল', barcode: '00000390', unit: 'PC', category: 'টায়ার বেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৪\'\' বেইল ছোট', barcode: '00000392', unit: 'PC', category: 'টায়ার বেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৬\'\' বেইল', barcode: '00000391', unit: 'PC', category: 'টায়ার বেল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২০*৯৫*১২ যোগান', barcode: '00000396', unit: 'PC', category: 'যোগান ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৭৫*১০০*১২ যোগান', barcode: '00000397', unit: 'PC', category: 'যোগান ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৭০*৯৫*১২ যোগান', barcode: '00000398', unit: 'PC', category: 'যোগান ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৫*৮৫*১২ যোগান', barcode: '00000399', unit: 'PC', category: 'যোগান ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১১২*১৩২ যোগান', barcode: '00000951', unit: 'PC', category: 'যোগান ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৪৫*৬০*১০ যোগান', barcode: '00000403', unit: 'PC', category: 'যোগান ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫০*৬৯*১০ যোগান', barcode: '00000401', unit: 'PC', category: 'যোগান ওয়েলসিল', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '২০ মিলি সেকশন স্টিক নাট', barcode: '00000406', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৬ মিলি সেকশন স্টিক নাট', barcode: '00000408', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৩ মিলি সেকশন স্টিক নাট', barcode: '00000410', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৩ মিলি গেলান স্টিক নাট', barcode: '00000411', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৬ মিলি সেকশন স্টিক নাট (লম্বা)', barcode: '00000968', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৬ মিলি স্টিক (১০০ মিলি লম্বা)', barcode: '00001029', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '২০ মিলি স্টিক (১০০ মিলি লম্বা)', barcode: '00001030', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২ মিলি গেলান স্টিক নাট', barcode: '00000413', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১২ মিলি সেকশন স্টিক নাট', barcode: '00000412', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১৬ মিলি গেলান স্টিক নাট', barcode: '00000409', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '২০ মিলি গেলান স্টিক নাট', barcode: '00000407', unit: 'PC', category: 'স্টিক নাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/৬ ঢালাই সকেট', barcode: '00001026', unit: 'PC', category: 'ছকেট/ রেডুছাড়', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '১০/৮ ছকেট', barcode: '00000454', unit: 'PC', category: 'ছকেট/ রেডুছাড়', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/৬ কম্পিলিট ছকেট', barcode: '00000452', unit: 'PC', category: 'ছকেট/ রেডুছাড়', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/৬ সকেট', barcode: '00000453', unit: 'PC', category: 'ছকেট/ রেডুছাড়', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬\'\' পাইপ ১৬', barcode: '00000969', unit: 'PC', category: 'সট পাইপ', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'লায়লনবুস ১২০.৯৫.১২', barcode: '00000597', unit: 'PC', category: 'লায়লনবুস', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১৪ আকাটা সেব', barcode: '00000887', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১৬ আকাটা সেব', barcode: '00000888', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৪.৫" আকাটা বড় সেব', barcode: '00000892', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫" আকাটা বড় সেব', barcode: '00000893', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩০৭ আকাটা সেব', barcode: '00000896', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩০৮ আকাটা সেব', barcode: '00000885', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩০৮ স্টিল পাম্পের আকাটা সেব', barcode: '00000890', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩০৯ আকাটা সেব (৬/১০.৫)', barcode: '00000886', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১০ আকাটা সেব', barcode: '00000883', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১০ স্টিল পাম্পের আকাটা সেব', barcode: '00000891', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১২ আকাটা সেব', barcode: '00000884', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬৩১৯ আকাটা সেব', barcode: '00000889', unit: 'PC', category: 'সলিড শ্যাফট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: 'স্টীল পাম্পের স্ট্যান্ড ৬৩১২', barcode: '00000458', unit: 'PC', category: 'স্টীল পাম্পের স্ট্যান্ড', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১০.৫ গেলান ৪৫.৬০', barcode: '00000492', unit: 'PC', category: 'গেলান', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ গেলান ৫০.৬৯', barcode: '00000491', unit: 'PC', category: 'গেলান', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ গেলান ৫০.৬৯', barcode: '00000490', unit: 'PC', category: 'গেলান', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ গেলান বি সুপার ৬০.৮০', barcode: '00000489', unit: 'PC', category: 'গেলান', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৯.৫ গেলান ৩৫.৫০', barcode: '00000495', unit: 'PC', category: 'গেলান', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/৯.৫ গেলান ৪০.৬০', barcode: '00000493', unit: 'PC', category: 'গেলান', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৫/১০ ছোট কেলাম', barcode: '00000515', unit: 'PC', category: 'কেলাম', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৯\'\' কেলাম ওল্ড মডেল', barcode: '00000511', unit: 'PC', category: 'কেলাম', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১২ সুপার সেকশন কম্পিপিলিট', barcode: '00000526', unit: 'PC', category: 'কমপ্লিট সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ সুপার সেকশন কম্পিপিলিট', barcode: '00000525', unit: 'PC', category: 'কমপ্লিট সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮/১৮ ইতালি সেকশন ২০ কম্পিপিলিট', barcode: '00000529', unit: 'PC', category: 'কমপ্লিট সেকশন', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৮\'\' চেইন ঘাট', barcode: '00000634', unit: 'PC', category: 'চেইন ঘাট', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ ইতালী ষ্টীল বডি', barcode: '00001064', unit: 'PC', category: 'স্টিল বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৪ স্টিল প্লেট পাথর বডি', barcode: '00001004', unit: 'PC', category: 'স্টিল বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-    { name: '৬/১৫ স্টিল প্লেট বডি', barcode: '00000857', unit: 'PC', category: 'স্টিল বডি', sale_price: 0, wholesale_price: 0, cost: 0, stock: 0, alert_quantity: 0 },
-  ];
+  const brandSet = new Set();
+  const unitSet = new Set();
+  const categorySet = new Set();
+  const usedProductCodes = new Set();
 
-  if (productData.length) {
-    await prisma.product.createMany({ data: productData, skipDuplicates: true });
+  const products = productRows
+    .map((row, index) => {
+      const productCol = row.Product ?? row.product ?? "";
+      const categoryCol = normalizeText(row.Category ?? row.category ?? "");
+      const brandCol = normalizeText(row.Brand ?? row.brand ?? "");
+      const unitCol = normalizeText(row.Units ?? row.Unit ?? row.unit ?? "");
+      const sl = normalizeText(row["S.L"] ?? row["SL"] ?? "");
+
+      const extracted = extractProductNameAndCode(productCol, sl);
+      const name = normalizeText(extracted.name);
+      if (!name) return null;
+
+      const category = categoryCol || "";
+      const brand = brandCol || null;
+      const unit = unitCol || "PC";
+      const barcode = makeUniqueCode(extracted.code || sl || `AUTO${index + 1}`, usedProductCodes, "AUTO");
+
+      categorySet.add(category);
+      unitSet.add(unit);
+      if (brand) brandSet.add(brand);
+
+      return {
+        name,
+        description: null,
+        brand,
+        image: null,
+        unit,
+        sale_price: 0,
+        wholesale_price: 0,
+        cost: 0,
+        barcode,
+        category,
+        stock: 0,
+        alert_quantity: 0,
+        deleted_at: false,
+      };
+    })
+    .filter(Boolean);
+
+  for (const row of brandRows) {
+    const name = normalizeText(row.Name ?? row.name ?? "");
+    if (name) brandSet.add(name);
   }
 
-  console.log(`Products created: ${productData.length}`);
+  for (const row of unitRows) {
+    const name = normalizeText(row.Name ?? row.name ?? "");
+    if (name) unitSet.add(name);
+  }
 
+  const brands = [...brandSet].map((name) => ({ name, status: "active" }));
+  const units = [...unitSet].map((name) => ({ name, status: "active" }));
+  const categories = [...categorySet].map((name) => ({ name, status: "active" }));
+
+  if (brands.length) {
+    await prisma.brand.createMany({ data: brands, skipDuplicates: true });
+  }
+  if (units.length) {
+    await prisma.unit.createMany({ data: units, skipDuplicates: true });
+  }
+  if (categories.length) {
+    await prisma.productCategory.createMany({ data: categories, skipDuplicates: true });
+  }
+  if (products.length) {
+    await prisma.product.createMany({ data: products, skipDuplicates: true });
+  }
+
+  const usedMobiles = new Set();
+  const usedEmails = new Set();
+  const customers = customerRows
+    .map((row, index) => {
+      const name = normalizeText(row.name ?? row.Name ?? "");
+      if (!name) return null;
+
+      const mobile = extractMobile(row.phone ?? row.Phone ?? "", name, index, usedMobiles);
+
+      const emailRaw = normalizeText(row.email ?? row.Email ?? "").toLowerCase();
+      let email = emailRaw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw) ? emailRaw : null;
+      if (email) {
+        if (usedEmails.has(email)) email = null;
+        else usedEmails.add(email);
+      }
+
+      const address = normalizeText(row.address ?? row.Address ?? "") || null;
+      const combinedNumbers = [
+        normalizeText(row.total_purchase ?? row.totalPurchase ?? ""),
+        ...(Array.isArray(row.__extra) ? row.__extra.map((v) => normalizeText(v)) : []),
+        normalizeText(row.total_due ?? row.totalDue ?? ""),
+      ].filter(Boolean);
+      const { totalPurchase, totalDue } = splitPurchaseDue(combinedNumbers);
+
+      return {
+        name,
+        mobile,
+        email,
+        address,
+        total_purchase: totalPurchase,
+        total_due: totalDue,
+        deleted_at: false,
+      };
+    })
+    .filter(Boolean);
+
+  if (customers.length) {
+    await prisma.customer.createMany({ data: customers, skipDuplicates: true });
+  }
+
+  console.log(`Brands created: ${brands.length}`);
+  console.log(`Units created: ${units.length}`);
+  console.log(`Categories created: ${categories.length}`);
+  console.log(`Products created: ${products.length}`);
+  console.log(`Customers created: ${customers.length}`);
   console.log("Seed completed.");
   console.log(`Permission created: ${adminPermission.name} (#${adminPermission.id})`);
   console.log(`User created: ${adminUser.username} (${adminUser.email})`);
@@ -686,8 +463,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
-
-
-
-

@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { API_ROUTES } from '../../config';
+import SearchableSelect from "../common/SearchableSelect";
 
 export default function AssignUser() {
   const [entities, setEntities] = useState([]);
@@ -113,7 +114,7 @@ export default function AssignUser() {
       const statsData = await statsRes.json();
 
       // Handle paginated response
-      setEntities(entitiesData.data || []);
+      setEntities(entitiesData.data || entitiesData || []);
       setPagination(entitiesData.pagination || {
         currentPage: 1,
         totalPages: 1,
@@ -965,19 +966,12 @@ export default function AssignUser() {
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Select User
                         </label>
-                        <select
+                        <SearchableSelect
+                          options={users.map((user) => ({ value: user.id, label: user.name, key: user.id }))}
                           value={selectedUser}
                           onChange={(e) => setSelectedUser(e.target.value)}
-                          className="glass-input w-full px-3 py-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500/50 border border-gray-300/50"
                           required
-                        >
-                          <option value="">Choose a user...</option>
-                          {users.map((user) => (
-                            <option key={user.id} value={user.id}>
-                              {user.name || user.email} ({user.role}) - {user.email}
-                            </option>
-                          ))}
-                        </select>
+                        />
                         <p className="text-sm text-gray-500 mt-2">
                           {users.length} users available for assignment
                         </p>
