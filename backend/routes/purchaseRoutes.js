@@ -76,6 +76,7 @@ router.post("/", async (req, res) => {
       paidAmount = 0,
       paymentMethod = "cash",
       bankAccountId,
+      createdAt,
       reference, 
       items 
     } = req.body;
@@ -113,6 +114,16 @@ router.post("/", async (req, res) => {
 
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, actualDestinationType, actualDestinationId);
+
+    let parsedCreatedAt = null;
+    if (createdAt) {
+      parsedCreatedAt = new Date(createdAt);
+      if (Number.isNaN(parsedCreatedAt.getTime())) {
+        return res.status(400).json({
+          error: "Invalid createdAt date-time value"
+        });
+      }
+    }
 
     // Validate each item
     for (const item of items) {
@@ -240,6 +251,7 @@ router.post("/", async (req, res) => {
           tax: taxValue,
           paidAmount: paidAmountValue,
           shippingStatus: computedShippingStatus,
+          createdAt: parsedCreatedAt || undefined,
         },
       });
 

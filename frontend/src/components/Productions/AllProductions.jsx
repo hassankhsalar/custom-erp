@@ -499,48 +499,69 @@ const AllProductions = () => {
 
         {/* Main Content */}
         <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-3 mb-4">
-            <input
-              type="text"
-              value={filters.search}
-              onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-              placeholder="Search by reference..."
-              className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl"
-            />
-            <select
-              value={filters.factoryId}
-              onChange={(e) => setFilters((prev) => ({ ...prev, factoryId: e.target.value }))}
-              className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl"
-            >
-              <option value="">All Factories</option>
-              {factoryOptions.map((f) => (
-                <option key={f.id} value={f.id}>{f.name}</option>
-              ))}
-            </select>
-            <select
-              value={filters.status}
-              onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
-              className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl"
-            >
-              <option value="">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="running">Running</option>
-              <option value="production_done">Completed</option>
-            </select>
-            <input type="datetime-local" value={filters.dateFrom} onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl" />
-            <input type="datetime-local" value={filters.dateTo} onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl" />
-            <select value={filters.sortBy} onChange={(e) => setFilters((prev) => ({ ...prev, sortBy: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl">
-              <option value="createdAt">Sort by Created</option>
-              <option value="reference">Sort by Reference</option>
-              <option value="status">Sort by Status</option>
-              <option value="start_date">Sort by Start Date</option>
-              <option value="estimated_end_date">Sort by End Date</option>
-            </select>
-            <select value={filters.sortDir} onChange={(e) => setFilters((prev) => ({ ...prev, sortDir: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl">
-              <option value="desc">Desc</option>
-              <option value="asc">Asc</option>
-            </select>
-            <div className="md:col-span-7 flex justify-end gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+            <div>
+              <label className='text-sm text-gray-600'>Reference</label>
+              <input
+                type="text"
+                value={filters.search}
+                onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+                placeholder="Search by reference..."
+                className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl"
+              />
+            </div>
+            <div>
+              <label className='text-sm text-gray-600'>Factory</label>
+              <select
+                value={filters.factoryId}
+                onChange={(e) => setFilters((prev) => ({ ...prev, factoryId: e.target.value }))}
+                className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl"
+              >
+                <option value="">All Factories</option>
+                {factoryOptions.map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className='text-sm text-gray-600'>Status</label>
+              <select
+                value={filters.status}
+                onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+                className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl"
+              >
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="running">Running</option>
+                <option value="production_done">Completed</option>
+              </select>
+            </div>
+            <div>
+              <label className='text-sm text-gray-600'>Start Date</label>
+              <input type="datetime-local" value={filters.dateFrom} onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl" />
+            </div>
+            <div>
+              <label className='text-sm text-gray-600'>End Date</label>
+              <input type="datetime-local" value={filters.dateTo} onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl" />
+            </div>
+            <div>
+              <label className='text-sm text-gray-600'>Sort By</label>
+              <select value={filters.sortBy} onChange={(e) => setFilters((prev) => ({ ...prev, sortBy: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl">
+                <option value="createdAt">Sort by Created</option>
+                <option value="reference">Sort by Reference</option>
+                <option value="status">Sort by Status</option>
+                <option value="start_date">Sort by Start Date</option>
+                <option value="estimated_end_date">Sort by End Date</option>
+              </select>
+            </div>
+            <div>
+              <label className='text-sm text-gray-600'>Sort Direction</label>
+              <select value={filters.sortDir} onChange={(e) => setFilters((prev) => ({ ...prev, sortDir: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl">
+                <option value="desc">Desc</option>
+                <option value="asc">Asc</option>
+              </select>
+            </div>
+            <div className="md:col-span-4 flex justify-end gap-2">
               <button onClick={handleApplyFilters} className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 text-white">Apply</button>
               <button onClick={handleClearFilters} className="px-4 py-2 rounded-xl bg-white/80 border border-white/60 text-gray-700">Clear</button>
             </div>

@@ -6,6 +6,12 @@ import { TbCurrencyTaka } from "react-icons/tb";
 import { activeOnly } from "../../utils/softDelete";
 import { Html5Qrcode } from "html5-qrcode";
 
+const getNowDateTimeLocal = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+};
+
 export default function ShopPOS( props ) {
   const [shops, setShops] = useState([]);
   const [shopItems, setShopItems] = useState([]);
@@ -32,6 +38,7 @@ export default function ShopPOS( props ) {
   const [priceModalData, setPriceModalData] = useState({ index: null, currentPrice: 0 });
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState("");
+  const [saleDateTime, setSaleDateTime] = useState(getNowDateTimeLocal());
 
   const searchInputRef = useRef(null);
   const scannerRef = useRef(null);
@@ -522,6 +529,14 @@ export default function ShopPOS( props ) {
       return false;
     }
 
+    if (saleDateTime) {
+      const parsedSaleDateTime = new Date(saleDateTime);
+      if (Number.isNaN(parsedSaleDateTime.getTime())) {
+        alert("Please select a valid sale date and time.");
+        return false;
+      }
+    }
+
     if ( ( parseFloat(paidAmount).toFixed(2) - grandTotal.toFixed(2) ) > 0.01 ) {
       alert("⚠️ Paid amount cannot exceed grand total.");
       return false;
@@ -598,6 +613,7 @@ export default function ShopPOS( props ) {
       paymentType,
       bankAccountId: paymentType === "card" ? parseInt(bankAccountId) : null,
       cashRegisterId: paymentType === "cash" ? parseInt(cashRegisterId) : null,
+      createdAt: saleDateTime ? new Date(saleDateTime).toISOString() : null,
       discount: Math.max(0, parseFloat(discount) || 0),
       paidAmount: parseFloat(paidAmount) || 0,
       items: cartItems.map(item => ({
@@ -649,6 +665,7 @@ export default function ShopPOS( props ) {
         setShowSearchResults(false);
         setPaidAmount(0);
         setPaidAmountTouched(false);
+        setSaleDateTime(getNowDateTimeLocal());
         
         // Refresh shop items to get updated stock from server
         if (shopId) {
@@ -722,7 +739,7 @@ export default function ShopPOS( props ) {
                   <span className="text-blue-600"><Store size={42} /></span>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-800">Select Shop</h3>
+                  <h3 className="font-semibold text-gray-800">Select Shop and time</h3>
                   <p className="text-sm text-gray-500">Choose shop to sell from</p>
                 </div>
               </div>
@@ -743,6 +760,15 @@ export default function ShopPOS( props ) {
                   </option>
                 ))}
               </select>
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sale Date & Time</label>
+                <input
+                  type="datetime-local"
+                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                  value={saleDateTime}
+                  onChange={(e) => setSaleDateTime(e.target.value)}
+                />
+              </div>
             </div>
 
             {/* Customer Card */}

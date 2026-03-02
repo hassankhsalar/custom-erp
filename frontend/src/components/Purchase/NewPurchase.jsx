@@ -5,6 +5,12 @@ import { useLocation } from "react-router-dom";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
 import { activeOnly } from "../../utils/softDelete";
 
+const getNowDateTimeLocal = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+};
+
 export default function NewPurchase() {
   const location = useLocation();
   const requisitionOrder = location.state?.requisitionOrder || null;
@@ -37,6 +43,7 @@ export default function NewPurchase() {
     bankAccountId: "",
     grandTotal: 0,
     shippingStatus: "pending",
+    createdAt: getNowDateTimeLocal(),
     reference: `PUR-${Date.now()}`
   });
   const [bankAccounts, setBankAccounts] = useState([]);
@@ -372,9 +379,10 @@ const fetchBankAccounts = async () => {
           .map(m => ({
             type: "material",
             id: m.id,
+            barcode: m.barcode,
             name: m.name,
             selectedName: m.name,
-            unit: m.unit,
+            unit: m.unit || "unit",
             defaultUnit: m.unit || "unit",
             alternativeNames: m.alternative_names || [],
             alternativeUnits: toAltUnits(m.alternative_units),
@@ -392,6 +400,7 @@ const fetchBankAccounts = async () => {
           .map(p => ({
             type: "product",
             id: p.id,
+            barcode: p.barcode,
             name: p.name,
             selectedName: p.name,
             unit: p.unit || "unit",
@@ -581,6 +590,14 @@ const fetchBankAccounts = async () => {
 
     // Validate paid amount
     const paidAmount = parseFloat(form.paidAmount) || 0;
+    if (form.createdAt) {
+      const parsedPurchaseDateTime = new Date(form.createdAt);
+      if (Number.isNaN(parsedPurchaseDateTime.getTime())) {
+        setMessage("Please select a valid purchase date and time");
+        setLoading(false);
+        return;
+      }
+    }
     if ((paidAmount.toFixed(2) - financialBreakdown.grandTotal.toFixed(2)) > 0 && paidAmount > 0) {
       setMessage(`❌ Paid amount cannot exceed grand total` );
       setLoading(false);
@@ -612,6 +629,7 @@ const fetchBankAccounts = async () => {
         bankAccountId: form.bankAccountId ? parseInt(form.bankAccountId) : null,
         grandTotal: financialBreakdown.grandTotal,
         shippingStatus: form.shippingStatus,
+        createdAt: form.createdAt ? new Date(form.createdAt).toISOString() : null,
         reference: form.reference,
         items: validItems.map(item => ({
           itemType: item.itemType,
@@ -665,6 +683,7 @@ const fetchBankAccounts = async () => {
           bankAccountId: "",
           grandTotal: 0,
           shippingStatus: "pending",
+          createdAt: getNowDateTimeLocal(),
           reference: `PUR-${Date.now()}`
         });
         setDestinationType("store");
@@ -799,6 +818,16 @@ const fetchBankAccounts = async () => {
                     <option value="received">Received</option>
                   </select>
                 </div>
+                <div className="mt-4">
+                  <label className="block text-sm text-gray-600 mb-2">Purchase Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    name="createdAt"
+                    value={form.createdAt}
+                    onChange={handleFormChange}
+                    className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-400/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:focus:border-blue-400 transition-all duration-300"
+                  />
+                </div>
               </div>
             </div>
 
@@ -892,10 +921,10 @@ const fetchBankAccounts = async () => {
                   // If no search term, show all items when focused
                   const allItems = [
                     ...materials.slice(0, 10).map(m => ({
-                      type: "material", id: m.id, name: m.name, unit: m.unit, standardPrice: m.unit_cost, image: m.image || m.photo,
+                      type: "material", id: m.id, barcode: p.barcode || 'N/A', name: m.name, unit: m.unit, standardPrice: m.unit_cost, image: m.image || m.photo,
                     })),
                     ...products.slice(0, 10).map(p => ({
-                      type: "product", id: p.id, name: p.name, unit: "unit", standardPrice: p.cost, image: p.image || p.photo || p.thumbnail,
+                      type: "product", id: p.id, barcode: p.barcode || 'N/A', name: p.name, unit: p.unit || "unit", standardPrice: p.cost, image: p.image || p.photo || p.thumbnail,
                     }))
                   ];
                   setSearchState(prevState => ({ ...prevState, showSearchResults: true, filteredResults: allItems }));
@@ -915,7 +944,10 @@ const fetchBankAccounts = async () => {
                       type="text"
                       placeholder="Search materials or products by name/barcode..."
                       value={searchState.searchTerm}
-                      onChange={(e) => handleSearchInputChange(e.target.value)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        handleSearchInputChange(e.target.value)}
+                      }
                       className="w-full p-2 pr-12 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
                     />
                   </div>
@@ -937,7 +969,10 @@ const fetchBankAccounts = async () => {
                       return (
                         <div
                           key={resultItem.type + resultItem.id}
-                          onClick={() => handleItemSelect(resultItem)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleItemSelect(resultItem)
+                          }}
                           className="p-3 border-b border-gray-100/50 last:border-b-0 cursor-pointer transition-all duration-200 hover:bg-blue-50/50"
                         >
                           <div className="flex items-center gap-3">
@@ -965,6 +1000,7 @@ const fetchBankAccounts = async () => {
                               <h4 className="font-medium text-gray-800 truncate">
                                 {resultItem.name} ({resultItem.type})
                               </h4>
+                              <p>Code: {resultItem.barcode}</p>
                               <p className="text-sm text-gray-600 truncate">
                                 Unit Cost: ${resultItem.standardPrice.toFixed(2)} / {resultItem.unit}
                               </p>
@@ -1461,3 +1497,4 @@ const fetchBankAccounts = async () => {
     </div>
   );
 }
+

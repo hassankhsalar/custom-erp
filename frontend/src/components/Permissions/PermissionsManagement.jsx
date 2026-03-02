@@ -992,10 +992,10 @@ export default function PermissionsManagement() {
                                 </div>
                               </div>
                               <div className="min-w-0 flex-1">
-                                <span className="text-sm font-medium text-gray-700 truncate">
+                                {/* <span className="text-sm font-medium text-gray-700 truncate">
                                   {getShortPermissionLabel(permission)}
-                                </span>
-                                <div className="text-xs text-gray-500 truncate" title={formatPermissionDisplay(permission)}>
+                                </span> */}
+                                <div className="text-sm font-medium text-gray-700" title={formatPermissionDisplay(permission)}>
                                   {formatPermissionDisplay(permission)}
                                 </div>
                               </div>

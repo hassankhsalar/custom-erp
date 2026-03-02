@@ -350,7 +350,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
 // Create a new sale for shop (updated for products & materials)
 router.post("/", async (req, res) => {
   try {
-    const { shopId, customerId, paymentType, discount, items, bankAccountId, paidAmount, cashRegisterId } = req.body;
+    const { shopId, customerId, paymentType, discount, items, bankAccountId, paidAmount, cashRegisterId, createdAt } = req.body;
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, "shop", parseInt(shopId));
     await assertActivePlace(prisma, "shop", parseInt(shopId));
@@ -398,6 +398,14 @@ router.post("/", async (req, res) => {
     }
     if (normalizedPaymentType === "cash" && paid > 0 && !cashRegisterId) {
       return res.status(400).json({ error: "Cash register is required for cash payments" });
+    }
+
+    let parsedCreatedAt = null;
+    if (createdAt) {
+      parsedCreatedAt = new Date(createdAt);
+      if (Number.isNaN(parsedCreatedAt.getTime())) {
+        return res.status(400).json({ error: "Invalid createdAt date-time value" });
+      }
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -475,6 +483,7 @@ router.post("/", async (req, res) => {
           editOpenedAt: new Date(),
           bankAccountId: bankRecord ? bankRecord.id : null,
           bankName: bankRecord ? bankRecord.name : null,
+          createdAt: parsedCreatedAt || undefined,
         },
       });
 
