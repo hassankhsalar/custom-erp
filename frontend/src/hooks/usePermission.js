@@ -11,7 +11,7 @@ export const usePermission = () => {
     }
 
     // Admin has all permissions
-    if (currentUser.permission.name === 'admin' || currentUser.permission.name === 'superadmin' || requiredPermission === null ) {
+    if (currentUser.permission.name === 'admin' || currentUser.permission.name === 'superadmin' ) {
       return true;
     }
 

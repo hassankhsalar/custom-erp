@@ -1,4 +1,4 @@
-import { ArrowUpDown, ClipboardList, TrendingUp, DollarSign, Calendar, Store, User, Tag, CreditCard, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreVertical, Eye, Edit, Trash2, XCircle, Loader2, Search } from "lucide-react";
+import { ArrowUpDown, ClipboardList, TrendingUp, DollarSign, Calendar, Store, User, Tag, CreditCard, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreVertical, Eye, Edit, Trash2, XCircle, Loader2, Search, FileText } from "lucide-react";
 import { useState, useEffect } from "react";
 import { API_ROUTES } from '../../config';
 import { Link, useNavigate } from "react-router-dom";
@@ -11,7 +11,7 @@ export default function AllSales() {
   const { currentUser } = useAuth();
   const canViewEditRequests = hasPermission("sales_open_close");
   const canManageTransaction = hasPermission("sales_open_close");
-  const canEditSales = hasPermission(["sales_edit", "sales_edit_today", "sales_edit_any_day", "sales_update"]);
+  const canEditSales = hasPermission(["sales_edit"]);
   const canDeleteSales = hasPermission(["sales_delete", "sales_open_close"]);
   const canGrantEditAccess = hasPermission("sales_open_close");
   const [sales, setSales] = useState([]);
@@ -34,6 +34,7 @@ export default function AllSales() {
   const [lockActionLoading, setLockActionLoading] = useState(false);
   const [grantLoading, setGrantLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [printingSaleId, setPrintingSaleId] = useState(null);
   const [activeViewTab, setActiveViewTab] = useState("items");
   const [allUsers, setAllUsers] = useState([]);
   const [userSearchTerm, setUserSearchTerm] = useState("");
@@ -307,6 +308,151 @@ export default function AllSales() {
     const grandTotal = parseFloat(sale.grandTotal) || 0;
     const paidAmount = parseFloat(sale.paidAmount) || 0;
     return Math.max(0, grandTotal - paidAmount);
+  };
+
+  const escapeHtml = (value) =>
+    String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  const parseCompanyProfile = (raw) => {
+    if (!raw || raw.value === undefined || raw.value === null) return {};
+    if (typeof raw.value === "string") {
+      try {
+        return JSON.parse(raw.value);
+      } catch {
+        return {};
+      }
+    }
+    return typeof raw.value === "object" ? raw.value : {};
+  };
+
+  const handlePrintInvoice = async (sale) => {
+    const token = localStorage.getItem("token");
+    if (!token || !sale?.id) return;
+    setPrintingSaleId(sale.id);
+    try {
+      const [detailsRes, companyRes] = await Promise.all([
+        fetch(API_ROUTES.SHOP_SALES_DETAILS_BY_ID(sale.id), {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(API_ROUTES.BUSINESS_SETTINGS_BY_KEY("company_profile"), {
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => null),
+      ]);
+
+      if (!detailsRes.ok) throw new Error("Failed to load sale details for invoice");
+      const saleDetails = await detailsRes.json();
+      const companyRaw = companyRes && companyRes.ok ? await companyRes.json() : null;
+      const company = parseCompanyProfile(companyRaw);
+
+      const createdAt = saleDetails?.createdAt ? new Date(saleDetails.createdAt) : new Date();
+      const saleDate = Number.isNaN(createdAt.getTime()) ? "-" : createdAt.toLocaleDateString();
+      const saleTime = Number.isNaN(createdAt.getTime()) ? "-" : createdAt.toLocaleTimeString();
+      const customerName = saleDetails?.customer?.name || "Walk-in";
+      const customerMobile = saleDetails?.customer?.mobile || "-";
+
+      const subtotal = Number(saleDetails?.totalAmount || 0);
+      const discountAmount = Number(saleDetails?.discount || 0);
+      const taxAmount = Number(saleDetails?.tax || saleDetails?.taxAmount || 0);
+      const total = Number(
+        saleDetails?.grandTotal ?? Math.max(0, subtotal - discountAmount + taxAmount)
+      );
+      const totalPaid = Number(saleDetails?.paidAmount || 0);
+      const totalDue = Math.max(0, total - totalPaid);
+
+      const rows = (saleDetails?.saleItems || [])
+        .map((item) => {
+          const itemName = item?.product?.name || item?.material?.name || item?.selectedName || "-";
+          const barcode = item?.product?.barcode || item?.material?.barcode || "-";
+          const quantity = Number(item?.selectedQuantity ?? item?.quantity ?? 0);
+          const unitPrice = Number(item?.unitPrice || 0);
+          return `
+            <tr>
+              <td>${escapeHtml(itemName)}<div style="font-size:12px;color:#666;">${escapeHtml(barcode)}</div></td>
+              <td style="text-align:right;">${quantity.toFixed(2)}</td>
+              <td style="text-align:right;">${unitPrice.toFixed(2)}</td>
+              <td style="text-align:right;">${(quantity * unitPrice).toFixed(2)}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      const printWindow = window.open("", "_blank", "width=900,height=700");
+      if (!printWindow) throw new Error("Please allow popups to print invoice");
+
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Invoice ${escapeHtml(saleDetails?.reference || "")}</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+              .row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+              .muted { color: #666; }
+              .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }
+              .meta-box { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; background: #fafafa; }
+              .meta-title { font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 6px; text-transform: uppercase; }
+              table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+              th, td { border: 1px solid #ddd; padding: 8px; font-size: 13px; }
+              th { background: #f7f7f7; text-align: left; }
+              .summary { margin-top: 14px; width: 320px; margin-left: auto; }
+              .summary .row { border-bottom: 1px dashed #ddd; padding: 4px 0; }
+              .summary .total { font-weight: 700; font-size: 16px; border-bottom: 0; }
+            </style>
+          </head>
+          <body>
+            <h2 style="margin:0;">${escapeHtml(company?.companyName || company?.name || "Company")}</h2>
+            <div class="meta-grid">
+              <div class="meta-box">
+                <div class="meta-title">Company Details</div>
+                <div class="muted">${escapeHtml(company?.address || "-")}</div>
+                <div class="muted">${escapeHtml(company?.mobile || company?.phone || "-")}</div>
+              </div>
+              <div class="meta-box">
+                <div class="meta-title">Shop Details</div>
+                <div class="muted">${escapeHtml(saleDetails?.shop?.name || "-")}</div>
+                <div class="muted">${escapeHtml(saleDetails?.shop?.shop_keeper || "-")}</div>
+              </div>
+            </div>
+            <hr style="margin:14px 0;" />
+            <div class="row"><strong>Invoice No:</strong><span>${escapeHtml(saleDetails?.reference || "-")}</span></div>
+            <div class="row"><strong>Date:</strong><span>${escapeHtml(saleDate)}</span></div>
+            <div class="row"><strong>Time:</strong><span>${escapeHtml(saleTime)}</span></div>
+            <div class="row"><strong>Customer:</strong><span>${escapeHtml(customerName)}</span></div>
+            <div class="row"><strong>Mobile:</strong><span>${escapeHtml(customerMobile)}</span></div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th style="text-align:right;">Quantity</th>
+                  <th style="text-align:right;">Price</th>
+                  <th style="text-align:right;">Amount</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+            <div class="summary">
+              <div class="row"><span>Tax</span><span>${taxAmount.toFixed(2)}</span></div>
+              <div class="row"><span>Discount</span><span>${discountAmount.toFixed(2)}</span></div>
+              <div class="row"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
+              <div class="row"><span>Total</span><span>${total.toFixed(2)}</span></div>
+              <div class="row"><span>Total Paid</span><span>${totalPaid.toFixed(2)}</span></div>
+              <div class="row total"><span>Total Due</span><span>${totalDue.toFixed(2)}</span></div>
+            </div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+    } catch (err) {
+      alert(err.message || "Failed to print invoice");
+    } finally {
+      setPrintingSaleId(null);
+    }
   };
 
   const handleView = async (sale) => {
@@ -883,9 +1029,12 @@ export default function AllSales() {
                 const isEditGrantedToCurrentUser = Number(sale?.editGrantedToUserId || 0) === currentUserId;
                 const openedDate = sale?.editOpenedAt ? Date.parse(sale?.editOpenedAt) : null;
                 const availableMinuts = sale?.editAccessDurationMinutes;
+                const canEditOnlyToday = hasPermission("sales_edit_today");
+                const saleCreationDate = sale?.createdAt ? Date.parse(sale?.createdAt) : null;
+                const canEditSalesToday = canEditOnlyToday && saleCreationDate && saleCreationDate > Date.now() - 24 * 60 * 60 * 1000;
                 let isTimeValid = openedDate && availableMinuts && Date.now() - openedDate < availableMinuts * 60 * 1000;
                 if( !availableMinuts ) isTimeValid = true;
-                const canEditThisSale = canEditSales || (isEditGrantedToCurrentUser && isTimeValid);
+                const canEditThisSale = canEditSales || (isEditGrantedToCurrentUser && isTimeValid) || canEditSalesToday;
                 return (
                   <tr
                     key={item.id}
@@ -897,12 +1046,27 @@ export default function AllSales() {
                       <td key={key} className="p-4">
                         {key === 'actions' ? (
                           <div className="relative dropdown-container">
-                            <button
-                              onClick={() => setActiveDropdown(activeDropdown === item.id ? null : item.id)}
-                              className="p-2 hover:bg-gray-100 rounded-lg transition"
-                            >
-                              <MoreVertical size={18} className="text-gray-600" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => setActiveDropdown(activeDropdown === item.id ? null : item.id)}
+                                className="p-2 hover:bg-gray-100 rounded-lg transition"
+                                title="More Actions"
+                              >
+                                <MoreVertical size={18} className="text-gray-600" />
+                              </button>
+                              <button
+                                onClick={() => handlePrintInvoice(sale)}
+                                disabled={printingSaleId === sale.id}
+                                className="p-2 hover:bg-emerald-50 rounded-lg transition disabled:opacity-50"
+                                title="Print Invoice"
+                              >
+                                {printingSaleId === sale.id ? (
+                                  <Loader2 size={18} className="text-emerald-600 animate-spin" />
+                                ) : (
+                                  <FileText size={18} className="text-emerald-600" />
+                                )}
+                              </button>
+                            </div>
 
                             {activeDropdown === item.id && (
                               <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-10">

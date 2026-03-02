@@ -42,7 +42,7 @@ const getRequesterAccessContext = async (userId) => {
   const permissionList = Array.isArray(user?.permission?.permissions) ? user.permission.permissions : [];
   const isAdmin = isAdminPermission(permissionName);
   const canSalesOpenClose = isAdmin || permissionList.includes("sales_open_close");
-  const canEditAnyDay = isAdmin || permissionList.includes("sales_edit_any_day");
+  const canEditAnyDay = isAdmin || permissionList.includes("sales_edit");
   const canEditToday = isAdmin || permissionList.includes("sales_edit_today") || permissionList.includes("sales_edit");
   const canGrantSaleEdit = canSalesOpenClose || isAdmin;
 
@@ -61,13 +61,12 @@ const getRequesterAccessContext = async (userId) => {
 const canEditSaleForUser = (sale, requesterId, access) => {
   if (!sale || !access) return false;
 
-  const transactionClosed = (sale.transactionStatus || "open") === "closed";
-  if (transactionClosed && !access.isAdmin && !access.canSalesOpenClose) {
-    return false;
-  }
+  // const transactionClosed = (sale.transactionStatus || "open") === "closed";
+  // if (transactionClosed && !access.isAdmin && !access.canSalesOpenClose) {
+  //   return false;
+  // }
 
   const isTodaySale = isSameCalendarDay(new Date(sale.createdAt), new Date());
-  const isCreator = Number(sale.createdById || 0) === Number(requesterId || 0);
   const grantState = getEditGrantStateForUser(sale, requesterId);
   const hasSaleGrant = grantState.allowed;
   const isEditOpen = String(sale.editStatus || "closed").toLowerCase() === "open";
@@ -90,12 +89,16 @@ const canEditSaleForUser = (sale, requesterId, access) => {
 
   if (access.isAdmin || access.canSalesOpenClose || access.canEditAnyDay) return true;
   if (hasSaleGrant) return true;
-  if (isTodaySale && (access.canEditToday || isCreator)) return true;
+  if (isTodaySale && (access.canEditToday)) return true;
 
   return false;
 };
 
 const mapSaleWithPermissions = (sale, requesterId, access) => {
+
+
+
+
   const canEdit = canEditSaleForUser(sale, requesterId, access);
   const canDelete = canEdit;
   const canCloseTransaction = access?.isAdmin || access?.canSalesOpenClose;

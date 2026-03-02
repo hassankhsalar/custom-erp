@@ -349,7 +349,7 @@ export default function ShopPOS( props ) {
       const salePrice = item.sale_price || 0;
       if (salePrice <= 0) {
         alert(`${item.name} has no sale price set.`);
-        return;
+        // return;
       }
       
       const newItem = {

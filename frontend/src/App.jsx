@@ -110,6 +110,7 @@ import PermissionsManagement from "./components/Permissions/PermissionsManagemen
 import NewRequisition from "./components/Requisition/NewRequisition";
 import RequisitionList from "./components/Requisition/RequisitionList";
 import RequisitionView from "./components/Requisition/RequisitionView";
+import Unauthorized from "./components/Unauthorized";
 import { API_ROUTES } from "./config";
 import { SOCKET_BASE_URL } from "./config";
 import { io } from "socket.io-client";
@@ -121,6 +122,7 @@ import StoreInventory from "./components/Stores/StoreInventory";
 import ShopInventory from "./components/Shop/ShopInventory";
 import EditShop from "./components/Shop/EditShop";
 import { AuthContext, useAuth } from "./context/AuthContext";
+
 
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("token"));
@@ -219,13 +221,15 @@ const PermissionRoute = ({ requiredPermission }) => {
   const { loading: authLoading } = useAuth();
 
   if (loading || authLoading) {
-    return <div>Loading permissions...</div>; // Or a spinner component
+    return <div className="w-full h-full flex items-center justify-center">Loading permissions...</div>;
   }
 
-  if (hasPermission(requiredPermission)) {
+  const requiredPermissionsArray = Array.isArray(requiredPermission) ? requiredPermission : [requiredPermission];
+
+  if (hasPermission(requiredPermissionsArray)) {
     return <Outlet />;
   } else {
-    return <Navigate to="/dashboard" replace />; // Redirect to dashboard if unauthorized
+    return <Unauthorized />;
   }
 };
 
@@ -344,24 +348,17 @@ function App() {
         {/* Protected routes with layout */}
         <Route element={<PrivateRoute />}>
           <Route element={<AuthenticatedLayout />}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            {/* New Routes */}
-            <Route element={<PermissionRoute requiredPermission="product_read" />}>
-              <Route path="/products/all" element={<AllProducts />} />
+            <Route element={<PermissionRoute requiredPermission="dashboard_read" />}>
+              <Route path="/dashboard" element={<Dashboard />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission="product_create" />}>
-              <Route path="/products/create" element={<CreateProduct />} />
-            </Route>
-            <Route element={<PermissionRoute requiredPermission="product_update" />}>
-              <Route path="/products/edit/:id" element={<EditProduct />} />
-            </Route>
+
             <Route element={<PermissionRoute requiredPermission="sales_create" />}>
               <Route path="/sale/pos" element={<POS />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission="sales_read" />}>
+            <Route element={<PermissionRoute requiredPermission={['sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_add_payment' ]} />}>
               <Route path="/sale/all" element={<AllSales />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission="sales_read" />}>
+            <Route element={<PermissionRoute requiredPermission={['sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_add_payment' ]} />}>
               <Route path="/sale/edit/:id" element={<EditSale />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="sales_open_close" />}>
@@ -373,21 +370,32 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="sales_return_create" />}>
               <Route path="/sale/return" element={<SaleReturn />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission="sales_return_read" />}>
+            <Route element={<PermissionRoute requiredPermission={[ 'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read']} />}>
               <Route path="/sale/allreturns" element={<AllReturns />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission="sales_read" />}>
+            <Route element={<PermissionRoute requiredPermission={['sales_warranty' ]} />}>
               <Route path="/sale/warranty" element={<WarrantyList />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission="customer_read" />}>
+            <Route element={<PermissionRoute requiredPermission={['customer_read', 'customer_create', 'customer_edit', 'customer_delete']} />}>
               <Route path="/customers/all" element={<AllCustomers />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="customer_create" />}>
               <Route path="/customers/add" element={<AddCustomer />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission="customer_update" />}>
+            <Route element={<PermissionRoute requiredPermission={["customer_edit"]} />}>
               <Route path="/customers/edit/:id" element={<AddCustomer />} />
             </Route>
+
+            <Route element={<PermissionRoute requiredPermission="product_read" />}>
+              <Route path="/products/all" element={<AllProducts />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="product_create" />}>
+              <Route path="/products/create" element={<CreateProduct />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="product_update" />}>
+              <Route path="/products/edit/:id" element={<EditProduct />} />
+            </Route>
+
             <Route element={<PermissionRoute requiredPermission="material_read" />}>
               <Route path="/materials/all" element={<AllMaterials />} />
             </Route>
@@ -403,6 +411,8 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="repairs_create" />}>
               <Route path="/materials/recover" element={<RecoverMaterials />} />
             </Route>
+
+
             <Route element={<PermissionRoute requiredPermission="production_read" />}>
               <Route path="/productions/all" element={<AllProductions />} />
             </Route>
@@ -412,6 +422,7 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="production_edit" />}>
               <Route path="/productions/edit/:id" element={<EditProduction />} />
             </Route>
+
             <Route element={<PermissionRoute requiredPermission="purchases_read" />}>
               <Route path="/purchase/all" element={<AllPurchase />} />
             </Route>
@@ -436,6 +447,7 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="supplier_create" />}>
               <Route path="/purchase/add-supplier" element={<AddSupplier />} />
             </Route>
+            
             <Route element={<PermissionRoute requiredPermission="factory_read" />}>
               <Route path="/factories/all" element={<AllFactory />} />
             </Route>

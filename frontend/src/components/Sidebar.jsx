@@ -84,7 +84,7 @@ const Sidebar = () => {
       color: 'from-blue-500 to-cyan-500',
       bgColor: 'bg-gradient-to-r from-blue-50 to-blue-100/50',
       textColor: 'text-blue-700',
-      permissionKey: null,
+      permissionKey: ['dashboard_read'],
     },
     {
       name: 'Sale',
@@ -92,16 +92,16 @@ const Sidebar = () => {
       color: 'from-emerald-500 to-green-500',
       bgColor: 'bg-gradient-to-r from-emerald-50 to-green-100/50',
       textColor: 'text-emerald-700',
-      permissionKey: ['sales_create', 'sales_read'],
+      permissionKey: ['sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_add_payment', 'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read', 'customer_read', 'customer_create', 'customer_edit', 'customer_delete'],
       subItems: [
         { name: 'POS', path: '/sale/pos', icon: <CreditCard size={16} />, permissionKey: 'sales_create' },
-        { name: 'All Sales', path: '/sale/all', icon: <FileText size={16} />, permissionKey: 'sales_read' },
+        { name: 'All Sales', path: '/sale/all', icon: <FileText size={16} />, permissionKey: ['sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_add_payment' ] },
         { name: 'Edit Requests', path: '/sale/edit-requests', icon: <ClipboardList size={16} />, permissionKey: 'sales_open_close' },
         { name: 'Create Sale', path: '/sale/create', icon: <ShoppingCart size={16} />, permissionKey: 'sales_create' },
-        { name: 'Sale Return', path: '/sale/return', icon: <ClipboardList size={16} />, permissionKey: ['sales_return_create', 'sales_create'] },
-        { name: 'All Sale Returns', path: '/sale/allreturns', icon: <FileText size={16} />, permissionKey: ['sales_return_read', 'sales_read'] },
-        { name: 'Warranty', path: '/sale/warranty', icon: <Shield size={16} />, permissionKey: ['sales_read'] },
-        { name: 'Customers', path: '/customers/all', icon: <Users size={16} />, permissionKey: ['customer_read', 'customer_create'] }
+        { name: 'Sale Return', path: '/sale/return', icon: <ClipboardList size={16} />, permissionKey: ['sales_return_create'] },
+        { name: 'All Sale Returns', path: '/sale/allreturns', icon: <FileText size={16} />, permissionKey: [ 'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read'] },
+        { name: 'Warranty', path: '/sale/warranty', icon: <Shield size={16} />, permissionKey: ['sales_warranty' ] },
+        { name: 'Customers', path: '/customers/all', icon: <Users size={16} />, permissionKey: ['customer_read', 'customer_create', 'customer_edit', 'customer_delete'] }
       ]
     },
     {
@@ -478,29 +478,33 @@ const Sidebar = () => {
     {!isCollapsed && (
       <div className="flex-shrink-0 p-4 pt-0">
         {/* Quick Actions */}
-        <div className="mt-2 p-3 rounded-xl bg-gradient-to-r from-blue-50/50 to-blue-100/30 border border-blue-200/50">
-          <p className="text-xs font-medium text-blue-700 mb-2">Quick Actions</p>
-          <div className="flex gap-2">
-            {hasPermission('sales_report') && (
-              <Link to="/report/best-selling" className="flex-1">
-                <button className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium hover:from-blue-600 hover:to-blue-700 transition-all hover:shadow-md">
-                  Sales
-                </button>
-              </Link>
-            )}
-            {hasPermission('purchase_create') && (
-              <Link to="/purchase/new" className="flex-1">
-                <button className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-medium hover:from-emerald-600 hover:to-green-700 transition-all hover:shadow-md">
-                  Add Stock
-                </button>
-              </Link>
-            )}
-          </div>
-        </div>
+        {
+          hasPermission(['sales_report', 'purchase_create']) && (
+            <div className="mt-2 p-3 rounded-xl bg-gradient-to-r from-blue-50/50 to-blue-100/30 border border-blue-200/50">
+              <p className="text-xs font-medium text-blue-700 mb-2">Quick Actions</p>
+              <div className="flex gap-2">
+                {hasPermission('sales_report') && (
+                  <Link to="/report/best-selling" className="flex-1">
+                    <button className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 text-white text-xs font-medium hover:from-blue-600 hover:to-blue-700 transition-all hover:shadow-md">
+                      Sales
+                    </button>
+                  </Link>
+                )}
+                {hasPermission('purchase_create') && (
+                  <Link to="/purchase/new" className="flex-1">
+                    <button className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-medium hover:from-emerald-600 hover:to-green-700 transition-all hover:shadow-md">
+                      Add Stock
+                    </button>
+                  </Link>
+                )}
+              </div>
+            </div>
+          )
+        }
 
         {/* Footer Stats */}
         <div className="mt-1 pt-1 border-t border-gray-200/50">
-          {canViewActiveUsers ? (
+          {canViewActiveUsers && (
             <Link
               to="/users/all?mode=active"
               className="flex items-center justify-between p-3 mb-2 rounded-xl bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200/50 hover:shadow-md transition-all"
@@ -511,14 +515,6 @@ const Sidebar = () => {
                 <p className="text-lg font-bold text-green-600">{activeUsersCount}</p>
               </div>
             </Link>
-          ) : (
-            <div className="flex items-center justify-between p-3 mb-2 rounded-xl bg-gradient-to-br from-green-50 to-green-100/30 border border-green-200/50">
-              <p className="text-xs text-gray-600">Active Users</p>
-              <div className="flex items-center gap-1">
-                <div className='h-2 w-2 rounded-full bg-green-600'></div>
-                <p className="text-lg font-bold text-green-600">0</p>
-              </div>
-            </div>
           )}
           {!isCollapsed && (
           <div className="flex items-center justify-between hidden sm:hidden md:flex md:justify-center">

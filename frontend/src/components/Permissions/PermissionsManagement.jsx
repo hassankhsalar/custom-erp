@@ -123,8 +123,9 @@ export default function PermissionsManagement() {
     'production_create', 'production_edit', 'production_delete', 'production_read', 'production_change_status', 
 
     // Add sales permissions
-    'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_edit_any_day', 'sales_open_close', 'sales_add_payment',
+    'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today',  'sales_open_close', 'sales_add_payment',
     'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read',
+    'sales_warranty',
 
     // Add transfer permissions
     'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive', 'transfer_return',
@@ -158,7 +159,7 @@ export default function PermissionsManagement() {
     'role_create', 'role_edit', 'role_delete', 'role_read',
 
     // Add customer permissions
-    'customer_read', 'customer_create', 'customer_edit', 'customer_update', 'customer_delete',
+    'customer_read', 'customer_create', 'customer_edit', 'customer_delete',
 
     // Add supplier permissions
     'supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete',
@@ -298,7 +299,7 @@ export default function PermissionsManagement() {
       name: 'Sales',
       icon: <Receipt size={18} className="text-emerald-500" />,
       permissions: [
-        'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_edit_any_day', 'sales_open_close', 'sales_add_payment'
+        'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_add_payment', 'sales_warranty'
       ]
     },
     // Sales Return Management
@@ -369,7 +370,7 @@ export default function PermissionsManagement() {
       key: 'customer',
       name: 'Customer',
       icon: <UserCircle size={18} className="text-blue-500" />,
-      permissions: ['customer_read', 'customer_create', 'customer_edit', 'customer_update', 'customer_delete']
+      permissions: ['customer_read', 'customer_create', 'customer_edit', 'customer_delete']
     },
     // Supplier Management
     {
@@ -433,7 +434,7 @@ export default function PermissionsManagement() {
       key: 'dashboard',
       name: 'Dashboard',
       icon: <LayoutDashboard size={18} className="text-blue-500" />,
-      permissions: ['view']
+      permissions: ['dashboard_read']
     }
   ];
 
