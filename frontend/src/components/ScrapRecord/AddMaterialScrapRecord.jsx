@@ -430,7 +430,7 @@ const AddMaterialScrapRecord = () => {
       );
 
       alert("Material scrap record created successfully!");
-      navigate("/materialscraprecord");
+      navigate("/damage-record");
     } catch (error) {
       console.error("Error creating material scrap record:", error);
       alert(
@@ -453,10 +453,10 @@ const AddMaterialScrapRecord = () => {
           "Are you sure you want to cancel? All unsaved changes will be lost.",
         )
       ) {
-        navigate("/materialscraprecord");
+        navigate("/damage-record");
       }
     } else {
-      navigate("/materialscraprecord");
+      navigate("/damage-record");
     }
   };
 

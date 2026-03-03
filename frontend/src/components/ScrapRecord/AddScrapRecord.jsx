@@ -353,7 +353,7 @@ const AddScrapRecord = () => {
       });
 
       alert('Scrap record created successfully!');
-      navigate('/scraprecord');
+      navigate('/damage-record');
     } catch (error) {
       console.error('Error creating scrap record:', error);
       if (error.response?.status === 401) {
@@ -371,10 +371,10 @@ const AddScrapRecord = () => {
   const handleCancel = () => {
     if (scrapProducts.length > 0 || formData.fromBranchId || formData.reason || formData.note) {
       if (window.confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
-        navigate('/scraprecord');
+        navigate('/damage-record');
       }
     } else {
-      navigate('/scraprecord');
+      navigate('/damage-record');
     }
   };
 

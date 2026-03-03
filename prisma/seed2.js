@@ -627,7 +627,7 @@ async function main() {
   }
 
   console.log('Seeding sales (1000000)...');
-  for (let i = 0; i < 1000; i += 1) {
+  for (let i = 0; i < 10000; i += 1) {
     const shop = pick(shops);
     const itemsCount = randInt(1, 3);
     const saleItems = [];

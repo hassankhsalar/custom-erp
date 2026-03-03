@@ -94,26 +94,27 @@ export default function PermissionsManagement() {
   const allPermissions = [
     // Product and material management permissions
     'material_create', 'material_read', 'material_edit', 'material_delete',
-    'product_read', 'product_create', 'product_edit', 'product_update', 'product_delete',
+    'product_read', 'product_create', 'product_edit', 'product_delete',
     'unit_read', 'unit_create', 'unit_edit', 'unit_delete',
     'brand_read', 'brand_create', 'brand_edit', 'brand_delete',
     'product_category_read', 'product_category_create', 'product_category_edit', 'product_category_delete',
 
     // Store factory, shop management permissions
-    'factory_create', 'factory_edit', 'factory_delete', 'factory_read',
-    'store_create', 'store_edit', 'store_delete', 'store_read',
-    'shop_create', 'shop_edit', 'shop_delete', 'shop_read',
-    'inventory_adjustment_create', 'inventory_adjustment_read',
+    'factory_create', 'factory_edit', 'factory_delete', 'factory_read', 'factory_inventory_adjustment_create', 'factory_inventory_adjustment_read',
+    'store_create', 'store_edit', 'store_delete', 'store_read', 'store_inventory_adjustment_create', 'store_inventory_adjustment_read',
+    'shop_create', 'shop_edit', 'shop_delete', 'shop_read', 'shop_inventory_adjustment_create', 'shop_inventory_adjustment_read',
+    
 
     // Add cash register and bank account permissions
     'cash_register_read', 'cash_register_create', 'cash_register_edit', 'cash_register_delete',
-    'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit',
+    'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit', 'cash_register_daily_record',
     'bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete',
     'bank_account_deposit', 'bank_account_withdraw',
 
     // Add account permissions
     'account_read', 'account_create', 'account_edit', 'account_delete',
-    'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement', 'account_balance',
+    'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement',
+    'general_ledger_report', 'balance_sheet_report',
 
     // Add purchase permissions
     'purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment',
@@ -131,32 +132,29 @@ export default function PermissionsManagement() {
     'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive', 'transfer_return',
 
     // Add Wastage/Damage permissions
-    'damage_create', 'damage_edit', 'damage_delete', 'damage_read',
+    'damage_create', 'damage_read', 'damage_edit', 'damage_delete', 'damage_return_create', 'damage_return_read', 'damage_return_edit', 'damage_return_delete',
 
     // Add Repair permissions
-    'repairs_create', 'repairs_edit', 'repairs_delete', 'repairs_read',
+    'repairs_create', 'repairs_read', 'repairs_edit', 'repairs_delete', 
 
     // Add Expense permissions
-    'expenses_create', 'expenses_edit', 'expenses_delete', 'expenses_read',
+    'expenses_create', 'expenses_edit', 'expenses_delete', 'expenses_read', 'expense_category_manage',
 
     // Add Salary and HRM permissions
     'salary_create', 'salary_edit', 'salary_delete', 'salary_read',
-    'leave_approve', 'leave_approve_all', 'leave_read', 'leave_request_create', 'leave_request_edit', 'leave_request_delete',
-    'holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read', 'holiday_manage',
-    'leave_category_manage', 'payroll_manage', 'approve_salary', 'approve_clock_in_out', 'add_salary', 'edit_salary',
-    'hrm_read', 'hrm_employee_manage', 'clock_in_out_manage',
+    'leave_approve', 'leave_read', 'leave_request_create', 'leave_request_edit', 'leave_request_delete',
+    'holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read',
+    'leave_category_manage', 'payroll_manage', 'approve_salary', 'approve_clock_in_out',
+    'hrm_employee_manage', 'clock_in_out_manage',
     
     // Add Report permissions
-    'general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report',
-    'sales_report', 'purchases_report', 'stock_report', 'transfer_report',
-    'profit_loss_report', 'purchase_sales_report', 'customer_report', 'supplier_report',
-    'best_selling_product_report', 'worst_selling_product_report', 'profit_calender_report', 'production_report', 'wastage_report',
+    'sales_report', 'purchases_report', 'production_report', 'wastage_report', 'trial_balance_report', 'cash_and_bank_report', 'stock_report', 'daily_stock_report', 'transfer_report', 'purchase_sales_report', 'customer_report', 'supplier_report', 'best_selling_report',
 
     // Add user management permissions
-    'user_create', 'user_edit', 'user_delete', 'user_read', 'user_activate_deactivate', 'user_logout', 'user_associate_create', 'user_activity_log_read',
+    'user_create', 'user_edit', 'user_delete', 'user_read', 'user_activate_deactivate', 'user_logout', 'user_associate_create',
 
     // Add role and permission management permissions
-    'role_create', 'role_edit', 'role_delete', 'role_read',
+    'role_create', 'role_edit', 'role_delete', 'role_read', 'role_assign',
 
     // Add customer permissions
     'customer_read', 'customer_create', 'customer_edit', 'customer_delete',
@@ -165,14 +163,15 @@ export default function PermissionsManagement() {
     'supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete',
 
     // Requisition permissions
-    'requisition_create', 'requisition_read', 'requisition_update',
+    'requisition_create', 'requisition_read', 'requisition_update', 'requisition_delete', 'requisition_approve', 'production_order_read', 'transfer_order_read', 'purchase_order_read',
 
     // Notification permissions
     'notification_read',
 
     // System Management
-    'general_settings_edit', 'company_settings_edit', 
+    'general_settings', 'company_settings', 
     'data_import', 'data_export',
+    'printer_settings', 'print_label', 'unit_manage', 'category_manage', 'brand_manage', 'activity_log'
   ];
 
   // Group permissions by category for better organization in UI - SEPARATE CATEGORIES
@@ -189,7 +188,7 @@ export default function PermissionsManagement() {
       key: 'product',
       name: 'Product',
       icon: <Tag size={18} className="text-purple-500" />,
-      permissions: ['product_read', 'product_create', 'product_edit', 'product_update', 'product_delete']
+      permissions: ['product_read', 'product_create', 'product_edit', 'product_delete']
     },
     // Unit Management
     {
@@ -217,28 +216,21 @@ export default function PermissionsManagement() {
       key: 'factory',
       name: 'Factory',
       icon: <Factory size={18} className="text-cyan-500" />,
-      permissions: ['factory_create', 'factory_edit', 'factory_delete', 'factory_read']
+      permissions: ['factory_create', 'factory_edit', 'factory_delete', 'factory_read', 'factory_inventory_adjustment_create', 'factory_inventory_adjustment_read']
     },
     // Store Management
     {
       key: 'store',
       name: 'Store',
       icon: <Store size={18} className="text-indigo-500" />,
-      permissions: ['store_create', 'store_edit', 'store_delete', 'store_read']
+      permissions: ['store_create', 'store_edit', 'store_delete', 'store_read', 'store_inventory_adjustment_create', 'store_inventory_adjustment_read']
     },
     // Shop Management
     {
       key: 'shop',
       name: 'Shop',
       icon: <ShoppingBag size={18} className="text-pink-500" />,
-      permissions: ['shop_create', 'shop_edit', 'shop_delete', 'shop_read']
-    },
-    // Inventory Adjustment
-    {
-      key: 'inventory_adjustment',
-      name: 'Inventory Adjustment',
-      icon: <PackageCheck size={18} className="text-teal-500" />,
-      permissions: ['inventory_adjustment_create', 'inventory_adjustment_read']
+      permissions: ['shop_create', 'shop_edit', 'shop_delete', 'shop_read', 'shop_inventory_adjustment_create', 'shop_inventory_adjustment_read']
     },
     // Cash Register Management
     {
@@ -246,8 +238,8 @@ export default function PermissionsManagement() {
       name: 'Cash Register',
       icon: <Coins size={18} className="text-yellow-600" />,
       permissions: [
-        'cash_register_read', 'cash_register_create', 'cash_register_edit', 'cash_register_delete',
-        'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit'
+        'cash_register_read', 'cash_register_create', 'cash_register_edit', 'cash_register_delete', 'cash_register_assign',
+        'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit', 'cash_register_daily_record'
       ]
     },
     // Bank Account Management
@@ -266,8 +258,9 @@ export default function PermissionsManagement() {
       name: 'Accounts',
       icon: <CreditCard size={18} className="text-yellow-500" />,
       permissions: [
-        'account_read', 'account_create', 'account_edit', 'account_delete',
-        'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement', 'account_balance'
+        'account_read', 'account_create', 'account_edit', 'account_delete', 'account_assign',
+        'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement',
+        'general_ledger_report', 'balance_sheet_report'
       ]
     },
     // Purchase Management
@@ -321,7 +314,7 @@ export default function PermissionsManagement() {
       key: 'damage',
       name: 'Wastage/Damage',
       icon: <AlertTriangle size={18} className="text-red-500" />,
-      permissions: ['damage_create', 'damage_edit', 'damage_delete', 'damage_read']
+      permissions: ['damage_create', 'damage_edit', 'damage_delete', 'damage_read', 'damage_return_create', 'damage_return_edit', 'damage_return_delete', 'damage_return_read']
     },
     // Repair Management
     {
@@ -335,35 +328,35 @@ export default function PermissionsManagement() {
       key: 'expenses',
       name: 'Expenses',
       icon: <Wallet size={18} className="text-rose-600" />,
-      permissions: ['expenses_create', 'expenses_edit', 'expenses_delete', 'expenses_read']
+      permissions: ['expenses_create', 'expenses_read', 'expenses_edit', 'expenses_delete', 'expense_category_manage']
     },
     // Salary Management
     {
       key: 'salary',
       name: 'Salary',
       icon: <Briefcase size={18} className="text-green-600" />,
-      permissions: ['salary_create', 'salary_edit', 'salary_delete', 'salary_read', 'add_salary', 'edit_salary', 'approve_salary', 'payroll_manage']
+      permissions: ['salary_create', 'salary_edit', 'salary_delete', 'salary_read', 'approve_salary', 'payroll_manage']
     },
     // Leave Management
     {
       key: 'leave',
       name: 'Leave',
       icon: <Calendar size={18} className="text-sky-500" />,
-      permissions: ['leave_request_create', 'leave_request_edit', 'leave_request_delete', 'leave_read', 'leave_approve', 'leave_approve_all']
+      permissions: ['leave_request_create', 'leave_request_edit', 'leave_request_delete', 'leave_read', 'leave_approve' ]
     },
     // Holiday Management
     {
       key: 'holiday',
       name: 'Holiday',
       icon: <Calendar size={18} className="text-purple-500" />,
-      permissions: ['holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read', 'holiday_manage']
+      permissions: ['holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read']
     },
     // HRM Management
     {
       key: 'hrm',
       name: 'HRM',
       icon: <UsersIcon size={18} className="text-teal-500" />,
-      permissions: ['hrm_read', 'hrm_employee_manage', 'clock_in_out_manage', 'approve_clock_in_out', 'leave_category_manage', 'payroll_manage']
+      permissions: ['hrm_employee_manage', 'clock_in_out_manage', 'approve_clock_in_out', 'leave_category_manage', 'payroll_manage']
     },
     // Customer Management
     {
@@ -386,7 +379,7 @@ export default function PermissionsManagement() {
       icon: <UserCog size={18} className="text-rose-500" />,
       permissions: [
         'user_create', 'user_edit', 'user_delete', 'user_read', 
-        'user_activate_deactivate', 'user_logout', 'user_associate_create', 'user_activity_log_read'
+        'user_activate_deactivate', 'user_logout', 'user_associate_create',
       ]
     },
     // Role & Permission Management
@@ -394,7 +387,7 @@ export default function PermissionsManagement() {
       key: 'role',
       name: 'Role & Permissions',
       icon: <KeyRound size={18} className="text-purple-600" />,
-      permissions: ['role_create', 'role_edit', 'role_delete', 'role_read']
+      permissions: ['role_create', 'role_edit', 'role_delete', 'role_read', 'role_assign']
     },
     // Reports
     {
@@ -402,10 +395,7 @@ export default function PermissionsManagement() {
       name: 'Reports',
       icon: <BarChart3 size={18} className="text-violet-500" />,
       permissions: [
-        'general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report',
-        'sales_report', 'purchases_report', 'stock_report', 'transfer_report',
-        'profit_loss_report', 'purchase_sales_report', 'customer_report', 'supplier_report',
-        'best_selling_product_report', 'worst_selling_product_report', 'profit_calender_report', 'production_report', 'wastage_report'
+        'sales_report', 'purchases_report', 'production_report', 'wastage_report', 'trial_balance_report', 'cash_and_bank_report', 'stock_report', 'daily_stock_report', 'transfer_report', 'purchase_sales_report', 'customer_report', 'supplier_report', 'best_selling_report'
       ]
     },
     // Requisition Management
@@ -413,7 +403,7 @@ export default function PermissionsManagement() {
       key: 'requisition',
       name: 'Requisition',
       icon: <ClipboardList size={18} className="text-violet-500" />,
-      permissions: ['requisition_create', 'requisition_read', 'requisition_update']
+      permissions: ['requisition_create', 'requisition_read', 'requisition_update', 'requisition_delete', 'requisition_approve', 'production_order_read', 'transfer_order_read', 'purchase_order_read']
     },
     // Notifications
     {
@@ -427,7 +417,7 @@ export default function PermissionsManagement() {
       key: 'system',
       name: 'System Management',
       icon: <Settings size={18} className="text-gray-600" />,
-      permissions: ['general_settings_edit', 'company_settings_edit', 'data_import', 'data_export']
+      permissions: ['general_settings', 'company_settings', 'data_import', 'data_export', 'printer_settings', 'print_label', 'unit_manage', 'category_manage', 'brand_manage', 'activity_log']
     },
     // Dashboard
     {

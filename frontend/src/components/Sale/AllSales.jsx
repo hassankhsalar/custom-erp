@@ -4,6 +4,7 @@ import { API_ROUTES } from '../../config';
 import { Link, useNavigate } from "react-router-dom";
 import { usePermission } from "../../hooks/usePermission";
 import { useAuth } from "../../context/AuthContext";
+import SearchableSelect from "../common/SearchableSelect";
 
 export default function AllSales() {
   const navigate = useNavigate();
@@ -42,6 +43,7 @@ export default function AllSales() {
   const [selectedSaleForEditAccess, setSelectedSaleForEditAccess] = useState(null);
   const [editGrantMaxCount, setEditGrantMaxCount] = useState("");
   const [editGrantDurationMinutes, setEditGrantDurationMinutes] = useState("");
+  const [customers, setCustomers] = useState([]);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -53,12 +55,14 @@ export default function AllSales() {
     dateFrom: "",
     dateTo: "",
     customer: "",
+    customerId: "",
     shopId: "",
   });
   const [appliedFilters, setAppliedFilters] = useState({
     dateFrom: "",
     dateTo: "",
     customer: "",
+    customerId: "",
     shopId: "",
   });
   const [overview, setOverview] = useState({
@@ -72,6 +76,7 @@ export default function AllSales() {
     fetchBankAccounts();
     fetchUsers();
     fetchShops();
+    fetchCustomer();
   }, []);
 
   useEffect(() => {
@@ -90,7 +95,8 @@ export default function AllSales() {
     params.set("sortDir", sortConfig.direction === "ascending" ? "asc" : "desc");
     if (appliedFilters.dateFrom) params.set("dateFrom", appliedFilters.dateFrom);
     if (appliedFilters.dateTo) params.set("dateTo", appliedFilters.dateTo);
-    if (appliedFilters.customer.trim()) params.set("customer", appliedFilters.customer.trim());
+    if (appliedFilters.customerId) params.set("customerId", appliedFilters.customerId);
+    else if (appliedFilters.customer.trim()) params.set("customer", appliedFilters.customer.trim());
     if (appliedFilters.shopId) params.set("shopId", appliedFilters.shopId);
     return params.toString();
   };
@@ -99,10 +105,27 @@ export default function AllSales() {
     const params = new URLSearchParams();
     if (appliedFilters.dateFrom) params.set("dateFrom", appliedFilters.dateFrom);
     if (appliedFilters.dateTo) params.set("dateTo", appliedFilters.dateTo);
-    if (appliedFilters.customer.trim()) params.set("customer", appliedFilters.customer.trim());
+    if (appliedFilters.customerId) params.set("customerId", appliedFilters.customerId);
+    else if (appliedFilters.customer.trim()) params.set("customer", appliedFilters.customer.trim());
     if (appliedFilters.shopId) params.set("shopId", appliedFilters.shopId);
     return params.toString();
   };
+
+  const fetchCustomer = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const response = await fetch(API_ROUTES.CUSTOMERS_ALL, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Failed to fetch customers");
+      const data = await response.json();
+      setCustomers(Array.isArray(data?.customers) ? data.customers : Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+      setCustomers([]);
+    }
+  }
 
   const fetchOverview = async () => {
     const token = localStorage.getItem("token");
@@ -522,7 +545,7 @@ export default function AllSales() {
   };
 
   const handleClearFilters = () => {
-    const empty = { dateFrom: "", dateTo: "", customer: "", shopId: "" };
+    const empty = { dateFrom: "", dateTo: "", customer: "", customerId: "", shopId: "" };
     setFilters(empty);
     setAppliedFilters(empty);
     setCurrentPage(1);
@@ -773,7 +796,7 @@ export default function AllSales() {
         </div>
       </div>
 
-      <div className="glass-card p-5 mb-6 border border-white/20 backdrop-blur-xl">
+      <div className="glass-card relative z-40 p-5 mb-6 border border-white/20 backdrop-blur-xl">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
             <label className="block text-xs text-gray-600 mb-1">From</label>
@@ -795,12 +818,17 @@ export default function AllSales() {
           </div>
           <div>
             <label className="block text-xs text-gray-600 mb-1">Customer</label>
-            <input
-              type="text"
-              value={filters.customer}
-              onChange={(e) => setFilters((prev) => ({ ...prev, customer: e.target.value }))}
-              placeholder="Name or mobile"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+            <SearchableSelect
+              name="customerId"
+              value={String(filters.customerId || "")}
+              onChange={(e) => setFilters((prev) => ({ ...prev, customerId: e.target.value, customer: "" }))}
+              options={customers.map((customer) => ({
+                value: String(customer.id),
+                label: `${customer.name || "Unknown"} (${customer.mobile || "No mobile"})`,
+              }))}
+              placeholder="Search by name or mobile"
+              className="w-full"
+              inputClassName="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
             />
           </div>
           <div>
@@ -858,7 +886,7 @@ export default function AllSales() {
 
       {/* Pagination Controls */}
       {totalCount > 0 && (
-        <div className=" p-4 mt-4 border border-white/20 backdrop-blur-xl">
+        <div className="relative z-0 p-4 mt-4 border border-white/20 backdrop-blur-xl">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               {/* Items per page selector */}
@@ -984,7 +1012,7 @@ export default function AllSales() {
       )}
 
       {/* Sales Table */}
-      <div className=" overflow-hidden border border-white/20 backdrop-blur-xl">
+      <div className="relative z-0 overflow-hidden border border-white/20 backdrop-blur-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -1214,7 +1242,7 @@ export default function AllSales() {
 
       {/* Pagination Controls */}
       {totalCount > 0 && (
-        <div className=" p-4 mt-4 border border-white/20 backdrop-blur-xl">
+        <div className="relative z-0 p-4 mt-4 border border-white/20 backdrop-blur-xl">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               {/* Items per page selector */}

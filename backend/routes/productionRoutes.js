@@ -35,6 +35,27 @@ const generateReference = async () => {
   return `PROD-${year}${month}${day}-${(count + 1).toString().padStart(4, '0')}`;
 };
 
+const parseValidDate = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const applyProductionDateFilters = (where, dateFromRaw, dateToRaw) => {
+  const dateFrom = parseValidDate(dateFromRaw);
+  const dateTo = parseValidDate(dateToRaw);
+
+  if (!dateFrom && !dateTo) return;
+
+  where.AND = where.AND || [];
+  if (dateFrom) {
+    where.AND.push({ start_date: { gte: dateFrom } });
+  }
+  if (dateTo) {
+    where.AND.push({ estimated_end_date: { lte: dateTo } });
+  }
+};
+
 // Create a new production
 router.post('/', authenticateToken, async (req, res) => {
   const { start_date, estimated_end_date, factoryId, status, products, materials, requisitionId, requisitionSectionId } = req.body;
@@ -176,13 +197,8 @@ router.get('/', authenticateToken, async (req, res) => {
       const q = String(req.query.search).trim();
       if (q) where.reference = { contains: q };
     }
-    const dateFrom = req.query.dateFrom ? new Date(req.query.dateFrom) : null;
-    const dateTo = req.query.dateTo ? new Date(req.query.dateTo) : null;
-    if ((dateFrom && !Number.isNaN(dateFrom.getTime())) || (dateTo && !Number.isNaN(dateTo.getTime()))) {
-      where.createdAt = {};
-      if (dateFrom && !Number.isNaN(dateFrom.getTime())) where.createdAt.gte = dateFrom;
-      if (dateTo && !Number.isNaN(dateTo.getTime())) where.createdAt.lte = dateTo;
-    }
+    applyProductionDateFilters(where, req.query.dateFrom, req.query.dateTo);
+
     const allowedSort = new Set(["createdAt", "reference", "status", "start_date", "estimated_end_date"]);
     const sortBy = allowedSort.has(String(req.query.sortBy || "")) ? String(req.query.sortBy) : "createdAt";
     const sortDir = String(req.query.sortDir || "desc").toLowerCase() === "asc" ? "asc" : "desc";
@@ -239,13 +255,7 @@ router.get('/overview', authenticateToken, async (req, res) => {
       const q = String(req.query.search).trim();
       if (q) where.reference = { contains: q };
     }
-    const dateFrom = req.query.dateFrom ? new Date(req.query.dateFrom) : null;
-    const dateTo = req.query.dateTo ? new Date(req.query.dateTo) : null;
-    if ((dateFrom && !Number.isNaN(dateFrom.getTime())) || (dateTo && !Number.isNaN(dateTo.getTime()))) {
-      where.createdAt = {};
-      if (dateFrom && !Number.isNaN(dateFrom.getTime())) where.createdAt.gte = dateFrom;
-      if (dateTo && !Number.isNaN(dateTo.getTime())) where.createdAt.lte = dateTo;
-    }
+    applyProductionDateFilters(where, req.query.dateFrom, req.query.dateTo);
 
     const [totalCount, grouped] = await Promise.all([
       prisma.production.count({ where }),

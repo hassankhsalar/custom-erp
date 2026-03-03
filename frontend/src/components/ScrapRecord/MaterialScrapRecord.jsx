@@ -183,7 +183,7 @@ const MaterialScrapRecord = () => {
               </Link>
               
               <Link 
-                to="/addmaterialscraprecord" 
+                to="/damage-record" 
                 className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
               >
                 <Plus size={20} />
@@ -307,7 +307,7 @@ const MaterialScrapRecord = () => {
                     <h3 className="text-lg font-semibold text-gray-700 mb-2">No Material Scrap Records Found</h3>
                     <p className="text-gray-600 mb-6">Create your first material scrap record to track material losses</p>
                     <Link 
-                      to="/addmaterialscraprecord"
+                      to="/damage-record"
                       className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-orange-500 text-white font-semibold rounded-xl hover:shadow-lg transition-all duration-300"
                     >
                       <Plus size={20} />

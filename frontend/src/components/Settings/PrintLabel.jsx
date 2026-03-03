@@ -18,10 +18,33 @@ export default function PrintLabel() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);
   const [selectedName, setSelectedName] = useState("");
+  const [previewMode, setPreviewMode] = useState("barcode");
   const barcodeHostRef = useRef(null);
   const qrHostRef = useRef(null);
   const [printing, setPrinting] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showSheetForm, setShowSheetForm] = useState(false);
+  const [sheet, setSheet] = useState({
+    mode: "barcode",
+    pageSize: "A4",
+    orientation: "portrait",
+    pageWidthMm: 210,
+    pageHeightMm: 297,
+    marginMm: 8,
+    gapXmm: 4,
+    gapYmm: 4,
+    labelWidthMm: 50,
+    labelHeightMm: 35,
+    codeWidthMm: 34,
+    codeHeightMm: 14,
+    qrSizeMm: 22,
+    copies: 24,
+    fillPage: true,
+    showName: true,
+    showPrice: true,
+    showCode: true,
+    showType: false,
+  });
 
   useEffect(() => {
     const load = async () => {
@@ -96,6 +119,104 @@ export default function PrintLabel() {
     w.document.close();
     w.focus();
     w.print();
+    setPrinting(false);
+  };
+
+  const updateSheet = (key, value) => {
+    setSheet((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const getPageSize = () => {
+    const preset = {
+      A5: { w: 148, h: 210 },
+      A4: { w: 210, h: 297 },
+      A3: { w: 297, h: 420 },
+      LETTER: { w: 215.9, h: 279.4 },
+      LEGAL: { w: 215.9, h: 355.6 },
+      TABLOID: { w: 279.4, h: 431.8 },
+    };
+    const base =
+      sheet.pageSize === "CUSTOM"
+        ? { w: Math.max(Number(sheet.pageWidthMm) || 210, 50), h: Math.max(Number(sheet.pageHeightMm) || 297, 50) }
+        : (preset[sheet.pageSize] || preset.A4);
+    const portrait = sheet.orientation === "portrait";
+    return portrait ? base : { w: base.h, h: base.w };
+  };
+
+  const computeCapacity = () => {
+    const { w, h } = getPageSize();
+    const innerW = Math.max(w - sheet.marginMm * 2, 1);
+    const innerH = Math.max(h - sheet.marginMm * 2, 1);
+    const cols = Math.max(Math.floor((innerW + sheet.gapXmm) / (sheet.labelWidthMm + sheet.gapXmm)), 1);
+    const rows = Math.max(Math.floor((innerH + sheet.gapYmm) / (sheet.labelHeightMm + sheet.gapYmm)), 1);
+    return { cols, rows, capacity: cols * rows };
+  };
+
+  const printSheet = async () => {
+    if (!selected) return;
+    setPrinting(true);
+    const labelName = selectedName || selected.name || "";
+    const price = Number(selected.price || 0).toFixed(2);
+    const code = String(selected.barcode || `${String(selected.type || "item").toUpperCase()}-${selected.id || "NA"}`);
+    const mode = sheet.mode;
+    const codeSvg = await getCodeSvg(mode);
+    const { capacity } = computeCapacity();
+    const total = sheet.fillPage ? capacity : Math.max(Number(sheet.copies) || 1, 1);
+    const labelsHtml = Array.from({ length: total }).map(() => `
+      <div class="label">
+        ${sheet.showName ? `<div class="line name">${escapeHtml(labelName)}</div>` : ""}
+        ${sheet.showType ? `<div class="line type">${escapeHtml(String(selected.type || ""))}</div>` : ""}
+        ${sheet.showPrice ? `<div class="line price">Price: ${escapeHtml(price)}</div>` : ""}
+        <div class="code-wrap ${mode === "qr" ? "qr-wrap" : "barcode-wrap"}">${codeSvg}</div>
+        ${sheet.showCode ? `<div class="line code">${escapeHtml(code)}</div>` : ""}
+      </div>
+    `).join("");
+    const page = getPageSize();
+    const codeStyle = mode === "qr"
+      ? `width:${sheet.qrSizeMm}mm;height:${sheet.qrSizeMm}mm;`
+      : `width:${sheet.codeWidthMm}mm;height:${sheet.codeHeightMm}mm;`;
+    const win = window.open("", "_blank", "width=1200,height=800");
+    if (!win) {
+      setPrinting(false);
+      return;
+    }
+    win.document.write(`
+      <html>
+        <head>
+          <title>Sheet Print Preview</title>
+          <style>
+            @page { size: ${page.w}mm ${page.h}mm; margin: ${sheet.marginMm}mm; }
+            * { box-sizing: border-box; }
+            body { margin: 0; font-family: Arial, sans-serif; background: #eef2f7; color: #111827; }
+            .toolbar { position: sticky; top: 0; z-index: 10; padding: 10px 14px; background: #0f172a; color: #fff; display: flex; gap: 10px; align-items: center; }
+            .toolbar button { border: 0; background: #22c55e; color: #0b1220; border-radius: 6px; font-weight: 700; padding: 8px 12px; cursor: pointer; }
+            .toolbar small { opacity: 0.9; }
+            .sheet { width: ${page.w}mm; min-height: ${page.h}mm; margin: 12px auto; background: #fff; padding: ${sheet.marginMm}mm; display: grid; grid-template-columns: repeat(auto-fill, minmax(${sheet.labelWidthMm}mm, ${sheet.labelWidthMm}mm)); grid-auto-rows: ${sheet.labelHeightMm}mm; gap: ${sheet.gapYmm}mm ${sheet.gapXmm}mm; align-content: start; justify-content: start; }
+            .label { width: ${sheet.labelWidthMm}mm; height: ${sheet.labelHeightMm}mm; border: 1px solid #d1d5db; border-radius: 2mm; padding: 2mm; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; overflow: hidden; }
+            .line { width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .name { font-size: 2.8mm; font-weight: 700; }
+            .type, .price { font-size: 2.4mm; }
+            .code { font-size: 2.3mm; letter-spacing: 0.08em; font-weight: 700; }
+            .code-wrap { display: flex; align-items: center; justify-content: center; margin: 1.2mm 0; ${codeStyle} }
+            .code-wrap svg { width: 100% !important; height: 100% !important; }
+            @media print {
+              body { background: #fff; }
+              .toolbar { display: none; }
+              .sheet { margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="toolbar">
+            <button onclick="window.print()">Print</button>
+            <small>Preview: ${escapeHtml(sheet.pageSize)} (${page.w}mm x ${page.h}mm) | Labels: ${total}</small>
+          </div>
+          <div class="sheet">${labelsHtml}</div>
+        </body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
     setPrinting(false);
   };
 
@@ -199,29 +320,165 @@ export default function PrintLabel() {
                   >
                     QR Code
                   </button>
+                  <button
+                    onClick={() => setShowSheetForm((v) => !v)}
+                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-slate-600 to-slate-700 text-white font-semibold"
+                  >
+                    {showSheetForm ? "Hide Sheet Print" : "Sheet Print"}
+                  </button>
                 </div>
               </div>
 
               <div className="rounded-2xl border border-white/60 bg-white/70 p-4">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Live Preview</h3>
+                <div className="flex items-center gap-4 mb-4">
+                  <h3 className="text-sm font-semibold text-gray-700">Live Preview</h3>
+                  <div className="inline-flex rounded-xl border border-white/60 bg-white/70 p-1">
+                    <button
+                      onClick={() => setPreviewMode("barcode")}
+                      className={`px-3 py-1.5 text-sm rounded-lg ${previewMode === "barcode" ? "bg-blue-500 text-white" : "text-gray-700"}`}
+                    >
+                      Barcode
+                    </button>
+                    <button
+                      onClick={() => setPreviewMode("qr")}
+                      className={`px-3 py-1.5 text-sm rounded-lg ${previewMode === "qr" ? "bg-emerald-500 text-white" : "text-gray-700"}`}
+                    >
+                      QR Code
+                    </button>
+                  </div>
+                </div>
                 <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
                   <div className="text-sm font-bold text-gray-900">{selectedName || selected.name}</div>
                   <div className="mt-1 text-xs text-gray-600">Price: {Number(selected.price || 0).toFixed(2)}</div>
                   <div className="mt-3 flex justify-center">
-                    <Barcode
-                      value={String(selected.barcode || `${String(selected.type || "item").toUpperCase()}-${selected.id || "NA"}`)}
-                      format="CODE128"
-                      width={1.5}
-                      height={52}
-                      displayValue={false}
-                      margin={0}
-                      renderer="svg"
-                    />
+                    {previewMode === "barcode" ? (
+                      <Barcode
+                        value={String(selected.barcode || `${String(selected.type || "item").toUpperCase()}-${selected.id || "NA"}`)}
+                        format="CODE128"
+                        width={1.5}
+                        height={52}
+                        displayValue={false}
+                        margin={0}
+                        renderer="svg"
+                      />
+                    ) : (
+                      <QRCodeSVG
+                        value={String(selected.barcode || `${String(selected.type || "item").toUpperCase()}-${selected.id || "NA"}`)}
+                        size={120}
+                        marginSize={0}
+                      />
+                    )}
                   </div>
                   <div className="mt-2 text-xs font-semibold tracking-wide text-gray-800">
                     {String(selected.barcode || `${String(selected.type || "item").toUpperCase()}-${selected.id || "NA"}`)}
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {selected && showSheetForm && (
+            <div className="mt-6 rounded-2xl border border-white/60 bg-white/70 p-4 md:p-5">
+              <h3 className="text-sm font-semibold text-gray-700 mb-4">Sheet Print Settings</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <label className="text-sm text-gray-700">
+                  Mode
+                  <select value={sheet.mode} onChange={(e) => updateSheet("mode", e.target.value)} className="mt-1 w-full px-3 py-2 border border-white/60 bg-white/80 rounded-xl">
+                    <option value="barcode">Barcode</option>
+                    <option value="qr">QR Code</option>
+                  </select>
+                </label>
+                <label className="text-sm text-gray-700">
+                  Page Size
+                  <select value={sheet.pageSize} onChange={(e) => updateSheet("pageSize", e.target.value)} className="mt-1 w-full px-3 py-2 border border-white/60 bg-white/80 rounded-xl">
+                    <option value="A5">A5</option>
+                    <option value="A4">A4</option>
+                    <option value="A3">A3</option>
+                    <option value="LETTER">Letter</option>
+                    <option value="LEGAL">Legal</option>
+                    <option value="TABLOID">Tabloid</option>
+                    <option value="CUSTOM">Custom (mm)</option>
+                  </select>
+                </label>
+                <label className="text-sm text-gray-700">
+                  Orientation
+                  <select value={sheet.orientation} onChange={(e) => updateSheet("orientation", e.target.value)} className="mt-1 w-full px-3 py-2 border border-white/60 bg-white/80 rounded-xl">
+                    <option value="portrait">Portrait</option>
+                    <option value="landscape">Landscape</option>
+                  </select>
+                </label>
+                {sheet.pageSize === "CUSTOM" && (
+                  <>
+                    <label className="text-sm text-gray-700">
+                      Page Width (mm)
+                      <input type="number" min="50" value={sheet.pageWidthMm} onChange={(e) => updateSheet("pageWidthMm", Number(e.target.value) || 50)} className="mt-1 w-full px-3 py-2 border border-white/60 bg-white/80 rounded-xl" />
+                    </label>
+                    <label className="text-sm text-gray-700">
+                      Page Height (mm)
+                      <input type="number" min="50" value={sheet.pageHeightMm} onChange={(e) => updateSheet("pageHeightMm", Number(e.target.value) || 50)} className="mt-1 w-full px-3 py-2 border border-white/60 bg-white/80 rounded-xl" />
+                    </label>
+                  </>
+                )}
+                <label className="text-sm text-gray-700">
+                  Margin (mm)
+                  <input type="number" min="0" value={sheet.marginMm} onChange={(e) => updateSheet("marginMm", Number(e.target.value) || 0)} className="mt-1 w-full px-3 py-2 border border-white/60 bg-white/80 rounded-xl" />
+                </label>
+                <label className="text-sm text-gray-700">
+                  Gap X (mm)
+                  <input type="number" min="0" value={sheet.gapXmm} onChange={(e) => updateSheet("gapXmm", Number(e.target.value) || 0)} className="mt-1 w-full px-3 py-2 border border-white/60 bg-white/80 rounded-xl" />
+                </label>
+                <label className="text-sm text-gray-700">
+                  Gap Y (mm)
+                  <input type="number" min="0" value={sheet.gapYmm} onChange={(e) => updateSheet("gapYmm", Number(e.target.value) || 0)} className="mt-1 w-full px-3 py-2 border border-white/60 bg-white/80 rounded-xl" />
+                </label>
+                <label className="text-sm text-gray-700">
+                  Label Width (mm)
+                  <input type="number" min="10" value={sheet.labelWidthMm} onChange={(e) => updateSheet("labelWidthMm", Number(e.target.value) || 10)} className="mt-1 w-full px-3 py-2 border border-white/60 bg-white/80 rounded-xl" />
+                </label>
+                <label className="text-sm text-gray-700">
+                  Label Height (mm)
+                  <input type="number" min="10" value={sheet.labelHeightMm} onChange={(e) => updateSheet("labelHeightMm", Number(e.target.value) || 10)} className="mt-1 w-full px-3 py-2 border border-white/60 bg-white/80 rounded-xl" />
+                </label>
+                {sheet.mode === "barcode" ? (
+                  <>
+                    <label className="text-sm text-gray-700">
+                      Barcode Width (mm)
+                      <input type="number" min="10" value={sheet.codeWidthMm} onChange={(e) => updateSheet("codeWidthMm", Number(e.target.value) || 10)} className="mt-1 w-full px-3 py-2 border border-white/60 bg-white/80 rounded-xl" />
+                    </label>
+                    <label className="text-sm text-gray-700">
+                      Barcode Height (mm)
+                      <input type="number" min="5" value={sheet.codeHeightMm} onChange={(e) => updateSheet("codeHeightMm", Number(e.target.value) || 5)} className="mt-1 w-full px-3 py-2 border border-white/60 bg-white/80 rounded-xl" />
+                    </label>
+                  </>
+                ) : (
+                  <label className="text-sm text-gray-700">
+                    QR Size (mm)
+                    <input type="number" min="10" value={sheet.qrSizeMm} onChange={(e) => updateSheet("qrSizeMm", Number(e.target.value) || 10)} className="mt-1 w-full px-3 py-2 border border-white/60 bg-white/80 rounded-xl" />
+                  </label>
+                )}
+                <label className="text-sm text-gray-700">
+                  Copies
+                  <input type="number" min="1" value={sheet.copies} onChange={(e) => updateSheet("copies", Number(e.target.value) || 1)} className="mt-1 w-full px-3 py-2 border border-white/60 bg-white/80 rounded-xl" />
+                </label>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-700">
+                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={sheet.fillPage} onChange={(e) => updateSheet("fillPage", e.target.checked)} /> Fill whole page</label>
+                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={sheet.showName} onChange={(e) => updateSheet("showName", e.target.checked)} /> Show name</label>
+                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={sheet.showPrice} onChange={(e) => updateSheet("showPrice", e.target.checked)} /> Show price</label>
+                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={sheet.showCode} onChange={(e) => updateSheet("showCode", e.target.checked)} /> Show code</label>
+                <label className="inline-flex items-center gap-2"><input type="checkbox" checked={sheet.showType} onChange={(e) => updateSheet("showType", e.target.checked)} /> Show type</label>
+              </div>
+              <div className="mt-4 flex items-center justify-between gap-4">
+                <p className="text-xs text-gray-600">
+                  Capacity/Page: {computeCapacity().capacity} labels ({computeCapacity().cols} x {computeCapacity().rows})
+                </p>
+                <button
+                  onClick={printSheet}
+                  disabled={printing}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-500 text-white font-semibold disabled:opacity-70"
+                >
+                  Process & Preview
+                </button>
               </div>
             </div>
           )}

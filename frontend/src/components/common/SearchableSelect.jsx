@@ -9,6 +9,7 @@ const SearchableSelect = ({
   disabled = false,
   required = false,
   className = "",
+  inputClassName = "",
 }) => {
   const wrapperRef = useRef(null);
   const [open, setOpen] = useState(false);
@@ -57,7 +58,10 @@ const SearchableSelect = ({
   };
 
   return (
-    <div ref={wrapperRef} className={`relative ${className}`}>
+    <div
+      ref={wrapperRef}
+      className={`relative ${open ? "z-[1000]" : ""} ${className}`}
+    >
       <input
         type="text"
         name={`${name}_search`}
@@ -74,13 +78,13 @@ const SearchableSelect = ({
         placeholder={placeholder}
         disabled={disabled}
         required={required && !value}
-        className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 outline-0"
+        className={`w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200 outline-0 ${inputClassName}`}
       />
 
       <input type="hidden" name={name} value={value || ""} />
 
       {open && !disabled && (
-        <div className="absolute z-30 mt-1 w-full max-h-56 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+        <div className="absolute z-[1001] mt-1 w-full max-h-56 overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
           <button
             type="button"
             onMouseDown={(e) => {

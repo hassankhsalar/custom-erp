@@ -421,7 +421,7 @@ export default function LeaveRequests() {
         </div>
 
         {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <div className="flex flex-col gap-6 mb-6">
           {/* New Request Form */}
           <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
             <div className="flex items-center gap-3 mb-6">
@@ -725,7 +725,7 @@ export default function LeaveRequests() {
                 <p className="text-gray-600 mb-6">
                   {searchQuery || statusFilter !== "all" ? 
                     "No matching requests found. Try adjusting your filters." : 
-                    "Submit your first leave request using the form on the left."}
+                    "Submit your first leave request using the form."}
                 </p>
               </div>
             ) : (
