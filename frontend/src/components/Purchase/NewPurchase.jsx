@@ -1000,9 +1000,9 @@ const fetchBankAccounts = async () => {
                               <h4 className="font-medium text-gray-800 truncate">
                                 {resultItem.name} ({resultItem.type})
                               </h4>
-                              <p>Code: {resultItem.barcode}</p>
+                              <p className="text-sm text-gray-600 truncate">Code: {resultItem.barcode}</p>
                               <p className="text-sm text-gray-600 truncate">
-                                Unit Cost: ${resultItem.standardPrice.toFixed(2)} / {resultItem.unit}
+                                Cost: ${resultItem.standardPrice.toFixed(2)} / {resultItem.unit}
                               </p>
                             </div>
                           </div>

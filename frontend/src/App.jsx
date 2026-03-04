@@ -375,7 +375,7 @@ function App() {
             <Route element={<PermissionRoute requiredPermission={['sales_warranty' ]} />}>
               <Route path="/sale/warranty" element={<WarrantyList />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission={['customer_read', 'customer_create', 'customer_edit', 'customer_delete']} />}>
+            <Route element={<PermissionRoute requiredPermission={['customer_read', 'customer_create', 'customer_edit', 'customer_delete', 'customer_clear_due']} />}>
               <Route path="/customers/all" element={<AllCustomers />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="customer_create" />}>
@@ -412,7 +412,7 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="purchases_return_create" />}>
               <Route path="/purchase/return" element={<PurchaseReturnPage mode="purchase_return" />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission={['supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete']} />}>
+            <Route element={<PermissionRoute requiredPermission={['supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete', 'supplier_clear_due']} />}>
               <Route path="/purchase/all-supplier" element={<AllSupplier />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="supplier_create" />}>

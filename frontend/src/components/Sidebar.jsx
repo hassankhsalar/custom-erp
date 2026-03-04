@@ -92,7 +92,7 @@ const Sidebar = () => {
       color: 'from-emerald-500 to-green-500',
       bgColor: 'bg-gradient-to-r from-emerald-50 to-green-100/50',
       textColor: 'text-emerald-700',
-      permissionKey: ['sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_add_payment', 'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read', 'customer_read', 'customer_create', 'customer_edit', 'customer_delete'],
+      permissionKey: ['sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_add_payment', 'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read', 'customer_read', 'customer_create', 'customer_edit', 'customer_delete', 'customer_clear_due'],
       subItems: [
         { name: 'POS', path: '/sale/pos', icon: <CreditCard size={16} />, permissionKey: 'sales_create' },
         { name: 'All Sales', path: '/sale/all', icon: <FileText size={16} />, permissionKey: ['sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_add_payment' ] },
@@ -101,7 +101,7 @@ const Sidebar = () => {
         { name: 'Sale Return', path: '/sale/return', icon: <ClipboardList size={16} />, permissionKey: ['sales_return_create'] },
         { name: 'All Sale Returns', path: '/sale/allreturns', icon: <FileText size={16} />, permissionKey: [ 'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read'] },
         { name: 'Warranty', path: '/sale/warranty', icon: <Shield size={16} />, permissionKey: ['sales_warranty' ] },
-        { name: 'Customers', path: '/customers/all', icon: <Users size={16} />, permissionKey: ['customer_read', 'customer_create', 'customer_edit', 'customer_delete'] }
+        { name: 'Customers', path: '/customers/all', icon: <Users size={16} />, permissionKey: ['customer_read', 'customer_create', 'customer_edit', 'customer_delete', 'customer_clear_due'] }
       ]
     },
     {
@@ -122,13 +122,13 @@ const Sidebar = () => {
       color: 'from-violet-500 to-purple-500',
       bgColor: 'bg-gradient-to-r from-violet-50 to-purple-100/50',
       textColor: 'text-violet-700',
-      permissionKey: ['purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment', 'purchases_return_create', 'purchases_return_edit', 'purchases_return_delete', 'purchases_return_read', 'supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete' ],
+      permissionKey: ['purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment', 'purchases_return_create', 'purchases_return_edit', 'purchases_return_delete', 'purchases_return_read', 'supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete', 'supplier_clear_due' ],
       subItems: [
         { name: 'All Purchase', path: '/purchase/all', icon: <Package size={16} />, permissionKey: ['purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment'] },
         { name: 'All Returns', path: '/purchase/returns', icon: <Undo2 size={16} />, permissionKey: ['purchases_return_create', 'purchases_return_edit', 'purchases_return_delete', 'purchases_return_read'] },
         { name: 'New Purchase', path: '/purchase/new', icon: <ShoppingCart size={16} />, permissionKey: 'purchases_create' },
         { name: 'Purchase Return', path: '/purchase/return', icon: <Recycle size={16} />, permissionKey: 'purchases_return_create' },
-        { name: 'All Supplier', path: '/purchase/all-supplier', icon: <Users size={16} />, permissionKey: ['supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete'] },
+        { name: 'All Supplier', path: '/purchase/all-supplier', icon: <Users size={16} />, permissionKey: ['supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete', 'supplier_clear_due'] },
         { name: 'Add Supplier', path: '/purchase/add-supplier', icon: <UserPlus size={16} />, permissionKey: 'supplier_create' }
       ]
     },

@@ -24,6 +24,7 @@ import {
   Save,
   Image as ImageIcon
 } from 'lucide-react';
+import { usePermission } from '../../hooks/usePermission';
 
 const AllProductions = () => {
   const [productions, setProductions] = useState([]);
@@ -54,6 +55,12 @@ const AllProductions = () => {
   });
   const initializedRef = useRef(false);
   const skipNextPageFetchRef = useRef(false);
+
+  const { hasPermission } = usePermission();
+  const canCreateProduction = hasPermission('production_create');
+  const canEditProduction = hasPermission('production_edit');
+  const canDeleteProduction = hasPermission('production_delete');
+  const canChangeStatus = hasPermission('production_change_status');
 
   // Modal states
   const [modal, setModal] = useState({ isOpen: false, type: null, data: null });
@@ -440,13 +447,15 @@ const AllProductions = () => {
                 <p className="text-2xl font-bold text-emerald-600">{overview.totalCount}</p>
               </div>
               
-              <Link 
-                to="/productions/new" 
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                <Settings size={20} />
-                New Production
-              </Link>
+              { canCreateProduction && (
+                <Link 
+                  to="/productions/new" 
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <Settings size={20} />
+                  New Production
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -651,7 +660,7 @@ const AllProductions = () => {
                                 <Eye size={16} />
                               </button>
                               
-                              {['running', 'pending'].includes(production.status) && (
+                              {['running', 'pending'].includes(production.status) && canEditProduction && (
                                 <Link
                                   to={`/productions/edit/${production.id}`}
                                   className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
@@ -661,15 +670,17 @@ const AllProductions = () => {
                                 </Link>
                               )}
                               
-                              <button
-                                onClick={() => handleDelete(production.id)}
-                                className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
-                                title="Delete"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              { canDeleteProduction && (
+                                <button
+                                  onClick={() => handleDelete(production.id)}
+                                  className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
                               
-                              {['running', 'pending'].includes(production.status) && (
+                              {['running', 'pending'].includes(production.status) && canChangeStatus && (
                                 <button
                                   onClick={() => openModal('updateStatus', production)}
                                   className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors duration-300"
@@ -910,7 +921,7 @@ const AllProductions = () => {
       )}
 
       {/* Update Status Modal */}
-      {modal.isOpen && modal.type === 'updateStatus' && (
+      {modal.isOpen && modal.type === 'updateStatus' && canChangeStatus && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeModal}></div>
           <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">

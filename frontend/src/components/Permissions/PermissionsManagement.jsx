@@ -157,10 +157,10 @@ export default function PermissionsManagement() {
     'role_create', 'role_edit', 'role_delete', 'role_read', 'role_assign',
 
     // Add customer permissions
-    'customer_read', 'customer_create', 'customer_edit', 'customer_delete',
+    'customer_read', 'customer_create', 'customer_edit', 'customer_delete', 'customer_clear_due',
 
     // Add supplier permissions
-    'supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete',
+    'supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete', 'supplier_clear_due',
 
     // Requisition permissions
     'requisition_create', 'requisition_read', 'requisition_update', 'requisition_delete', 'requisition_approve', 'production_order_read', 'transfer_order_read', 'purchase_order_read',
@@ -363,14 +363,14 @@ export default function PermissionsManagement() {
       key: 'customer',
       name: 'Customer',
       icon: <UserCircle size={18} className="text-blue-500" />,
-      permissions: ['customer_read', 'customer_create', 'customer_edit', 'customer_delete']
+      permissions: ['customer_read', 'customer_create', 'customer_edit', 'customer_delete', 'customer_clear_due']
     },
     // Supplier Management
     {
       key: 'supplier',
       name: 'Supplier',
       icon: <Building size={18} className="text-orange-500" />,
-      permissions: ['supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete']
+      permissions: ['supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete', 'supplier_clear_due']
     },
     // User Management
     {
@@ -1320,7 +1320,6 @@ export default function PermissionsManagement() {
                         <th className="p-4 text-left font-medium text-gray-700">User</th>
                         <th className="p-4 text-left font-medium text-gray-700">Email</th>
                         <th className="p-4 text-left font-medium text-gray-700">Role</th>
-                        <th className="p-4 text-left font-medium text-gray-700">Assigned Permission</th>
                         <th className="p-4 text-left font-medium text-gray-700">Sample Permissions</th>
                         <th className="p-4 text-left font-medium text-gray-700">Actions</th>
                       </tr>
@@ -1333,17 +1332,8 @@ export default function PermissionsManagement() {
                           </td>
                           <td className="p-4 text-gray-600">{user.email}</td>
                           <td className="p-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              user.role === 'ADMIN' 
-                                ? 'bg-gradient-to-r from-red-100 to-red-50 text-red-700' 
-                                : 'bg-gradient-to-r from-green-100 to-green-50 text-green-700'
-                            }`}>
-                              {user.role}
-                            </span>
-                          </td>
-                          <td className="p-4">
-                            <div className="font-medium text-purple-700">
-                              {user.permission?.name || 'No Permission'}
+                            <div className="font-medium text-purple-700 capitalize">
+                              { (user.permission?.name || 'No Permission').replaceAll('_', ' ').replaceAll('-', ' ') }
                             </div>
                           </td>
                           <td className="p-4">

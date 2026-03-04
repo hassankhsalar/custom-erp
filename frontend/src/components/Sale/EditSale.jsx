@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { API_ROUTES } from "../../config";
 import { ArrowLeft, Save, Search, ShoppingCart, X, Store, User, CreditCard, Landmark, Wallet, Receipt, Package } from "lucide-react";
+import SearchableSelect from "../common/SearchableSelect";
 
 const getItemType = (saleItem) => (saleItem?.productId ? "product" : "material");
 
@@ -22,6 +23,7 @@ export default function EditSale() {
   const [showSearchResults, setShowSearchResults] = useState(false);
 
   const [customerId, setCustomerId] = useState("");
+  const [customers, setCustomers] = useState([]);
   const [discount, setDiscount] = useState(0);
   const [paymentType, setPaymentType] = useState("cash");
   const [bankAccounts, setBankAccounts] = useState([]);
@@ -41,13 +43,29 @@ export default function EditSale() {
   useEffect(() => {
     const fetchAux = async () => {
       try {
-        const res = await fetch(API_ROUTES.BANK_ACCOUNTS, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        setBankAccounts(Array.isArray(data) ? data : []);
+        const [bankRes, customerRes] = await Promise.all([
+          fetch(API_ROUTES.BANK_ACCOUNTS, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(API_ROUTES.CUSTOMERS_ALL, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+        const bankData = await bankRes.json();
+        setBankAccounts(Array.isArray(bankData) ? bankData : []);
+
+        const customerData = await customerRes.json();
+        setCustomers(
+          Array.isArray(customerData?.customers)
+            ? customerData.customers
+            : Array.isArray(customerData)
+              ? customerData
+              : []
+        );
       } catch {
         setBankAccounts([]);
+        setCustomers([]);
       }
     };
     if (token) fetchAux();
@@ -413,7 +431,7 @@ export default function EditSale() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1 space-y-6">
-            <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 space-y-5">
+            <div className="relative z-40 backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 space-y-5">
               <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
                 <div className="p-2 bg-amber-100 rounded-lg">
                   <Store className="text-amber-600" size={20} />
@@ -434,18 +452,23 @@ export default function EditSale() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                   <User size={16} className="text-gray-500" />
-                  Customer ID (optional)
+                  Customer (optional)
                 </label>
-                <input
-                  type="number"
+                <SearchableSelect
+                  name="customerId"
                   value={customerId}
                   onChange={(e) => setCustomerId(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/60 backdrop-blur-sm border border-gray-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400 transition-all duration-300"
+                  options={customers.map((customer) => ({
+                    value: String(customer.id),
+                    label: `${customer.name || "Unknown"} (${customer.mobile || "No mobile"})`,
+                  }))}
+                  placeholder="Search customer by name or mobile"
+                  className="w-full"
                 />
               </div>
             </div>
 
-            <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
+            <div className="relative z-0 backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                 <Receipt size={20} className="text-amber-600" />
                 Totals

@@ -61,12 +61,15 @@ const getRequesterAccessContext = async (userId) => {
 const canEditSaleForUser = (sale, requesterId, access) => {
   if (!sale || !access) return false;
 
-  // const transactionClosed = (sale.transactionStatus || "open") === "closed";
-  // if (transactionClosed && !access.isAdmin && !access.canSalesOpenClose) {
-  //   return false;
-  // }
-
   const isTodaySale = isSameCalendarDay(new Date(sale.createdAt), new Date());
+
+  if (isTodaySale && access.canEditToday) return true;
+
+  const transactionClosed = (sale.transactionStatus || "open") === "closed";
+  if (transactionClosed && !access.isAdmin && !access.canSalesOpenClose) {
+    return false;
+  }
+
   const grantState = getEditGrantStateForUser(sale, requesterId);
   const hasSaleGrant = grantState.allowed;
   const isEditOpen = String(sale.editStatus || "closed").toLowerCase() === "open";
@@ -1244,7 +1247,10 @@ router.put("/:id", async (req, res) => {
       return res.status(403).json({ error: "You do not have permission to edit this sale" });
     }
 
-    if ((sale.transactionStatus || "open") === "closed" && !access.isAdmin && !access.canSalesOpenClose) {
+    const isTodaySale = isSameCalendarDay(new Date(sale.createdAt), new Date());
+    const hasTodayEditAccess = access.canEditToday && isTodaySale;
+
+    if ((sale.transactionStatus || "open") === "closed" && !access.isAdmin && !access.canSalesOpenClose && !hasTodayEditAccess) {
       return res.status(403).json({ error: "This sale transaction is closed and cannot be edited" });
     }
 

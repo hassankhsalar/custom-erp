@@ -7,3 +7,4 @@ gemini.md
 /uploads/*
 /web_data
 /prisma/seed_data
+githubaction.yml
