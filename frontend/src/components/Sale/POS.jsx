@@ -15,6 +15,7 @@ export default function ShopPOS( props ) {
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [discount, setDiscount] = useState(0);
+  const [discountType, setDiscountType] = useState("flat");
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
@@ -629,7 +630,7 @@ export default function ShopPOS( props ) {
       paymentType,
       bankAccountId: paymentType === "card" ? parseInt(bankAccountId) : null,
       cashRegisterId: paymentType === "cash" ? parseInt(cashRegisterId) : null,
-      discount: Math.max(0, parseFloat(discount) || 0),
+      discount: Number(discountAmount.toFixed(2)),
       paidAmount: parseFloat(paidAmount) || 0,
       items: cartItems.map(item => ({
         itemId: item.itemId,
@@ -674,6 +675,7 @@ export default function ShopPOS( props ) {
         // Clear cart but don't restore stock since it's already sold
         setCartItems([]);
         setDiscount(0);
+        setDiscountType("flat");
         setSelectedCustomer(null);
         setCustomerSearchQuery("");
         setSearchQuery("");
@@ -702,7 +704,12 @@ export default function ShopPOS( props ) {
 
   // Calculate totals
   const subtotal = cartItems.reduce((sum, item) => sum + item.totalPrice, 0);
-  const grandTotal = Math.max(0, subtotal - (parseFloat(discount) || 0));
+  const discountInputValue = Math.max(0, parseFloat(discount) || 0);
+  const discountAmount = Math.min(
+    subtotal,
+    discountType === "percent" ? (subtotal * discountInputValue) / 100 : discountInputValue
+  );
+  const grandTotal = Math.max(0, subtotal - discountAmount);
 
   useEffect(() => {
     if (!paidAmountTouched) {
@@ -1234,15 +1241,33 @@ export default function ShopPOS( props ) {
                     <div className="flex justify-between items-center">
                       <span>Discount:</span>
                       <div className="flex items-center space-x-3">
+                        <select
+                          value={discountType}
+                          onChange={(e) => {
+                            const nextType = e.target.value;
+                            setDiscountType(nextType);
+                            if (nextType === "percent") {
+                              setDiscount((prev) => Math.min(100, Math.max(0, parseFloat(prev) || 0)));
+                            }
+                          }}
+                          className="border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                        >
+                          <option value="flat">Flat</option>
+                          <option value="percent">Percent</option>
+                        </select>
                         <input
                           type="number"
                           min="0"
+                          max={discountType === "percent" ? 100 : undefined}
                           step="0.01"
                           value={discount}
-                          onChange={(e) => setDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
+                          onChange={(e) => {
+                            const value = Math.max(0, parseFloat(e.target.value) || 0);
+                            setDiscount(discountType === "percent" ? Math.min(100, value) : value);
+                          }}
                           className="w-32 border border-gray-300 p-2 rounded-lg text-right focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                         />
-                        <span className="font-medium text-red-600">-${parseFloat(discount || 0).toFixed(2)}</span>
+                        <span className="font-medium text-red-600">-${discountAmount.toFixed(2)}</span>
                       </div>
                     </div>
                     

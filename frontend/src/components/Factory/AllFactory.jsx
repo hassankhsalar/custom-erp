@@ -24,6 +24,7 @@ import {
   Eye,
   X
 } from 'lucide-react';
+import { usePermission } from '../../hooks/usePermission';
 
 const AllFactory = () => {
   const [factories, setFactories] = useState([]);
@@ -36,6 +37,11 @@ const AllFactory = () => {
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
   const [totalFactories, setTotalFactories] = useState(0);
+
+  const { hasPermission } = usePermission();
+  const canCreateFactory = hasPermission('factory_create');
+  const canEditFactory = hasPermission('factory_edit');
+  const canDeleteFactory = hasPermission('factory_delete');
 
   useEffect(() => {
     const fetchFactories = async () => {
@@ -211,13 +217,15 @@ const AllFactory = () => {
             </div>
             
             <div className="flex items-center gap-4">
-              <Link 
-                to="/factories/add" 
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                <Plus size={20} />
-                New Factory
-              </Link>
+              { canCreateFactory && (
+                <Link 
+                  to="/factories/add" 
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <Plus size={20} />
+                  New Factory
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -356,21 +364,25 @@ const AllFactory = () => {
                                   <Eye size={16} />
                                 </button>
                                 
-                                <Link
-                                  to={`/factories/edit/${factory.id}`}
-                                  className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
-                                  title="Edit"
-                                >
-                                  <Edit size={16} />
-                                </Link>
+                                { canEditFactory && (
+                                  <Link
+                                    to={`/factories/edit/${factory.id}`}
+                                    className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
+                                    title="Edit"
+                                  >
+                                    <Edit size={16} />
+                                  </Link>
+                                )}
                                 
-                                <button
-                                  onClick={() => handleDelete(factory.id)}
-                                  className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
-                                  title="Delete"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
+                                { canDeleteFactory && (
+                                  <button
+                                    onClick={() => handleDelete(factory.id)}
+                                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                )}
                                 
                                
                               </div>

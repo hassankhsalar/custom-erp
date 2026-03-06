@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import {
-  AlertTriangle,
   ChevronLeft,
   ChevronRight,
   CreditCard,
@@ -17,6 +16,7 @@ import {
   XCircle
 } from "lucide-react";
 import { API_ROUTES } from "../../config";
+import { usePermission } from "../../hooks/usePermission";
 
 const locationIcon = (type) => {
   if (type === "store") return <Store size={13} />;
@@ -38,16 +38,25 @@ export default function AllPurchaseReturns() {
   const [totalCount, setTotalCount] = useState(0);
   const [typeFilter, setTypeFilter] = useState("all");
 
-  const [viewModal, setViewModal] = useState({ open: false, row: null });
   const [shipmentModal, setShipmentModal] = useState({
     open: false, row: null, destinationType: "store", destinationId: "", destinations: [], lines: [], saving: false, error: "",
   });
   const [paymentModal, setPaymentModal] = useState({
     open: false, row: null, amount: "", paymentMethod: "cash", note: "", saving: false, error: "",
   });
-  const [paymentsModal, setPaymentsModal] = useState({
-    open: false, row: null, loading: false, payments: [], totalPaid: 0,
+  const [detailsModal, setDetailsModal] = useState({
+    open: false, row: null, activeTab: "returned_items",
   });
+
+  // 'purchases_return_create', 'purchases_return_add_payment', 'purchases_return_add_shipment', 'purchases_return_delete', 'purchases_return_read', 'damage_return_create', 'damage_return_read', 'damage_return_add_payment', 'damage_return_add_shipment', 'damage_return_delete'
+  const { hasPermission } = usePermission();
+  const canAddPurchasePayment = hasPermission("purchases_return_add_payment");
+  const canAddPurchaseShipment = hasPermission("purchases_return_add_shipment");
+  const canDeletePurchaseReturn = hasPermission("purchases_return_delete");
+  const canAddDamageReturnPayment = hasPermission("damage_return_add_payment");
+  const canAddDamageReturnShipment = hasPermission("damage_return_add_shipment");
+  const canDeleteDamageReturn = hasPermission("damage_return_delete");
+
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -104,6 +113,9 @@ export default function AllPurchaseReturns() {
   }, []);
 
   const openShipmentModal = async (row) => {
+    if (isItemsCompensationFullyShipped(row)) {
+      return;
+    }
     try {
       const destinationType = row.sourceType || "store";
       const destinations = await fetchDestinations(destinationType);
@@ -205,24 +217,36 @@ export default function AllPurchaseReturns() {
     }
   };
 
-  const openPaymentsModal = async (row) => {
-    setPaymentsModal({ open: true, row, loading: true, payments: [], totalPaid: 0 });
+  const openDetailsModal = (row, tab = "returned_items") => {
+    setDetailsModal({
+      open: true,
+      row,
+      activeTab: tab,
+    });
     setActiveDropdown(null);
-    try {
-      const res = await fetch(API_ROUTES.PURCHASE_RETURN_PAYMENTS(row.id), {
-        headers: { Authorization: `Bearer ${token}` },
+  };
+
+  const getShippedQtyByLine = (row) => {
+    const shipped = {};
+    (row?.compensationShipments || []).forEach((shipment) => {
+      (shipment.items || []).forEach((item) => {
+        const key = `${item.itemType}:${item.itemType === "product" ? item.productId : item.materialId}`;
+        shipped[key] = (shipped[key] || 0) + Number(item.quantity || 0);
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to fetch payments");
-      setPaymentsModal((prev) => ({
-        ...prev,
-        loading: false,
-        payments: data.payments || [],
-        totalPaid: Number(data.totalPaid || 0),
-      }));
-    } catch (_) {
-      setPaymentsModal((prev) => ({ ...prev, loading: false, payments: [], totalPaid: 0 }));
-    }
+    });
+    return shipped;
+  };
+
+  const isItemsCompensationFullyShipped = (row) => {
+    if (!row || row.compensationType !== "items") return false;
+    const shippedByLine = getShippedQtyByLine(row);
+    const returnItems = Array.isArray(row.items) ? row.items : [];
+    if (!returnItems.length) return false;
+    return returnItems.every((item) => {
+      const key = `${item.itemType}:${item.itemType === "product" ? item.productId : item.materialId}`;
+      const returnedQty = Number(item.quantity || 0);
+      return shippedByLine[key] >= returnedQty;
+    });
   };
 
   const handleDeleteReturn = async (row) => {
@@ -257,7 +281,9 @@ export default function AllPurchaseReturns() {
             <Package className="text-white" size={32} />
           </div>
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">All Purchase Returns</h1>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-violet-600 to-indigo-600 bg-clip-text text-transparent">
+              All { typeFilter === "purchase_return" ? "Purchase Returns" : "Damage Returns" }
+            </h1>
             <p className="text-gray-600">View returns, add shipments, and manage compensation payments.</p>
           </div>
         </div>
@@ -326,11 +352,45 @@ export default function AllPurchaseReturns() {
                         </button>
                         {activeDropdown === row.id && (
                           <div className="absolute right-0 mt-1 w-52 bg-white border border-gray-200 shadow-xl rounded-xl z-20 py-1">
-                            <button onClick={() => { setViewModal({ open: true, row }); setActiveDropdown(null); }} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2"><Eye size={14} /> View</button>
-                            <button onClick={() => openShipmentModal(row)} className="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 flex items-center gap-2"><Truck size={14} /> Add Shipment</button>
-                            <button onClick={() => openPaymentModal(row)} className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 flex items-center gap-2"><CreditCard size={14} /> Add Payment</button>
-                            <button onClick={() => openPaymentsModal(row)} className="w-full text-left px-3 py-2 text-sm hover:bg-amber-50 flex items-center gap-2"><AlertTriangle size={14} /> View Payments</button>
-                            <button disabled={deletingId === row.id} onClick={() => handleDeleteReturn(row)} className="w-full text-left px-3 py-2 text-sm hover:bg-rose-50 text-rose-700 flex items-center gap-2 disabled:opacity-60"><Trash2 size={14} /> {deletingId === row.id ? "Deleting..." : "Delete"}</button>
+                            
+                            <button 
+                              onClick={() => openDetailsModal(row, "returned_items")} 
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2">
+                              <Eye size={14} /> View Details
+                            </button>
+
+                            {row.compensationType === "items" && !isItemsCompensationFullyShipped(row) && ((typeFilter === "purchase_return" && canAddPurchaseShipment) || (typeFilter === "damage_return" && canAddDamageReturnShipment)) ? (
+                              <button 
+                                onClick={() => openShipmentModal(row)} 
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 flex items-center gap-2">
+                                <Truck size={14} /> 
+                                Add Shipment
+                              </button>
+                            ) : (
+                              <span className="block px-3 py-2 text-sm text-gray-600">
+                                Select a return type to add payment and shipment.
+                              </span>
+                            )}
+
+                            { row.compensationType != "items" && (Number(row.totalReturnValue || 0).toFixed(2) < Number(row.compensationAmount || 0).toFixed(2)) && ((typeFilter === "purchase_return" && canAddPurchasePayment) || (typeFilter === "damage_return" && canAddDamageReturnPayment)) && (
+                              <button 
+                                onClick={() => openPaymentModal(row)} 
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 flex items-center gap-2">
+                                <CreditCard size={14} />
+                                Add Payment
+                              </button>
+                            )}
+
+                            {((typeFilter === "purchase_return" && canDeletePurchaseReturn) || (typeFilter === "damage_return" && canDeleteDamageReturn)) && (
+                              <button 
+                                disabled={deletingId === row.id} 
+                                onClick={() => handleDeleteReturn(row)} 
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-rose-50 text-rose-700 flex items-center gap-2 disabled:opacity-60">
+                                <Trash2 size={14} /> 
+                                {deletingId === row.id ? "Deleting..." : "Delete"}
+                              </button>
+                            )}
+
                           </div>
                         )}
                       </div>
@@ -357,22 +417,96 @@ export default function AllPurchaseReturns() {
         </div>
       </div>
 
-      {viewModal.open && viewModal.row && (
+      {detailsModal.open && detailsModal.row && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b flex items-center justify-between">
-              <h3 className="font-semibold text-lg">Return Details - {viewModal.row.reference}</h3>
-              <button onClick={() => setViewModal({ open: false, row: null })}><XCircle /></button>
+              <h3 className="font-semibold text-lg">Return Details - {detailsModal.row.reference}</h3>
+              <button onClick={() => setDetailsModal({ open: false, row: null, activeTab: "returned_items" })}><XCircle /></button>
+            </div>
+            <div className="px-5 pt-4 border-b">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setDetailsModal((prev) => ({ ...prev, activeTab: "returned_items" }))}
+                  className={`px-3 py-2 text-sm rounded-t-lg ${detailsModal.activeTab === "returned_items" ? "bg-indigo-100 text-indigo-700 font-medium" : "text-gray-600 hover:bg-gray-100"}`}
+                >
+                  Returned Items
+                </button>
+                <button
+                  onClick={() => setDetailsModal((prev) => ({ ...prev, activeTab: "shipments" }))}
+                  className={`px-3 py-2 text-sm rounded-t-lg ${detailsModal.activeTab === "shipments" ? "bg-indigo-100 text-indigo-700 font-medium" : "text-gray-600 hover:bg-gray-100"}`}
+                >
+                  Shipments
+                </button>
+                <button
+                  onClick={() => setDetailsModal((prev) => ({ ...prev, activeTab: "payments" }))}
+                  className={`px-3 py-2 text-sm rounded-t-lg ${detailsModal.activeTab === "payments" ? "bg-indigo-100 text-indigo-700 font-medium" : "text-gray-600 hover:bg-gray-100"}`}
+                >
+                  Payments
+                </button>
+              </div>
             </div>
             <div className="p-5 space-y-3">
-              {(viewModal.row.items || []).map((item, idx) => (
-                <div key={idx} className="grid grid-cols-4 gap-2 text-sm border-b pb-2">
-                  <div>{item.product?.name || item.material?.name || "-"}</div>
-                  <div>{item.itemType}</div>
-                  <div>Qty: {Number(item.quantity || 0)}</div>
-                  <div>Price: ${Number(item.unitPrice || 0).toFixed(2)}</div>
-                </div>
-              ))}
+              {detailsModal.activeTab === "returned_items" && (
+                <>
+                  {(detailsModal.row.items || []).map((item, idx) => (
+                    <div key={idx} className="grid grid-cols-4 gap-2 text-sm border-b pb-2">
+                      <div>{item.product?.name || item.material?.name || "-"}</div>
+                      <div>{item.itemType}</div>
+                      <div>Qty: {Number(item.quantity || 0)}</div>
+                      <div>Price: ${Number(item.unitPrice || 0).toFixed(2)}</div>
+                    </div>
+                  ))}
+                  {!detailsModal.row.items?.length && <div className="text-sm text-gray-500">No returned items.</div>}
+                </>
+              )}
+
+              {detailsModal.activeTab === "shipments" && (
+                <>
+                  {(detailsModal.row.compensationShipments || []).map((shipment) => (
+                    <div key={shipment.id} className="border rounded-xl p-3">
+                      <div className="flex items-center justify-between text-sm mb-2">
+                        <div className="font-semibold">{shipment.reference || `Shipment #${shipment.id}`}</div>
+                        <div className="text-gray-500">{shipment.receivedAt ? new Date(shipment.receivedAt).toLocaleString() : "-"}</div>
+                      </div>
+                      <div className="text-xs text-gray-600 mb-2">
+                        Destination: {shipment.destinationType} #{shipment.destinationId}
+                      </div>
+                      <div className="space-y-1">
+                        {(shipment.items || []).map((item) => (
+                          <div key={item.id} className="grid grid-cols-4 gap-2 text-sm">
+                            <div>{item.product?.name || item.material?.name || "-"}</div>
+                            <div>{item.itemType}</div>
+                            <div>Qty: {Number(item.quantity || 0)}</div>
+                            <div>Price: ${Number(item.unitPrice || 0).toFixed(2)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {!detailsModal.row.compensationShipments?.length && <div className="text-sm text-gray-500">No shipments found.</div>}
+                </>
+              )}
+
+              {detailsModal.activeTab === "payments" && (
+                <>
+                  <div className="mb-3 text-sm">
+                    Total Paid: <strong>${Number(detailsModal.row.paymentsTotal || 0).toFixed(2)}</strong>
+                  </div>
+                  <div className="space-y-2">
+                    {(detailsModal.row.compensationPayments || []).map((p) => (
+                      <div key={p.id} className="border rounded-lg p-3 text-sm flex items-center justify-between">
+                        <div>
+                          <div className="font-semibold">${Number(p.amount || 0).toFixed(2)} ({p.paymentMethod})</div>
+                          <div className="text-gray-500">{p.note || "-"}</div>
+                        </div>
+                        <div className="text-gray-500">{new Date(p.createdAt).toLocaleString()}</div>
+                      </div>
+                    ))}
+                    {!detailsModal.row.compensationPayments?.length && <div className="text-sm text-gray-500">No payments found.</div>}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -385,6 +519,11 @@ export default function AllPurchaseReturns() {
               <h3 className="font-semibold text-lg">Add Shipment - {shipmentModal.row.reference}</h3>
             </div>
             <div className="p-5 space-y-3">
+              {isItemsCompensationFullyShipped(shipmentModal.row) && (
+                <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  This return is fully compensated by shipments. New shipment is not allowed.
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <select
                   value={shipmentModal.destinationType}
@@ -423,7 +562,7 @@ export default function AllPurchaseReturns() {
               {shipmentModal.error && <div className="text-rose-600 text-sm">{shipmentModal.error}</div>}
               <div className="flex justify-end gap-2">
                 <button onClick={() => setShipmentModal((prev) => ({ ...prev, open: false }))} className="px-4 py-2 rounded-lg border border-gray-300">Cancel</button>
-                <button onClick={submitShipment} disabled={shipmentModal.saving} className="px-4 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-60">{shipmentModal.saving ? "Saving..." : "Add Shipment"}</button>
+                <button onClick={submitShipment} disabled={shipmentModal.saving || isItemsCompensationFullyShipped(shipmentModal.row)} className="px-4 py-2 rounded-lg bg-indigo-600 text-white disabled:opacity-60">{shipmentModal.saving ? "Saving..." : "Add Shipment"}</button>
               </div>
             </div>
           </div>
@@ -455,37 +594,7 @@ export default function AllPurchaseReturns() {
         </div>
       )}
 
-      {paymentsModal.open && paymentsModal.row && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto">
-            <div className="p-5 border-b flex items-center justify-between">
-              <h3 className="font-semibold text-lg">Payments - {paymentsModal.row.reference}</h3>
-              <button onClick={() => setPaymentsModal({ open: false, row: null, loading: false, payments: [], totalPaid: 0 })}><XCircle /></button>
-            </div>
-            <div className="p-5">
-              {paymentsModal.loading ? (
-                <div className="py-8 flex justify-center"><Loader2 className="animate-spin text-indigo-500" /></div>
-              ) : (
-                <>
-                  <div className="mb-3 text-sm">Total Paid: <strong>${Number(paymentsModal.totalPaid || 0).toFixed(2)}</strong></div>
-                  <div className="space-y-2">
-                    {(paymentsModal.payments || []).map((p) => (
-                      <div key={p.id} className="border rounded-lg p-3 text-sm flex items-center justify-between">
-                        <div>
-                          <div className="font-semibold">${Number(p.amount || 0).toFixed(2)} ({p.paymentMethod})</div>
-                          <div className="text-gray-500">{p.note || "-"}</div>
-                        </div>
-                        <div className="text-gray-500">{new Date(p.createdAt).toLocaleString()}</div>
-                      </div>
-                    ))}
-                    {!paymentsModal.payments?.length && <div className="text-gray-500 text-sm">No payments found.</div>}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      
     </div>
   );
 }

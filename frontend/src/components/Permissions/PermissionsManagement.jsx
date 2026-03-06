@@ -100,9 +100,9 @@ export default function PermissionsManagement() {
     'product_category_read', 'product_category_create', 'product_category_edit', 'product_category_delete',
 
     // Store factory, shop management permissions
-    'factory_create', 'factory_edit', 'factory_delete', 'factory_read', 'factory_inventory_adjustment_create', 'factory_inventory_adjustment_read',
-    'store_create', 'store_edit', 'store_delete', 'store_read', 'store_inventory_adjustment_create', 'store_inventory_adjustment_read',
-    'shop_create', 'shop_edit', 'shop_delete', 'shop_read', 'shop_inventory_adjustment_create', 'shop_inventory_adjustment_read',
+    'factory_create', 'factory_edit', 'factory_delete', 'factory_read', 'factory_inventory_manage', 'factory_inventory_adjustment_create', 'factory_inventory_adjustment_read',
+    'store_create', 'store_edit', 'store_delete', 'store_read', 'store_inventory_manage', 'store_inventory_adjustment_create', 'store_inventory_adjustment_read',
+    'shop_create', 'shop_edit', 'shop_delete', 'shop_read', 'shop_inventory_manage', 'shop_inventory_adjustment_create', 'shop_inventory_adjustment_read',
     
 
     // Add cash register and bank account permissions
@@ -117,14 +117,14 @@ export default function PermissionsManagement() {
     'general_ledger_report', 'balance_sheet_report',
 
     // Add purchase permissions
-    'purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment',
-    'purchases_return_create', 'purchases_return_edit', 'purchases_return_delete', 'purchases_return_read',
+    'purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchase_add_payment', 'purchase_add_shipment',
+    'purchases_return_create', 'purchases_return_add_payment', 'purchases_return_add_shipment', 'purchases_return_delete', 'purchases_return_read',
 
     // Add production permissions
     'production_create', 'production_edit', 'production_delete', 'production_read', 'production_change_status', 
 
     // Add sales permissions
-    'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today',  'sales_open_close', 'sales_add_payment',
+    'sales_create', 'previous_date_sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today',  'sales_open_close', 'sales_add_payment',
     'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read',
     'sales_warranty',
 
@@ -132,10 +132,10 @@ export default function PermissionsManagement() {
     'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive', 'transfer_return',
 
     // Add Wastage/Damage permissions
-    'damage_create', 'damage_read', 'damage_edit', 'damage_delete', 'damage_return_create', 'damage_return_read', 'damage_return_edit', 'damage_return_delete',
+    'damage_create', 'damage_read', 'damage_edit', 'damage_delete', 'damage_return_create', 'damage_return_read', 'damage_return_add_payment', 'damage_return_add_shipment', 'damage_return_delete',
 
     // Add Repair permissions
-    'repairs_create', 'repairs_read', 'repairs_edit', 'repairs_delete', 
+    'repairs_create', 'repairs_read', 'repairs_receive', 'repairs_delete', 
 
     // Add Expense permissions
     'expenses_create', 'expenses_edit', 'expenses_delete', 'expenses_read', 'expense_category_manage',
@@ -216,21 +216,21 @@ export default function PermissionsManagement() {
       key: 'factory',
       name: 'Factory',
       icon: <Factory size={18} className="text-cyan-500" />,
-      permissions: ['factory_create', 'factory_edit', 'factory_delete', 'factory_read', 'factory_inventory_adjustment_create', 'factory_inventory_adjustment_read']
+      permissions: ['factory_create', 'factory_edit', 'factory_delete', 'factory_read', 'factory_inventory_manage', 'factory_inventory_adjustment_create', 'factory_inventory_adjustment_read']
     },
     // Store Management
     {
       key: 'store',
       name: 'Store',
       icon: <Store size={18} className="text-indigo-500" />,
-      permissions: ['store_create', 'store_edit', 'store_delete', 'store_read', 'store_inventory_adjustment_create', 'store_inventory_adjustment_read']
+      permissions: ['store_create', 'store_edit', 'store_delete', 'store_read', 'store_inventory_manage', 'store_inventory_adjustment_create', 'store_inventory_adjustment_read']
     },
     // Shop Management
     {
       key: 'shop',
       name: 'Shop',
       icon: <ShoppingBag size={18} className="text-pink-500" />,
-      permissions: ['shop_create', 'shop_edit', 'shop_delete', 'shop_read', 'shop_inventory_adjustment_create', 'shop_inventory_adjustment_read']
+      permissions: ['shop_create', 'shop_edit', 'shop_delete', 'shop_read', 'shop_inventory_manage', 'shop_inventory_adjustment_create', 'shop_inventory_adjustment_read']
     },
     // Cash Register Management
     {
@@ -269,7 +269,7 @@ export default function PermissionsManagement() {
       name: 'Purchase',
       icon: <ShoppingCart size={18} className="text-teal-500" />,
       permissions: [
-        'purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment'
+        'purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchase_add_payment', 'purchase_add_shipment',
       ]
     },
     // Purchase Return Management
@@ -277,7 +277,7 @@ export default function PermissionsManagement() {
       key: 'purchases_return',
       name: 'Purchase Return',
       icon: <PackageX size={18} className="text-rose-500" />,
-      permissions: ['purchases_return_create', 'purchases_return_edit', 'purchases_return_delete', 'purchases_return_read']
+      permissions: ['purchases_return_create', 'purchases_return_add_payment', 'purchases_return_add_shipment', 'purchases_return_delete', 'purchases_return_read']
     },
     // Production Management
     {
@@ -292,7 +292,7 @@ export default function PermissionsManagement() {
       name: 'Sales',
       icon: <Receipt size={18} className="text-emerald-500" />,
       permissions: [
-        'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_add_payment', 'sales_warranty'
+        'sales_create', 'previous_date_sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_add_payment', 'sales_warranty'
       ]
     },
     // Sales Return Management
@@ -314,14 +314,14 @@ export default function PermissionsManagement() {
       key: 'damage',
       name: 'Wastage/Damage',
       icon: <AlertTriangle size={18} className="text-red-500" />,
-      permissions: ['damage_create', 'damage_edit', 'damage_delete', 'damage_read', 'damage_return_create', 'damage_return_edit', 'damage_return_delete', 'damage_return_read']
+      permissions: ['damage_create', 'damage_edit', 'damage_delete', 'damage_read', 'damage_return_create', 'damage_return_add_payment', 'damage_return_add_shipment', 'damage_return_delete', 'damage_return_read']
     },
     // Repair Management
     {
       key: 'repairs',
       name: 'Repairs',
       icon: <Wrench size={18} className="text-orange-600" />,
-      permissions: ['repairs_create', 'repairs_edit', 'repairs_delete', 'repairs_read']
+      permissions: ['repairs_create', 'repairs_receive', 'repairs_delete', 'repairs_read']
     },
     // Expense Management
     {

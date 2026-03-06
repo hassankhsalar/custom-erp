@@ -198,6 +198,38 @@ router.get('/all-products', async (req, res) => {
   }
 });
 
+// Get products by IDs (optimized for requisition/production prefill)
+router.get('/by-ids', async (req, res) => {
+  const rawIds = String(req.query.ids || '')
+    .split(',')
+    .map((v) => parseInt(v.trim(), 10))
+    .filter((v) => Number.isFinite(v) && v > 0);
+
+  const uniqueIds = [...new Set(rawIds)].slice(0, 500);
+  if (!uniqueIds.length) {
+    return res.json({ products: [] });
+  }
+
+  try {
+    const products = await prisma.product.findMany({
+      where: {
+        deleted_at: false,
+        id: { in: uniqueIds },
+      },
+      include: {
+        materials: {
+          include: {
+            material: true,
+          },
+        },
+      },
+    });
+    res.json({ products });
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Failed to fetch products by ids' });
+  }
+});
+
 // Get a single product by ID
 router.get('/:id', async (req, res) => {
   try {

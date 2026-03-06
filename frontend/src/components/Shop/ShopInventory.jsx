@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ShoppingBag,
   Package,
@@ -21,10 +22,12 @@ import {
   Trash2,
   Pencil,
   X,
-  Store
+  Store,
+  History
 } from 'lucide-react';
 import { API_ROUTES } from '../../config';
 import { activeOnly } from '../../utils/softDelete';
+import { usePermission } from '../../hooks/usePermission';
 
 const ShopInventory = () => {
   const [shops, setShops] = useState([]);
@@ -35,9 +38,10 @@ const ShopInventory = () => {
   const [error, setError] = useState(null);
   const [modal, setModal] = useState({ isOpen: false, data: null });
   const [editModal, setEditModal] = useState({ isOpen: false, data: null });
-  const [editForm, setEditForm] = useState({ stock: '', sale_price: '', alert_quantity: '' });
+  const [editForm, setEditForm] = useState({ stock: '', sale_price: '', alert_quantity: '', reason: '', isAccountAdjusted: false });
   const [savingEdit, setSavingEdit] = useState(false);
   const token = localStorage.getItem('token');
+  const navigate = useNavigate();
   
   // Table states
   const [currentPage, setCurrentPage] = useState(1);
@@ -46,6 +50,10 @@ const ShopInventory = () => {
   const [serverTotalPages, setServerTotalPages] = useState(1);
   const [filters, setFilters] = useState({ searchTerm: '', filterType: 'all', sortBy: 'name', sortDir: 'asc', category: '', brand: '', unit: '' });
   const [appliedFilters, setAppliedFilters] = useState({ searchTerm: '', filterType: 'all', sortBy: 'name', sortDir: 'asc', category: '', brand: '', unit: '' });
+
+  const { hasPermission } = usePermission();
+  const canCreateAdjustment = hasPermission('shop_inventory_adjustment_create');
+  const canManageShopInventory = hasPermission('shop_inventory_manage');
 
   // Load shops on component mount
   useEffect(() => {
@@ -175,12 +183,14 @@ const ShopInventory = () => {
       stock: String(item.stock ?? ''),
       sale_price: item.sale_price === null || item.sale_price === undefined ? '' : String(item.sale_price),
       alert_quantity: item.alert_quantity === null || item.alert_quantity === undefined ? '' : String(item.alert_quantity),
+      reason: '',
+      isAccountAdjusted: false,
     });
   };
 
   const closeEditModal = () => {
     setEditModal({ isOpen: false, data: null });
-    setEditForm({ stock: '', sale_price: '', alert_quantity: '' });
+    setEditForm({ stock: '', sale_price: '', alert_quantity: '', reason: '', isAccountAdjusted: false });
     setSavingEdit(false);
   };
 
@@ -201,6 +211,9 @@ const ShopInventory = () => {
           stock: editForm.stock,
           sale_price: editForm.sale_price,
           alert_quantity: editForm.alert_quantity,
+          reason: editForm.reason,
+          date: new Date().toISOString(),
+          isAccountAdjusted: Math.abs((Number(editForm.stock) || 0) - (Number(editModal.data?.stock) || 0)) > 1e-9 ? Boolean(editForm.isAccountAdjusted) : false,
         }),
       });
 
@@ -256,6 +269,17 @@ const ShopInventory = () => {
       color: 'bg-gradient-to-r from-emerald-500 to-green-500',
       icon: <CheckCircle size={14} />
     };
+  };
+
+  const openItemHistory = (item) => {
+    if (!selectedShop) return;
+    const params = new URLSearchParams({
+      placeType: 'shop',
+      placeId: String(selectedShop),
+      itemType: String(item.type || ''),
+      itemId: String(item.id),
+    });
+    navigate(`/shopinventory/adjustments?${params.toString()}`);
   };
 
   const exportToCSV = () => {
@@ -699,12 +723,23 @@ const ShopInventory = () => {
                               >
                                 <Eye size={16} />
                               </button>
+
+                              { canManageShopInventory && (
+                                <button
+                                  onClick={() => openEditModal(item)}
+                                  className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-300"
+                                  title="Edit Inventory"
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                              )}
+
                               <button
-                                onClick={() => openEditModal(item)}
-                                className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-300"
-                                title="Edit Inventory"
+                                onClick={() => openItemHistory(item)}
+                                className="p-2 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors duration-300"
+                                title="Adjustment History"
                               >
-                                <Pencil size={16} />
+                                <History size={16} />
                               </button>
                             </div>
                           </td>
@@ -881,7 +916,7 @@ const ShopInventory = () => {
           </div>
         </div>
       )}
-      {editModal.isOpen && editModal.data && (
+      {editModal.isOpen && editModal.data && canManageShopInventory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeEditModal}></div>
           <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-xl w-full overflow-hidden">
@@ -895,18 +930,49 @@ const ShopInventory = () => {
               <p className="text-gray-600 mt-1">{editModal.data.name}</p>
             </div>
             <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Stock</label>
-                <input type="number" min="0" step="0.0001" value={editForm.stock} onChange={(e) => setEditForm((prev) => ({ ...prev, stock: e.target.value }))} className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Sale Price</label>
-                <input type="number" min="0" step="0.0001" value={editForm.sale_price} onChange={(e) => setEditForm((prev) => ({ ...prev, sale_price: e.target.value }))} className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Alert Quantity</label>
-                <input type="number" min="0" step="0.0001" value={editForm.alert_quantity} onChange={(e) => setEditForm((prev) => ({ ...prev, alert_quantity: e.target.value }))} className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
-              </div>
+              {(() => {
+                const stockChanged = Math.abs((Number(editForm.stock) || 0) - (Number(editModal.data?.stock) || 0)) > 1e-9;
+                return (
+                  <>
+                    {canCreateAdjustment && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Stock</label>
+                        <input type="number" min="0" step="0.0001" value={editForm.stock} onChange={(e) => setEditForm((prev) => ({ ...prev, stock: e.target.value }))} className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+                      </div>
+                    )}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Sale Price</label>
+                      <input type="number" min="0" step="0.0001" value={editForm.sale_price} onChange={(e) => setEditForm((prev) => ({ ...prev, sale_price: e.target.value }))} className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Alert Quantity</label>
+                      <input type="number" min="0" step="0.0001" value={editForm.alert_quantity} onChange={(e) => setEditForm((prev) => ({ ...prev, alert_quantity: e.target.value }))} className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+                    </div>
+                    {stockChanged && canCreateAdjustment && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Adjustment Reason</label>
+                          <input
+                            type="text"
+                            value={editForm.reason}
+                            onChange={(e) => setEditForm((prev) => ({ ...prev, reason: e.target.value }))}
+                            placeholder="Why is inventory adjusted?"
+                            className="w-full px-4 py-3 bg-white/80 backdrop-blur-sm border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                          />
+                        </div>
+                        <label className="flex items-center gap-2 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(editForm.isAccountAdjusted)}
+                            onChange={(e) => setEditForm((prev) => ({ ...prev, isAccountAdjusted: e.target.checked }))}
+                          />
+                          Also adjust accounts
+                        </label>
+                      </>
+                    )}
+                  </>
+                );
+              })()}
             </div>
             <div className="p-6 border-t border-white/50 bg-white/80 backdrop-blur-sm flex justify-end gap-3">
               <button onClick={closeEditModal} className="px-5 py-2.5 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60">Cancel</button>

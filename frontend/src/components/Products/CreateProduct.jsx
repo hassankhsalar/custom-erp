@@ -63,7 +63,7 @@ const CreateProduct = () => {
       if (!token) return;
       try {
         const [materialsRes, unitsRes, brandsRes, categoriesRes] = await Promise.all([
-          axios.get(API_ROUTES.MATERIALS, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(API_ROUTES.MATERIALS_ALL, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_ROUTES.MASTER_DATA_UNITS}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_ROUTES.MASTER_DATA_BRANDS}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_ROUTES.MASTER_DATA_PRODUCT_CATEGORIES}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),

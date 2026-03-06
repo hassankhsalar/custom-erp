@@ -32,6 +32,7 @@ import {
   Trash2
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import { usePermission } from "../../hooks/usePermission";
 
 const RequisitionList = () => {
   const navigate = useNavigate();
@@ -69,6 +70,18 @@ const RequisitionList = () => {
   const [requisitionModal, setRequisitionModal] = useState({ open: false, loading: false, data: null, error: "" });
   const initializedRef = useRef(false);
   const skipNextPageFetchRef = useRef(false);
+
+  // 'requisition_create', 'requisition_read', 'requisition_update', 'requisition_delete', 'requisition_approve', 'production_order_read', 'transfer_order_read', 'purchase_order_read'
+  const { hasPermission } = usePermission();
+  const hasPermissionToCreate = hasPermission('requisition_create');
+  const hasPermissionToRead = hasPermission('requisition_read');
+  const hasPermissionToUpdate = hasPermission('requisition_update');
+  const hasPermissionToDelete = hasPermission('requisition_delete');
+  const hasPermissionToApprove = hasPermission('requisition_approve');
+  const hasPermissionToReadProductionOrder = hasPermission('production_order_read');
+  const hasPermissionToReadTransferOrder = hasPermission('transfer_order_read');
+  const hasPermissionToReadPurchaseOrder = hasPermission('purchase_order_read');
+
 
   useEffect(() => {
     const fetchPlaces = async () => {
@@ -314,7 +327,8 @@ const RequisitionList = () => {
     if (type === "transfer") {
       navigate("/transfer/add", { state: { requisitionOrder: order, orderType: "transfer" } });
     } else if (type === "production") {
-      navigate("/productions/new", { state: { requisitionOrder: order, orderType: "production" } });
+      const sectionId = order?.id ? `?sectionId=${order.id}` : "";
+      navigate(`/productions/new${sectionId}`, { state: { requisitionOrder: order, orderType: "production" } });
     } else {
       navigate("/purchase/new", { state: { requisitionOrder: order, orderType: "purchase" } });
     }
@@ -571,25 +585,27 @@ const RequisitionList = () => {
               </div>
             </div>
             
-            <button
-              type="button"
-              onClick={() => navigate("/requisition/create")}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <Plus size={20} />
-              Create Requisition
-            </button>
+            { hasPermissionToCreate && (
+              <button
+                type="button"
+                onClick={() => navigate("/requisition/create")}
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+              >
+                <Plus size={20} />
+                Create Requisition
+              </button>
+            )}
           </div>
         </div>
 
         {/* Tab Navigation */}
         <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-2 mb-6 inline-flex flex-wrap gap-2">
-          {[
-            { id: "requisitions", label: "Requisitions", icon: <ClipboardList size={16} /> },
-            { id: "transfer_orders", label: "Transfer Orders", icon: <Truck size={16} /> },
-            { id: "production_orders", label: "Production Orders", icon: <Factory size={16} /> },
-            { id: "purchase_orders", label: "Purchase Orders", icon: <ShoppingBag size={16} /> }
-          ].map((item) => (
+          {[{ id: "requisitions", label: "Requisitions", icon: <ClipboardList size={16} /> },
+            hasPermissionToReadProductionOrder && { id: "production_orders", label: "Production Orders", icon: <Factory size={16} /> },
+            hasPermissionToReadTransferOrder && { id: "transfer_orders", label: "Transfer Orders", icon: <Truck size={16} /> },
+            hasPermissionToReadPurchaseOrder && { id: "purchase_orders", label: "Purchase Orders", icon: <ShoppingBag size={16} /> }
+          ].filter(Boolean)
+          .map((item) => (
             <button
               key={item.id}
               className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 flex items-center gap-2 ${
@@ -804,7 +820,7 @@ const RequisitionList = () => {
                                 <Eye size={16} />
                               </button>
                               
-                              {!row.isSegmented && row.requesterUserId === currentUser?.id && (
+                              {!row.isSegmented && ( isAdmin || row.requesterUserId === currentUser?.id || hasPermissionToUpdate ) && (
                                 <button
                                   className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
                                   onClick={() => navigate(`/requisition/edit/${row.id}`)}
@@ -814,7 +830,7 @@ const RequisitionList = () => {
                                 </button>
                               )}
 
-                              {!row.isSegmented && (isAdmin || row.requesterUserId === currentUser?.id) && (
+                              {!row.isSegmented && (isAdmin || row.requesterUserId === currentUser?.id || hasPermissionToDelete) && (
                                 <button
                                   className="p-2 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-colors duration-300"
                                   onClick={() => deleteRequisition(row.id)}
@@ -824,7 +840,7 @@ const RequisitionList = () => {
                                 </button>
                               )}
                               
-                              {isAdmin && row.status === "pending" && (
+                              { (isAdmin || hasPermissionToApprove ) && row.status === "pending" && (
                                 <>
                                   <button
                                     className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors duration-300"

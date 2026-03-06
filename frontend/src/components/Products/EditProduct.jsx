@@ -110,7 +110,7 @@ const EditProduct = () => {
       if (!token) return;
       
       try {
-        const response = await axios.get(API_ROUTES.MATERIALS, {
+        const response = await axios.get(API_ROUTES.MATERIALS_ALL, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',

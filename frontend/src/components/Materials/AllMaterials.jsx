@@ -27,6 +27,7 @@ import {
   Box,
   Gauge
 } from 'lucide-react';
+import { usePermission } from '../../hooks/usePermission';
 
 const MaterialOverviewCards = memo(function MaterialOverviewCards({ overview }) {
   return (
@@ -105,6 +106,12 @@ const AllMaterials = () => {
   const [sortDir, setSortDir] = useState('asc');
   const [appliedSortBy, setAppliedSortBy] = useState('name');
   const [appliedSortDir, setAppliedSortDir] = useState('asc');
+
+  const { hasPermission } = usePermission();
+  const canCreate = hasPermission('material_create');
+  const canEdit = hasPermission('material_edit');
+  const canDelete = hasPermission('material_delete');
+
 
   // Function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -293,13 +300,15 @@ const AllMaterials = () => {
             </div>
             
             <div className="flex items-center gap-4">
-              <Link 
-                to="/materials/add" 
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                <Settings size={20} />
-                New Material
-              </Link>
+              { canCreate && (
+                <Link 
+                  to="/materials/add" 
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <Settings size={20} />
+                  New Material
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -499,22 +508,25 @@ const AllMaterials = () => {
                                   <Eye size={16} />
                                 </button>
                                 
-                                <Link
-                                  to={`/materials/edit/${material.id}`}
-                                  className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
-                                  title="Edit"
-                                >
-                                  <Pen size={16} />
-                                </Link>
+                                {canEdit && (
+                                  <Link
+                                    to={`/materials/edit/${material.id}`}
+                                    className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
+                                    title="Edit"
+                                  >
+                                    <Pen size={16} />
+                                  </Link>
+                                )}
                                 
-                                <button
-                                  onClick={() => handleDelete(material.id)}
-                                  className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
-                                  title="Delete"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                                
+                                {canDelete && (
+                                  <button
+                                    onClick={() => handleDelete(material.id)}
+                                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                )}
                                 
                               </div>
                             </td>

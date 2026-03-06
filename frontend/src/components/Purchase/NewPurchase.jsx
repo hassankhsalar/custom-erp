@@ -49,6 +49,7 @@ export default function NewPurchase() {
   const [bankAccounts, setBankAccounts] = useState([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [discountType, setDiscountType] = useState("percent");
   const toAltUnits = (arr) => (Array.isArray(arr) ? arr : [])
     .map((u) => ({ unitname: String(u?.unitname || "").trim(), multiplier: Number(u?.multiplier) }))
     .filter((u) => u.unitname && Number.isFinite(u.multiplier) && u.multiplier > 0);
@@ -310,12 +311,17 @@ const fetchBankAccounts = async () => {
   // Calculate subtotal from purchase items
   useEffect(() => {
     const subtotal = purchaseItems.reduce((sum, item) => sum + item.total, 0);
-    const discountPercent = parseFloat(form.discount) || 0;
+    const rawDiscountValue = parseFloat(form.discount) || 0;
+    const discountValue = discountType === "percent"
+      ? Math.min(100, Math.max(0, rawDiscountValue))
+      : Math.max(0, rawDiscountValue);
     const taxPercent = parseFloat(form.tax) || 0;
     const shippingCost = parseFloat(form.shippingCost) || 0;
     
     // Calculate discount amount
-    const discountAmount = (discountPercent / 100) * subtotal;
+    const discountAmount = discountType === "percent"
+      ? (discountValue / 100) * subtotal
+      : Math.min(subtotal, discountValue);
     
     // Calculate amount after discount
     const amountAfterDiscount = subtotal - discountAmount;
@@ -341,7 +347,7 @@ const fetchBankAccounts = async () => {
     });
     
     setForm(prev => ({ ...prev, grandTotal }));
-  }, [purchaseItems, form.discount, form.tax, form.shippingCost, form.paidAmount]);
+  }, [purchaseItems, form.discount, form.tax, form.shippingCost, form.paidAmount, discountType]);
 
   useEffect(() => {
     const computeShippingStatus = () => {
@@ -386,7 +392,7 @@ const fetchBankAccounts = async () => {
             defaultUnit: m.unit || "unit",
             alternativeNames: m.alternative_names || [],
             alternativeUnits: toAltUnits(m.alternative_units),
-            standardPrice: m.unit_cost,
+            standardPrice: Number(m.unit_cost) || 0,
             image: m.image || m.photo,
           })).slice(0, 5);
 
@@ -407,7 +413,7 @@ const fetchBankAccounts = async () => {
             defaultUnit: p.unit || "unit",
             alternativeNames: p.alternative_names || [],
             alternativeUnits: toAltUnits(p.alternative_units),
-            standardPrice: p.cost,
+            standardPrice: Number(p.cost) || 0,
             image: p.image || p.photo || p.thumbnail,
           })).slice(0, 5);
 
@@ -426,9 +432,25 @@ const fetchBankAccounts = async () => {
 
   const handleFormChange = (e) => {
     const { name, value } = e.target;
+
+    if (name === "discount") {
+      if (value && (isNaN(value) || parseFloat(value) < 0)) {
+        return;
+      }
+      const numericValue = parseFloat(value);
+      if (!Number.isFinite(numericValue)) {
+        setForm(prev => ({ ...prev, [name]: value }));
+        return;
+      }
+      const normalizedDiscount = discountType === "percent"
+        ? Math.min(100, Math.max(0, numericValue))
+        : Math.max(0, numericValue);
+      setForm(prev => ({ ...prev, [name]: String(normalizedDiscount) }));
+      return;
+    }
     
     // Validate numeric inputs
-    if (["shippingCost", "discount", "tax", "paidAmount"].includes(name)) {
+    if (["shippingCost", "tax", "paidAmount"].includes(name)) {
       if (value && (isNaN(value) || parseFloat(value) < 0)) {
         return;
       }
@@ -513,6 +535,7 @@ const fetchBankAccounts = async () => {
 
   const handleItemSelect = (selectedItem) => {
     const { type, id, name, selectedName, unit, defaultUnit, alternativeNames, alternativeUnits, standardPrice, image } = selectedItem;
+    const normalizedStandardPrice = Number(standardPrice) || 0;
 
     // Create a new purchase item
     const newItem = {
@@ -532,15 +555,15 @@ const fetchBankAccounts = async () => {
       quantity: "1", // Default quantity (selected)
       selectedQuantity: "1",
       actualQuantity: 1,
-      unitPrice: standardPrice.toString(), // Default unit price
-      baseUnitPrice: standardPrice,
-      total: standardPrice, // Default total
+      unitPrice: normalizedStandardPrice.toString(), // Default unit price
+      baseUnitPrice: normalizedStandardPrice,
+      total: normalizedStandardPrice, // Default total
       receivedQuantity: "1",
       batchNumber: "",
       expiryDate: "",
       manufactureDate: "",
       batchNotes: "",
-      originalStandardPrice: standardPrice, // Store original standard price for comparison if needed
+      originalStandardPrice: normalizedStandardPrice, // Store original standard price for comparison if needed
     };
 
     // Add the new item to purchaseItems
@@ -617,12 +640,16 @@ const fetchBankAccounts = async () => {
         return;
       }
 
+      const discountPercentForApi = financialBreakdown.subtotal > 0
+        ? (financialBreakdown.discountAmount / financialBreakdown.subtotal) * 100
+        : 0;
+
       const payload = {
         supplierId: parseInt(form.supplierId),
         destinationType: form.destinationType,
         destinationId: parseInt(form.destinationId),
         shippingCost: parseFloat(form.shippingCost) || 0,
-        discount: parseFloat(form.discount) || 0,
+        discount: Number(Math.max(0, discountPercentForApi).toFixed(4)),
         tax: parseFloat(form.tax) || 0,
         paidAmount: paidAmount,
         paymentMethod: form.paymentMethod,
@@ -687,6 +714,7 @@ const fetchBankAccounts = async () => {
           reference: `PUR-${Date.now()}`
         });
         setDestinationType("store");
+        setDiscountType("percent");
         setPurchaseItems([]);
         setSearchState({
           searchTerm: "",
@@ -914,27 +942,7 @@ const fetchBankAccounts = async () => {
               </div>
 
               {/* Single Search Input for Items */}
-              <div className="relative mb-6" ref={searchInputRef} tabIndex={0} onFocus={() => {
-                if (searchState.searchTerm.length > 0) {
-                  setSearchState(prevState => ({ ...prevState, showSearchResults: true }));
-                } else {
-                  // If no search term, show all items when focused
-                  const allItems = [
-                    ...materials.slice(0, 10).map(m => ({
-                      type: "material", id: m.id, barcode: p.barcode || 'N/A', name: m.name, unit: m.unit, standardPrice: m.unit_cost, image: m.image || m.photo,
-                    })),
-                    ...products.slice(0, 10).map(p => ({
-                      type: "product", id: p.id, barcode: p.barcode || 'N/A', name: p.name, unit: p.unit || "unit", standardPrice: p.cost, image: p.image || p.photo || p.thumbnail,
-                    }))
-                  ];
-                  setSearchState(prevState => ({ ...prevState, showSearchResults: true, filteredResults: allItems }));
-                }
-              }} onBlur={() => {
-                // Hide results when focus is lost, with a small delay to allow click on result
-                setTimeout(() => {
-                  setSearchState(prevState => ({ ...prevState, showSearchResults: false }));
-                }, 100);
-              }}>
+              <div className="relative mb-6" ref={searchInputRef}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Search Material or Product
                 </label>
@@ -944,6 +952,34 @@ const fetchBankAccounts = async () => {
                       type="text"
                       placeholder="Search materials or products by name/barcode..."
                       value={searchState.searchTerm}
+                      onFocus={() => {
+                        if (searchState.searchTerm.length > 0) {
+                          setSearchState(prevState => ({ ...prevState, showSearchResults: true }));
+                        } else {
+                          // If no search term, show all items when focused
+                          const allItems = [
+                            ...materials.slice(0, 10).map(m => ({
+                              type: "material",
+                              id: m.id,
+                              barcode: m.barcode || 'N/A',
+                              name: m.name,
+                              unit: m.unit,
+                              standardPrice: Number(m.unit_cost) || 0,
+                              image: m.image || m.photo,
+                            })),
+                            ...products.slice(0, 10).map(p => ({
+                              type: "product",
+                              id: p.id,
+                              barcode: p.barcode || 'N/A',
+                              name: p.name,
+                              unit: p.unit || "unit",
+                              standardPrice: Number(p.cost) || 0,
+                              image: p.image || p.photo || p.thumbnail,
+                            }))
+                          ];
+                          setSearchState(prevState => ({ ...prevState, showSearchResults: true, filteredResults: allItems }));
+                        }
+                      }}
                       onChange={(e) => {
                         e.stopPropagation();
                         handleSearchInputChange(e.target.value)}
@@ -963,15 +999,16 @@ const fetchBankAccounts = async () => {
 
                 {/* Search Results Dropdown */}
                 {searchState.showSearchResults && searchState.filteredResults.length > 0 && (
-                  <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200/80 rounded-xl shadow-2xl shadow-blue-100/50 backdrop-blur-xl max-h-64 overflow-y-auto">
+                  <div className="relative z-50 w-full mt-2 bg-white border border-gray-200/80 rounded-xl shadow-2xl shadow-blue-100/50 backdrop-blur-xl max-h-64 overflow-y-auto">
                     {searchState.filteredResults.map((resultItem) => {
                       const itemImage = getImageUrl(resultItem.image);
                       return (
                         <div
                           key={resultItem.type + resultItem.id}
-                          onClick={(e) => {
+                          onMouseDown={(e) => {
                             e.stopPropagation();
-                            handleItemSelect(resultItem)
+                            e.preventDefault();
+                            handleItemSelect(resultItem);
                           }}
                           className="p-3 border-b border-gray-100/50 last:border-b-0 cursor-pointer transition-all duration-200 hover:bg-blue-50/50"
                         >
@@ -1002,7 +1039,7 @@ const fetchBankAccounts = async () => {
                               </h4>
                               <p className="text-sm text-gray-600 truncate">Code: {resultItem.barcode}</p>
                               <p className="text-sm text-gray-600 truncate">
-                                Cost: ${resultItem.standardPrice.toFixed(2)} / {resultItem.unit}
+                                Cost: ${Number(resultItem.standardPrice || 0).toFixed(2)} / {resultItem.unit}
                               </p>
                             </div>
                           </div>
@@ -1261,17 +1298,38 @@ const fetchBankAccounts = async () => {
                   {/* Discount */}
                   <div className="flex justify-between items-center border-b border-gray-100">
                     <div className="flex items-center gap-2">
-                      <Percent size={14} className="text-gray-500" />
-                      <span className="text-gray-600">Discount ({form.discount}%)</span>
+                      {discountType === "percent" ? (
+                        <Percent size={14} className="text-gray-500" />
+                      ) : (
+                        <DollarSign size={14} className="text-gray-500" />
+                      )}
+                      <span className="text-gray-600">Discount ({discountType === "percent" ? "Percent" : "Flat"})</span>
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <select
+                        value={discountType}
+                        onChange={(e) => {
+                          const nextType = e.target.value;
+                          setDiscountType(nextType);
+                          if (nextType === "percent") {
+                            setForm((prev) => ({
+                              ...prev,
+                              discount: String(Math.min(100, Math.max(0, parseFloat(prev.discount) || 0))),
+                            }));
+                          }
+                        }}
+                        className="p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                      >
+                        <option value="percent">Percent</option>
+                        <option value="flat">Flat</option>
+                      </select>
                       <span className="text-red-600">-$</span>
                       <input
                         type="number"
                         name="discount"
                         min="0"
-                        max="100"
+                        max={discountType === "percent" ? "100" : undefined}
                         step="0.01"
                         value={form.discount}
                         onChange={handleFormChange}

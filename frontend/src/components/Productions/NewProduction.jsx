@@ -29,6 +29,8 @@ import {
 const NewProduction = () => {
   const location = useLocation();
   const requisitionOrder = location.state?.requisitionOrder || null;
+  const sectionIdFromQuery = new URLSearchParams(location.search).get("sectionId");
+  const [resolvedRequisitionOrder, setResolvedRequisitionOrder] = useState(requisitionOrder);
   const [formData, setFormData] = useState({
     start_date: '',
     estimated_end_date: '',
@@ -56,6 +58,41 @@ const NewProduction = () => {
   });
   const [prefillFactoryId, setPrefillFactoryId] = useState('');
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let cancelled = false;
+    const hydrateSectionOrder = async () => {
+      const hasUsableStateItems = Array.isArray(requisitionOrder?.items) && requisitionOrder.items.length > 0;
+      if (hasUsableStateItems) {
+        setResolvedRequisitionOrder(requisitionOrder);
+        return;
+      }
+      const sectionId = parseInt(sectionIdFromQuery, 10);
+      if (!Number.isFinite(sectionId) || sectionId <= 0) {
+        setResolvedRequisitionOrder(requisitionOrder || null);
+        return;
+      }
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get(API_ROUTES.REQUISITION_SECTION_BY_ID(sectionId), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!cancelled) {
+          setResolvedRequisitionOrder(response.data || null);
+        }
+      } catch (error) {
+        console.error('Error fetching requisition section for production prefill:', error);
+        if (!cancelled) {
+          setResolvedRequisitionOrder(requisitionOrder || null);
+        }
+      }
+    };
+
+    hydrateSectionOrder();
+    return () => {
+      cancelled = true;
+    };
+  }, [requisitionOrder, sectionIdFromQuery]);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -158,13 +195,14 @@ const NewProduction = () => {
   }, [formData.factoryId]);
 
   useEffect(() => {
-    if (!requisitionOrder) return;
+    if (!resolvedRequisitionOrder) return;
     const today = new Date();
     const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
     const fmt = (d) => d.toISOString().slice(0, 10);
+    let cancelled = false;
 
-    const destinationType = requisitionOrder.destinationType || requisitionOrder.destination?.type;
-    const destinationId = requisitionOrder.destinationId || requisitionOrder.destination?.id;
+    const destinationType = resolvedRequisitionOrder.destinationType || resolvedRequisitionOrder.destination?.type;
+    const destinationId = resolvedRequisitionOrder.destinationId || resolvedRequisitionOrder.destination?.id;
     if (destinationType === "factory" && destinationId) {
       const nextFactoryId = String(destinationId);
       setPrefillFactoryId(nextFactoryId);
@@ -176,32 +214,109 @@ const NewProduction = () => {
       }));
     }
 
-    const orderProducts = (requisitionOrder.items || [])
-      .filter((it) => it.itemType === "product")
-      .map((it) => ({
-        id: it.productId,
-        name: it.product?.name,
-        barcode: it.product?.barcode || '',
-        materials: it.product?.materials || [],
-        quantity: it.quantity || 1,
-        unit_cost: it.product?.cost || 0,
-        moved_to_store: 0,
-        batchNumber: '',
-        expiryDate: '',
-        manufactureDate: '',
-        batchNotes: '',
-        image: it.product?.image || null
-      }));
+    const hydrateAndSetOrderProducts = async () => {
+      const productItems = (resolvedRequisitionOrder.items || []).filter((it) => {
+        const itemType = String(it.itemType || it.requisitionItem?.itemType || "").toLowerCase();
+        const productId = Number(
+          it.productId ||
+          it.product?.id ||
+          it.requisitionItem?.productId ||
+          it.requisitionItem?.product?.id ||
+          it.itemId
+        );
+        return itemType === "product" || (Number.isFinite(productId) && productId > 0);
+      });
+      if (!productItems.length) {
+        setSelectedProducts([]);
+        return;
+      }
 
-    if (orderProducts.length > 0) {
-      setSelectedProducts(orderProducts);
-    }
+      const productIds = [...new Set(
+        productItems
+          .map((it) =>
+            Number(
+              it.productId ||
+              it.product?.id ||
+              it.requisitionItem?.productId ||
+              it.requisitionItem?.product?.id ||
+              it.itemId
+            )
+          )
+          .filter((id) => Number.isFinite(id) && id > 0)
+      )];
+
+      const needsHydration = productItems.some(
+        (it) => {
+          const primary = it.product;
+          const fallback = it.requisitionItem?.product;
+          const candidate = primary || fallback;
+          return !candidate || !Array.isArray(candidate.materials);
+        }
+      );
+
+      let hydratedMap = {};
+      if (needsHydration && productIds.length) {
+        try {
+          const token = localStorage.getItem("token");
+          const response = await axios.get(`${API_ROUTES.PRODUCTS}/by-ids`, {
+            params: { ids: productIds.join(",") },
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const hydratedProducts = Array.isArray(response.data?.products) ? response.data.products : [];
+          hydratedMap = hydratedProducts.reduce((acc, p) => {
+            acc[p.id] = p;
+            return acc;
+          }, {});
+        } catch (error) {
+          console.error("Error hydrating requisition products:", error);
+        }
+      }
+
+      const orderProducts = productItems
+        .map((it) => {
+          const productId = Number(
+            it.productId ||
+            it.product?.id ||
+            it.requisitionItem?.productId ||
+            it.requisitionItem?.product?.id ||
+            it.itemId
+          );
+          if (!Number.isFinite(productId) || productId <= 0) return null;
+          const hydrated = hydratedMap[productId];
+          const product = it.product || it.requisitionItem?.product || hydrated || {};
+          return {
+            id: productId,
+            name: product.name || `Product #${productId}`,
+            barcode: product.barcode || '',
+            materials: Array.isArray(product.materials) ? product.materials : [],
+            quantity: Number(it.quantity || it.requisitionItem?.requestedQty || it.requestedQty || 1),
+            unit_cost: Number(product.cost || it.unitPrice || it.requisitionItem?.unitPrice || 0),
+            moved_to_store: 0,
+            batchNumber: '',
+            expiryDate: '',
+            manufactureDate: '',
+            batchNotes: '',
+            image: product.image || null
+          };
+        })
+        .filter(Boolean);
+
+      if (!cancelled) {
+        setSelectedProducts(orderProducts);
+      }
+    };
+
+    hydrateAndSetOrderProducts();
 
     setRequisitionLink({
-      requisitionId: requisitionOrder.requisitionId,
-      requisitionSectionId: requisitionOrder.id,
-    });
-  }, [requisitionOrder]);
+        requisitionId: resolvedRequisitionOrder.requisitionId || resolvedRequisitionOrder.requisition?.id || null,
+        requisitionSectionId: resolvedRequisitionOrder.id || null,
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedRequisitionOrder]);
 
   useEffect(() => {
     if (!prefillFactoryId || !factories.length) return;
@@ -489,9 +604,9 @@ const NewProduction = () => {
                   New Production Order
                 </h1>
                 <p className="text-gray-600 mt-2">Create a new production batch in your factory</p>
-                {requisitionOrder && (
+                {resolvedRequisitionOrder && (
                   <p className="text-sm text-indigo-700 mt-1">
-                    Requisition Order: {requisitionOrder?.requisition?.reference} / Section {requisitionOrder?.sectionNo}
+                    Requisition Order: {resolvedRequisitionOrder?.requisition?.reference} / Section {resolvedRequisitionOrder?.sectionNo}
                   </p>
                 )}
               </div>

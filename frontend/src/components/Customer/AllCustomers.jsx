@@ -48,7 +48,7 @@ export default function AllCustomers() {
   const canCreateCustomer = hasPermission(["customer_create"]);
   const canEditCustomer = hasPermission(["customer_edit"]);
   const canDeleteCustomer = hasPermission(["customer_delete"]);
-  const canClearDue = hasPermission(["supplier_clear_due"]);
+  const canClearDue = hasPermission(["customer_clear_due"]);
 
   useEffect(() => {
     fetchCustomers();

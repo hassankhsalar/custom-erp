@@ -2,6 +2,7 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const jwt = require('jsonwebtoken');
 const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associateScope');
+const { createInventoryAdjustmentAndMaybeAccount, toBoolean } = require('../utils/inventoryAdjustmentHelper');
 
 const prisma = new PrismaClient();
 const { seedStoreInventoryForAllItems } = require("../utils/inventoryBootstrap");
@@ -198,7 +199,7 @@ router.get('/:id/inventory/summary', async (req, res) => {
 // Update store inventory row (stock, sale_price, alert_quantity)
 router.put('/inventory/:storeId/item', async (req, res) => {
   const storeId = parseInt(req.params.storeId);
-  const { itemType, itemId, stock, sale_price, alert_quantity } = req.body || {};
+  const { itemType, itemId, stock, sale_price, alert_quantity, reason, date, isAccountAdjusted } = req.body || {};
   const parsedItemId = parseInt(itemId);
   const nextStock = toNullableNumber(stock);
   const nextSalePrice = toNullableNumber(sale_price);
@@ -220,6 +221,7 @@ router.put('/inventory/:storeId/item', async (req, res) => {
       if (normalizedItemType === 'product') {
         const existing = await tx.storeProduct.findFirst({
           where: { store_id: storeId, product_id: parsedItemId, deleted_at: false, product: { deleted_at: false } },
+          include: { product: { select: { cost: true } } },
         });
         if (!existing) throw new Error('Inventory row not found');
 
@@ -244,12 +246,27 @@ router.put('/inventory/:storeId/item', async (req, res) => {
               after_edit: nextStock,
             },
           });
+          await createInventoryAdjustmentAndMaybeAccount({
+            tx,
+            placeType: 'store',
+            placeId: storeId,
+            itemType: 'product',
+            productId: parsedItemId,
+            previousStock: prevStock,
+            nextStock,
+            unitPrice: Number(existing.avg_cost) || Number(existing.product?.cost) || 0,
+            reason,
+            date,
+            isAccountAdjusted: toBoolean(isAccountAdjusted),
+            createdById: req.user?.userId || null,
+          });
         }
         return updated;
       }
 
       const existing = await tx.storeMaterial.findFirst({
         where: { store_id: storeId, material_id: parsedItemId, deleted_at: false, material: { deleted_at: false } },
+        include: { material: { select: { unit_cost: true } } },
       });
       if (!existing) throw new Error('Inventory row not found');
 
@@ -274,6 +291,20 @@ router.put('/inventory/:storeId/item', async (req, res) => {
             after_edit: nextStock,
           },
         });
+        await createInventoryAdjustmentAndMaybeAccount({
+          tx,
+          placeType: 'store',
+          placeId: storeId,
+          itemType: 'material',
+          materialId: parsedItemId,
+          previousStock: prevStock,
+          nextStock,
+          unitPrice: Number(existing.avg_cost) || Number(existing.material?.unit_cost) || 0,
+          reason,
+          date,
+          isAccountAdjusted: toBoolean(isAccountAdjusted),
+          createdById: req.user?.userId || null,
+        });
       }
       return updated;
     });
@@ -282,6 +313,9 @@ router.put('/inventory/:storeId/item', async (req, res) => {
   } catch (error) {
     if (error.status === 403) return res.status(403).json({ error: 'Forbidden' });
     if (error.message === 'Inventory row not found') return res.status(404).json({ error: error.message });
+    if (String(error.message || '').includes('No account assigned to this')) {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to update store inventory item' });
   }
 });

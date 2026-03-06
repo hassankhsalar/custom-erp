@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { API_ROUTES } from "../../config";
 import { useAuth } from "../../context/AuthContext";
+import { usePermission } from "../../hooks/usePermission";
 
 const defaultPageSize = 20;
 
@@ -32,6 +33,9 @@ export default function DamageRecordList() {
   const [overview, setOverview] = useState({ totalRecords: 0, totalLoss: 0, averageLoss: 0 });
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [sourceOptions, setSourceOptions] = useState([]);
+
+  const { hasPermission } = usePermission();
+  const canDelete = hasPermission("damage_delete");
 
   const [filters, setFilters] = useState({
     fromType: "",
@@ -332,11 +336,11 @@ export default function DamageRecordList() {
       </div>
 
       <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3 items-end mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 items-end mb-4">
           <div className="lg:col-span-2">
             <label className="text-xs text-gray-600 mb-1 block">Reason</label>
             <div className="relative">
-              <Search size={16} className="absolute left-2.5 top-2.5 text-gray-400" />
+              <Search size={16} className="absolute left-2.5 top-3 text-gray-400" />
               <input
                 value={filters.reason}
                 onChange={(e) => setFilters((p) => ({ ...p, reason: e.target.value }))}
@@ -405,11 +409,11 @@ export default function DamageRecordList() {
             </select>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2">
           <button onClick={applyFilters} className="px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-orange-500 text-white inline-flex items-center gap-2">
             <Filter size={14} /> Apply
           </button>
-          <button onClick={clearFilters} className="px-4 py-2 rounded-lg border bg-white/70">Clear</button>
+          <button onClick={clearFilters} className="px-4 py-2 rounded-lg border bg-gray-100 text-gray-600 border-gray-300">Clear</button>
         </div>
       </div>
 
@@ -462,12 +466,14 @@ export default function DamageRecordList() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => setSelected(row)} className="p-2 rounded-lg border hover:bg-gray-50" title="View">
+                        <button onClick={() => setSelected(row)} className="p-2 rounded-lg text-white bg-linear-to-br from-orange-400 to-rose-600 hover:bg-linear-to-r hover:shadow-md hover:shadow-rose-600/30 cursor-pointer transition-all" title="View">
                           <Eye size={14} />
                         </button>
-                        <button onClick={() => handleDelete(row.id)} className="p-2 rounded-lg border text-red-600 hover:bg-red-50" title="Delete">
-                          <Trash2 size={14} />
-                        </button>
+                        { canDelete && (
+                          <button onClick={() => handleDelete(row.id)} className="p-2 rounded-lg border border-rose-400 cursor-pointer text-red-600 hover:bg-red-100 hover:shadow-md hover:shadow-red-600/30" title="Delete">
+                            <Trash2 size={14} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -64,6 +64,16 @@ const TransferList = ({ fromType, toType, title }) => {
   const initializedRef = useRef(false);
   const skipNextPageFetchRef = useRef(false);
 
+  // 'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive', 'transfer_return'
+  const canCreateTransfer = hasPermission('transfers_create');
+  const canEditTransfer = hasPermission('transfers_edit');
+  const canDeleteTransfer = hasPermission('transfers_delete');
+  const canViewTransfer = hasPermission('transfers_read');
+  const canChangeTransferStatus = hasPermission('transfers_change_status');
+  const canReceiveTransferPermission = hasPermission('transfers_receive');
+  const canReturnTransfer = hasPermission('transfer_return');
+
+
   // Details Modal State
   const [detailsModal, setDetailsModal] = useState({ isOpen: false, data: null });
 
@@ -498,10 +508,12 @@ const TransferList = ({ fromType, toType, title }) => {
             </div>
             
             <div className="flex items-center gap-4">
-              <Link to="/transfer/add" className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300">
-                <Settings size={20} />
-                New Transfer
-              </Link>
+              { canCreateTransfer && (
+                <Link to="/transfer/add" className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300">
+                  <Settings size={20} />
+                  New Transfer
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -865,7 +877,7 @@ const TransferList = ({ fromType, toType, title }) => {
                                 >
                                   <Eye className="w-4 h-4" />
                                 </button>
-                                {hasPermission('transfers_receive') && (
+                                {( (canReceiveTransferPermission && canReceiveTransfer(transfer)) || canChangeTransferStatus ) && (
                                   <Link
                                     to={`/transfers/${transfer.id}/receive`}
                                     className="p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100"
@@ -874,14 +886,16 @@ const TransferList = ({ fromType, toType, title }) => {
                                     <CheckCircle className="w-4 h-4" />
                                   </Link>
                                 )}
-                                <Link
-                                  to={`/transfers/${transfer.id}/receipts`}
-                                  className="p-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
-                                  title="Receive History"
-                                >
-                                  <Layers className="w-4 h-4" />
-                                </Link>
-                                {hasPermission('transfers_edit') && (
+                                { ( (canReceiveTransferPermission && canReceiveTransfer(transfer)) || canChangeTransferStatus ) && (
+                                  <Link
+                                    to={`/transfers/${transfer.id}/receipts`}
+                                    className="p-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                                    title="Receive History"
+                                  >
+                                    <Layers className="w-4 h-4" />
+                                  </Link>
+                                )}
+                                { canEditTransfer && (
                                   <Link
                                     to={`/transfer/edit/${transfer.id}`}
                                     className="p-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
@@ -890,7 +904,7 @@ const TransferList = ({ fromType, toType, title }) => {
                                     <Edit2 className="w-4 h-4" />
                                   </Link>
                                 )}
-                                {hasPermission('transfers_delete') && (
+                                { canDeleteTransfer && (
                                   <button
                                     onClick={() => handleDeleteTransfer(transfer.id)}
                                     className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"

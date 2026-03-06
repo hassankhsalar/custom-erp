@@ -25,6 +25,7 @@ import {
   Package,
   Box
 } from 'lucide-react';
+import { usePermission } from '../../hooks/usePermission';
 
 const AllStore = () => {
   const [stores, setStores] = useState([]);
@@ -36,6 +37,11 @@ const AllStore = () => {
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
   const [totalStores, setTotalStores] = useState(0);
+
+  const { hasPermission } = usePermission();
+  const canCreateStore = hasPermission('store_create');
+  const canEditStore = hasPermission('store_edit');
+  const canDeleteStore = hasPermission('store_delete');
 
   useEffect(() => {
     const fetchStores = async () => {
@@ -214,13 +220,15 @@ const AllStore = () => {
             </div>
             
             <div className="flex items-center gap-4">
-              <Link 
-                to="/stores/add" 
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                <Plus size={20} />
-                New Store
-              </Link>
+              { canCreateStore && (
+                <Link 
+                  to="/stores/add" 
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <Plus size={20} />
+                  New Store
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -355,21 +363,25 @@ const AllStore = () => {
                                 <Eye size={16} />
                               </button>
                               
-                              <Link
-                                to={`/stores/edit/${store.id}`}
-                                className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
-                                title="Edit"
-                              >
-                                <Edit size={16} />
-                              </Link>
+                              { canEditStore && (
+                                <Link
+                                  to={`/stores/edit/${store.id}`}
+                                  className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
+                                  title="Edit"
+                                >
+                                  <Edit size={16} />
+                                </Link>
+                              )}
                               
-                              <button
-                                onClick={() => handleDelete(store.id)}
-                                className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
-                                title="Delete"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              {  canDeleteStore && (
+                                <button
+                                  onClick={() => handleDelete(store.id)}
+                                  className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>

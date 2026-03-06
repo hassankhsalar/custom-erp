@@ -23,6 +23,7 @@ import {
   Settings,
   Factory
 } from 'lucide-react';
+import { usePermission } from '../../hooks/usePermission';
 
 const ProductOverviewCards = memo(function ProductOverviewCards({ overview }) {
   return (
@@ -89,6 +90,12 @@ const AllProducts = () => {
   const [sortDir, setSortDir] = useState('desc');
   const [appliedSortBy, setAppliedSortBy] = useState('created_at');
   const [appliedSortDir, setAppliedSortDir] = useState('desc');
+
+  const { hasPermission } = usePermission();
+  const canRead = hasPermission('product_read');
+  const canCreate = hasPermission('product_create');
+  const canEdit = hasPermission('product_edit');
+  const canDelete = hasPermission('product_delete');
 
   // Function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -284,13 +291,15 @@ const AllProducts = () => {
             </div>
             
             <div className="flex items-center gap-4">
-              <Link 
-                to="/products/create" 
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                <Settings size={20} />
-                New Product
-              </Link>
+              { canCreate && (
+                <Link 
+                  to="/products/create" 
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <Settings size={20} />
+                  New Product
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -618,21 +627,25 @@ const AllProducts = () => {
                                   <Eye size={16} />
                                 </button>
                                 
-                                <Link
-                                  to={`/products/edit/${product.id}`}
-                                  className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
-                                  title="Edit"
-                                >
-                                  <Pen size={16} />
-                                </Link>
+                                { canEdit && (
+                                  <Link
+                                    to={`/products/edit/${product.id}`}
+                                    className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
+                                    title="Edit"
+                                  >
+                                    <Pen size={16} />
+                                  </Link>
+                                )}
                                 
-                                <button
-                                  onClick={() => handleDelete(product.id)}
-                                  className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
-                                  title="Delete"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
+                                { canDelete && (
+                                  <button
+                                    onClick={() => handleDelete(product.id)}
+                                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                )}
                                 
                                 <button
                                   onClick={() => toggleMaterials(product.id)}
@@ -660,8 +673,6 @@ const AllProducts = () => {
                                         <tr>
                                           <th className="p-3 text-left font-medium text-gray-700">Material Name</th>
                                           <th className="p-3 text-left font-medium text-gray-700">Quantity</th>
-                                          <th className="p-3 text-left font-medium text-gray-700">Price</th>
-                                          <th className="p-3 text-left font-medium text-gray-700">Total</th>
                                         </tr>
                                       </thead>
                                       <tbody>
@@ -677,12 +688,6 @@ const AllProducts = () => {
                                               <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-1 rounded-full">
                                                 {mat.material_quantity}
                                               </span>
-                                            </td>
-                                            <td className="p-3 font-medium text-gray-900">
-                                              ${parseFloat(mat.price).toFixed(2)}
-                                            </td>
-                                            <td className="p-3 font-semibold text-gray-900">
-                                              ${(parseFloat(mat.price) * parseFloat(mat.material_quantity)).toFixed(2)}
                                             </td>
                                           </tr>
                                         ))}

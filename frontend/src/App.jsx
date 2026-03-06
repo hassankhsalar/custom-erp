@@ -117,6 +117,7 @@ import FactoryInventory from "./components/Factory/FactoryInventory";
 import StoreInventory from "./components/Stores/StoreInventory";
 import ShopInventory from "./components/Shop/ShopInventory";
 import EditShop from "./components/Shop/EditShop";
+import InventoryAdjustmentHistory from "./components/Inventory/InventoryAdjustmentHistory";
 import { AuthContext, useAuth } from "./context/AuthContext";
 
 
@@ -363,7 +364,7 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="sales_open_close" />}>
               <Route path="/sale/edit-requests" element={<SaleEditRequests />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission="sales_create" />}>
+            <Route element={<PermissionRoute requiredPermission={["sales_create", "previous_date_sales_create"]} />}>
               <Route path="/sale/create" element={<CreateSale />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="sales_return_create" />}>
@@ -397,10 +398,10 @@ function App() {
             </Route>
 
             {/* Purchase */}
-            <Route element={<PermissionRoute requiredPermission={['purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment']} />}>
+            <Route element={<PermissionRoute requiredPermission={['purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchase_add_payment', 'purchase_add_shipment']} />}>
               <Route path="/purchase/all" element={<AllPurchase />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission={['purchases_return_create', 'purchases_return_edit', 'purchases_return_delete', 'purchases_return_read', 'damage_return_create', 'damage_return_read', 'damage_return_edit', 'damage_return_delete' ]} />}>
+            <Route element={<PermissionRoute requiredPermission={['purchases_return_create', 'purchases_return_add_payment', 'purchases_return_add_shipment', 'purchases_return_delete', 'purchases_return_read', 'damage_return_create', 'damage_return_read', 'damage_return_add_payment', 'damage_return_add_shipment', 'damage_return_delete' ]} />}>
               <Route path="/purchase/returns" element={<AllPurchaseReturns />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="purchases_create" />}>
@@ -432,7 +433,7 @@ function App() {
             <Route element={<PermissionRoute requiredPermission={["transfers_receive", "transfers_change_status"]} />}>
               <Route path="/transfers/:id/receive" element={<TransferReceive />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission={["transfers_read", "transfers_receive", "transfer_return"]} />}>
+            <Route element={<PermissionRoute requiredPermission={["transfers_read", "transfers_receive", "transfers_change_status", "transfer_return"]} />}>
               <Route path="/transfers/:id/receipts" element={<TransferReceiveHistory />} />
             </Route>
 
@@ -451,7 +452,7 @@ function App() {
             </Route>
 
             {/* Repair */}
-            <Route element={<PermissionRoute requiredPermission={['repairs_create', 'repairs_read', 'repairs_edit', 'repairs_delete']} />}>
+            <Route element={<PermissionRoute requiredPermission={['repairs_create', 'repairs_read', 'repairs_receive', 'repairs_delete']} />}>
               <Route path="/repair/items" element={<RepairedItems />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="repairs_create" />}>
@@ -459,7 +460,7 @@ function App() {
             </Route>
 
             {/* Damage */}
-            <Route element={<PermissionRoute requiredPermission={['damage_create', 'damage_read', 'damage_edit', 'damage_delete', 'damage_return_create', 'damage_return_read', 'damage_return_edit', 'damage_return_delete']} />}>
+            <Route element={<PermissionRoute requiredPermission={['damage_create', 'damage_read', 'damage_edit', 'damage_delete', 'damage_return_create', 'damage_return_read', 'damage_return_add_payment', 'damage_return_add_shipment', 'damage_return_delete']} />}>
               <Route path="/damage-record" element={<DamageRecord />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="damage_create" />}>
@@ -498,8 +499,9 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="factory_create" />}>
               <Route path="/factories/add" element={<AddFactory />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission={['factory_inventory_adjustment_create', 'factory_inventory_adjustment_read']} />}>
+            <Route element={<PermissionRoute requiredPermission={['factory_inventory_manage', 'factory_inventory_adjustment_create', 'factory_inventory_adjustment_read']} />}>
               <Route path="/factoryinventory" element={<FactoryInventory />} />
+              <Route path="/factoryinventory/adjustments" element={<InventoryAdjustmentHistory defaultPlaceType="factory" />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="factory_edit" />}>
               <Route path="/factories/edit/:id" element={<EditFactory />} />
@@ -509,8 +511,9 @@ function App() {
             <Route element={<PermissionRoute requiredPermission={['store_create', 'store_edit', 'store_delete', 'store_read']} />}>
               <Route path="/stores/all" element={<AllStore />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission={[ 'store_inventory_adjustment_create', 'store_inventory_adjustment_read']} />}>
+            <Route element={<PermissionRoute requiredPermission={[ 'store_inventory_manage', 'store_inventory_adjustment_create', 'store_inventory_adjustment_read']} />}>
               <Route path="/storeinventory" element={<StoreInventory />} />
+              <Route path="/storeinventory/adjustments" element={<InventoryAdjustmentHistory defaultPlaceType="store" />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="store_create" />}>
               <Route path="/stores/add" element={<AddStore />} />
@@ -529,8 +532,9 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="shop_edit" />}>
               <Route path="/shop/edit/:id" element={<EditShop />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission={[ 'shop_inventory_adjustment_create', 'shop_inventory_adjustment_read']} />}>
+            <Route element={<PermissionRoute requiredPermission={[ 'shop_inventory_manage', 'shop_inventory_adjustment_create', 'shop_inventory_adjustment_read']} />}>
               <Route path="/shopinventory" element={<ShopInventory />} />
+              <Route path="/shopinventory/adjustments" element={<InventoryAdjustmentHistory defaultPlaceType="shop" />} />
             </Route>
 
             {/* Accounts */}

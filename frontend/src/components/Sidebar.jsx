@@ -23,7 +23,9 @@ import {
   Calendar,
   TableProperties,
   Wallet,
-  Briefcase
+  Briefcase,
+  History,
+  Boxes,
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -92,12 +94,12 @@ const Sidebar = () => {
       color: 'from-emerald-500 to-green-500',
       bgColor: 'bg-gradient-to-r from-emerald-50 to-green-100/50',
       textColor: 'text-emerald-700',
-      permissionKey: ['sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_add_payment', 'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read', 'customer_read', 'customer_create', 'customer_edit', 'customer_delete', 'customer_clear_due'],
+      permissionKey: ['sales_create', 'previous_date_sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_add_payment', 'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read', 'customer_read', 'customer_create', 'customer_edit', 'customer_delete', 'customer_clear_due'],
       subItems: [
         { name: 'POS', path: '/sale/pos', icon: <CreditCard size={16} />, permissionKey: 'sales_create' },
-        { name: 'All Sales', path: '/sale/all', icon: <FileText size={16} />, permissionKey: ['sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_add_payment' ] },
+        { name: 'All Sales', path: '/sale/all', icon: <FileText size={16} />, permissionKey: ['sales_create', 'previous_date_sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_add_payment' ] },
         { name: 'Edit Requests', path: '/sale/edit-requests', icon: <ClipboardList size={16} />, permissionKey: 'sales_open_close' },
-        { name: 'Create Sale', path: '/sale/create', icon: <ShoppingCart size={16} />, permissionKey: 'sales_create' },
+        { name: 'Create Sale', path: '/sale/create', icon: <ShoppingCart size={16} />, permissionKey: ['sales_create', 'previous_date_sales_create'] },
         { name: 'Sale Return', path: '/sale/return', icon: <ClipboardList size={16} />, permissionKey: ['sales_return_create'] },
         { name: 'All Sale Returns', path: '/sale/allreturns', icon: <FileText size={16} />, permissionKey: [ 'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read'] },
         { name: 'Warranty', path: '/sale/warranty', icon: <Shield size={16} />, permissionKey: ['sales_warranty' ] },
@@ -122,10 +124,10 @@ const Sidebar = () => {
       color: 'from-violet-500 to-purple-500',
       bgColor: 'bg-gradient-to-r from-violet-50 to-purple-100/50',
       textColor: 'text-violet-700',
-      permissionKey: ['purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment', 'purchases_return_create', 'purchases_return_edit', 'purchases_return_delete', 'purchases_return_read', 'supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete', 'supplier_clear_due' ],
+      permissionKey: ['purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchase_add_payment', 'purchase_add_shipment', 'purchases_return_create', 'purchases_return_add_payment', 'purchases_return_add_shipment', 'purchases_return_delete', 'purchases_return_read', 'supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete', 'supplier_clear_due' ],
       subItems: [
-        { name: 'All Purchase', path: '/purchase/all', icon: <Package size={16} />, permissionKey: ['purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment'] },
-        { name: 'All Returns', path: '/purchase/returns', icon: <Undo2 size={16} />, permissionKey: ['purchases_return_create', 'purchases_return_edit', 'purchases_return_delete', 'purchases_return_read'] },
+        { name: 'All Purchase', path: '/purchase/all', icon: <Package size={16} />, permissionKey: ['purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchase_add_payment', 'purchase_add_shipment' ] },
+        { name: 'All Returns', path: '/purchase/returns', icon: <Undo2 size={16} />, permissionKey: ['purchases_return_create', 'purchases_return_add_payment', 'purchases_return_add_shipment', 'purchases_return_delete', 'purchases_return_read'] },
         { name: 'New Purchase', path: '/purchase/new', icon: <ShoppingCart size={16} />, permissionKey: 'purchases_create' },
         { name: 'Purchase Return', path: '/purchase/return', icon: <Recycle size={16} />, permissionKey: 'purchases_return_create' },
         { name: 'All Supplier', path: '/purchase/all-supplier', icon: <Users size={16} />, permissionKey: ['supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete', 'supplier_clear_due'] },
@@ -152,8 +154,8 @@ const Sidebar = () => {
       textColor: 'text-teal-700',
       permissionKey: ['requisition_create', 'requisition_read', 'requisition_update', 'requisition_delete', 'requisition_approve', 'production_order_read', 'transfer_order_read', 'purchase_order_read'],
       subItems: [
-        { name: 'Create Requisition', path: '/requisition/create', icon: <NotebookPen size={16} />, permissionKey: 'requisition_create' },
         { name: 'Requisition List', path: '/requisition/list', icon: <ClipboardList size={16} />, permissionKey: ['requisition_create', 'requisition_read', 'requisition_update', 'requisition_delete', 'requisition_approve', 'production_order_read', 'transfer_order_read', 'purchase_order_read'] },
+        { name: 'Create Requisition', path: '/requisition/create', icon: <NotebookPen size={16} />, permissionKey: 'requisition_create' },
       ]
     },
     {
@@ -162,10 +164,10 @@ const Sidebar = () => {
       color: 'from-cyan-500 to-blue-500',
       bgColor: 'bg-gradient-to-r from-pink-50 to-rose-100/50',
       textColor: 'text-cyan-700',
-      permissionKey: ['repairs_create', 'repairs_read', 'repairs_edit', 'repairs_delete'],
+      permissionKey: ['repairs_create', 'repairs_read', 'repairs_receive', 'repairs_delete'],
       subItems: [
+        { name: 'Repaired Item', path: '/repair/items', icon: <Box size={16} />, permissionKey: ['repairs_create', 'repairs_read', 'repairs_receive', 'repairs_delete'] },
         { name: 'Add Repair', path: '/repair/new', icon: <Wrench size={16} />, permissionKey: 'repairs_create' },
-        { name: 'Repaired Item', path: '/repair/items', icon: <Box size={16} />, permissionKey: ['repairs_create', 'repairs_read', 'repairs_edit', 'repairs_delete'] },
       ] 
     },
     {
@@ -174,10 +176,10 @@ const Sidebar = () => {
       color: 'from-red-500 to-rose-500',
       bgColor: 'bg-gradient-to-r from-pink-50 to-rose-100/50',
       textColor: 'text-red-700',
-      permissionKey: ['damage_create', 'damage_read', 'damage_edit', 'damage_delete', 'damage_return_create', 'damage_return_read', 'damage_return_edit', 'damage_return_delete'],
+      permissionKey: ['damage_create', 'damage_read', 'damage_edit', 'damage_delete', 'damage_return_create', 'damage_return_read', 'damage_return_add_payment', 'damage_return_add_shipment', 'damage_return_delete'],
       subItems: [
         { name: 'Damage Records', path: '/damage-record', icon: <AlertTriangle size={16} />, permissionKey: ['damage_create', 'damage_read', 'damage_edit', 'damage_delete'] },
-        { name: 'Damage Return Records', path: '/purchase/returns?type=damage_return', icon: <ClipboardList size={16} />, permissionKey: ['damage_return_create', 'damage_return_read', 'damage_return_edit', 'damage_return_delete'] },
+        { name: 'Damage Return Records', path: '/purchase/returns?type=damage_return', icon: <ClipboardList size={16} />, permissionKey: ['damage_return_create', 'damage_return_read', 'damage_return_add_payment', 'damage_return_add_shipment', 'damage_return_delete'] },
         { name: 'New Damage', path: '/damage-record/new', icon: <Recycle size={16} />, permissionKey: 'damage_create' },
         { name: 'New Damage Return', path: '/purchase/damage-return', icon: <Undo2 size={16} />, permissionKey: 'damage_return_create' },
       ]
@@ -213,11 +215,12 @@ const Sidebar = () => {
       color: 'from-orange-500 to-red-500',
       bgColor: 'bg-gradient-to-r from-orange-50 to-red-100/50',
       textColor: 'text-orange-700',
-      permissionKey: ['factory_create', 'factory_edit', 'factory_delete', 'factory_read', 'factory_inventory_adjustment_create', 'factory_inventory_adjustment_read'],
+      permissionKey: ['factory_create', 'factory_edit', 'factory_delete', 'factory_read', 'factory_inventory_manage',  'factory_inventory_adjustment_create', 'factory_inventory_adjustment_read'],
       subItems: [
         { name: 'All Factory', path: '/factories/all', icon: <Factory size={16} />, permissionKey: ['factory_create', 'factory_edit', 'factory_delete', 'factory_read'] },
         { name: 'Add Factory', path: '/factories/add', icon: <Building size={16} />, permissionKey: 'factory_create' },
-        { name: 'Inventory', path: '/factoryinventory', icon: <Building size={16} />, permissionKey: ['factory_inventory_adjustment_create', 'factory_inventory_adjustment_read'] }
+        { name: 'Inventory', path: '/factoryinventory', icon: <Boxes size={16} />, permissionKey: [ 'factory_inventory_manage', 'factory_inventory_adjustment_create', 'factory_inventory_adjustment_read'] },
+        { name: 'Adjustment History', path: '/factoryinventory/adjustments', icon: <History size={16} />, permissionKey: ['factory_inventory_adjustment_read'] }
       ]
     },
     {
@@ -226,11 +229,12 @@ const Sidebar = () => {
       color: 'from-sky-500 to-blue-500',
       bgColor: 'bg-gradient-to-r from-sky-50 to-blue-100/50',
       textColor: 'text-sky-700',
-      permissionKey: ['store_create', 'store_edit', 'store_delete', 'store_read', 'store_inventory_adjustment_create', 'store_inventory_adjustment_read'],
+      permissionKey: ['store_create', 'store_edit', 'store_delete', 'store_read', 'store_inventory_manage', 'store_inventory_adjustment_create', 'store_inventory_adjustment_read'],
       subItems: [
         { name: 'All Store', path: '/stores/all', icon: <Warehouse size={16} />, permissionKey: ['store_create', 'store_edit', 'store_delete', 'store_read'] },
         { name: 'Add Store', path: '/stores/add', icon: <Store size={16} />, permissionKey: 'store_create' },
-        { name: 'Inventory', path: '/storeinventory', icon: <Store size={16} />, permissionKey: [ 'store_inventory_adjustment_create', 'store_inventory_adjustment_read'] }
+        { name: 'Inventory', path: '/storeinventory', icon: <Boxes size={16} />, permissionKey: [ 'store_inventory_manage', 'store_inventory_adjustment_create', 'store_inventory_adjustment_read'] },
+        { name: 'Adjustment History', path: '/storeinventory/adjustments', icon: <History size={16} />, permissionKey: ['store_inventory_adjustment_read'] }
       ]
     },
     {
@@ -239,11 +243,12 @@ const Sidebar = () => {
       color: 'from-fuchsia-500 to-pink-500',
       bgColor: 'bg-gradient-to-r from-fuchsia-50 to-pink-100/50',
       textColor: 'text-fuchsia-700',
-      permissionKey: ['shop_create', 'shop_edit', 'shop_delete', 'shop_read', 'shop_inventory_adjustment_create', 'shop_inventory_adjustment_read'],
+      permissionKey: ['shop_create', 'shop_edit', 'shop_delete', 'shop_read', 'shop_inventory_manage', 'shop_inventory_adjustment_create', 'shop_inventory_adjustment_read'],
       subItems: [
         { name: 'All Shop', path: '/shop/all', icon: <ShoppingBag size={16} />, permissionKey: ['shop_create', 'shop_edit', 'shop_delete', 'shop_read'] },
         { name: 'Add Shop', path: '/shop/add', icon: <Store size={16} />, permissionKey: 'shop_create' },
-        { name: 'Inventory', path: '/shopinventory', icon: <Store size={16} />, permissionKey: [ 'shop_inventory_adjustment_create', 'shop_inventory_adjustment_read'] }
+        { name: 'Inventory', path: '/shopinventory', icon: <Boxes size={16} />, permissionKey: [ 'shop_inventory_manage', 'shop_inventory_adjustment_create', 'shop_inventory_adjustment_read'] },
+        { name: 'Adjustment History', path: '/shopinventory/adjustments', icon: <History size={16} />, permissionKey: ['shop_inventory_adjustment_read'] }
       ]
     },
     {

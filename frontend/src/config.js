@@ -63,6 +63,9 @@ export const API_ROUTES = {
   SHOP_INVENTORY_SUMMARY: (id) => `${API_BASE_URL}/shops/${id}/inventory/summary`,
   SHOP_STOCK: (id) => `${API_BASE_URL}/shops/${id}/stock`,
   SHOP_INVENTORY_ITEM_UPDATE: (shopId) => `${API_BASE_URL}/shops/inventory/${shopId}/item`,
+  INVENTORY_ADJUSTMENTS: `${API_BASE_URL}/inventory-adjustments`,
+  INVENTORY_ADJUSTMENTS_ITEM: `${API_BASE_URL}/inventory-adjustments/item`,
+  INVENTORY_ADJUSTMENTS_PLACE_SUMMARY: `${API_BASE_URL}/inventory-adjustments/place-summary`,
 
   // Shop POS routes
   SHOP_SALES: `${API_BASE_URL}/shop-sales`,
@@ -182,6 +185,7 @@ export const API_ROUTES = {
   REQUISITION_APPROVE: (id) => `${API_BASE_URL}/requisitions/${id}/approve`,
   REQUISITION_REJECT: (id) => `${API_BASE_URL}/requisitions/${id}/reject`,
   REQUISITION_SECTION_ACTION: (sectionId) => `${API_BASE_URL}/requisitions/sections/${sectionId}/action`,
+  REQUISITION_SECTION_BY_ID: (sectionId) => `${API_BASE_URL}/requisitions/sections/${sectionId}`,
   REQUISITION_SECTION_COMPLETE: (sectionId) => `${API_BASE_URL}/requisitions/sections/${sectionId}/complete`,
   REQUISITION_CHILD: (id) => `${API_BASE_URL}/requisitions/${id}/child`,
   
