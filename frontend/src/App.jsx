@@ -123,6 +123,9 @@ import EditShop from "./components/Shop/EditShop";
 import { AuthContext, useAuth } from "./context/AuthContext";
 import ValuedCustomerList from "./components/HomePage/ValuedCustomerList";
 import CreateValuedCustomer from "./components/HomePage/CreateValuedCustomer";
+import ProductCollectionManager from "./components/HomePage/ProductCollectionManager";
+import HomeBannerList from "./components/HomePage/HomeBannerList";
+import CreateEditHomeBanner from "./components/HomePage/CreateEditHomeBanner";
 
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("token"));
@@ -684,7 +687,26 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="notification_read" />}>
               <Route path="/notifications" element={<Notifications />} />
             </Route>
-          {/* Home page */}
+          {/* Home page  Permission edit required*/} 
+
+          
+          
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/home-banners" element={<HomeBannerList />} />
+            </Route>
+          
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/home-banners/create" element={<CreateEditHomeBanner />} />
+            </Route>
+          
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/home-banners/edit/:id" element={<CreateEditHomeBanner />} />
+            </Route>
+
+
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/homepage/productcollectionmanage" element={<ProductCollectionManager />} />
+            </Route>
 
             <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
               <Route path="/homepage/valuedcustomer" element={<ValuedCustomerList />} />

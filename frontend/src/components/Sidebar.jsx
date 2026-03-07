@@ -305,8 +305,8 @@ const Sidebar = () => {
       textColor: 'text-orange-700',
       permissionKey: ['factory_read', 'factory_create'],
       subItems: [
-        { name: 'Hero Section', path: '/factories/all', icon: <Factory size={16} />, permissionKey: 'factory_read' },
-        { name: 'Products Collection', path: '/factories/add', icon: <Building size={16} />, permissionKey: 'factory_create' },
+        { name: 'Home Banners', path: '/home-banners', icon: <Factory size={16} />, permissionKey: 'factory_read' },
+        { name: 'Products Collection', path: '/homepage/productcollectionmanage', icon: <Building size={16} />, permissionKey: 'factory_create' },
         { name: 'Valued Customer', path: '/homepage/valuedcustomer', icon: <Building size={16} />, permissionKey: 'factory_read' }
       ]
     },

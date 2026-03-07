@@ -232,6 +232,64 @@ router.get('/valued-customers/:filename', (req, res) => {
   }
 });
 
+// Add this with your other upload configurations
+const bannerUploadDir = 'uploads/banners';
+
+// Ensure directory exists
+if (!fs.existsSync(bannerUploadDir)) {
+  fs.mkdirSync(bannerUploadDir, { recursive: true });
+}
+
+// Configure storage for banner images
+const bannerStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, bannerUploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'banner-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+// Configure upload for banner images
+const uploadBanner = multer({
+  storage: bannerStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: fileFilter
+});
+
+// Upload banner image
+router.post('/banner', uploadBanner.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+    
+    const imageUrl = `/uploads/banners/${req.file.filename}`;
+    
+    res.json({
+      success: true,
+      imageUrl: imageUrl,
+      filename: req.file.filename
+    });
+  } catch (error) {
+    console.error('Error uploading banner image:', error);
+    res.status(500).json({ error: 'Failed to upload image' });
+  }
+});
+
+// Get uploaded banner image
+router.get('/banners/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(bannerUploadDir, filename);
+
+  if (fs.existsSync(filePath)) {
+    res.sendFile(path.resolve(filePath));
+  } else {
+    res.status(404).json({ error: 'Image not found' });
+  }
+});
+
 // REMOVE this line as it's causing duplication:
 // router.use('/uploads', express.static('uploads'));
 

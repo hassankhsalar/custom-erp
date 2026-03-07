@@ -221,6 +221,18 @@ export const API_ROUTES = {
   UPLOADS: `${API_BASE_URL}/uploads`,
 
   //home Page
+
+// Home Banner routes
+  HOME_BANNERS: `${API_BASE_URL}/home-banners`,
+  HOME_BANNER: (id) => `${API_BASE_URL}/home-banners/${id}`,
+  HOME_BANNERS_ALL: `${API_BASE_URL}/home-banners/all`,
+
+  PRODUCT_COLLECTIONS: `${API_BASE_URL}/product-collections`,
+  PRODUCT_COLLECTION: (id) => `${API_BASE_URL}/product-collections/${id}`,
+  PRODUCT_COLLECTION_BY_TYPE: (type) => `${API_BASE_URL}/product-collections/by-type/${type}`,
+  PRODUCT_COLLECTION_REMOVE: (productId, type) => `${API_BASE_URL}/product-collections/product/${productId}/type/${type}`,
+
+
   VALUED_CUSTOMERS: `${API_BASE_URL}/valued-customers`,
   VALUED_CUSTOMER: (id) => `${API_BASE_URL}/valued-customers/${id}`,
   VALUED_CUSTOMERS_ALL: `${API_BASE_URL}/valued-customers/all`,

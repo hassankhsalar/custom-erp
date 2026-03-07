@@ -321,7 +321,9 @@ const requisitionRoutes = require('./routes/requisitionRoutes');
 const masterDataRoutes = require('./routes/masterDataRoutes');
 const businessSettingsRoutes = require('./routes/businessSettingsRoutes');
 ///////Home page
+const homeBannerRoutes = require('./routes/HomePage/homeBannerRoutes');
 const valuedCustomer = require('./routes/HomePage/valuedCustomerRoutes');
+const productCollectionRoutes = require('./routes/HomePage/productCollectionRoutes');
 
 const uploadRoutes = require('./routes/uploadRoutes');
 
@@ -374,6 +376,8 @@ app.use('/api/master-data', authenticateToken, masterDataRoutes);
 app.use('/api/business-settings', authenticateToken, businessSettingsRoutes);
 ///////Home page
 app.use('/api/valued-customers', authenticateToken, valuedCustomer);
+app.use('/api/product-collections', productCollectionRoutes);
+app.use('/api/home-banners', homeBannerRoutes);
 
 
 // serve static files from uploads directory
