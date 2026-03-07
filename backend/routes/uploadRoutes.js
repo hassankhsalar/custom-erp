@@ -8,18 +8,14 @@ const router = express.Router();
 const productUploadDir = 'uploads/products';
 const materialUploadDir = 'uploads/materials';
 const profileUploadDir = 'uploads/profiles';
+const valuedCustomerUploadDir = 'uploads/valued-customers';
 
-if (!fs.existsSync(productUploadDir)) {
-  fs.mkdirSync(productUploadDir, { recursive: true });
-}
-
-if (!fs.existsSync(materialUploadDir)) {
-  fs.mkdirSync(materialUploadDir, { recursive: true });
-}
-
-if (!fs.existsSync(profileUploadDir)) {
-  fs.mkdirSync(profileUploadDir, { recursive: true });
-}
+// Create all directories
+[productUploadDir, materialUploadDir, profileUploadDir, valuedCustomerUploadDir].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
 
 // Configure storage for products
 const productStorage = multer.diskStorage({
@@ -27,7 +23,6 @@ const productStorage = multer.diskStorage({
     cb(null, productUploadDir);
   },
   filename: function (req, file, cb) {
-    // Create unique filename
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, 'product-' + uniqueSuffix + path.extname(file.originalname));
   }
@@ -39,7 +34,6 @@ const materialStorage = multer.diskStorage({
     cb(null, materialUploadDir);
   },
   filename: function (req, file, cb) {
-    // Create unique filename
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, 'material-' + uniqueSuffix + path.extname(file.originalname));
   }
@@ -53,6 +47,17 @@ const profileStorage = multer.diskStorage({
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
     cb(null, 'profile-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+// Configure storage for valued customer images
+const valuedCustomerStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, valuedCustomerUploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'valued-customer-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
 
@@ -90,6 +95,13 @@ const uploadProfile = multer({
   fileFilter: fileFilter
 });
 
+// Configure upload for valued customer images
+const uploadValuedCustomer = multer({
+  storage: valuedCustomerStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: fileFilter
+});
+
 // Upload product image
 router.post('/product', uploadProduct.single('image'), (req, res) => {
   try {
@@ -118,7 +130,6 @@ router.post('/material', uploadMaterial.single('image'), (req, res) => {
       return res.status(400).json({ error: 'No image file provided' });
     }
     
-    // Construct the URL
     const imageUrl = `/uploads/materials/${req.file.filename}`;
     
     res.json({
@@ -148,6 +159,27 @@ router.post('/profile', uploadProfile.single('image'), (req, res) => {
     });
   } catch (error) {
     console.error('Error uploading profile image:', error);
+    res.status(500).json({ error: 'Failed to upload image' });
+  }
+});
+
+// Upload valued customer image - FIXED VERSION
+router.post('/valued-customer', uploadValuedCustomer.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+    
+    // Construct the URL - using consistent format with other endpoints
+    const imageUrl = `/uploads/valued-customers/${req.file.filename}`;
+    
+    res.json({
+      success: true,
+      imageUrl: imageUrl,
+      filename: req.file.filename
+    });
+  } catch (error) {
+    console.error('Error uploading valued customer image:', error);
     res.status(500).json({ error: 'Failed to upload image' });
   }
 });
@@ -188,7 +220,19 @@ router.get('/profiles/:filename', (req, res) => {
   }
 });
 
-// Serve static files from uploads directory
-router.use('/uploads', express.static('uploads'));
+// Get uploaded valued customer image
+router.get('/valued-customers/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(valuedCustomerUploadDir, filename);
+
+  if (fs.existsSync(filePath)) {
+    res.sendFile(path.resolve(filePath));
+  } else {
+    res.status(404).json({ error: 'Image not found' });
+  }
+});
+
+// REMOVE this line as it's causing duplication:
+// router.use('/uploads', express.static('uploads'));
 
 module.exports = router;

@@ -1760,4 +1760,14 @@ model RepairOrderItem {
   @@index([materialId])
 }
 
+model ValuedCustomer {
+  id        Int      @id @default(autoincrement())
+  image     String?  
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt Boolean  @default(false) @map("deleted_at")
+
+  @@map("valued_customers")
+}
 

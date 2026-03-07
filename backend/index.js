@@ -320,6 +320,8 @@ const dailyStockReportRoutes = require('./routes/dailyStockReportRoutes');
 const requisitionRoutes = require('./routes/requisitionRoutes');
 const masterDataRoutes = require('./routes/masterDataRoutes');
 const businessSettingsRoutes = require('./routes/businessSettingsRoutes');
+///////Home page
+const valuedCustomer = require('./routes/HomePage/valuedCustomerRoutes');
 
 const uploadRoutes = require('./routes/uploadRoutes');
 
@@ -370,6 +372,9 @@ app.use('/api/activity-logs', authenticateToken, activityLogRoutes);
 app.use('/api/requisitions', authenticateToken, requisitionRoutes);
 app.use('/api/master-data', authenticateToken, masterDataRoutes);
 app.use('/api/business-settings', authenticateToken, businessSettingsRoutes);
+///////Home page
+app.use('/api/valued-customers', authenticateToken, valuedCustomer);
+
 
 // serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));

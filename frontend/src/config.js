@@ -220,6 +220,10 @@ export const API_ROUTES = {
   //Image file uploads
   UPLOADS: `${API_BASE_URL}/uploads`,
 
+  //home Page
+  VALUED_CUSTOMERS: `${API_BASE_URL}/valued-customers`,
+  VALUED_CUSTOMER: (id) => `${API_BASE_URL}/valued-customers/${id}`,
+  VALUED_CUSTOMERS_ALL: `${API_BASE_URL}/valued-customers/all`,
 
   //user routes
   USERS: `${API_BASE_URL}/users`,

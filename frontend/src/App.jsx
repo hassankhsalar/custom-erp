@@ -121,6 +121,8 @@ import StoreInventory from "./components/Stores/StoreInventory";
 import ShopInventory from "./components/Shop/ShopInventory";
 import EditShop from "./components/Shop/EditShop";
 import { AuthContext, useAuth } from "./context/AuthContext";
+import ValuedCustomerList from "./components/HomePage/ValuedCustomerList";
+import CreateValuedCustomer from "./components/HomePage/CreateValuedCustomer";
 
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("token"));
@@ -682,6 +684,19 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="notification_read" />}>
               <Route path="/notifications" element={<Notifications />} />
             </Route>
+          {/* Home page */}
+
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/homepage/valuedcustomer" element={<ValuedCustomerList />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/homepage/createvaluedcustomer" element={<CreateValuedCustomer />} />
+            </Route>
+
+
+
+
+
             <Route path="/profile" element={<UserProfile />} />
             <Route path="/userprofile" element={<Navigate to="/profile" replace />} />
             {/* Default route for authenticated users */}
