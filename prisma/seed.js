@@ -25,10 +25,10 @@ function normalizeText(value) {
   if (/(?:à¦|à§|Ã)/.test(raw)) {
     try {
       const repaired = Buffer.from(raw, "latin1").toString("utf8").trim();
-      if (repaired) return repaired;
+      if (repaired) return repaired.replace(/\s*--\s*/g, ", ");
     } catch (_) {}
   }
-  return raw;
+  return raw.replace(/\s*--\s*/g, ", ");
 }
 
 function normalizeDigits(value) {
@@ -101,11 +101,97 @@ function loadCSV(fileName) {
   });
 }
 
+function loadCSVOptional(fileName) {
+  const fullPath = path.join(seedDataDir, fileName);
+  if (!fs.existsSync(fullPath)) return [];
+  return loadCSV(fileName);
+}
+
+function loadLegacySalesRowsOptional(fileName) {
+  const fullPath = path.join(seedDataDir, fileName);
+  if (!fs.existsSync(fullPath)) return [];
+  const content = fs.readFileSync(fullPath, "utf8");
+  if (!content || !content.trim()) return [];
+
+  const normalized = content.replace(/\r\n/g, "\n");
+  const lines = normalized.split("\n");
+  if (lines.length <= 1) return [];
+
+  const headerCols = lines[0].split(",").map((h) => normalizeText(h));
+  const dataBody = lines.slice(1).join("\n");
+  const rowStartRegex = /(?:^|\n)\s*\d+\s*,/g;
+  const starts = [];
+  let m = rowStartRegex.exec(dataBody);
+  while (m) {
+    starts.push(m.index + (m[0].startsWith("\n") ? 1 : 0));
+    m = rowStartRegex.exec(dataBody);
+  }
+  if (!starts.length) return [];
+
+  const rows = [];
+  for (let i = 0; i < starts.length; i += 1) {
+    const start = starts[i];
+    const end = i + 1 < starts.length ? starts[i + 1] : dataBody.length;
+    const chunk = dataBody.slice(start, end).replace(/\n+/g, " ").trim();
+    if (!chunk) continue;
+    const cols = chunk.split(",");
+    const rowObj = {};
+    for (let c = 0; c < headerCols.length; c += 1) {
+      rowObj[headerCols[c]] = cols[c] ?? "";
+    }
+    if (cols.length > headerCols.length) {
+      rowObj.__extra = cols.slice(headerCols.length);
+    }
+    rows.push(rowObj);
+  }
+  return rows;
+}
+
 function toNumber(value) {
   if (value === null || value === undefined) return 0;
   const cleaned = normalizeDigits(String(value)).replace(/,/g, "").trim();
   const num = parseFloat(cleaned);
   return Number.isFinite(num) ? num : 0;
+}
+
+function toLooseNumber(value) {
+  if (value === null || value === undefined) return 0;
+  const cleaned = normalizeDigits(String(value))
+    .replace(/--/g, "")
+    .replace(/,/g, "")
+    .replace(/[^0-9.-]/g, "")
+    .trim();
+  const num = parseFloat(cleaned);
+  return Number.isFinite(num) ? num : 0;
+}
+
+function parseLegacySaleDate(value) {
+  const raw = normalizeText(value).replace(/--/g, ", ");
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function parseLegacySaleItems(value) {
+  const html = String(value ?? "");
+  const items = [];
+  const liRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+  let match = liRegex.exec(html);
+
+  while (match) {
+    const text = normalizeText(match[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
+    const parsed = text.match(/^(.*?)\s*Code:\s*([A-Za-z0-9-]+)\s*\*\s*([0-9.]+)\s*(?:pc|pcs|piece|pieces)?$/i);
+    if (parsed) {
+      items.push({
+        name: normalizeText(parsed[1]),
+        code: normalizeText(parsed[2]),
+        quantity: Number.parseFloat(parsed[3]) || 0,
+      });
+    }
+    match = liRegex.exec(html);
+  }
+
+  return items.filter((x) => x.code && x.quantity > 0);
 }
 
 function isMoneyTokens(tokens) {
@@ -343,182 +429,108 @@ async function main() {
     },
   });
 
-  const shops = await Promise.all([
-    prisma.shop.create({
-      data: {
-        name: "Main Shop",
-        address: "Main Market",
-        shop_keeper: "Keeper 1",
-        mobile: "01700000001",
-      },
-    }),
-    prisma.shop.create({
-      data: {
-        name: "Second Shop",
-        address: "Second Market",
-        shop_keeper: "Keeper 2",
-        mobile: "01700000002",
-      },
-    }),
-  ]);
+  const shopRows = loadCSVOptional("shop.csv");
+  const usedShopNames = new Set();
+  const shopsFromCsv = shopRows
+    .map((row, index) => {
+      const rawName = normalizeText(row.name ?? row.Name ?? row.shop ?? row.Shop ?? "");
+      if (!rawName) return null;
 
-  const stores = await Promise.all([
-    prisma.store.create({
-      data: {
-        name: "Main Store",
-        address: "Store Area 1",
-        store_keeper: "Store Keeper 1",
-        mobile: "01800000001",
-      },
-    }),
-    prisma.store.create({
-      data: {
-        name: "Second Store",
-        address: "Store Area 2",
-        store_keeper: "Store Keeper 2",
-        mobile: "01800000002",
-      },
-    }),
-  ]);
+      let name = rawName;
+      let suffix = 1;
+      while (usedShopNames.has(name.toLowerCase())) {
+        suffix += 1;
+        name = `${rawName} ${suffix}`;
+      }
+      usedShopNames.add(name.toLowerCase());
 
-  const factories = await Promise.all([
-    prisma.factory.create({
-      data: {
-        name: "Main Factory",
-        address: "Factory Zone 1",
-        manager: "Manager 1",
-        phone: "01900000001",
-        email: "factory1@example.com",
-      },
-    }),
-    prisma.factory.create({
-      data: {
-        name: "Second Factory",
-        address: "Factory Zone 2",
-        manager: "Manager 2",
-        phone: "01900000002",
-        email: "factory2@example.com",
-      },
-    }),
-  ]);
+      return {
+        name,
+        address: normalizeText(row.address ?? row.Address ?? "") || null,
+        shop_keeper: normalizeText(row.shop_keeper ?? row.shopKeeper ?? row.keeper ?? row.Keeper ?? "") || null,
+        mobile: normalizeDigits(normalizeText(row.phone ?? row.Phone ?? row.mobile ?? row.Mobile ?? "")) || null,
+      };
+    })
+    .filter(Boolean);
 
-  const primaryAccount = await prisma.accounts.create({
-    data: {
-      name: "Primary Business Account",
-      account_number: "ACC-PRIMARY-0001",
-      status: "active",
-      balance: 0,
-      deleted_at: false,
-    },
-  });
-
-  const entityAccountData = [
-    ...shops.map((shop) => ({
-      entityType: "shop",
-      entityId: shop.id,
-      accountId: primaryAccount.id,
-      isPrimary: true,
-      assignedById: adminUser.id,
-    })),
-    ...stores.map((store) => ({
-      entityType: "store",
-      entityId: store.id,
-      accountId: primaryAccount.id,
-      isPrimary: true,
-      assignedById: adminUser.id,
-    })),
-    ...factories.map((factory) => ({
-      entityType: "factory",
-      entityId: factory.id,
-      accountId: primaryAccount.id,
-      isPrimary: true,
-      assignedById: adminUser.id,
-    })),
-  ];
-  await prisma.entityAccount.createMany({ data: entityAccountData, skipDuplicates: true });
-
-  await prisma.userAssociate.createMany({
-    data: [
-      { userId: testUser.id, associateName: "shop", associateId: shops[0].id },
-      { userId: testUser.id, associateName: "store", associateId: stores[0].id },
-      { userId: testUser.id, associateName: "factory", associateId: factories[0].id },
-    ],
-    skipDuplicates: true,
-  });
-
-  const shopRegisters = await Promise.all(
-    shops.map((shop, index) =>
-      prisma.cashRegister.create({
-        data: {
-          name: `Shop Register ${index + 1}`,
-          status: "open",
-          cash_in_hand: 0,
-          deleted_at: false,
-        },
-      })
-    )
-  );
-
-  await prisma.cashRegisterAssignment.createMany({
-    data: shopRegisters.map((register, index) => ({
-      entityType: "shop",
-      entityId: shops[index].id,
-      cashRegisterId: register.id,
-      assignedById: adminUser.id,
-      isActive: true,
-      notes: "Seeded default cash register for shop",
-    })),
-    skipDuplicates: true,
-  });
+  const shops = await Promise.all(shopsFromCsv.map((shop) => prisma.shop.create({ data: shop })));
 
   const brandRows = loadCSV("brand.csv");
   const unitRows = loadCSV("unit.csv");
   const productRows = loadCSV("product.csv");
   const customerRows = loadCSV("customer.csv");
+  const supplierRows = loadCSVOptional("supplier.csv");
+  const salesRows = loadLegacySalesRowsOptional("sales.csv");
 
   const brandSet = new Set();
   const unitSet = new Set();
   const categorySet = new Set();
   const usedProductCodes = new Set();
 
-  const products = productRows
-    .map((row, index) => {
-      const productCol = row.Product ?? row.product ?? "";
-      const categoryCol = normalizeText(row.Category ?? row.category ?? "");
-      const brandCol = normalizeText(row.Brand ?? row.brand ?? "");
-      const unitCol = normalizeText(row.Units ?? row.Unit ?? row.unit ?? "");
-      const sl = normalizeText(row["S.L"] ?? row["SL"] ?? "");
+  const products = [];
+  const materials = [];
 
-      const extracted = extractProductNameAndCode(productCol, sl);
-      const name = normalizeText(extracted.name);
-      if (!name) return null;
+  for (let index = 0; index < productRows.length; index += 1) {
+    const row = productRows[index];
+    const productCol = row.Product ?? row.product ?? "";
+    const categoryCol = normalizeText(row.Category ?? row.category ?? "");
+    const brandCol = normalizeText(row.Brand ?? row.brand ?? "");
+    const typeCol = normalizeText(row["Product/Material"] ?? row.product_material ?? row.Type ?? row.type ?? "");
+    const unitCol = normalizeText(row.Units ?? row.Unit ?? row.unit ?? "");
+    const sl = normalizeText(row["S.L"] ?? row["SL"] ?? "");
 
-      const category = categoryCol || "";
-      const brand = brandCol || null;
-      const unit = unitCol || "PC";
-      const barcode = makeUniqueCode(extracted.code || sl || `AUTO${index + 1}`, usedProductCodes, "AUTO");
+    const extracted = extractProductNameAndCode(productCol, sl);
+    const name = normalizeText(extracted.name);
+    if (!name) continue;
 
-      categorySet.add(category);
-      unitSet.add(unit);
-      if (brand) brandSet.add(brand);
+    const category = categoryCol || "";
+    const brand = brandCol || null;
+    const unit = unitCol || "PC";
+    const barcode = makeUniqueCode(extracted.code || sl || `AUTO${index + 1}`, usedProductCodes, "AUTO");
+    const salePrice = toNumber(row["Sale Price"] ?? row.sale_price ?? row.salePrice ?? row.saleprice);
+    const costPrice = toNumber(row["Cost Price"] ?? row.cost ?? row.unit_cost ?? row.costPrice ?? row.costprice);
+    const wholesalePrice = toNumber(row.Wholesale ?? row.wholesale_price ?? row.wholesale ?? row.wholesalePrice ?? row.wholesaleprice);
 
-      return {
+    categorySet.add(category);
+    unitSet.add(unit);
+    if (brand) brandSet.add(brand);
+
+    if (typeCol.toLowerCase() === "material") {
+      materials.push({
+        name,
+        description: null,
+        category,
+        brand,
+        alternative_names: null,
+        barcode,
+        image: null,
+        unit,
+        alternative_units: null,
+        unit_cost: costPrice,
+        sale_price: salePrice,
+        wholesale_price: wholesalePrice,
+        current_stock: 0,
+        deleted_at: false,
+        alert_quantity: 0,
+      });
+    } else {
+      products.push({
         name,
         description: null,
         brand,
         image: null,
         unit,
-        sale_price: 0,
-        wholesale_price: 0,
-        cost: 0,
+        sale_price: salePrice,
+        wholesale_price: wholesalePrice,
+        cost: costPrice,
         barcode,
         category,
         stock: 0,
         alert_quantity: 0,
         deleted_at: false,
-      };
-    })
-    .filter(Boolean);
+      });
+    }
+  }
 
   for (const row of brandRows) {
     const name = normalizeText(row.Name ?? row.name ?? "");
@@ -546,6 +558,9 @@ async function main() {
   if (products.length) {
     await prisma.product.createMany({ data: products, skipDuplicates: true });
   }
+  if (materials.length) {
+    await prisma.material.createMany({ data: materials, skipDuplicates: true });
+  }
 
   const usedMobiles = new Set();
   const usedEmails = new Set();
@@ -558,6 +573,7 @@ async function main() {
 
       const emailRaw = normalizeText(row.email ?? row.Email ?? "").toLowerCase();
       let email = emailRaw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw) ? emailRaw : null;
+
       if (email) {
         if (usedEmails.has(email)) email = null;
         else usedEmails.add(email);
@@ -574,7 +590,6 @@ async function main() {
       return {
         name,
         mobile,
-        email,
         address,
         total_purchase: totalPurchase,
         total_due: totalDue,
@@ -587,333 +602,259 @@ async function main() {
     await prisma.customer.createMany({ data: customers, skipDuplicates: true });
   }
 
-  const extraCustomers = await Promise.all([
-    prisma.customer.create({
-      data: {
-        name: "Walk-in Customer",
-        mobile: "01999000001",
-        address: "Dhaka",
-        total_purchase: 0,
-        total_due: 0,
-      },
-    }),
-    prisma.customer.create({
-      data: {
-        name: "Dealer Customer",
-        mobile: "01999000002",
-        address: "Chattogram",
-        total_purchase: 0,
-        total_due: 0,
-      },
-    }),
-  ]);
 
-  const suppliers = await Promise.all([
-    prisma.supplier.create({
-      data: {
-        name: "Default Supplier A",
-        mobile: "01888000001",
-        address: "Supplier Area 1",
-      },
-    }),
-    prisma.supplier.create({
-      data: {
-        name: "Default Supplier B",
-        mobile: "01888000002",
-        address: "Supplier Area 2",
-      },
-    }),
-  ]);
+  const suppliersFromCsv = supplierRows
+    .map((row, index) => {
+      const name = normalizeText(row.name ?? row.Name ?? "");
+      if (!name) return null;
 
-  const productPool = await prisma.product.findMany({
+      const mobile = normalizeDigits(normalizeText(row.phone ?? row.Phone ?? row.mobile ?? row.Mobile ?? "")) || null;
+      const address = normalizeText(row.address ?? row.Address ?? "") || null;
+      const totalPurchase = toLooseNumber(row.total_purchase ?? row.totalPurchase ?? row["total purchase"] ?? row["Total Purchase"]);
+      const totalDue = toLooseNumber(row.total_due ?? row.totalDue ?? row["total due"] ?? row["Total Due"]);
+
+      return {
+        name,
+        mobile,
+        address,
+        total_purchase: totalPurchase,
+        total_due: totalDue,
+        deleted_at: false,
+      };
+    })
+    .filter(Boolean);
+
+  if (suppliersFromCsv.length) {
+    await prisma.supplier.createMany({ data: suppliersFromCsv });
+  }
+
+  const suppliers = await prisma.supplier.findMany({
     where: { deleted_at: false },
     orderBy: { id: "asc" },
-    take: 60,
-  });
-  const customerPool = await prisma.customer.findMany({
-    where: { deleted_at: false },
-    orderBy: { id: "asc" },
-    take: 80,
   });
 
-  if (!productPool.length || !customerPool.length) {
-    throw new Error("Seed dependencies missing: product/customer not found.");
-  }
+  if (salesRows.length) {
+    const existingShops = await prisma.shop.findMany({ select: { id: true, name: true } });
+    const shopByName = new Map(existingShops.map((s) => [normalizeText(s.name).toLowerCase(), s]));
 
-  const purchaseCount = 24;
-  const saleCount = 24;
-  const transferCount = 24;
-  const damageCount = 24;
-  const productionCount = 24;
+    const existingCustomers = await prisma.customer.findMany({
+      where: { deleted_at: false },
+      select: { id: true, name: true, mobile: true }
+    });
+    const customerByName = new Map(existingCustomers.map((c) => [normalizeText(c.name).toLowerCase(), c]));
 
-  const ref = (prefix, n) => `${prefix}-${String(n).padStart(4, "0")}`;
-  const pick = (arr, i) => arr[i % arr.length];
-
-  for (let i = 1; i <= purchaseCount; i += 1) {
-    const product = pick(productPool, i);
-    const supplier = pick(suppliers, i);
-    const route = i % 3;
-    const destinationType = route === 0 ? "store" : route === 1 ? "shop" : "factory";
-    const destinationId =
-      destinationType === "store" ? pick(stores, i).id : destinationType === "shop" ? pick(shops, i).id : pick(factories, i).id;
-    const quantity = 5 + (i % 8);
-    const unitPrice = 80 + (i % 10) * 7;
-    const totalPrice = quantity * unitPrice;
-    const paid = totalPrice - (i % 4) * 50;
-
-    const purchase = await prisma.purchase.create({
-      data: {
-        reference: ref("PUR", i),
-        supplierId: supplier.id,
-        destinationType,
-        destinationId,
-        grandTotal: totalPrice,
-        paidAmount: Math.max(0, paid),
-        shippingStatus: "received",
-        shippingCost: 20 + (i % 5) * 5,
-        discount: 0,
-        tax: 0,
-        accountId: primaryAccount.id,
-        purchaseItems: {
-          create: [
-            {
-              productId: product.id,
-              itemType: "product",
-              selectedName: product.name,
-              selectedUnit: product.unit,
-              selectedQuantity: quantity,
-              quantity,
-              unitPrice,
-              totalPrice,
-            },
-          ],
-        },
-      },
-      include: { purchaseItems: true },
+    const existingProducts = await prisma.product.findMany({
+      where: { deleted_at: false },
+      select: { id: true, name: true, unit: true, cost: true, sale_price: true, barcode: true }
+    });
+    const existingMaterials = await prisma.material.findMany({
+      where: { deleted_at: false },
+      select: { id: true, name: true, unit: true, unit_cost: true, sale_price: true, barcode: true }
     });
 
-    await prisma.purchaseShipment.create({
-      data: {
-        purchaseId: purchase.id,
-        reference: ref("PSHIP", i),
-        status: "received",
-        note: "Seed shipment",
-        receivedAt: new Date(),
-        items: {
-          create: [
-            {
-              purchaseItemId: purchase.purchaseItems[0].id,
-              itemType: "product",
-              productId: product.id,
-              quantity,
-              received_quantity: quantity,
-            },
-          ],
-        },
-      },
-    });
-  }
+    const productByCode = new Map();
+    for (const product of existingProducts) {
+      if (product.barcode) productByCode.set(normalizeText(product.barcode), product);
+    }
+    const usedProductCodesForSales = new Set(
+      existingProducts
+        .map((product) => normalizeText(product.barcode))
+        .filter(Boolean)
+    );
 
-  for (let i = 1; i <= saleCount; i += 1) {
-    const product = pick(productPool, i + 3);
-    const customer = pick(customerPool, i);
-    const shop = pick(shops, i);
-    const quantity = 1 + (i % 6);
-    const unitPrice = 120 + (i % 11) * 9;
-    const total = quantity * unitPrice;
-    const paid = total - (i % 3) * 40;
+    const materialByCode = new Map();
+    for (const material of existingMaterials) {
+      if (material.barcode) materialByCode.set(normalizeText(material.barcode), material);
+    }
 
-    await prisma.sale.create({
-      data: {
-        reference: ref("SAL", i),
-        shopId: shop.id,
-        customerId: customer.id,
-        totalAmount: total,
-        total_cost: quantity * 90,
-        discount: 0,
-        grandTotal: total,
-        paidAmount: Math.max(0, paid),
-        paymentType: "cash",
-        createdById: adminUser.id,
-        transactionStatus: "closed",
-        transactionClosedById: adminUser.id,
-        transactionClosedAt: new Date(),
-        saleItems: {
-          create: [
-            {
-              productId: product.id,
-              selectedName: product.name,
-              selectedUnit: product.unit,
-              selectedQuantity: quantity,
-              quantity,
-              unitPrice,
-              avg_cost: 90,
-              totalPrice: total,
-            },
-          ],
-        },
-      },
-    });
-  }
+    const usedSaleRefs = new Set(
+      (await prisma.sale.findMany({ select: { reference: true } }))
+        .map((s) => normalizeText(s.reference))
+        .filter(Boolean)
+    );
 
-  for (let i = 1; i <= transferCount; i += 1) {
-    const product = pick(productPool, i + 7);
-    const quantity = 1 + (i % 5);
-    const route = i % 3;
+    for (let i = 0; i < salesRows.length; i += 1) {
+      const row = salesRows[i];
+      const invoiceRaw = normalizeText(row.invoice ?? row.Invoice ?? row.reference ?? row.Reference ?? "");
+      if (!invoiceRaw) continue;
 
-    const from = route === 0 ? "store" : route === 1 ? "factory" : "shop";
-    const to = route === 0 ? "shop" : route === 1 ? "store" : "factory";
-    const fromStoreId = from === "store" ? pick(stores, i).id : null;
-    const fromFactoryId = from === "factory" ? pick(factories, i).id : null;
-    const fromShopId = from === "shop" ? pick(shops, i).id : null;
-    const toStoreId = to === "store" ? pick(stores, i + 1).id : null;
-    const toFactoryId = to === "factory" ? pick(factories, i + 1).id : null;
-    const toShopId = to === "shop" ? pick(shops, i + 1).id : null;
-    const fromId = fromStoreId || fromFactoryId || fromShopId;
-    const toId = toStoreId || toFactoryId || toShopId;
+      const invoiceToken = (normalizeDigits(invoiceRaw).match(/\d+/) || [])[0] || String(i + 1);
+      const baseRef = `INV-${invoiceToken}`.slice(0, 24);
+      const reference = makeUniqueCode(baseRef, usedSaleRefs, "INV");
+      const shopName = normalizeText(row.shop ?? row.Shop ?? "") || "Main Shop";
+      const customerName = normalizeText(row.customer ?? row.Customer ?? "") || "Walk-in Customer";
 
-    const transfer = await prisma.transfer.create({
-      data: {
-        reference: ref("TRN", i),
-        from,
-        fromId,
-        fromStoreId,
-        fromFactoryId,
-        fromShopId,
-        to,
-        toId,
-        toStoreId,
-        toFactoryId,
-        toShopId,
-        shipping_cost: 10 + (i % 6) * 3,
-        status: "completed",
-        isRecived: true,
-        note: "Seed transfer",
-        transferItems: {
-          create: [
-            {
-              item: "product",
-              itemId: product.id,
-              productId: product.id,
-              selectedName: product.name,
-              selectedUnit: product.unit,
-              selectedQuantity: quantity,
-              quantity,
-              receivedQuantity: quantity,
-              avg_cost: 95,
-            },
-          ],
-        },
-      },
-      include: { transferItems: true },
-    });
+      let shop = shopByName.get(shopName.toLowerCase());
+      if (!shop) {
+        shop = await prisma.shop.create({
+          data: {
+            name: shopName,
+            address: null,
+            shop_keeper: null,
+            mobile: null,
+          },
+          select: { id: true, name: true }
+        });
+        shopByName.set(shopName.toLowerCase(), shop);
+      }
 
-    await prisma.transferReceipt.create({
-      data: {
-        transferId: transfer.id,
-        reference: ref("TRN-RCV", i),
-        receiptType: "receive",
-        status: "partial",
-        note: "Seed transfer receipt",
-        createdById: adminUser.id,
-        items: {
-          create: [
-            {
-              transferItemId: transfer.transferItems[0].id,
-              itemType: "product",
-              itemId: product.id,
-              productId: product.id,
-              quantity,
-            },
-          ],
-        },
-      },
-    });
-  }
+      let customer = customerByName.get(customerName.toLowerCase()) || null;
+      if (!customer) {
+        const generatedMobile = `SCUST${String(i + 1).padStart(7, "0")}`;
+        customer = await prisma.customer.create({
+          data: {
+            name: customerName,
+            mobile: generatedMobile,
+            total_purchase: 0,
+            total_due: 0,
+            deleted_at: false,
+          },
+          select: { id: true, name: true, mobile: true }
+        });
+        customerByName.set(customerName.toLowerCase(), customer);
+      }
 
-  for (let i = 1; i <= damageCount; i += 1) {
-    const product = pick(productPool, i + 11);
-    const lossPerUnit = 70 + (i % 8) * 10;
-    const quantity = 1 + (i % 3);
-    const fromType = i % 3 === 0 ? "shop" : i % 3 === 1 ? "store" : "factory";
-    const shopId = fromType === "shop" ? pick(shops, i).id : null;
-    const storeId = fromType === "store" ? pick(stores, i).id : null;
-    const factoryId = fromType === "factory" ? pick(factories, i).id : null;
-    const fromId = shopId || storeId || factoryId;
+      const totalAmount = toLooseNumber(row.amount ?? row.Amount ?? row.total ?? row.Total);
+      const discount = toLooseNumber(row.discount ?? row.Discount);
+      const paidAmount = toLooseNumber(row.paid_amount ?? row.paidAmount ?? row.paid ?? row.Paid);
+      const totalCost = toLooseNumber(row.cost ?? row.Cost);
+      const createdAt = parseLegacySaleDate(row.date ?? row.Date) || new Date();
 
-    await prisma.damageRecord.create({
-      data: {
-        reason: `Seed damage record ${i}`,
-        note: "Damaged during handling",
-        totalLoss: quantity * lossPerUnit,
-        fromType,
-        fromId,
-        shopId,
-        storeId,
-        factoryId,
-        items: {
-          create: [
-            {
-              itemType: "product",
-              productId: product.id,
-              quantity,
-              lossPerUnit,
-            },
-          ],
-        },
-      },
-    });
-  }
+      const parsedItems = parseLegacySaleItems(row.items ?? row.Items ?? "");
+      const saleItemsData = [];
 
-  for (let i = 1; i <= productionCount; i += 1) {
-    const product = pick(productPool, i + 15);
-    const factory = pick(factories, i);
-    const quantity = 8 + (i % 12);
-    const unitCost = 60 + (i % 9) * 8;
-    const startDate = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
-    const endDate = new Date(startDate.getTime() + 2 * 24 * 60 * 60 * 1000);
+      let knownItemsTotal = 0;
+      let unknownItemsQty = 0;
+      const totalParsedQty = parsedItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
 
-    await prisma.production.create({
-      data: {
-        reference: ref("PRD", i),
-        start_date: startDate,
-        estimated_end_date: endDate,
-        end_date: endDate,
-        factoryId: factory.id,
-        status: "done",
-        productionProducts: {
-          create: [
-            {
-              productId: product.id,
-              code: product.barcode || ref("PRD-CODE", i),
-              quantity,
-              unit_cost: unitCost,
-              received: quantity,
-              scrap: i % 2 === 0 ? 0 : 1,
-            },
-          ],
-        },
-      },
-    });
+      for (const parsedItem of parsedItems) {
+        const code = normalizeText(parsedItem.code);
+        const qty = Number(parsedItem.quantity || 0);
+        if (!code || qty <= 0) continue;
+
+        const product = productByCode.get(code);
+        if (product) {
+          knownItemsTotal += qty * Number(product.sale_price || 0);
+          continue;
+        }
+
+        const material = materialByCode.get(code);
+        if (material) {
+          knownItemsTotal += qty * Number(material.sale_price || 0);
+          continue;
+        }
+
+        unknownItemsQty += qty;
+      }
+
+      const averageUnitPrice = totalParsedQty > 0 ? totalAmount / totalParsedQty : 0;
+      const remainingForUnknown = totalAmount - knownItemsTotal;
+      const unknownUnitPrice = unknownItemsQty > 0
+        ? (remainingForUnknown > 0 ? remainingForUnknown / unknownItemsQty : averageUnitPrice)
+        : 0;
+
+      for (const parsedItem of parsedItems) {
+        const code = normalizeText(parsedItem.code);
+        const qty = Number(parsedItem.quantity || 0);
+        if (!code || qty <= 0) continue;
+
+        const product = productByCode.get(code);
+        if (product) {
+          const unitPrice = Number(product.sale_price || 0);
+          saleItemsData.push({
+            productId: product.id,
+            selectedName: product.name,
+            selectedUnit: product.unit || "unit",
+            selectedQuantity: qty,
+            quantity: qty,
+            unitPrice,
+            avg_cost: Number(product.cost || 0),
+            totalPrice: qty * unitPrice,
+          });
+          continue;
+        }
+
+        const material = materialByCode.get(code);
+        if (material) {
+          const unitPrice = Number(material.sale_price || 0);
+          saleItemsData.push({
+            materialId: material.id,
+            selectedName: material.name,
+            selectedUnit: material.unit || "unit",
+            selectedQuantity: qty,
+            quantity: qty,
+            unitPrice,
+            avg_cost: Number(material.unit_cost || 0),
+            totalPrice: qty * unitPrice,
+          });
+          continue;
+        }
+
+        const generatedName = normalizeText(parsedItem.name) || `Imported Product ${code}`;
+        const generatedBarcode = makeUniqueCode(code, usedProductCodesForSales, "AUTO");
+        const generatedSalePrice = Number.isFinite(unknownUnitPrice) && unknownUnitPrice > 0 ? unknownUnitPrice : averageUnitPrice;
+
+        const createdProduct = await prisma.product.create({
+          data: {
+            name: generatedName,
+            unit: "pc",
+            sale_price: generatedSalePrice > 0 ? generatedSalePrice : 0,
+            wholesale_price: generatedSalePrice > 0 ? generatedSalePrice : 0,
+            cost: 0,
+            barcode: generatedBarcode,
+            category: "Imported Sales",
+            deleted_at: false,
+          },
+          select: { id: true, name: true, unit: true, cost: true, sale_price: true, barcode: true },
+        });
+
+        productByCode.set(code, createdProduct);
+        if (createdProduct.barcode) {
+          productByCode.set(normalizeText(createdProduct.barcode), createdProduct);
+        }
+
+        saleItemsData.push({
+          productId: createdProduct.id,
+          selectedName: createdProduct.name,
+          selectedUnit: createdProduct.unit || "unit",
+          selectedQuantity: qty,
+          quantity: qty,
+          unitPrice: Number(createdProduct.sale_price || 0),
+          avg_cost: 0,
+          totalPrice: qty * Number(createdProduct.sale_price || 0),
+        });
+      }
+
+      await prisma.sale.create({
+        data: {
+          reference,
+          shopId: shop.id,
+          customerId: customer?.id || null,
+          totalAmount,
+          total_cost: totalCost,
+          discount,
+          grandTotal: totalAmount,
+          paidAmount,
+          paymentType: "cash",
+          createdById: adminUser.id,
+          transactionStatus: paidAmount >= totalAmount ? "closed" : "open",
+          transactionClosedById: paidAmount >= totalAmount ? adminUser.id : null,
+          transactionClosedAt: paidAmount >= totalAmount ? createdAt : null,
+          createdAt,
+          saleItems: saleItemsData.length ? { create: saleItemsData } : undefined,
+        }
+      });
+    }
   }
 
   console.log(`Brands created: ${brands.length}`);
   console.log(`Units created: ${units.length}`);
   console.log(`Categories created: ${categories.length}`);
   console.log(`Products created: ${products.length}`);
+  console.log(`Materials created: ${materials.length}`);
   console.log(`Customers created: ${customers.length}`);
-  console.log(`Extra customers created: ${extraCustomers.length}`);
   console.log(`Suppliers created: ${suppliers.length}`);
-  console.log(`Purchases created: ${purchaseCount}`);
-  console.log(`Sales created: ${saleCount}`);
-  console.log(`Transfers created: ${transferCount}`);
-  console.log(`Damage records created: ${damageCount}`);
-  console.log(`Productions created: ${productionCount}`);
   console.log(`Shops created: ${shops.length}`);
-  console.log(`Stores created: ${stores.length}`);
-  console.log(`Factories created: ${factories.length}`);
-  console.log(`Cash registers created: ${shopRegisters.length}`);
-  console.log(`Primary account created: ${primaryAccount.name} (#${primaryAccount.id})`);
   console.log(`Test user created: ${testUser.username} (${testUser.email})`);
   console.log("Seed completed.");
   console.log(`Permission created: ${adminPermission.name} (#${adminPermission.id})`);
@@ -928,3 +869,12 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+
+
+
+
+
+
+
+
+

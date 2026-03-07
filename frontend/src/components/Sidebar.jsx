@@ -78,6 +78,10 @@ const Sidebar = () => {
     }));
   };
 
+  const isActive = (path) => {
+    return location.pathname === path;
+  };
+
   const menuItems = [
     {
       name: 'Dashboard',
@@ -257,20 +261,20 @@ const Sidebar = () => {
       color: 'from-indigo-500 to-blue-500',
       bgColor: 'bg-gradient-to-r from-indigo-50 to-blue-100/50',
       textColor: 'text-indigo-700',
-      permissionKey: ['account_read', 'account_create', 'account_edit', 'account_delete', 'account_assign', 'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement',
-        'cash_register_read', 'cash_register_create', 'cash_register_edit', 'cash_register_delete', 'cash_register_assign', 'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit', 'cash_register_daily_record',
-        'bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete', 'bank_account_deposit', 'bank_account_withdraw',
+      permissionKey: ['account_read', 'account_create', 'account_edit', 'account_assign', 'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement',
+        'cash_register_read', 'cash_register_create', 'cash_register_deactivate', 'cash_register_assign', 'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit', 'cash_register_daily_record',
+        'bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete',
         'general_ledger_report', 'balance_sheet_report'
       ],
       subItems: [
-        { name: 'Account List', path: '/allaccounts', icon: <TableProperties size={16} />, permissionKey: ['account_read', 'account_create', 'account_edit', 'account_delete', 'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement', 'account_assign'] },
+        { name: 'Account List', path: '/allaccounts', icon: <TableProperties size={16} />, permissionKey: ['account_read', 'account_create', 'account_edit', 'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement', 'account_assign'] },
         { name: 'Add Account', path: '/addaccount', icon: <NotebookPen size={16} />, permissionKey: 'account_create' },
         { name: 'Assign Account', path: '/assignaccount', icon: <TableProperties size={16} />, permissionKey: "account_assign" },
-        { name: 'Cash Register List', path: '/cashregister-list', icon: <TableProperties size={16} />, permissionKey: ['cash_register_read', 'cash_register_create', 'cash_register_edit', 'cash_register_delete', 'cash_register_assign', 'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit' ] },
+        { name: 'Cash Register List', path: '/cashregister-list', icon: <TableProperties size={16} />, permissionKey: ['cash_register_read', 'cash_register_create', 'cash_register_deactivate', 'cash_register_assign', 'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit' ] },
         { name: 'Assign CashRegister', path: '/cashregisterassign', icon: <TableProperties size={16} />, permissionKey: 'cash_register_assign' },
         { name: 'Cash Register Records', path: '/cash-register-records', icon: <TableProperties size={16} />, permissionKey: ['cash_register_open', 'cash_register_close', 'cash_register_daily_record'] },
         { name: 'Add CashRegister', path: '/addcashregister', icon: <TableProperties size={16} />, permissionKey: 'cash_register_create' },
-        { name: 'Bank Accounts', path: '/bank-accounts', icon: <TableProperties size={16} />, permissionKey: ['bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete', 'bank_account_deposit', 'bank_account_withdraw'] },
+        { name: 'Bank Accounts', path: '/bank-accounts', icon: <TableProperties size={16} />, permissionKey: ['bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete' ] },
         { name: 'General Ledger', path: '/accounts/general-ledger', icon: <TableProperties size={16} />, permissionKey: 'general_ledger_report' },
         { name: 'Balance Sheet', path: '/accounts/balance-sheet', icon: <TableProperties size={16} />, permissionKey: 'balance_sheet_report' },
       ]
@@ -421,7 +425,7 @@ const Sidebar = () => {
                 // Render direct link if path exists
                 <Link
                   to={item.path}
-                  className="group flex items-center gap-3 p-3 rounded-xl hover:bg-white/80 hover:border-gray-200/70 border border-transparent transition-all duration-300 hover:scale-[1.02] hover:shadow-lg"
+                  className={`group flex items-center gap-3 p-3 rounded-xl hover:bg-white/80 hover:border-gray-200/70 border border-transparent transition-all duration-300 hover:scale-[1.02] hover:shadow-lg ${ isActive(item.path) ? 'text-black font-semibold' : '' }`}
                 >
                   <div className={`flex-shrink-0 p-2 rounded-lg bg-gradient-to-r ${item.color} shadow-sm`}>
                     {item.icon}
@@ -466,7 +470,7 @@ const Sidebar = () => {
                         <Link
                           key={subItem.path}
                           to={subItem.path}
-                          className="group flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50/70 hover:pl-4 transition-all duration-200"
+                          className={`group flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-gray-50/70 hover:pl-4 transition-all duration-200 ${ isActive(subItem.path) ? 'text-black font-semibold group-hover:font-semibold' : '' }`}
                         >
                           <div className="flex-shrink-0 p-1.5 rounded-md bg-gray-100/50 group-hover:bg-white shadow-sm">
                             {subItem.icon}

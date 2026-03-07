@@ -23,6 +23,7 @@ import {
   Filter,
   Trash2
 } from "lucide-react";
+import { usePermission } from "../../hooks/usePermission";
 
 export default function Salaries() {
   const [salaries, setSalaries] = useState([]);
@@ -72,6 +73,13 @@ export default function Salaries() {
   const skipNextPageFetchRef = useRef(false);
   const token = localStorage.getItem("token");
   const STATUS_OPTIONS = ["generated", "created", "approve", "paid"];
+
+  // 'salary_edit', 'salary_delete', 'salary_read', 'approve_salary',
+  const { hasPermission } = usePermission();
+  const canEditSalary = hasPermission("salary_edit");
+  const canDeleteSalary = hasPermission("salary_delete");
+  const canApproveSalary = hasPermission("approve_salary");
+
 
   const fetchSalaries = async (page = 1, mode = "table") => {
     try {
@@ -803,25 +811,31 @@ export default function Salaries() {
                           </td>
                           <td className="p-4">
                             <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => openEditModal(salary)}
-                                disabled={isPaid}
-                                className={`p-2 rounded-lg transition-colors duration-300 ${
-                                  isPaid
-                                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                    : "bg-blue-50 text-blue-600 hover:bg-blue-100"
-                                }`}
-                                title="Edit Salary"
-                              >
-                                <Pencil size={16} />
-                              </button>
-                              <button
-                                onClick={() => openStatusModal(salary)}
-                                className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors duration-300"
-                                title="Change Status"
-                              >
-                                <Settings size={16} />
-                              </button>
+                              { canEditSalary && (
+                                <button
+                                  onClick={() => openEditModal(salary)}
+                                  disabled={isPaid}
+                                  className={`p-2 rounded-lg transition-colors duration-300 ${
+                                    isPaid
+                                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                      : "bg-blue-50 text-blue-600 hover:bg-blue-100"
+                                  }`}
+                                  title="Edit Salary"
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                              )}
+
+                              { canApproveSalary && (
+                                <button
+                                  onClick={() => openStatusModal(salary)}
+                                  className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors duration-300"
+                                  title="Change Status"
+                                >
+                                  <Settings size={16} />
+                                </button>
+                              )}
+
                               <button
                                 onClick={() => handleDownloadPayslip(salary)}
                                 disabled={!canDownloadPayslip(salary.status)}
@@ -834,14 +848,18 @@ export default function Salaries() {
                               >
                                 <Download size={16} />
                               </button>
-                              <button
-                                onClick={() => handleDeleteSalary(salary.id)}
-                                disabled={deletingId === salary.id}
-                                className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300 disabled:opacity-60"
-                                title="Delete Salary"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+
+                              { canDeleteSalary && (
+                                <button
+                                  onClick={() => handleDeleteSalary(salary.id)}
+                                  disabled={deletingId === salary.id}
+                                  className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300 disabled:opacity-60"
+                                  title="Delete Salary"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+
                             </div>
                           </td>
                         </tr>

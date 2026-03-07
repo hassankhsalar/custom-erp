@@ -279,7 +279,12 @@ export default function AllSuppliers() {
           s.id === clearDueModal.supplier.id
             ? {
                 ...s,
-                total_due: Math.max(0, (parseFloat(s.total_due || 0) - (parseFloat(data.appliedAmount) || 0)))
+                total_due: data.updatedSupplierDue !== null && data.updatedSupplierDue !== undefined
+                  ? parseFloat(data.updatedSupplierDue)
+                  : (parseFloat(s.total_due || 0) - (parseFloat(data.appliedAmount) || 0)),
+                rawDue: data.updatedSupplierDue !== null && data.updatedSupplierDue !== undefined
+                  ? parseFloat(data.updatedSupplierDue)
+                  : (parseFloat(s.rawDue || s.total_due || 0) - (parseFloat(data.appliedAmount) || 0))
               }
             : s
         )

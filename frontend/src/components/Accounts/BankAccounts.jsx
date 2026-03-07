@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES } from "../../config";
 import { Banknote, Plus, Pencil, Trash2, X, Save, AlertCircle } from "lucide-react";
+import { usePermission } from "../../hooks/usePermission";
 
 export default function BankAccounts() {
   const [accounts, setAccounts] = useState([]);
@@ -15,6 +16,12 @@ export default function BankAccounts() {
   });
   const [editing, setEditing] = useState(null);
   const token = localStorage.getItem("token");
+
+  // 'bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete'
+  const { hasPermission } = usePermission();
+  const canCreate = hasPermission("bank_account_create");
+  const canEdit = hasPermission("bank_account_edit");
+  const canDelete = hasPermission("bank_account_delete");
 
   const fetchAccounts = async () => {
     setLoading(true);
@@ -156,61 +163,66 @@ export default function BankAccounts() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="glass-card p-6 border border-white/20 backdrop-blur-xl">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Plus size={18} className="text-blue-600" />
-            New Bank Account
-          </h2>
-          <form onSubmit={handleCreate} className="space-y-4">
-            <input
-              name="name"
-              value={form.name}
-              onChange={handleChange}
-              placeholder="Bank name"
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white/70"
-              required
-            />
-            <input
-              name="account_number"
-              value={form.account_number}
-              onChange={handleChange}
-              placeholder="Account number"
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white/70"
-              required
-            />
-            <input
-              name="starting_balance"
-              type="number"
-              step="0.01"
-              value={form.starting_balance}
-              onChange={handleChange}
-              placeholder="Starting balance"
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white/70"
-            />
-            <input
-              name="current_balance"
-              type="number"
-              step="0.01"
-              value={form.current_balance}
-              onChange={handleChange}
-              placeholder="Current balance"
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white/70"
-            />
-            <input
-              name="withdraw_charge"
-              type="number"
-              step="0.01"
-              value={form.withdraw_charge}
-              onChange={handleChange}
-              placeholder="Withdraw charge"
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white/70"
-            />
-            <button
-              type="submit"
-              className="w-full px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold"
-            >
-              Create Bank Account
-            </button>
-          </form>
+          {canCreate && (
+            <>
+              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <Plus size={18} className="text-blue-600" />
+                New Bank Account
+              </h2>
+              <form onSubmit={handleCreate} className="space-y-4">
+                <input
+                  name="name"
+                  value={form.name}
+                  onChange={handleChange}
+                  placeholder="Bank name"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white/70"
+                  required
+                />
+                <input
+                  name="account_number"
+                  value={form.account_number}
+                  onChange={handleChange}
+                  placeholder="Account number"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white/70"
+                  required
+                />
+                <input
+                  name="starting_balance"
+                  type="number"
+                  step="0.01"
+                  value={form.starting_balance}
+                  onChange={handleChange}
+                  placeholder="Starting balance"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white/70"
+                />
+                <input
+                  name="current_balance"
+                  type="number"
+                  step="0.01"
+                  value={form.current_balance}
+                  onChange={handleChange}
+                  placeholder="Current balance"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white/70"
+                />
+                <input
+                  name="withdraw_charge"
+                  type="number"
+                  step="0.01"
+                  value={form.withdraw_charge}
+                  onChange={handleChange}
+                  placeholder="Withdraw charge"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 bg-white/70"
+                />
+                <button
+                  type="submit"
+                  className="w-full px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold"
+                >
+                  Create Bank Account
+                </button>
+              </form>
+            </>
+          )}
+
         </div>
 
         <div className="lg:col-span-2 glass-card p-6 border border-white/20 backdrop-blur-xl">
@@ -236,18 +248,24 @@ export default function BankAccounts() {
                       <td className="p-3 text-gray-800">${parseFloat(acc.current_balance || 0).toFixed(2)}</td>
                       <td className="p-3">
                         <div className="flex gap-2">
-                          <button
-                            onClick={() => openEdit(acc)}
-                            className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100"
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(acc.id)}
-                            className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                          { canEdit && (
+                            <button
+                              onClick={() => openEdit(acc)}
+                              className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          )}
+
+                          { canDelete && (
+                            <button
+                              onClick={() => handleDelete(acc.id)}
+                              className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+
                         </div>
                       </td>
                     </tr>

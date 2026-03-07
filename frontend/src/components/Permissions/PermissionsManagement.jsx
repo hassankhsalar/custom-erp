@@ -69,6 +69,7 @@ import {
   Bell
 } from "lucide-react";
 import { API_ROUTES } from '../../config';
+import { usePermission } from "../../hooks/usePermission";
 
 
 export default function PermissionsManagement() {
@@ -89,6 +90,13 @@ export default function PermissionsManagement() {
   const [selectedPermissionId, setSelectedPermissionId] = useState("");
   const [searchUser, setSearchUser] = useState("");
   const [searchPermission, setSearchPermission] = useState("");
+
+  // 'role_read', 'role_create', 'role_edit', 'role_delete', 'role_assign'
+  const { hasPermission } = usePermission();
+  const canCreateRole = hasPermission('role_create');
+  const canEditRole = hasPermission('role_edit');
+  const canDeleteRole = hasPermission('role_delete');
+  const canAssignRole = hasPermission('role_assign');
   
   // All permissions list (exact names as they should be sent to backend)
   const allPermissions = [
@@ -106,13 +114,12 @@ export default function PermissionsManagement() {
     
 
     // Add cash register and bank account permissions
-    'cash_register_read', 'cash_register_create', 'cash_register_edit', 'cash_register_delete',
+    'cash_register_read', 'cash_register_create', 'cash_register_deactivate',
     'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit', 'cash_register_daily_record',
     'bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete',
-    'bank_account_deposit', 'bank_account_withdraw',
 
     // Add account permissions
-    'account_read', 'account_create', 'account_edit', 'account_delete',
+    'account_read', 'account_create', 'account_edit',
     'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement',
     'general_ledger_report', 'balance_sheet_report',
 
@@ -238,7 +245,7 @@ export default function PermissionsManagement() {
       name: 'Cash Register',
       icon: <Coins size={18} className="text-yellow-600" />,
       permissions: [
-        'cash_register_read', 'cash_register_create', 'cash_register_edit', 'cash_register_delete', 'cash_register_assign',
+        'cash_register_read', 'cash_register_create', 'cash_register_deactivate', 'cash_register_assign',
         'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit', 'cash_register_daily_record'
       ]
     },
@@ -249,7 +256,6 @@ export default function PermissionsManagement() {
       icon: <BanknoteIcon size={18} className="text-blue-600" />,
       permissions: [
         'bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete',
-        'bank_account_deposit', 'bank_account_withdraw'
       ]
     },
     // Account Management
@@ -258,7 +264,7 @@ export default function PermissionsManagement() {
       name: 'Accounts',
       icon: <CreditCard size={18} className="text-yellow-500" />,
       permissions: [
-        'account_read', 'account_create', 'account_edit', 'account_delete', 'account_assign',
+        'account_read', 'account_create', 'account_edit', 'account_assign',
         'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement',
         'general_ledger_report', 'balance_sheet_report'
       ]
@@ -868,22 +874,24 @@ export default function PermissionsManagement() {
               <Key size={20} />
               Manage Permissions
             </button>
-            <button
-              onClick={() => setActiveTab("assignments")}
-              className={`flex-1 py-3 px-4 flex items-center justify-center gap-2 font-medium transition-all duration-300 ${
-                activeTab === "assignments"
-                  ? "text-purple-600 border-b-2 border-purple-500"
-                  : "text-gray-600 hover:text-gray-900 hover:bg-white/20"
-              }`}
-            >
-              <UserCheck size={20} />
-              Assign Role to Users
-            </button>
+            { canAssignRole && (
+              <button
+                onClick={() => setActiveTab("assignments")}
+                className={`flex-1 py-3 px-4 flex items-center justify-center gap-2 font-medium transition-all duration-300 ${
+                  activeTab === "assignments"
+                    ? "text-purple-600 border-b-2 border-purple-500"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-white/20"
+                }`}
+              >
+                <UserCheck size={20} />
+                Assign Role to Users
+              </button>
+            )}
           </div>
         </div>
 
         {/* Permissions Tab */}
-        {activeTab === "permissions" && (
+        {activeTab === "permissions" && (canCreateRole || canEditRole) && (
           <div className="space-y-6">
             {/* Create/Edit Permission Form */}
             <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
@@ -1037,13 +1045,25 @@ export default function PermissionsManagement() {
 
                 {/* Form Actions */}
                 <div className="flex gap-3 pt-4">
-                  <button
-                    type="submit"
-                    className="px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg font-medium hover:from-purple-600 hover:to-indigo-600 transition-all duration-300 flex items-center gap-2 shadow-lg"
-                  >
-                    <Save size={20} />
-                    {editingPermission ? "Update Permission" : "Create Permission"}
-                  </button>
+                  { canCreateRole && !editingPermission && (
+                    <button
+                      type="submit"
+                      className="px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg font-medium hover:from-purple-600 hover:to-indigo-600 transition-all duration-300 flex items-center gap-2 shadow-lg"
+                    >
+                      <Save size={20} />
+                      Create Permission
+                    </button>
+                  )}
+                  { canEditRole && editingPermission && (
+                    <button
+                      type="submit"
+                      className="px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg font-medium hover:from-purple-600 hover:to-indigo-600 transition-all duration-300 flex items-center gap-2 shadow-lg"
+                    >
+                      <Save size={20} />
+                      Update Permission
+                    </button>
+                  )}
+
                   {editingPermission && (
                     <button
                       type="button"
@@ -1142,20 +1162,26 @@ export default function PermissionsManagement() {
                           </td>
                           <td className="p-4">
                             <div className="flex gap-2">
-                              <button
-                                onClick={() => handleEditPermission(permission)}
-                                className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
-                                title="Edit"
-                              >
-                                <Edit size={16} />
-                              </button>
-                              <button
-                                onClick={() => handleDeletePermission(permission.id)}
-                                className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                                title="Delete"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              {canEditRole && (
+                                <button
+                                  onClick={() => handleEditPermission(permission)}
+                                  className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                                  title="Edit"
+                                >
+                                  <Edit size={16} />
+                                </button>
+                              )}
+
+                              {canDeleteRole && (
+                                <button
+                                  onClick={() => handleDeletePermission(permission.id)}
+                                  className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                              
                             </div>
                           </td>
                         </tr>
@@ -1169,7 +1195,7 @@ export default function PermissionsManagement() {
         )}
 
         {/* Assignments Tab */}
-        {activeTab === "assignments" && (
+        {activeTab === "assignments" && canAssignRole && (
           <div className="space-y-6">
             {/* Assignment Form */}
             <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">

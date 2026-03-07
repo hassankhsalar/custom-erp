@@ -22,6 +22,7 @@ import {
   ArrowLeftRight
 } from "lucide-react";
 import { API_ROUTES } from "../../config";
+import { usePermission } from "../../hooks/usePermission";
 
 export default function AllAccounts() {
   const [accounts, setAccounts] = useState([]);
@@ -41,6 +42,14 @@ export default function AllAccounts() {
   });
   const [actionLoading, setActionLoading] = useState(false);
   const token = localStorage.getItem('token');
+
+  //  'account_edit', 'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement', 'account_assign'
+  const { hasPermission } = usePermission();
+  const canEditAccount = hasPermission("account_edit");
+  const canDeposit = hasPermission("account_deposit");
+  const canWithdraw = hasPermission("account_withdraw");
+  const canTransfer = hasPermission("account_transfer");
+
 
   const fetchAccounts = async () => {
     try {
@@ -494,16 +503,18 @@ export default function AllAccounts() {
                           }`}>
                             {item.status === 'active' ? 'Active' : 'Inactive'}
                           </span>
-                          <button
-                            onClick={() => handleStatusToggle(item.id, item.status)}
-                            className="glass-icon-button p-1 rounded hover:bg-gray-100/50 transition-colors"
-                            title={`Toggle ${item.status === 'active' ? 'Inactive' : 'Active'}`}
-                          >
-                            {item.status === 'active' 
-                              ? <ToggleRight size={30} className="text-emerald-600" />
-                              : <ToggleLeft size={30} className="text-red-600" />
-                            }
-                          </button>
+                          { canEditAccount && (
+                            <button
+                              onClick={() => handleStatusToggle(item.id, item.status)}
+                              className="glass-icon-button p-1 rounded hover:bg-gray-100/50 transition-colors"
+                              title={`Toggle ${item.status === 'active' ? 'Inactive' : 'Active'}`}
+                            >
+                              {item.status === 'active' 
+                                ? <ToggleRight size={30} className="text-emerald-600" />
+                                : <ToggleLeft size={30} className="text-red-600" />
+                              }
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -523,27 +534,37 @@ export default function AllAccounts() {
                   </td>
                   <td className="p-4">
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => openActionModal("deposit", item)}
-                        className="glass-icon-button p-1.5 rounded hover:bg-emerald-100/60 transition-colors"
-                        title="Deposit"
-                      >
-                        <PlusCircle size={18} className="text-emerald-600" />
-                      </button>
-                      <button
-                        onClick={() => openActionModal("withdraw", item)}
-                        className="glass-icon-button p-1.5 rounded hover:bg-red-100/60 transition-colors"
-                        title="Withdraw"
-                      >
-                        <MinusCircle size={18} className="text-red-600" />
-                      </button>
-                      <button
-                        onClick={() => openActionModal("transfer", item)}
-                        className="glass-icon-button p-1.5 rounded hover:bg-blue-100/60 transition-colors"
-                        title="Transfer"
-                      >
-                        <ArrowLeftRight size={18} className="text-blue-600" />
-                      </button>
+                      
+                      { canDeposit && (
+                        <button
+                          onClick={() => openActionModal("deposit", item)}
+                          className="glass-icon-button p-1.5 rounded hover:bg-emerald-100/60 transition-colors"
+                          title="Deposit"
+                        >
+                          <PlusCircle size={18} className="text-emerald-600" />
+                        </button>
+                      )}
+
+                      { canWithdraw && (
+                        <button
+                          onClick={() => openActionModal("withdraw", item)}
+                          className="glass-icon-button p-1.5 rounded hover:bg-red-100/60 transition-colors"
+                          title="Withdraw"
+                        >
+                          <MinusCircle size={18} className="text-red-600" />
+                        </button>
+                      )}
+
+                      { canTransfer && (
+                        <button
+                          onClick={() => openActionModal("transfer", item)}
+                          className="glass-icon-button p-1.5 rounded hover:bg-blue-100/60 transition-colors"
+                          title="Transfer"
+                        >
+                          <ArrowLeftRight size={18} className="text-blue-600" />
+                        </button>
+                      )}
+
                     </div>
                   </td>
                 </tr>

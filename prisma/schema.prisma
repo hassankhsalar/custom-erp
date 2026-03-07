@@ -284,11 +284,14 @@ model Expense {
   createdBy   User?   @relation(fields: [createdById], references: [id])
   salaryId    Int?
   salary      Salary? @relation(fields: [salaryId], references: [id])
+  transactionId Int?  @unique
+  transaction   Transactions? @relation(fields: [transactionId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([categoryId])
   @@index([date])
+  @@index([transactionId])
 }
 
 
@@ -436,6 +439,7 @@ model Transactions {
 
   purchaseId               Int?
   purchase                 Purchase? @relation(fields: [purchaseId], references: [id])
+  expense                  Expense?
 
   purpose                  String?
   added_to_account         Boolean?
@@ -485,6 +489,7 @@ model Material {
   alternative_units   Json?
   unit_cost           Float
   sale_price          Float?  
+  wholesale_price     Float?
   current_stock       Float                @default(0)
   created_at          DateTime             @default(now())
   updated_at          DateTime             @updatedAt
@@ -757,11 +762,13 @@ model ProductionMaterial {
 
 
 model Supplier {
-  id        Int        @id @default(autoincrement())
-  name      String
-  mobile    String?
-  address   String?
-  deleted_at Boolean @default(false)
+  id            Int        @id @default(autoincrement())
+  name          String
+  mobile        String?
+  address       String?
+  total_purchase Float      @default(0)
+  total_due      Float      @default(0)
+  deleted_at    Boolean    @default(false)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   purchases Purchase[] @relation("SupplierPurchases")
@@ -1794,5 +1801,7 @@ model RepairOrderItem {
   @@index([productId])
   @@index([materialId])
 }
+
+
 
 

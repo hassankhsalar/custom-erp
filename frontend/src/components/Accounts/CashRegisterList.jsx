@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { API_ROUTES } from "../../config";
 import { Banknote, PlusCircle, MinusCircle, Power, Lock } from "lucide-react";
 import { Link } from "react-router-dom";
+import { usePermission } from "../../hooks/usePermission";
 
 export default function CashRegisterList() {
   const [rows, setRows] = useState([]);
@@ -18,6 +19,16 @@ export default function CashRegisterList() {
     payment_method: "cash",
     notes: "",
   });
+
+  // 'cash_register_read', 'cash_register_deactivate', 'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit'
+  const { hasPermission } = usePermission();
+  const canRead = hasPermission("cash_register_read");
+  const canDeactivate = hasPermission("cash_register_deactivate");
+  const canOpen = hasPermission("cash_register_open");
+  const canClose = hasPermission("cash_register_close");
+  const canWithdraw = hasPermission("cash_register_withdraw");
+  const canDeposit = hasPermission("cash_register_deposit");
+
 
   const token = localStorage.getItem("token");
 
@@ -128,12 +139,14 @@ export default function CashRegisterList() {
             </h1>
             <p className="text-gray-600 mt-1">Manage status, deposit and withdraw for all cash registers</p>
           </div>
-          <Link
-            to="/cash-register-records"
-            className="px-6 py-2 rounded-lg text-sm inline-flex items-center gap-2 text-white bg-gradient-to-br from-teal-500 to-green-500 transition-all hover:drop-shadow hover:drop-shadow-teal-200 drop-shadow drop-shadow-gray-100"
-          >
-            View Records
-          </Link>
+          { canRead || canOpen || canClose || canWithdraw || canDeposit && (
+            <Link
+              to="/cash-register-records"
+              className="px-6 py-2 rounded-lg text-sm inline-flex items-center gap-2 text-white bg-gradient-to-br from-teal-500 to-green-500 transition-all hover:drop-shadow hover:drop-shadow-teal-200 drop-shadow drop-shadow-gray-100"
+            >
+              View Records
+            </Link>
+          )}
         </div>
       </div>
 
@@ -178,46 +191,61 @@ export default function CashRegisterList() {
                 </td>
                 <td className="p-4">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      onClick={() => updateStatus(row.id, "active")}
-                      disabled={actionLoadingId === row.id || (row.status !== "closed" && row.status !== "inactive")}
-                      className={`flex items-center text-white bg-gradient-to-r from-teal-700 to-green-600 gap-2 px-3 py-1 rounded-md disabled:opacity-40 ${(actionLoadingId === row.id || (row.status !== "closed" && row.status !== "inactive")) ? "hidden" : "flex"}`}
-                      title="Set Active"
-                    >
-                      <Power size={16} className="text-white" /> Open Cash
-                    </button>
-                    <button
-                      onClick={() => updateStatus(row.id, "closed")}
-                      disabled={actionLoadingId === row.id || (row.status !== "active" && row.status !== "inactive")}
-                      className={`flex gap-2 items-center bg-gradient-to-r from-orange-600 to-amber-600 text-white px-3 py-1 rounded-md disabled:opacity-40 ${(actionLoadingId === row.id || (row.status !== "active" && row.status !== "inactive")) ? "hidden" : "flex"}`}
-                      title="Set Closed"
-                    >
-                      <Lock size={16} className="text-white" /> Close Cash
-                    </button>
-                    <button
-                      onClick={() => updateStatus(row.id, "inactive")}
-                      disabled={actionLoadingId === row.id || row.status !== "closed"}
-                      className="glass-icon-button p-1.5 rounded disabled:opacity-40"
-                      title="Deactivate (Closed to Inactive)"
-                    >
-                      <Power size={16} className="text-red-600" />
-                    </button>
-                    <button
-                      onClick={() => openMoneyModal("deposit", row)}
-                      disabled={row.status === "inactive"}
-                      className="glass-icon-button p-1.5 rounded disabled:opacity-40"
-                      title="Deposit"
-                    >
-                      <PlusCircle size={16} className="text-emerald-600" />
-                    </button>
-                    <button
-                      onClick={() => openMoneyModal("withdraw", row)}
-                      disabled={row.status === "inactive"}
-                      className="glass-icon-button p-1.5 rounded disabled:opacity-40"
-                      title="Withdraw"
-                    >
-                      <MinusCircle size={16} className="text-red-600" />
-                    </button>
+                    { canOpen && (
+                      <button
+                        onClick={() => updateStatus(row.id, "active")}
+                        disabled={actionLoadingId === row.id || (row.status !== "closed" && row.status !== "inactive")}
+                        className={`flex items-center text-white bg-gradient-to-r from-teal-700 to-green-600 gap-2 px-3 py-1 rounded-md disabled:opacity-40 ${(actionLoadingId === row.id || (row.status !== "closed" && row.status !== "inactive")) ? "hidden" : "flex"}`}
+                        title="Set Active"
+                      >
+                        <Power size={16} className="text-white" /> Open Cash
+                      </button>
+                    )}
+
+                    { canClose && (
+                      <button
+                        onClick={() => updateStatus(row.id, "closed")}
+                        disabled={actionLoadingId === row.id || (row.status !== "active" && row.status !== "inactive")}
+                        className={`flex gap-2 items-center bg-gradient-to-r from-orange-600 to-amber-600 text-white px-3 py-1 rounded-md disabled:opacity-40 ${(actionLoadingId === row.id || (row.status !== "active" && row.status !== "inactive")) ? "hidden" : "flex"}`}
+                        title="Set Closed"
+                      >
+                        <Lock size={16} className="text-white" /> Close Cash
+                      </button>
+                    )}
+
+                    { canDeactivate && (
+                      <button
+                        onClick={() => updateStatus(row.id, "inactive")}
+                        disabled={actionLoadingId === row.id || row.status !== "closed"}
+                        className="glass-icon-button p-1.5 rounded disabled:opacity-40"
+                        title="Deactivate (Closed to Inactive)"
+                      >
+                        <Power size={16} className="text-red-600" />
+                      </button>
+                    )}
+
+                    { canDeposit && (
+                      <button
+                        onClick={() => openMoneyModal("deposit", row)}
+                        disabled={row.status === "inactive"}
+                        className="glass-icon-button p-1.5 rounded disabled:opacity-40"
+                        title="Deposit"
+                      >
+                        <PlusCircle size={16} className="text-emerald-600" />
+                      </button>
+                    )}
+
+                    { canWithdraw && (
+                      <button
+                        onClick={() => openMoneyModal("withdraw", row)}
+                        disabled={row.status === "inactive"}
+                        className="glass-icon-button p-1.5 rounded disabled:opacity-40"
+                        title="Withdraw"
+                      >
+                        <MinusCircle size={16} className="text-red-600" />
+                      </button>
+                    )}
+
                   </div>
                 </td>
               </tr>

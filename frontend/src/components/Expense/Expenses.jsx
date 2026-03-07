@@ -30,6 +30,7 @@ import {
   Clock,
   Hash
 } from "lucide-react";
+import { usePermission } from "../../hooks/usePermission";
 
 // Debounce function for search
 const debounce = (func, delay) => {
@@ -75,7 +76,14 @@ export default function Expenses() {
   const [salaries, setSalaries] = useState([]);
   const [form, setForm] = useState({ categoryId: "", accountId: "", amount: "", date: "", description: "", salaryId: "" });
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingExpense, setEditingExpense] = useState(null);
   const token = localStorage.getItem("token");
+
+  // 'expenses_create', 'expenses_read', 'expenses_edit', 'expenses_delete'
+  const { hasPermission } = usePermission();
+  const canCreate = hasPermission('expenses_create');
+  const canUpdate = hasPermission('expenses_edit');
+  const canDelete = hasPermission('expenses_delete');
 
   const fetchExpenses = async (page = 1, mode = "table") => {
     setLoading(true);
@@ -224,8 +232,10 @@ export default function Expenses() {
 
     setLoading(true);
     try {
-      await fetch(`${API_ROUTES.EXPENSES}`, {
-        method: "POST",
+      const endpoint = editingExpense ? `${API_ROUTES.EXPENSES}/${editingExpense.id}` : `${API_ROUTES.EXPENSES}`;
+      const method = editingExpense ? "PUT" : "POST";
+      await fetch(endpoint, {
+        method,
         headers: { 
           Authorization: `Bearer ${token}`, 
           "Content-Type": "application/json" 
@@ -246,13 +256,30 @@ export default function Expenses() {
       setCategorySearchQuery("");
       setFormErrors({});
       setShowCreateModal(false);
+      setEditingExpense(null);
       fetchExpenses();
     } catch (error) {
-      console.error("Error creating expense:", error);
-      alert("Failed to add expense");
+      console.error("Error saving expense:", error);
+      alert(editingExpense ? "Failed to update expense" : "Failed to add expense");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEditOpen = (expense) => {
+    setEditingExpense(expense);
+    setForm({
+      categoryId: expense.categoryId ? String(expense.categoryId) : "",
+      accountId: expense.accountId ? String(expense.accountId) : "",
+      amount: expense.amount !== undefined && expense.amount !== null ? String(expense.amount) : "",
+      date: expense.date ? new Date(expense.date).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+      description: expense.description || "",
+      salaryId: expense.salaryId ? String(expense.salaryId) : "",
+    });
+    const selectedCategory = categories.find((c) => c.id === expense.categoryId);
+    setCategorySearchQuery(selectedCategory?.name || "");
+    setFormErrors({});
+    setShowCreateModal(true);
   };
 
   const handleDelete = async (id) => {
@@ -375,6 +402,7 @@ export default function Expenses() {
     });
     setCategorySearchQuery("");
     setFormErrors({});
+    setEditingExpense(null);
   };
 
   const formatCurrency = (amount) => {
@@ -475,13 +503,17 @@ export default function Expenses() {
                 <RefreshCw size={18} />
                 Refresh
               </button>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all duration-300"
-              >
-                <Plus size={18} />
-                Create Expense
-              </button>
+              
+              {canCreate    && (
+                <button
+                  onClick={() => { clearForm(); setShowCreateModal(true); }}
+                  disabled={!canCreate}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all duration-300 disabled:opacity-60"
+                >
+                  <Plus size={18} />
+                  Create Expense
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -742,9 +774,20 @@ export default function Expenses() {
                                     {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                                   </button>
                                   
+                                  {canUpdate && (
+                                    <button
+                                      onClick={() => handleEditOpen(expense)}
+                                      className="p-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors duration-300"
+                                      title="Edit"
+                                    >
+                                      <Edit size={16} />
+                                    </button>
+                                  )}
+                                  
                                   <button
                                     onClick={() => handleDelete(expense.id)}
-                                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                    disabled={!canDelete}
+                                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300 disabled:opacity-40"
                                     title="Delete"
                                   >
                                     <Trash2 size={16} />
@@ -853,21 +896,21 @@ export default function Expenses() {
       </div>
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowCreateModal(false)}></div>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setShowCreateModal(false); setEditingExpense(null); }}></div>
           <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
             <div className="sticky top-0 z-10 p-6 border-b border-white/50 bg-gradient-to-r from-blue-500/10 to-cyan-500/10">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="p-3 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl shadow-lg">
-                    <Plus className="text-white" size={24} />
+                    {editingExpense ? <Edit className="text-white" size={24} /> : <Plus className="text-white" size={24} />}
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold text-gray-800">Create Expense</h2>
-                    <p className="text-gray-600">Record a new business expense</p>
+                    <h2 className="text-2xl font-bold text-gray-800">{editingExpense ? "Edit Expense" : "Create Expense"}</h2>
+                    <p className="text-gray-600">{editingExpense ? `Update expense #${editingExpense.id}` : "Record a new business expense"}</p>
                   </div>
                 </div>
                 <button
-                  onClick={() => setShowCreateModal(false)}
+                  onClick={() => { setShowCreateModal(false); setEditingExpense(null); }}
                   className="p-2 bg-white/60 rounded-lg hover:bg-white/80 transition-colors duration-300"
                 >
                   <X size={20} className="text-gray-600" />
@@ -1002,22 +1045,22 @@ export default function Expenses() {
                     {loading ? (
                       <>
                         <RefreshCw className="animate-spin" size={20} />
-                        Adding...
+                        {editingExpense ? "Updating..." : "Adding..."}
                       </>
                     ) : (
                       <>
-                        <Plus size={20} />
-                        Add Expense
+                        {editingExpense ? <Edit size={20} /> : <Plus size={20} />}
+                        {editingExpense ? "Update Expense" : "Add Expense"}
                       </>
                     )}
                   </button>
                   
                   <button
                     type="button"
-                    onClick={clearForm}
+                    onClick={() => { clearForm(); setShowCreateModal(false); }}
                     className="px-6 py-3 bg-gray-200/60 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300"
                   >
-                    Clear
+                    Cancel
                   </button>
                 </div>
               </form>
@@ -1028,3 +1071,20 @@ export default function Expenses() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

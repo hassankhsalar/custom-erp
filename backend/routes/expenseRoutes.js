@@ -4,6 +4,7 @@ const prisma = new PrismaClient();
 const router = express.Router();
 const { createTransaction } = require("../utils/transactionHelper");
 const { createNotification } = require("../utils/notificationHelper");
+const makeExpenseReference = (expenseId) => `EXP-${expenseId}-${Date.now()}`;
 
 const parsePositiveInt = (value, fallback) => {
   const parsed = parseInt(value, 10);
@@ -204,8 +205,8 @@ router.post("/", async (req, res) => {
         }
       });
 
-      await createTransaction(tx, {
-        reference: `EXP-${Date.now()}`,
+      const trx = await createTransaction(tx, {
+        reference: makeExpenseReference(expense.id),
         createdById: req.user?.userId || 1,
         accountId: parseInt(accountId),
         purpose: "Expense",
@@ -213,10 +214,13 @@ router.post("/", async (req, res) => {
         amount: expenseAmount,
         payment_method: "expense",
         current_account_balance: updatedAccount.balance,
-        note: expense.description || "Expense"
+        note: expense.description ? `Expense #${expense.id} - ${expense.description}` : `Expense #${expense.id}`
       });
 
-      return expense;
+      return tx.expense.update({
+        where: { id: expense.id },
+        data: { transactionId: trx.id }
+      });
     });
 
     await createNotification(prisma, {
@@ -235,7 +239,7 @@ router.post("/", async (req, res) => {
 router.put("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { categoryId, amount, date, description, accountId } = req.body;
+    const { categoryId, amount, date, description, accountId, salaryId } = req.body;
 
     const existing = await prisma.expense.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: "Expense not found" });
@@ -243,44 +247,67 @@ router.put("/:id", async (req, res) => {
     const newAmount = amount !== undefined ? parseFloat(amount) : existing.amount;
     if (newAmount <= 0) return res.status(400).json({ error: "Amount must be greater than 0" });
     const newAccountId = accountId ? parseInt(accountId) : existing.accountId;
+    const nextCategoryId = categoryId ? parseInt(categoryId) : existing.categoryId;
+    const nextSalaryId = salaryId === "" ? null : (salaryId ? parseInt(salaryId) : existing.salaryId);
 
     const result = await prisma.$transaction(async (tx) => {
-      if (newAccountId !== existing.accountId) {
-        await tx.accounts.update({
-          where: { id: existing.accountId },
-          data: { balance: { increment: existing.amount } }
-        });
-        await tx.accounts.update({
-          where: { id: newAccountId },
-          data: { balance: { decrement: newAmount } }
-        });
-      } else if (newAmount !== existing.amount) {
-        const diff = newAmount - existing.amount;
-        if (diff > 0) {
-          await tx.accounts.update({
-            where: { id: existing.accountId },
-            data: { balance: { decrement: diff } }
-          });
-        } else if (diff < 0) {
-          await tx.accounts.update({
-            where: { id: existing.accountId },
-            data: { balance: { increment: Math.abs(diff) } }
-          });
-        }
-      }
+      const targetAccount = await tx.accounts.findUnique({ where: { id: newAccountId } });
+      if (!targetAccount) throw new Error("Target account not found");
+
+      await tx.accounts.update({
+        where: { id: existing.accountId },
+        data: { balance: { increment: existing.amount } }
+      });
+      const updatedTargetAccount = await tx.accounts.update({
+        where: { id: newAccountId },
+        data: { balance: { decrement: newAmount } }
+      });
 
       const expense = await tx.expense.update({
         where: { id },
         data: {
-          categoryId: categoryId ? parseInt(categoryId) : existing.categoryId,
+          categoryId: nextCategoryId,
           accountId: newAccountId,
           amount: newAmount,
           date: date ? new Date(date) : undefined,
-          description: description || null
+          description: description || null,
+          salaryId: nextSalaryId
         }
       });
 
-      return expense;
+      const noteText = description ? `Expense #${id} - ${description}` : `Expense #${id}`;
+      if (existing.transactionId) {
+        await tx.transactions.update({
+          where: { id: existing.transactionId },
+          data: {
+            accountId: newAccountId,
+            amount: newAmount,
+            added_to_account: false,
+            payment_method: "expense",
+            purpose: "Expense",
+            current_account_balance: updatedTargetAccount.balance,
+            note: noteText,
+          }
+        });
+        return expense;
+      }
+
+      const trx = await createTransaction(tx, {
+        reference: makeExpenseReference(id),
+        createdById: req.user?.userId || existing.createdById || 1,
+        accountId: newAccountId,
+        purpose: "Expense",
+        added_to_account: false,
+        amount: newAmount,
+        payment_method: "expense",
+        current_account_balance: updatedTargetAccount.balance,
+        note: noteText,
+      });
+
+      return tx.expense.update({
+        where: { id },
+        data: { transactionId: trx.id }
+      });
     });
 
     res.json(result);
@@ -299,6 +326,9 @@ router.delete("/:id", async (req, res) => {
         where: { id: existing.accountId },
         data: { balance: { increment: existing.amount } }
       });
+      if (existing.transactionId) {
+        await tx.transactions.deleteMany({ where: { id: existing.transactionId } });
+      }
       await tx.expense.delete({ where: { id } });
     });
     res.json({ success: true });
@@ -321,3 +351,9 @@ router.get("/salaries/list", async (req, res) => {
 });
 
 module.exports = router;
+
+
+
+
+
+

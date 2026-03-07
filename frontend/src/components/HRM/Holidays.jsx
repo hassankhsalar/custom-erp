@@ -18,6 +18,7 @@ import {
   Star,
   PartyPopper
 } from "lucide-react";
+import { usePermission } from "../../hooks/usePermission";
 
 export default function Holidays() {
   const [holidays, setHolidays] = useState([]);
@@ -28,6 +29,12 @@ export default function Holidays() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const token = localStorage.getItem("token");
+
+  // 'holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read' 
+  const { hasPermission } = usePermission();
+  const canCreate = hasPermission('holiday_create');
+  const canEdit = hasPermission('holiday_edit');
+  const canDelete = hasPermission('holiday_delete');
 
   const fetchHolidays = async () => {
     try {
@@ -349,17 +356,17 @@ export default function Holidays() {
               >
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                ) : modal.type === 'edit' ? (
+                ) : modal.type === 'edit' && canEdit ? (
                   <>
                     <Edit2 size={18} />
                     Update
                   </>
-                ) : (
+                ) : canCreate && (
                   <>
                     <Plus size={18} />
                     Add Holiday
                   </>
-                )}
+                ) }
               </button>
               
               {modal.type === 'edit' && (
@@ -470,21 +477,25 @@ export default function Holidays() {
                           </td>
                           <td className="p-4">
                             <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleEdit(holiday)}
-                                className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-300"
-                                title="Edit"
-                              >
-                                <Edit2 size={16} />
-                              </button>
+                              { canEdit && (
+                                <button
+                                  onClick={() => handleEdit(holiday)}
+                                  className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-300"
+                                  title="Edit"
+                                >
+                                  <Edit2 size={16} />
+                                </button>
+                              )}
                               
-                              <button
-                                onClick={() => handleDelete(holiday.id)}
-                                className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
-                                title="Delete"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              { canDelete && (
+                                <button
+                                  onClick={() => handleDelete(holiday.id)}
+                                  className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>

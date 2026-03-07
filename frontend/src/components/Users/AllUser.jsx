@@ -4,6 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
 import { Users, UserPlus, Edit, Trash2, Save, X, Building, Store, ShoppingCart, Plus, Minus, ToggleLeft, ToggleRight, Key, Shield, Mail, User as UserIcon, LogOut, Clock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { usePermission } from '../../hooks/usePermission';
 
 const AllUser = () => {
   const location = useLocation();
@@ -35,15 +36,15 @@ const AllUser = () => {
   const [globalAccessWindow, setGlobalAccessWindow] = useState({ enabled: false, windows: [] });
   const [globalWindowSaving, setGlobalWindowSaving] = useState(false);
   const [updateLoading, setUpdateLoading] = useState(false);
-  const canManageSessions = currentUser?.permission?.name === 'admin'
-    || currentUser?.permission?.name === 'superadmin'
-    || (Array.isArray(currentUser?.permission?.permissions)
-      && currentUser.permission.permissions.includes('user_logout'));
-  const permissionList = Array.isArray(currentUser?.permission?.permissions) ? currentUser.permission.permissions : [];
-  const isAdmin = ['admin', 'superadmin'].includes((currentUser?.permission?.name || '').toLowerCase());
-  const canEditUsers = isAdmin || permissionList.includes('user_edit');
-  const canDeleteUsers = isAdmin || permissionList.includes('user_delete');
-  const canToggleUsers = isAdmin || permissionList.includes('user_activate_deactivate');
+
+  // 'user_create', 'user_edit', 'user_delete', 'user_read', 'user_activate_deactivate', 'user_logout'
+  const { hasPermission } = usePermission();
+  const canCreateUsers = hasPermission('user_create');
+  const canEditUsers = hasPermission('user_edit');
+  const canDeleteUsers = hasPermission('user_delete');
+  const canToggleUsers = hasPermission('user_activate_deactivate');
+  const canManageSessions = hasPermission('user_logout');
+
   const activeSessionByUserId = activeSessions.reduce((acc, session) => {
     acc[session.userId] = session;
     return acc;
@@ -459,13 +460,15 @@ const AllUser = () => {
               <p className="text-gray-600 mt-1">Manage user permissions and access</p>
             </div>
           </div>
-          <Link 
-            to="/users/create" 
-            className="group bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 px-6 rounded-xl flex items-center transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25"
-          >
-            <UserPlus size={20} className="mr-2 group-hover:scale-110 transition-transform" />
-            Add New User
-          </Link>
+          { canCreateUsers && (
+            <Link 
+              to="/users/create" 
+              className="group bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-3 px-6 rounded-xl flex items-center transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/25"
+            >
+              <UserPlus size={20} className="mr-2 group-hover:scale-110 transition-transform" />
+              Add New User
+            </Link>
+          )}
         </div>
       </div>
       {canManageSessions && (
@@ -722,7 +725,7 @@ const AllUser = () => {
       </div>
 
       {/* Edit User Modal */}
-      {editModalOpen && (
+      {editModalOpen && canEditUsers && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="glass-modal max-w-4xl w-full max-h-[90vh] overflow-y-auto rounded-2xl border border-white/20 backdrop-blur-xl shadow-2xl">
             <div className="p-6 md:p-8">

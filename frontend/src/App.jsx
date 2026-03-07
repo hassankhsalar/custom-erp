@@ -538,7 +538,7 @@ function App() {
             </Route>
 
             {/* Accounts */}
-            <Route element={<PermissionRoute requiredPermission={['account_read', 'account_create', 'account_edit', 'account_delete', 'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement', 'account_assign']} />}>
+            <Route element={<PermissionRoute requiredPermission={['account_read', 'account_create', 'account_edit', 'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement', 'account_assign']} />}>
               <Route path="/allaccounts" element={<AllAccounts />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="account_create" />}>
@@ -547,10 +547,10 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="account_assign" />}>
               <Route path="/assignaccount" element={<AssignAccount />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission={['cash_register_read', 'cash_register_create', 'cash_register_edit', 'cash_register_delete', 'cash_register_assign', 'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit']} />}>
+            <Route element={<PermissionRoute requiredPermission={['cash_register_read', 'cash_register_create', 'cash_register_deactivate', 'cash_register_assign', 'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit']} />}>
               <Route path="/cashregister-list" element={<CashRegisterList />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission={['cash_register_open', 'cash_register_close', "cash_register_daily_record"]} />}>
+            <Route element={<PermissionRoute requiredPermission={['cash_register_open', 'cash_register_close', "cash_register_daily_record", 'cash_register_withdraw', 'cash_register_deposit']} />}>
               <Route path="/cash-register-records" element={<CashRegisterRecords />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="cash_register_create" />}>
@@ -559,10 +559,10 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="cash_register_assign" />}>
               <Route path="/cashregisterassign" element={<CashRegisterAssign />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission={['bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete', 'bank_account_deposit', 'bank_account_withdraw']} />}>
+            <Route element={<PermissionRoute requiredPermission={['bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete']} />}>
               <Route path="/bank-accounts" element={<BankAccounts />} />
             </Route>
-            <Route element={<PermissionRoute requiredPermission="general_ledger_report" />}>
+            <Route element={<PermissionRoute requiredPermission={["general_ledger_report", "account_statement"]} />}>
               <Route path="/accounts/general-ledger" element={<GeneralLedger />} />
             </Route>
             <Route element={<PermissionRoute requiredPermission="balance_sheet_report" />}>

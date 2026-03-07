@@ -32,6 +32,30 @@ const calculatePurchaseStatus = (purchase) => {
   return { dueAmount, status };
 };
 
+const adjustSupplierTotals = async (tx, supplierId, { totalPurchaseDelta = 0, totalDueDelta = 0 } = {}) => {
+  const parsedSupplierId = Number.parseInt(supplierId, 10);
+  if (!Number.isFinite(parsedSupplierId) || parsedSupplierId <= 0) return;
+
+  const data = {};
+  if (Math.abs(totalPurchaseDelta) > Number.EPSILON) {
+    data.total_purchase = totalPurchaseDelta >= 0
+      ? { increment: totalPurchaseDelta }
+      : { decrement: Math.abs(totalPurchaseDelta) };
+  }
+  if (Math.abs(totalDueDelta) > Number.EPSILON) {
+    data.total_due = totalDueDelta >= 0
+      ? { increment: totalDueDelta }
+      : { decrement: Math.abs(totalDueDelta) };
+  }
+
+  if (Object.keys(data).length > 0) {
+    await tx.supplier.update({
+      where: { id: parsedSupplierId },
+      data,
+    });
+  }
+};
+
 const calculateShippingStatusFromReceived = (items) => {
   if (!items || items.length === 0) return 'pending';
   let allZero = true;
@@ -253,6 +277,11 @@ router.post("/", async (req, res) => {
           shippingStatus: computedShippingStatus,
           createdAt: parsedCreatedAt || undefined,
         },
+      });
+
+      await adjustSupplierTotals(tx, purchase.supplierId, {
+        totalPurchaseDelta: calculatedGrandTotal,
+        totalDueDelta: calculatedGrandTotal - paidAmountValue,
       });
 
       // 2. Create purchase items and update stock
@@ -1501,7 +1530,12 @@ router.put('/:id', async (req, res) => {
     }
 
     const oldPaid = parseFloat(existingPurchase.paidAmount) || 0;
+    const oldGrandTotal = parseFloat(existingPurchase.grandTotal) || 0;
+    const oldDue = oldGrandTotal - oldPaid;
     const nextPaid = oldPaid + paymentDelta;
+    const nextDue = nextGrandTotal - nextPaid;
+    const oldSupplierId = Number.parseInt(existingPurchase.supplierId, 10);
+    const nextSupplierId = supplierId ? parseInt(supplierId, 10) : oldSupplierId;
     if (nextPaid > nextGrandTotal + Number.EPSILON) {
       return res.status(400).json({ error: 'Total paid cannot exceed grand total after edit' });
     }
@@ -1565,7 +1599,7 @@ router.put('/:id', async (req, res) => {
       const updatedPurchase = await tx.purchase.update({
         where: { id: purchaseId },
         data: {
-          supplierId: supplierId ? parseInt(supplierId, 10) : existingPurchase.supplierId,
+          supplierId: nextSupplierId,
           destinationType: nextDestinationType,
           destinationId: nextDestinationId,
           shippingCost: shippingCostValue,
@@ -1649,6 +1683,22 @@ router.put('/:id', async (req, res) => {
         where: { id: purchaseId },
         data: { shippingStatus: shipmentStatus }
       });
+
+      if (oldSupplierId === nextSupplierId) {
+        await adjustSupplierTotals(tx, nextSupplierId, {
+          totalPurchaseDelta: nextGrandTotal - oldGrandTotal,
+          totalDueDelta: nextDue - oldDue,
+        });
+      } else {
+        await adjustSupplierTotals(tx, oldSupplierId, {
+          totalPurchaseDelta: -oldGrandTotal,
+          totalDueDelta: -oldDue,
+        });
+        await adjustSupplierTotals(tx, nextSupplierId, {
+          totalPurchaseDelta: nextGrandTotal,
+          totalDueDelta: nextDue,
+        });
+      }
 
       if (paymentDelta > 0) {
         const updatedAccount = await tx.accounts.update({
@@ -2009,6 +2059,10 @@ router.get('/:id/shipments', async (req, res) => {
         data: {
           paidAmount: newPaidAmount
         }
+      });
+
+      await adjustSupplierTotals(prisma, purchase.supplierId, {
+        totalDueDelta: -paymentAmount,
       });
 
       // Update account balance (decrease balance when making payment)
