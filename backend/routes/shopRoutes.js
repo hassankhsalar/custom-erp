@@ -5,7 +5,9 @@ const router = express.Router();
 const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associateScope');
 const { seedShopInventoryForAllItems } = require("../utils/inventoryBootstrap");
 const { createInventoryAdjustmentAndMaybeAccount, toBoolean } = require('../utils/inventoryAdjustmentHelper');
+const { toEnglishDigits } = require('../utils/numberLooseSearch');
 const STOCK_EPSILON = 1e-9;
+const normalizeLooseSearch = (value) => toEnglishDigits(String(value || "").toLowerCase());
 const parsePositiveInt = (value, fallback) => {
   const parsed = parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -156,7 +158,7 @@ router.get("/:id/inventory/list", async (req, res) => {
     }));
     let rows = [...materials, ...products];
     if (filterType !== "all") rows = rows.filter((x) => x.type === filterType);
-    if (search) rows = rows.filter((x) => String(x.name || "").toLowerCase().includes(search) || String(x.barcode || "").toLowerCase().includes(search) || String(x.category || "").toLowerCase().includes(search) || String(x.brand || "").toLowerCase().includes(search));
+    if (search) { const q = normalizeLooseSearch(search); rows = rows.filter((x) => normalizeLooseSearch(x.name).includes(q) || normalizeLooseSearch(x.barcode).includes(q) || normalizeLooseSearch(x.category).includes(q) || normalizeLooseSearch(x.brand).includes(q)); }
     if (category) rows = rows.filter((x) => String(x.category || "").toLowerCase().includes(category));
     if (brand) rows = rows.filter((x) => String(x.brand || "").toLowerCase().includes(brand));
     if (unit) rows = rows.filter((x) => String(x.unit || "").toLowerCase().includes(unit));
@@ -586,3 +588,5 @@ router.get("/:id/stock", async (req, res) => {
 });
 
 module.exports = router;
+
+

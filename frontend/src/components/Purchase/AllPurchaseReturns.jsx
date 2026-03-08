@@ -359,17 +359,13 @@ export default function AllPurchaseReturns() {
                               <Eye size={14} /> View Details
                             </button>
 
-                            {row.compensationType === "items" && !isItemsCompensationFullyShipped(row) && ((typeFilter === "purchase_return" && canAddPurchaseShipment) || (typeFilter === "damage_return" && canAddDamageReturnShipment)) ? (
+                            {row.compensationType === "items" && !isItemsCompensationFullyShipped(row) && ((typeFilter === "purchase_return" && canAddPurchaseShipment) || (typeFilter === "damage_return" && canAddDamageReturnShipment)) && (
                               <button 
                                 onClick={() => openShipmentModal(row)} 
                                 className="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 flex items-center gap-2">
                                 <Truck size={14} /> 
                                 Add Shipment
                               </button>
-                            ) : (
-                              <span className="block px-3 py-2 text-sm text-gray-600">
-                                Select a return type to add payment and shipment.
-                              </span>
                             )}
 
                             { row.compensationType != "items" && (Number(row.totalReturnValue || 0).toFixed(2) < Number(row.compensationAmount || 0).toFixed(2)) && ((typeFilter === "purchase_return" && canAddPurchasePayment) || (typeFilter === "damage_return" && canAddDamageReturnPayment)) && (

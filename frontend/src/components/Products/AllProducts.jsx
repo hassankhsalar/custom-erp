@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
 import { activeOnly } from '../../utils/softDelete';
+import { includesLooseNumberInAny } from '../../utils/numberLooseSearch';
 import { 
   Pen, 
   Trash2, 
@@ -129,7 +130,8 @@ const AllProducts = () => {
         },
       });
       const rows = activeOnly(response.data.products || []);
-      setProducts(rows);
+      const filteredRows = appliedSearch ? rows.filter((row) => includesLooseNumberInAny([row.name, row.barcode, row.category, row.description], appliedSearch)) : rows;
+      setProducts(filteredRows);
       setTotalPages(Number(response.data.totalPages || Math.ceil((response.data.totalCount || 0) / itemsPerPage) || 1));
       setTotalProducts(Number(response.data.totalCount || 0));
     } catch (error) {
@@ -1032,3 +1034,5 @@ const AllProducts = () => {
 };
 
 export default AllProducts;
+
+

@@ -4,9 +4,11 @@ const { PrismaClient } = require('@prisma/client');
 const { buildScope, ensureTypeScope, ensureIdScope } = require('../utils/associateScope');
 const { seedFactoryInventoryForAllItems } = require("../utils/inventoryBootstrap");
 const { createInventoryAdjustmentAndMaybeAccount, toBoolean } = require('../utils/inventoryAdjustmentHelper');
+const { toEnglishDigits } = require('../utils/numberLooseSearch');
 
 const prisma = new PrismaClient();
 const STOCK_EPSILON = 1e-9;
+const normalizeLooseSearch = (value) => toEnglishDigits(String(value || "").toLowerCase());
 const parsePositiveInt = (value, fallback) => {
   const parsed = parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -212,7 +214,13 @@ router.get('/inventory/:factoryId/list', async (req, res) => {
     let rows = [...materials, ...products];
     if (filterType !== 'all') rows = rows.filter((x) => x.type === filterType);
     if (search) {
-      rows = rows.filter((x) => String(x.name || '').toLowerCase().includes(search) || String(x.barcode || '').toLowerCase().includes(search) || String(x.category || '').toLowerCase().includes(search) || String(x.brand || '').toLowerCase().includes(search));
+      const q = normalizeLooseSearch(search);
+      rows = rows.filter((x) =>
+        normalizeLooseSearch(x.name).includes(q) ||
+        normalizeLooseSearch(x.barcode).includes(q) ||
+        normalizeLooseSearch(x.category).includes(q) ||
+        normalizeLooseSearch(x.brand).includes(q)
+      );
     }
     if (category) rows = rows.filter((x) => String(x.category || '').toLowerCase().includes(category));
     if (brand) rows = rows.filter((x) => String(x.brand || '').toLowerCase().includes(brand));
@@ -587,3 +595,6 @@ router.delete('/:id', async (req, res) => {
 
 
 module.exports = router;
+
+
+

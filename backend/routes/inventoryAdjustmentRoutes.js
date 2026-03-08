@@ -1,9 +1,12 @@
 const express = require("express");
 const { PrismaClient } = require("@prisma/client");
 const { buildScope, ensureIdScope } = require("../utils/associateScope");
+const { toEnglishDigits } = require("../utils/numberLooseSearch");
 
 const prisma = new PrismaClient();
 const router = express.Router();
+
+const normalizeLooseSearch = (value) => toEnglishDigits(String(value || "").toLowerCase());
 
 const parseNum = (v) => {
   const n = Number(v);
@@ -256,12 +259,12 @@ router.get("/place-summary", async (req, res) => {
     }));
 
     if (search) {
-      const q = String(search).toLowerCase();
+      const q = normalizeLooseSearch(search);
       items = items.filter((x) =>
-        String(x.name || "").toLowerCase().includes(q) ||
-        String(x.barcode || "").toLowerCase().includes(q) ||
-        String(x.brand || "").toLowerCase().includes(q) ||
-        String(x.category || "").toLowerCase().includes(q)
+        normalizeLooseSearch(x.name).includes(q) ||
+        normalizeLooseSearch(x.barcode).includes(q) ||
+        normalizeLooseSearch(x.brand).includes(q) ||
+        normalizeLooseSearch(x.category).includes(q)
       );
     }
 
@@ -285,3 +288,6 @@ router.get("/place-summary", async (req, res) => {
 });
 
 module.exports = router;
+
+
+

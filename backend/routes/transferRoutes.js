@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
@@ -11,6 +11,7 @@ const { rollbackAndDeleteTransactionsByWhere } = require('../utils/transactionRo
 const { buildScope, ensureIdScope, buildTransferOrFilter } = require('../utils/associateScope');
 const { getAvailableBatches, mergeIncomingBatch, decrementBatch, parseDateOnly } = require('../utils/batchDetails');
 const { assertActivePlace, assertActiveItem } = require('../utils/softDelete');
+const { buildContainsOr } = require('../utils/numberLooseSearch');
 
 const userHasPermission = async (userId, permission) => {
   const user = await prisma.user.findFirst({
@@ -644,10 +645,7 @@ router.get('/available-items', authenticateToken, async (req, res) => {
           product: search
             ? {
               deleted_at: false,
-              OR: [
-                { name: { contains: search } },
-                { barcode: { contains: search } },
-              ],
+              OR: buildContainsOr(["name", "barcode", "category"], search),
             }
             : { deleted_at: false },
         },
@@ -658,7 +656,7 @@ router.get('/available-items', authenticateToken, async (req, res) => {
           ...materialWhere,
           deleted_at: false,
           material: search
-            ? { deleted_at: false, name: { contains: search } }
+            ? { deleted_at: false, OR: buildContainsOr(["name", "barcode", "brand", "category"], search) }
             : { deleted_at: false },
         },
         include: materialInclude,
@@ -1651,3 +1649,5 @@ router.post('/:id/return-unreceived', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
+
+

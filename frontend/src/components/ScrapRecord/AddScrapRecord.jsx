@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
+import { includesLooseNumber } from '../../utils/numberLooseSearch';
 import { activeOnly } from '../../utils/softDelete';
 import {
   ArrowLeft,
@@ -196,9 +197,9 @@ const AddScrapRecord = () => {
     const searchTerm = query.toLowerCase();
     
     const results = availableProducts.filter(product => 
-      product.name?.toLowerCase().includes(searchTerm) ||
-      product.barcode?.toLowerCase().includes(searchTerm) ||
-      product.description?.toLowerCase().includes(searchTerm)
+      includesLooseNumber(product.name, searchTerm) ||
+      includesLooseNumber(product.barcode, searchTerm) ||
+      includesLooseNumber(product.description, searchTerm)
     ).slice(0, 10);
     
     setSearchResults(results);
@@ -973,3 +974,6 @@ const AddScrapRecord = () => {
 };
 
 export default AddScrapRecord;
+
+
+

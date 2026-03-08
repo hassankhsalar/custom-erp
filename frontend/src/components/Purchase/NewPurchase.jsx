@@ -3,6 +3,7 @@ import { Plus, Trash2, Package, Tag, Truck, Building2, Store, Factory, ShoppingB
 import { Html5Qrcode } from "html5-qrcode";
 import { useLocation } from "react-router-dom";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
+import { includesLooseNumber } from "../../utils/numberLooseSearch";
 import { activeOnly } from "../../utils/softDelete";
 
 const getNowDateTimeLocal = () => {
@@ -378,9 +379,9 @@ const fetchBankAccounts = async () => {
         // Filter materials
         const filteredMaterials = materials
           .filter(m =>
-            m.name.toLowerCase().includes(lowerCaseValue) ||
-            (Array.isArray(m.alternative_names) && m.alternative_names.some((n) => String(n || "").toLowerCase().includes(lowerCaseValue))) ||
-            (m.barcode && m.barcode.toLowerCase().includes(lowerCaseValue))
+            includesLooseNumber(m.name, lowerCaseValue) ||
+            (Array.isArray(m.alternative_names) && m.alternative_names.some((n) => includesLooseNumber(n, lowerCaseValue))) ||
+            (m.barcode && includesLooseNumber(m.barcode, lowerCaseValue))
           )
           .map(m => ({
             type: "material",
@@ -399,9 +400,9 @@ const fetchBankAccounts = async () => {
         // Filter products
         const filteredProducts = products
           .filter(p =>
-            p.name.toLowerCase().includes(lowerCaseValue) ||
-            (Array.isArray(p.alternative_names) && p.alternative_names.some((n) => String(n || "").toLowerCase().includes(lowerCaseValue))) ||
-            (p.barcode && p.barcode.toLowerCase().includes(lowerCaseValue))
+            includesLooseNumber(p.name, lowerCaseValue) ||
+            (Array.isArray(p.alternative_names) && p.alternative_names.some((n) => includesLooseNumber(n, lowerCaseValue))) ||
+            (p.barcode && includesLooseNumber(p.barcode, lowerCaseValue))
           )
           .map(p => ({
             type: "product",
@@ -771,7 +772,7 @@ const fetchBankAccounts = async () => {
         <div className="backdrop-blur-xl bg-white/40 border border-white/60 rounded-2xl shadow-2xl shadow-blue-100/50 mb-6 p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl shadow-lg">
+              <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg shadow-lg">
                 <Truck className="text-white" size={32} />
               </div>
               <div>
@@ -795,7 +796,7 @@ const fetchBankAccounts = async () => {
 
         <div className="grid grid-cols-1 gap-6">
           {/* Left Column - Supplier & Destination */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 space-y-6 lg:space-y-0">
             {/* Supplier Selection Card */}
             <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
@@ -815,7 +816,7 @@ const fetchBankAccounts = async () => {
                       value={form.supplierId}
                       onChange={handleFormChange}
                       required
-                      className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-400/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:focus:border-blue-400 transition-all duration-300 appearance-none"
+                      className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-400/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:focus:border-blue-400 transition-all duration-300 appearance-none"
                     >
                       <option value="">-- Choose Supplier --</option>
                       {suppliers.map((s) => (
@@ -838,7 +839,7 @@ const fetchBankAccounts = async () => {
                     name="shippingStatus"
                     value={form.shippingStatus}
                     onChange={handleFormChange}
-                    className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-400/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:focus:border-blue-400 transition-all duration-300 appearance-none"
+                    className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-400/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:focus:border-blue-400 transition-all duration-300 appearance-none"
                   >
                     <option value="">-- Choose Status --</option>
                     <option value="pending">Pending</option>
@@ -853,7 +854,7 @@ const fetchBankAccounts = async () => {
                     name="createdAt"
                     value={form.createdAt}
                     onChange={handleFormChange}
-                    className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-400/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:focus:border-blue-400 transition-all duration-300"
+                    className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-400/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:focus:border-blue-400 transition-all duration-300"
                   />
                 </div>
               </div>
@@ -908,7 +909,7 @@ const fetchBankAccounts = async () => {
                       value={form.destinationId}
                       onChange={handleDestinationChange}
                       required
-                      className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-400/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:focus:border-blue-400 transition-all duration-300 appearance-none"
+                      className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-400/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:focus:border-blue-400 transition-all duration-300 appearance-none"
                     >
                       <option value="">-- Select {destinationType.charAt(0).toUpperCase() + destinationType.slice(1)} --</option>
                       {destinations.map((dest) => (
@@ -984,7 +985,7 @@ const fetchBankAccounts = async () => {
                         e.stopPropagation();
                         handleSearchInputChange(e.target.value)}
                       }
-                      className="w-full p-2 pr-12 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                      className="w-full p-2 pr-12 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
                     />
                   </div>
                   <button
@@ -999,7 +1000,7 @@ const fetchBankAccounts = async () => {
 
                 {/* Search Results Dropdown */}
                 {searchState.showSearchResults && searchState.filteredResults.length > 0 && (
-                  <div className="relative z-50 w-full mt-2 bg-white border border-gray-200/80 rounded-xl shadow-2xl shadow-blue-100/50 backdrop-blur-xl max-h-64 overflow-y-auto">
+                  <div className="relative z-50 w-full mt-2 bg-white border border-gray-200/80 rounded-lg shadow-2xl shadow-blue-100/50 backdrop-blur-xl max-h-64 overflow-y-auto">
                     {searchState.filteredResults.map((resultItem) => {
                       const itemImage = getImageUrl(resultItem.image);
                       return (
@@ -1049,7 +1050,7 @@ const fetchBankAccounts = async () => {
                   </div>
                 )}
                 {searchState.showSearchResults && searchState.filteredResults.length === 0 && searchState.searchTerm.length > 0 && (
-                  <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200/80 rounded-xl shadow-2xl shadow-blue-100/50 backdrop-blur-xl">
+                  <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200/80 rounded-lg shadow-2xl shadow-blue-100/50 backdrop-blur-xl">
                     <div className="p-4 text-center text-gray-500">
                       No matching materials or products
                     </div>
@@ -1060,7 +1061,7 @@ const fetchBankAccounts = async () => {
               {/* List of Selected Purchase Items */}
               <div className="space-y-4">
                 {purchaseItems.length === 0 ? (
-                  <div className="p-5 text-center text-gray-500 border border-gray-200/50 rounded-xl bg-white/50">
+                  <div className="p-5 text-center text-gray-500 border border-gray-200/50 rounded-lg bg-white/50">
                     No items added to the purchase order yet. Search above to add items.
                   </div>
                 ) : (
@@ -1070,72 +1071,62 @@ const fetchBankAccounts = async () => {
                     const currentPrice = parseFloat(item.unitPrice) || 0;
 
                     return (
-                      <div key={item.uniqueId} className="backdrop-blur-sm bg-white/50 border border-white/60 rounded-xl p-5 shadow-lg">
-                        <div className="flex items-center justify-between mb-4">
-                          {/* Item Image and Details */}
-                          <div className="col-span-1 md:col-span-2 flex items-center gap-3">
-                            <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 bg-gray-50">
-                              {itemImage ? (
-                                <img
-                                  src={itemImage}
-                                  alt={item.name}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    e.target.style.display = 'none';
-                                    e.target.parentElement.innerHTML = '<div class="w-full h-full bg-gray-100 flex items-center justify-center"><ImageIcon size={24} class="text-gray-400" /></div>';
-                                  }}
-                                />
-                              ) : (
-                                <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                                  <ImageIcon size={24} className="text-gray-400" />
-                                </div>
-                              )}
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-800">{item.name}</p>
-                              <p className="text-sm text-gray-500">Base Unit: {item.defaultUnit || item.unit}</p>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {item.alternativeNames?.length > 0 && (
+                      <div key={item.uniqueId} className="backdrop-blur-sm bg-white/50 border border-white/60 rounded-lg p-5 shadow-lg">
+                        <div className="flex items-center justify-around">
+                          <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
+
+                            <div className="md:col-span-2 flex gap-2">
+                              <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 bg-gray-50">
+                                {itemImage ? (
+                                  <img
+                                    src={itemImage}
+                                    alt={item.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                      e.target.parentElement.innerHTML = '<div class="w-full h-full bg-gray-100 flex items-center justify-center"><ImageIcon size={24} class="text-gray-400" /></div>';
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                                    <ImageIcon size={24} className="text-gray-400" />
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm text-gray-800">{item.name}</p>
+                                <p className="text-sm text-gray-500">Unit: {item.defaultUnit || item.unit}</p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {item.alternativeNames?.length > 0 && (
+                                    <select
+                                      value={item.selectedName || item.name}
+                                      onChange={(e) => handleItemSelectedNameChange(item.uniqueId, e.target.value)}
+                                      className="text-xs border border-gray-300 rounded px-2 py-1"
+                                    >
+                                      <option value={item.name}>{item.name}</option>
+                                      {item.alternativeNames.map((n, ni) => (
+                                        <option key={`${item.uniqueId}-an-${ni}`} value={n}>{n}</option>
+                                      ))}
+                                    </select>
+                                  )}
                                   <select
-                                    value={item.selectedName || item.name}
-                                    onChange={(e) => handleItemSelectedNameChange(item.uniqueId, e.target.value)}
+                                    value={item.selectedUnit || item.defaultUnit || item.unit}
+                                    onChange={(e) => handleItemSelectedUnitChange(item.uniqueId, e.target.value)}
                                     className="text-xs border border-gray-300 rounded px-2 py-1"
                                   >
-                                    <option value={item.name}>{item.name}</option>
-                                    {item.alternativeNames.map((n, ni) => (
-                                      <option key={`${item.uniqueId}-an-${ni}`} value={n}>{n}</option>
+                                    <option value={item.defaultUnit || item.unit}>{item.defaultUnit || item.unit}</option>
+                                    {(item.alternativeUnits || []).map((u, ui) => (
+                                      <option key={`${item.uniqueId}-au-${ui}`} value={u.unitname}>{u.unitname}</option>
                                     ))}
                                   </select>
-                                )}
-                                <select
-                                  value={item.selectedUnit || item.defaultUnit || item.unit}
-                                  onChange={(e) => handleItemSelectedUnitChange(item.uniqueId, e.target.value)}
-                                  className="text-xs border border-gray-300 rounded px-2 py-1"
-                                >
-                                  <option value={item.defaultUnit || item.unit}>{item.defaultUnit || item.unit}</option>
-                                  {(item.alternativeUnits || []).map((u, ui) => (
-                                    <option key={`${item.uniqueId}-au-${ui}`} value={u.unitname}>{u.unitname}</option>
-                                  ))}
-                                </select>
+                                </div>
                               </div>
                             </div>
-                          </div>
 
-                          <button
-                            type="button"
-                            onClick={() => removePurchaseItem(item.uniqueId)}
-                            className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-
-                        <div className="flex flex-col md:flex-row gap-4">
-                          <div>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
                               {/* Quantity */}
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
                                   Quantity *
                                 </label>
                                 <input
@@ -1145,7 +1136,7 @@ const fetchBankAccounts = async () => {
                                   value={item.selectedQuantity || item.quantity}
                                   onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'quantity', e.target.value)}
                                   required
-                                  className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400"
+                                  className="w-full px-2 py-1 mb-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400"
                                 />
                                 {item.selectedUnit !== item.defaultUnit && (
                                   <p className="mt-1 text-xs text-gray-500">
@@ -1156,8 +1147,8 @@ const fetchBankAccounts = async () => {
 
                               {/* Recieved Quantity */}
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                  Received Quantity
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Received
                                 </label>
                                 <input
                                   type="number"
@@ -1166,109 +1157,110 @@ const fetchBankAccounts = async () => {
                                   max={item.quantity}
                                   value={item.receivedQuantity ?? ""}
                                   onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'receivedQuantity', e.target.value)}
-                                  className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400"
+                                  className="w-full px-2 py-1 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400"
                                 />
                               </div>
+                            </div>
 
-                              {/* Unit Price */}
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                  Unit Price *
-                                </label>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min={ item.avg_cost ? (item.avg_cost * (item.conversionMultiplier || 1)) : 0.001 }
-                                  value={item.unitPrice}
-                                  onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'unitPrice', e.target.value)}
-                                  required
-                                  className={`w-full p-2 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400 ${
-                                    standardPrice > 0 && currentPrice === standardPrice
-                                      ? "bg-green-50/60 border-green-200/50"
-                                      : standardPrice > 0 && currentPrice !== standardPrice
-                                      ? "bg-yellow-50/60 border-yellow-200/50"
-                                      : "bg-white/60 border-gray-200/50"
-                                  }`}
-                                />
-                                {standardPrice > 0 && (
-                                  <p className={`mt-1 text-xs ${
-                                    currentPrice <= standardPrice
-                                      ? "text-green-600"
-                                      : "text-yellow-600"
-                                  }`}>
-                                    Standard: ${standardPrice.toFixed(2)}
-                                    {currentPrice !== standardPrice && " (modified)"}
-                                  </p>
-                                )}
-                              </div>
-                              
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Unit Price *
+                              </label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min={ item.avg_cost ? (item.avg_cost * (item.conversionMultiplier || 1)) : 0.001 }
+                                value={item.unitPrice}
+                                onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'unitPrice', e.target.value)}
+                                required
+                                className={`w-full p-2 backdrop-blur-sm border border-gray-300/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300 placeholder:text-gray-400 ${
+                                  standardPrice > 0 && currentPrice === standardPrice
+                                    ? "bg-green-50/60 border-green-200/50"
+                                    : standardPrice > 0 && currentPrice !== standardPrice
+                                    ? "bg-yellow-50/60 border-yellow-200/50"
+                                    : "bg-white/60 border-gray-200/50"
+                                }`}
+                              />
+                              {standardPrice > 0 && (
+                                <p className={`mt-1 text-xs ${
+                                  currentPrice <= standardPrice
+                                    ? "text-green-600"
+                                    : "text-yellow-600"
+                                }`}>
+                                  Standard: ${standardPrice.toFixed(2)}
+                                  {currentPrice !== standardPrice && " (modified)"}
+                                </p>
+                              )}
+                            </div>
+
+                            <div>
                               {/* Batch Number */}
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                              <div className="mb-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
                                   Batch Number
                                 </label>
                                 <input
                                   type="text"
                                   value={item.batchNumber || ""}
                                   onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'batchNumber', e.target.value)}
-                                  className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl"
-                                  placeholder="e.g. BATCH-001"
+                                  className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-lg"
+                                  placeholder="BTCH-1234"
                                 />
-                              </div>
+                              </div> 
 
+                            </div>
+
+                            <div>
                               {/* Expiry Date */}
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                              <div className="mb-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
                                   Expiry Date
                                 </label>
                                 <input
                                   type="date"
                                   value={item.expiryDate || ""}
                                   onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'expiryDate', e.target.value)}
-                                  className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl"
+                                  className="w-full px-2 py-1 text-sm bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-lg"
                                 />
                               </div>
 
                               {/* Mfg Date */}
                               <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
                                   Mfg Date
                                 </label>
                                 <input
                                   type="date"
                                   value={item.manufactureDate || ""}
                                   onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'manufactureDate', e.target.value)}
-                                  className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl"
+                                  className="w-full px-2 py-1 text-sm bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-lg"
                                 />
                               </div>
-
-                              {/* Batch Notes */}
-                              <div className="col-span-full md:col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                  Batch Notes
-                                </label>
-                                <input
-                                  type="text"
-                                  value={item.batchNotes || ""}
-                                  onChange={(e) => handlePurchaseItemChange(item.uniqueId, 'batchNotes', e.target.value)}
-                                  className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl"
-                                  placeholder="Optional notes for this batch"
-                                />
-                              </div>                        
                             </div>
-                          </div>
-                          <div>
-                            {/* Total */}
-                            <div className="col-span-full md:col-span-1">
-                              <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Total
-                              </label>
-                              <input
-                                type="text"
-                                value={`$${parseFloat(item.total).toFixed(2)}`}
-                                readOnly
-                                className="w-full p-2 bg-gradient-to-r from-blue-50/60 to-purple-50/60 border border-gray-300/50 rounded-xl text-lg font-bold text-blue-700"
-                              />
+
+                            <div>
+                              <div className="flex flex-col items-end gap-2">
+                                <div>
+                                  <button
+                                    type="button"
+                                    onClick={() => removePurchaseItem(item.uniqueId)}
+                                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                  >
+                                    <Trash2 size={18} />
+                                  </button>
+                                </div>
+                                <div className="col-span-full md:col-span-1">
+                                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Sub Total
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={`$${parseFloat(item.total).toFixed(2)}`}
+                                    readOnly
+                                    className="w-full p-2 bg-gradient-to-r from-blue-50/60 to-purple-50/60 border border-gray-300/50 rounded-lg text-regular font-bold text-blue-700"
+                                  />
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1319,7 +1311,7 @@ const fetchBankAccounts = async () => {
                             }));
                           }
                         }}
-                        className="p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                        className="p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
                       >
                         <option value="percent">Percent</option>
                         <option value="flat">Flat</option>
@@ -1333,7 +1325,7 @@ const fetchBankAccounts = async () => {
                         step="0.01"
                         value={form.discount}
                         onChange={handleFormChange}
-                        className="w-32 p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                        className="w-32 p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
                       />
                     </div>
                   </div>
@@ -1355,7 +1347,7 @@ const fetchBankAccounts = async () => {
                         step="0.01"
                         value={form.tax}
                         onChange={handleFormChange}
-                        className="w-32 p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                        className="w-32 p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
                       />
                     </div>
                   </div>
@@ -1375,7 +1367,7 @@ const fetchBankAccounts = async () => {
                         step="0.01"
                         value={form.shippingCost}
                         onChange={handleFormChange}
-                        className="w-32 p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
+                        className="w-32 p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all duration-300"
                       />
                     </div>
                   </div>
@@ -1421,7 +1413,7 @@ const fetchBankAccounts = async () => {
                             name="bankAccountId"
                             value={form.bankAccountId}
                             onChange={handleFormChange}
-                            className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                            className="w-full p-2 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                           >
                             <option value="">Select Bank</option>
                             {bankAccounts.map((bank) => (
@@ -1443,7 +1435,7 @@ const fetchBankAccounts = async () => {
                         max={financialBreakdown.grandTotal}
                         value={form.paidAmount}
                         onChange={handleFormChange}
-                        className="p-2 w-32 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:focus:border-blue-400 transition-all duration-300"
+                        className="p-2 w-32 bg-white/60 backdrop-blur-sm border border-gray-300/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:focus:border-blue-400 transition-all duration-300"
                       />
                       <p className="mt-1 text-xs text-gray-500">
                         Max: ${financialBreakdown.grandTotal.toFixed(2)}
@@ -1488,7 +1480,7 @@ const fetchBankAccounts = async () => {
                   type="submit" 
                   onClick={handleSubmit}
                   disabled={loading}
-                  className="w-full py-4 px-6 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold rounded-xl shadow-2xl hover:shadow-3xl transform hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3"
+                  className="w-full py-4 px-6 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold rounded-lg shadow-2xl hover:shadow-3xl transform hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-3"
                 >
                   {loading ? (
                     <>
@@ -1506,7 +1498,7 @@ const fetchBankAccounts = async () => {
 
               {/* Message */}
               {message && (
-                <div className={`mt-6 p-4 rounded-xl backdrop-blur-sm ${
+                <div className={`mt-6 p-4 rounded-lg backdrop-blur-sm ${
                   message.includes("✅") 
                     ? "bg-green-50/50 border border-green-200/50" 
                     : "bg-red-50/50 border border-red-200/50"
@@ -1555,4 +1547,7 @@ const fetchBankAccounts = async () => {
     </div>
   );
 }
+
+
+
 

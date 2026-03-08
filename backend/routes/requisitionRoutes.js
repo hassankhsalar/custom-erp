@@ -4,6 +4,7 @@ const { PrismaClient } = require("@prisma/client");
 const { buildScope, ensureIdScope } = require("../utils/associateScope");
 const { createNotification } = require("../utils/notificationHelper");
 const { assertActivePlace, assertActiveItem } = require("../utils/softDelete");
+const { buildContainsOr } = require("../utils/numberLooseSearch");
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -200,7 +201,7 @@ router.get("/lookup/items", authenticateToken, async (req, res) => {
           ...productWhere,
           deleted_at: false,
           product: search
-            ? { deleted_at: false, name: { contains: search } }
+            ? { deleted_at: false, OR: buildContainsOr(["name", "barcode", "category"], search) }
             : { deleted_at: false },
         },
         include: { product: true },
@@ -210,7 +211,7 @@ router.get("/lookup/items", authenticateToken, async (req, res) => {
           ...materialWhere,
           deleted_at: false,
           material: search
-            ? { deleted_at: false, name: { contains: search } }
+            ? { deleted_at: false, OR: buildContainsOr(["name", "barcode", "brand", "category"], search) }
             : { deleted_at: false },
         },
         include: { material: true },
@@ -328,7 +329,7 @@ router.put("/:id", authenticateToken, async (req, res) => {
     if (existing.isSegmented) {
       return res.status(400).json({ error: "Segmented requisition cannot be edited" });
     }
-    if (existing.requesterUserId && existing.requesterUserId !== (req.user?.userId || 0)) {
+    if ((existing.requesterUserId && existing.requesterUserId !== (req.user?.userId || 0)) || !req.user?.isAdmin ) {
       return res.status(403).json({ error: "Only creator can edit this requisition" });
     }
 
@@ -1143,3 +1144,8 @@ router.post("/:id/child", authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
+
+
+
+
+

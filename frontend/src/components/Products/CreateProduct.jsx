@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { API_ROUTES } from "../../config";
+import { includesLooseNumber } from "../../utils/numberLooseSearch";
 import { Upload, X, Eye, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import SearchableSelect from "../common/SearchableSelect";
@@ -82,7 +83,7 @@ const CreateProduct = () => {
   useEffect(() => {
     if (searchTerm) {
       setFilteredMaterials(
-        allMaterials.filter((material) => material.name.toLowerCase().includes(searchTerm.toLowerCase()))
+        allMaterials.filter((material) => includesLooseNumber(material.name, searchTerm))
       );
     } else {
       setFilteredMaterials([]);
@@ -530,3 +531,6 @@ const CreateProduct = () => {
 };
 
 export default CreateProduct;
+
+
+

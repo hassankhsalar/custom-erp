@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Calendar, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, History, Search } from "lucide-react";
 import { API_ROUTES } from "../../config";
 import { activeOnly } from "../../utils/softDelete";
+import { includesLooseNumberInAny } from "../../utils/numberLooseSearch";
 
 const pageSizeOptions = [5, 10, 20, 50, 100];
 
@@ -129,7 +130,9 @@ const InventoryAdjustmentHistory = ({ defaultPlaceType = "" }) => {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || "Failed to fetch adjustment history");
 
-        setRows(Array.isArray(data.items) ? data.items : []);
+        const nextRows = Array.isArray(data.items) ? data.items : [];
+        const filteredRows = searchText ? nextRows.filter((row) => includesLooseNumberInAny([row.name, row.barcode, row.brand, row.category], searchText)) : nextRows;
+        setRows(filteredRows);
         setPagination({
           page: Number(data.pagination?.page || 1),
           totalPages: Number(data.pagination?.totalPages || 1),
@@ -421,3 +424,5 @@ const InventoryAdjustmentHistory = ({ defaultPlaceType = "" }) => {
 };
 
 export default InventoryAdjustmentHistory;
+
+

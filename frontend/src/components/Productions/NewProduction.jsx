@@ -4,6 +4,7 @@ import { Html5Qrcode } from "html5-qrcode";
 import { useNavigate, useLocation } from 'react-router-dom';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
 import { activeOnly } from '../../utils/softDelete';
+import { includesLooseNumberInAny } from '../../utils/numberLooseSearch';
 import SearchableSelect from '../common/SearchableSelect';
 import { 
   Factory, 
@@ -344,7 +345,9 @@ const NewProduction = () => {
         const response = await axios.get(`${API_ROUTES.PRODUCTS}?search=${value}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setSearchResults(activeOnly(response.data.products || []));
+        const rows = activeOnly(response.data.products || []);
+        const filteredRows = rows.filter((row) => includesLooseNumberInAny([row.name, row.barcode, row.category, row.description], value));
+        setSearchResults(filteredRows);
       } catch (error) {
         console.error('Error searching products:', error);
       }
@@ -1180,3 +1183,5 @@ const NewProduction = () => {
 };
 
 export default NewProduction;
+
+

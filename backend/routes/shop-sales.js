@@ -7,6 +7,7 @@ const { createNotification } = require('../utils/notificationHelper');
 const { rollbackAndDeleteTransactionsByWhere } = require('../utils/transactionRollback');
 const { buildScope, ensureTypeScope, ensureIdScope } = require("../utils/associateScope");
 const { getAvailableBatches, decrementBatch } = require("../utils/batchDetails");
+const { buildContainsOr } = require("../utils/numberLooseSearch");
 const { assertActivePlace, assertActiveItem } = require("../utils/softDelete");
 const { registerSaleEditAccessRoutes } = require("./shop-sales/editAccessRoutes");
 const { registerShopSaleWarrantyRoutes } = require("./shop-sales/warrantyRoutes");
@@ -225,11 +226,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
         product: search
           ? {
               deleted_at: false,
-              OR: [
-                { name: { contains: search, mode: 'insensitive' } },
-                { barcode: { contains: search, mode: 'insensitive' } },
-                { category: { contains: search, mode: 'insensitive' } }
-              ]
+              OR: buildContainsOr(["name", "barcode", "category"], search, { mode: "insensitive" })
             }
           : { deleted_at: false }
       },
@@ -261,12 +258,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
         material: search
           ? {
               deleted_at: false,
-              OR: [
-                { name: { contains: search, mode: 'insensitive' } },
-                { barcode: { contains: search, mode: 'insensitive' } },
-                { brand: { contains: search, mode: 'insensitive' } },
-                { description: { contains: search, mode: 'insensitive' } }
-              ]
+              OR: buildContainsOr(["name", "barcode", "brand", "description"], search, { mode: "insensitive" })
             }
           : { deleted_at: false }
       },
@@ -1719,3 +1711,4 @@ router.delete("/:id", async (req, res) => {
 
 registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScope });
 module.exports = router;
+

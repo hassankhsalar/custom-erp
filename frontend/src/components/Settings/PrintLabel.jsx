@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { API_ROUTES } from "../../config";
+import { includesLooseNumber } from "../../utils/numberLooseSearch";
 import Barcode from "react-barcode";
 import { QRCodeSVG } from "qrcode.react";
 import { QrCode, ScanLine, Tags, Search, Package, Boxes, DollarSign } from "lucide-react";
@@ -68,9 +69,9 @@ export default function PrintLabel() {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
     return items.filter((i) =>
-      String(i.name || "").toLowerCase().includes(q) ||
-      String(i.barcode || "").toLowerCase().includes(q) ||
-      altNames(i).some((n) => String(n || "").toLowerCase().includes(q))
+      includesLooseNumber(i.name, q) ||
+      includesLooseNumber(i.barcode, q) ||
+      altNames(i).some((n) => includesLooseNumber(n, q))
     ).slice(0, 20);
   }, [items, query]);
 
@@ -510,3 +511,6 @@ export default function PrintLabel() {
     </div>
   );
 }
+
+
+

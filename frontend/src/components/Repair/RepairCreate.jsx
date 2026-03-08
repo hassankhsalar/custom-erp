@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Camera, Factory, Package, Save, Search, ShoppingBag, Store, Trash2, Truck, X } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { API_ROUTES } from "../../config";
+import { includesLooseNumber } from "../../utils/numberLooseSearch";
 import { activeOnly } from "../../utils/softDelete";
 
 export default function RepairCreate() {
@@ -89,8 +90,8 @@ export default function RepairCreate() {
     const q = value.toLowerCase();
     const results = damagedItems.filter(
       (item) =>
-        String(item.name || "").toLowerCase().includes(q) ||
-        String(item.barcode || "").toLowerCase().includes(q)
+        includesLooseNumber(item.name, q) ||
+        includesLooseNumber(item.barcode, q)
     );
     setSearchResults(results);
     setShowSearch(true);
@@ -332,3 +333,6 @@ export default function RepairCreate() {
     </div>
   );
 }
+
+
+

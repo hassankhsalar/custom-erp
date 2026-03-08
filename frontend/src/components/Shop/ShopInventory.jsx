@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { API_ROUTES } from '../../config';
 import { activeOnly } from '../../utils/softDelete';
+import { includesLooseNumberInAny } from '../../utils/numberLooseSearch';
 import { usePermission } from '../../hooks/usePermission';
 
 const ShopInventory = () => {
@@ -132,7 +133,9 @@ const ShopInventory = () => {
         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      setInventory(activeOnly(data.items || []));
+      const rows = activeOnly(data.items || []);
+      const filteredRows = (filterOverrides.searchTerm || '') ? rows.filter((row) => includesLooseNumberInAny([row.name, row.barcode, row.category, row.brand], filterOverrides.searchTerm)) : rows;
+      setInventory(filteredRows);
       setTotalItems(Number(data.pagination?.totalCount || 0));
       setServerTotalPages(Number(data.pagination?.totalPages || 1));
       setCurrentPage(Number(data.pagination?.page || page));
@@ -988,3 +991,5 @@ const ShopInventory = () => {
 };
 
 export default ShopInventory;
+
+

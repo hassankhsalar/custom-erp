@@ -4,6 +4,7 @@ import { Html5Qrcode } from "html5-qrcode";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { API_ROUTES } from "../../config";
 import { activeOnly } from "../../utils/softDelete";
+import { includesLooseNumberInAny } from "../../utils/numberLooseSearch";
 import { 
   ClipboardList, 
   Search, 
@@ -142,7 +143,9 @@ const NewRequisition = () => {
           search: value,
         },
       });
-      setResults(Array.isArray(res.data) ? res.data : []);
+      const rows = Array.isArray(res.data) ? res.data : [];
+      const filteredRows = rows.filter((row) => includesLooseNumberInAny([row.name, row.barcode, row.product?.barcode, row.material?.barcode], value));
+      setResults(filteredRows);
     } catch (error) {
       console.error("Item search failed", error);
       setResults([]);
@@ -695,3 +698,5 @@ const NewRequisition = () => {
 };
 
 export default NewRequisition;
+
+

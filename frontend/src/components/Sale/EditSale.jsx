@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { API_ROUTES } from "../../config";
+import { includesLooseNumber } from "../../utils/numberLooseSearch";
 import { ArrowLeft, Save, Search, ShoppingCart, X, Store, User, CreditCard, Landmark, Wallet, Receipt, Package } from "lucide-react";
 import SearchableSelect from "../common/SearchableSelect";
 
@@ -174,10 +175,10 @@ export default function EditSale() {
     const q = query.toLowerCase();
     const filtered = shopItems.filter(
       (item) =>
-        String(item.name || "").toLowerCase().includes(q) ||
-        String(item.barcode || "").toLowerCase().includes(q) ||
-        String(item.brand || "").toLowerCase().includes(q) ||
-        String(item.category || "").toLowerCase().includes(q)
+        includesLooseNumber(item.name, q) ||
+        includesLooseNumber(item.barcode, q) ||
+        includesLooseNumber(item.brand, q) ||
+        includesLooseNumber(item.category, q)
     );
     setSearchResults(filtered);
     setShowSearchResults(true);
@@ -764,3 +765,6 @@ export default function EditSale() {
     </div>
   );
 }
+
+
+

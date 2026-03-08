@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { API_ROUTES } from '../../config';
 import { activeOnly } from '../../utils/softDelete';
+import { includesLooseNumberInAny } from '../../utils/numberLooseSearch';
 import { usePermission } from '../../hooks/usePermission';
 
 const FactoryInventory = () => {
@@ -117,7 +118,9 @@ const FactoryInventory = () => {
       });
       if (!response.ok) throw new Error('Failed to fetch inventory');
       const data = await response.json();
-      setInventory(activeOnly(data.items || []));
+      const rows = activeOnly(data.items || []);
+      const filteredRows = (filterOverrides.searchTerm || '') ? rows.filter((row) => includesLooseNumberInAny([row.name, row.barcode, row.category, row.brand], filterOverrides.searchTerm)) : rows;
+      setInventory(filteredRows);
       setTotalItems(Number(data.pagination?.totalCount || 0));
       setServerTotalPages(Number(data.pagination?.totalPages || 1));
       setCurrentPage(Number(data.pagination?.page || page));
@@ -983,3 +986,5 @@ const FactoryInventory = () => {
 };
 
 export default FactoryInventory;
+
+

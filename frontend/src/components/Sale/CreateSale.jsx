@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
+import { includesLooseNumber } from "../../utils/numberLooseSearch";
 import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X, Camera } from "lucide-react";
 import { TbCurrencyTaka } from "react-icons/tb";
 import { activeOnly } from "../../utils/softDelete";
@@ -278,11 +279,11 @@ export default function ShopPOS( props ) {
     }
 
     const filtered = shopItems.filter(item =>
-      item.name.toLowerCase().includes(query.toLowerCase()) ||
-      toArray(item.alternative_names).some((n) => String(n || "").toLowerCase().includes(query.toLowerCase())) ||
-      (item.barcode && item.barcode.toLowerCase().includes(query.toLowerCase())) ||
-      (item.brand && item.brand.toLowerCase().includes(query.toLowerCase())) ||
-      (item.category && item.category.toLowerCase().includes(query.toLowerCase()))
+      includesLooseNumber(item.name, query) ||
+      toArray(item.alternative_names).some((n) => includesLooseNumber(n, query)) ||
+      (item.barcode && includesLooseNumber(item.barcode, query)) ||
+      (item.brand && includesLooseNumber(item.brand, query)) ||
+      (item.category && includesLooseNumber(item.category, query))
     );
 
     setSearchResults(filtered.slice(0, 10));
@@ -1393,3 +1394,6 @@ export default function ShopPOS( props ) {
     </div>
   );
 }
+
+
+

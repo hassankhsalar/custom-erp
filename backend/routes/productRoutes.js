@@ -7,6 +7,7 @@ const router = express.Router();
 const { buildScope, ensureIdScope } = require("../utils/associateScope");
 const { withActiveWhere } = require("../utils/softDelete");
 const { seedProductIntoAllPlaces } = require("../utils/inventoryBootstrap");
+const { buildContainsOr } = require("../utils/numberLooseSearch");
 
 // Create a new product with materials
 router.post('/', async (req, res) => {
@@ -76,12 +77,7 @@ router.get('/', async (req, res) => {
   const where = { deleted_at: false };
   const searchText = String(search || '').trim();
   if (searchText) {
-    where.OR = [
-      { name: { contains: searchText } },
-      { category: { contains: searchText } },
-      { barcode: { contains: searchText } },
-      { description: { contains: searchText } },
-    ];
+    where.OR = buildContainsOr(["name", "category", "barcode", "description"], searchText);
   }
 
   try {
@@ -120,12 +116,7 @@ router.get('/overview', async (req, res) => {
   const where = { deleted_at: false };
 
   if (searchText) {
-    where.OR = [
-      { name: { contains: searchText } },
-      { category: { contains: searchText } },
-      { barcode: { contains: searchText } },
-      { description: { contains: searchText } },
-    ];
+    where.OR = buildContainsOr(["name", "category", "barcode", "description"], searchText);
   }
 
   try {
@@ -172,12 +163,7 @@ router.get('/all-products', async (req, res) => {
 
   const searchText = String(search || '').trim();
   if (searchText) {
-    where.OR = [
-      { name: { contains: searchText } },
-      { category: { contains: searchText } },
-      { barcode: { contains: searchText } },
-      { description: { contains: searchText } },
-    ];
+    where.OR = buildContainsOr(["name", "category", "barcode", "description"], searchText);
   }
 
   const allowedSortBy = new Set(['created_at', 'name', 'sale_price', 'wholesale_price', 'cost', 'stock', 'category', 'barcode']);
@@ -363,11 +349,7 @@ router.get('/search', async (req, res) => {
     const products = await prisma.product.findMany({
       where: {
         deleted_at: false,
-        OR: [
-          { name: { contains: q } },
-          { barcode: { contains: q } },
-          { description: { contains: q } }
-        ]
+        OR: buildContainsOr(["name", "barcode", "description"], q)
       },
       take: 10,
       select: {
@@ -390,3 +372,6 @@ router.get('/search', async (req, res) => {
 });
 
 module.exports = router;
+
+
+

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Camera, Factory, Package, ShoppingBag, Store, Trash2, Truck, Undo2, X } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { API_ROUTES } from "../../config";
+import { includesLooseNumber } from "../../utils/numberLooseSearch";
 import SearchableSelect from "../common/SearchableSelect";
 
 const lineKey = (itemType, id, batchNumber = "", expiryDate = "") =>
@@ -168,8 +169,8 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
       const availableRows = isDamage ? damageItems : sourceItems;
       results = availableRows
           .filter((item) =>
-            String(item.name || "").toLowerCase().includes(lower) ||
-            (item.barcode && String(item.barcode).toLowerCase().includes(lower))
+            includesLooseNumber(item.name, lower) ||
+            (item.barcode && includesLooseNumber(item.barcode, lower))
           )
           .map((item) => ({
             type: item.itemType,
@@ -685,3 +686,6 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
     </div>
   );
 }
+
+
+

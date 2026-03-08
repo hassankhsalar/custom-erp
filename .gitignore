@@ -8,3 +8,4 @@ gemini.md
 /web_data
 /prisma/seed_data
 githubaction.yml
+sales_shop_*.csv

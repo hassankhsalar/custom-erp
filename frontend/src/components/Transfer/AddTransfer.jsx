@@ -4,6 +4,7 @@ import { Html5Qrcode } from "html5-qrcode";
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { activeOnly } from '../../utils/softDelete';
+import { includesLooseNumberInAny } from '../../utils/numberLooseSearch';
 import { 
   Truck, 
   Package, 
@@ -222,7 +223,9 @@ const AddTransfer = () => {
             search: value
           },
         });
-        setSearchResults(Array.isArray(res.data) ? res.data : []);
+        const rows = Array.isArray(res.data) ? res.data : [];
+        const filteredRows = rows.filter((row) => includesLooseNumberInAny([row.name, row.barcode, ...(Array.isArray(row.alternativeNames) ? row.alternativeNames : [])], value));
+        setSearchResults(filteredRows);
       
     } catch (error) {
       console.error('Error searching items:', error);
@@ -877,3 +880,5 @@ const AddTransfer = () => {
 };
 
 export default AddTransfer;
+
+
