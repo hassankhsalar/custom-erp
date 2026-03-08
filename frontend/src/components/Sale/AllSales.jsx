@@ -5,6 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { usePermission } from "../../hooks/usePermission";
 import { useAuth } from "../../context/AuthContext";
 import SearchableSelect from "../common/SearchableSelect";
+import { printSaleInvoiceById, printSaleChallanById } from "./saleInvoicePrint";
 
 export default function AllSales() {
   const navigate = useNavigate();
@@ -332,147 +333,27 @@ export default function AllSales() {
     const paidAmount = parseFloat(sale.paidAmount) || 0;
     return Math.max(0, grandTotal - paidAmount);
   };
-
-  const escapeHtml = (value) =>
-    String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-
-  const parseCompanyProfile = (raw) => {
-    if (!raw || raw.value === undefined || raw.value === null) return {};
-    if (typeof raw.value === "string") {
-      try {
-        return JSON.parse(raw.value);
-      } catch {
-        return {};
-      }
-    }
-    return typeof raw.value === "object" ? raw.value : {};
-  };
-
   const handlePrintInvoice = async (sale) => {
     const token = localStorage.getItem("token");
     if (!token || !sale?.id) return;
     setPrintingSaleId(sale.id);
     try {
-      const [detailsRes, companyRes] = await Promise.all([
-        fetch(API_ROUTES.SHOP_SALES_DETAILS_BY_ID(sale.id), {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(API_ROUTES.BUSINESS_SETTINGS_BY_KEY("company_profile"), {
-          headers: { Authorization: `Bearer ${token}` },
-        }).catch(() => null),
-      ]);
-
-      if (!detailsRes.ok) throw new Error("Failed to load sale details for invoice");
-      const saleDetails = await detailsRes.json();
-      const companyRaw = companyRes && companyRes.ok ? await companyRes.json() : null;
-      const company = parseCompanyProfile(companyRaw);
-
-      const createdAt = saleDetails?.createdAt ? new Date(saleDetails.createdAt) : new Date();
-      const saleDate = Number.isNaN(createdAt.getTime()) ? "-" : createdAt.toLocaleDateString();
-      const saleTime = Number.isNaN(createdAt.getTime()) ? "-" : createdAt.toLocaleTimeString();
-      const customerName = saleDetails?.customer?.name || "Walk-in";
-      const customerMobile = saleDetails?.customer?.mobile || "-";
-
-      const subtotal = Number(saleDetails?.totalAmount || 0);
-      const discountAmount = Number(saleDetails?.discount || 0);
-      const taxAmount = Number(saleDetails?.tax || saleDetails?.taxAmount || 0);
-      const total = Number(
-        saleDetails?.grandTotal ?? Math.max(0, subtotal - discountAmount + taxAmount)
-      );
-      const totalPaid = Number(saleDetails?.paidAmount || 0);
-      const totalDue = Math.max(0, total - totalPaid);
-
-      const rows = (saleDetails?.saleItems || [])
-        .map((item) => {
-          const itemName = item?.product?.name || item?.material?.name || item?.selectedName || "-";
-          const barcode = item?.product?.barcode || item?.material?.barcode || "-";
-          const quantity = Number(item?.selectedQuantity ?? item?.quantity ?? 0);
-          const unitPrice = Number(item?.unitPrice || 0);
-          return `
-            <tr>
-              <td>${escapeHtml(itemName)}<div style="font-size:12px;color:#666;">${escapeHtml(barcode)}</div></td>
-              <td style="text-align:right;">${quantity.toFixed(2)}</td>
-              <td style="text-align:right;">${unitPrice.toFixed(2)}</td>
-              <td style="text-align:right;">${(quantity * unitPrice).toFixed(2)}</td>
-            </tr>
-          `;
-        })
-        .join("");
-
-      const printWindow = window.open("", "_blank", "width=900,height=700");
-      if (!printWindow) throw new Error("Please allow popups to print invoice");
-
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Invoice ${escapeHtml(saleDetails?.reference || "")}</title>
-            <style>
-              body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
-              .row { display: flex; justify-content: space-between; margin-bottom: 6px; }
-              .muted { color: #666; }
-              .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 10px; }
-              .meta-box { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; background: #fafafa; }
-              .meta-title { font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 6px; text-transform: uppercase; }
-              table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-              th, td { border: 1px solid #ddd; padding: 8px; font-size: 13px; }
-              th { background: #f7f7f7; text-align: left; }
-              .summary { margin-top: 14px; width: 320px; margin-left: auto; }
-              .summary .row { border-bottom: 1px dashed #ddd; padding: 4px 0; }
-              .summary .total { font-weight: 700; font-size: 16px; border-bottom: 0; }
-            </style>
-          </head>
-          <body>
-            <h2 style="margin:0;">${escapeHtml(company?.companyName || company?.name || "Company")}</h2>
-            <div class="meta-grid">
-              <div class="meta-box">
-                <div class="meta-title">Company Details</div>
-                <div class="muted">${escapeHtml(company?.address || "-")}</div>
-                <div class="muted">${escapeHtml(company?.mobile || company?.phone || "-")}</div>
-              </div>
-              <div class="meta-box">
-                <div class="meta-title">Shop Details</div>
-                <div class="muted">${escapeHtml(saleDetails?.shop?.name || "-")}</div>
-                <div class="muted">${escapeHtml(saleDetails?.shop?.shop_keeper || "-")}</div>
-              </div>
-            </div>
-            <hr style="margin:14px 0;" />
-            <div class="row"><strong>Invoice No:</strong><span>${escapeHtml(saleDetails?.reference || "-")}</span></div>
-            <div class="row"><strong>Date:</strong><span>${escapeHtml(saleDate)}</span></div>
-            <div class="row"><strong>Time:</strong><span>${escapeHtml(saleTime)}</span></div>
-            <div class="row"><strong>Customer:</strong><span>${escapeHtml(customerName)}</span></div>
-            <div class="row"><strong>Mobile:</strong><span>${escapeHtml(customerMobile)}</span></div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th style="text-align:right;">Quantity</th>
-                  <th style="text-align:right;">Price</th>
-                  <th style="text-align:right;">Amount</th>
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>
-            <div class="summary">
-              <div class="row"><span>Tax</span><span>${taxAmount.toFixed(2)}</span></div>
-              <div class="row"><span>Discount</span><span>${discountAmount.toFixed(2)}</span></div>
-              <div class="row"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
-              <div class="row"><span>Total</span><span>${total.toFixed(2)}</span></div>
-              <div class="row"><span>Total Paid</span><span>${totalPaid.toFixed(2)}</span></div>
-              <div class="row total"><span>Total Due</span><span>${totalDue.toFixed(2)}</span></div>
-            </div>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.focus();
-      printWindow.print();
+      await printSaleInvoiceById(sale.id, token);
     } catch (err) {
       alert(err.message || "Failed to print invoice");
+    } finally {
+      setPrintingSaleId(null);
+    }
+  };
+
+  const handlePrintChallan = async (sale) => {
+    const token = localStorage.getItem("token");
+    if (!token || !sale?.id) return;
+    setPrintingSaleId(sale.id);
+    try {
+      await printSaleChallanById(sale.id, token);
+    } catch (err) {
+      alert(err.message || "Failed to print challan");
     } finally {
       setPrintingSaleId(null);
     }
@@ -1092,6 +973,18 @@ export default function AllSales() {
                                   <Loader2 size={18} className="text-emerald-600 animate-spin" />
                                 ) : (
                                   <FileText size={18} className="text-emerald-600" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => handlePrintChallan(sale)}
+                                disabled={printingSaleId === sale.id}
+                                className="p-2 hover:bg-sky-50 rounded-lg transition disabled:opacity-50"
+                                title="Print Challan"
+                              >
+                                {printingSaleId === sale.id ? (
+                                  <Loader2 size={18} className="text-sky-600 animate-spin" />
+                                ) : (
+                                  <ClipboardList size={18} className="text-sky-600" />
                                 )}
                               </button>
                             </div>
@@ -1751,3 +1644,4 @@ export default function AllSales() {
     </div>
   );
 }
+

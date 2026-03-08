@@ -455,6 +455,52 @@ async function main() {
 
   const shops = await Promise.all(shopsFromCsv.map((shop) => prisma.shop.create({ data: shop })));
 
+  const shopRegisters = await Promise.all(
+    shops.map((shop) =>
+      prisma.cashRegister.create({
+        data: {
+          name: `${shop.name} Register`,
+          status: "active",
+          cash_in_hand: 0,
+          deleted_at: false,
+        },
+      })
+    )
+  );
+
+  await prisma.cashRegisterAssignment.createMany({
+    data: shopRegisters.map((register, index) => ({
+      entityType: "shop",
+      entityId: shops[index].id,
+      cashRegisterId: register.id,
+      assignedById: adminUser.id,
+      isActive: true,
+      notes: "Seeded default shop register",
+    })),
+    skipDuplicates: true,
+  });
+
+  const bspAccount = await prisma.accounts.create({
+    data: {
+      name: "BSP Accounts",
+      account_number: "BSP-ACC-0001",
+      status: "active",
+      balance: 0,
+      deleted_at: false,
+    },
+  });
+
+  await prisma.entityAccount.createMany({
+    data: shops.map((shop) => ({
+      entityType: "shop",
+      entityId: shop.id,
+      accountId: bspAccount.id,
+      isPrimary: true,
+      assignedById: adminUser.id,
+    })),
+    skipDuplicates: true,
+  });
+
   const brandRows = loadCSV("brand.csv");
   const unitRows = loadCSV("unit.csv");
   const productRows = loadCSV("product.csv");
@@ -560,6 +606,25 @@ async function main() {
   }
   if (materials.length) {
     await prisma.material.createMany({ data: materials, skipDuplicates: true });
+  }
+
+  const seededProducts = await prisma.product.findMany({
+    where: { deleted_at: false },
+    select: { id: true },
+  });
+
+  if (shops.length && seededProducts.length) {
+    await prisma.shopProduct.createMany({
+      data: shops.flatMap((shop) =>
+        seededProducts.map((product) => ({
+          shop_id: shop.id,
+          product_id: product.id,
+          stock: 0,
+          deleted_at: false,
+        }))
+      ),
+      skipDuplicates: true,
+    });
   }
 
   const usedMobiles = new Set();

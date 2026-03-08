@@ -157,12 +157,20 @@ export default function Salaries() {
       });
       if (!res.ok) return;
       const row = await res.json();
-      if (row?.value) {
-        setCompanyProfile((prev) => ({
-          ...prev,
-          ...row.value
-        }));
-      }
+      const parsed =
+        typeof row?.value === "string"
+          ? (() => {
+              try {
+                return JSON.parse(row.value);
+              } catch {
+                return {};
+              }
+            })()
+          : (row?.value || {});
+      setCompanyProfile((prev) => ({
+        ...prev,
+        ...parsed,
+      }));
     } catch (error) {
       console.error("Error fetching company profile:", error);
     }
@@ -279,11 +287,8 @@ export default function Salaries() {
 
   // Format currency
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2
-    }).format(amount || 0);
+    const value = Number(amount || 0);
+    return `\u09F3${value.toFixed(2)}`;
   };
 
   // Get status styling
@@ -452,9 +457,9 @@ export default function Salaries() {
     return date.toLocaleString("en-US", { month: "long" });
   };
 
-  const handleDownloadPayslip = (salary) => {
+  const handlePrintPayslip = (salary) => {
     if (!canDownloadPayslip(salary.status)) {
-      alert("Pay slip can be downloaded only after salary is approved.");
+      alert("Pay slip can be printed only after salary is approved.");
       return;
     }
 
@@ -466,6 +471,11 @@ export default function Salaries() {
     const net = parseFloat(salary.net || (gross - deductions));
     const period = `${formatMonthName(salary.month)} ${salary.year}`;
     const generatedOn = new Date().toLocaleString();
+
+    const companyName = companyProfile.companyName || companyProfile.name || "Company";
+    const companyAddress = companyProfile.address || "";
+    const companyPhone = companyProfile.phone || companyProfile.mobile || "";
+    const companyEmail = companyProfile.email || "";
 
     const html = `<!doctype html>
 <html>
@@ -494,9 +504,9 @@ export default function Salaries() {
   <body>
     <div class="card">
       <div class="header">
-        <h1 class="title">${companyProfile.companyName || "Company"}</h1>
-        <p class="sub">${companyProfile.address || ""}</p>
-        <p class="sub">${companyProfile.phone || ""} ${companyProfile.email ? " | " + companyProfile.email : ""}</p>
+        <h1 class="title">${companyName}</h1>
+        <p class="sub">${companyAddress}</p>
+        <p class="sub">${companyPhone}${companyEmail ? " | " + companyEmail : ""}</p>
       </div>
       <div class="content">
         <h2 style="margin: 0 0 12px;">Pay Slip</h2>
@@ -557,17 +567,15 @@ export default function Salaries() {
     </div>
   </body>
 </html>`;
-
-    const file = new Blob([html], { type: "text/html;charset=utf-8" });
-    const url = URL.createObjectURL(file);
-    const link = document.createElement("a");
-    const safeEmployee = employeeName.replace(/[^a-z0-9]/gi, "_");
-    link.href = url;
-    link.download = `PaySlip_${safeEmployee}_${salary.month}_${salary.year}.html`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const printWindow = window.open("", "_blank", "width=900,height=700");
+    if (!printWindow) {
+      alert("Please allow popups to print pay slip.");
+      return;
+    }
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
   };
 
   return (
@@ -837,14 +845,14 @@ export default function Salaries() {
                               )}
 
                               <button
-                                onClick={() => handleDownloadPayslip(salary)}
+                                onClick={() => handlePrintPayslip(salary)}
                                 disabled={!canDownloadPayslip(salary.status)}
                                 className={`p-2 rounded-lg transition-colors duration-300 ${
                                   canDownloadPayslip(salary.status)
                                     ? "bg-purple-50 text-purple-600 hover:bg-purple-100"
                                     : "bg-gray-100 text-gray-400 cursor-not-allowed"
                                 }`}
-                                title={canDownloadPayslip(salary.status) ? "Download Pay Slip" : "Available after approval"}
+                                title={canDownloadPayslip(salary.status) ? "Print Pay Slip" : "Available after approval"}
                               >
                                 <Download size={16} />
                               </button>
@@ -977,3 +985,6 @@ export default function Salaries() {
     </div>
   );
 }
+
+
+

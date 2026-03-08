@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
 import { includesLooseNumber } from "../../utils/numberLooseSearch";
+import { printSaleInvoiceById } from "./saleInvoicePrint";
 import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X, Camera } from "lucide-react";
 import { TbCurrencyTaka } from "react-icons/tb";
 import { activeOnly } from "../../utils/softDelete";
@@ -566,40 +567,9 @@ export default function ShopPOS( props ) {
   const printInvoice = async (saleResponse) => {
     try {
       const token = localStorage.getItem("token");
-      const companyRes = await fetch(API_ROUTES.BUSINESS_SETTINGS_BY_KEY("company_profile"), {
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => null);
-      const company = companyRes && companyRes.ok ? (await companyRes.json())?.value || {} : {};
-
-      const invoiceItems = cartItems.map((item) => `
-        <tr>
-          <td style="padding:4px 0;">${item.selectedName || item.name}</td>
-          <td style="text-align:right;">${item.selectedQuantity || item.quantity} ${item.selectedUnit || item.unit || ""}</td>
-          <td style="text-align:right;">${Number(item.unitPrice || 0).toFixed(2)}</td>
-          <td style="text-align:right;">${Number(item.totalPrice || 0).toFixed(2)}</td>
-        </tr>
-      `).join("");
-
-      const printWindow = window.open("", "_blank", "width=900,height=700");
-      if (!printWindow) return;
-      printWindow.document.write(`
-        <html>
-          <head><title>Invoice</title></head>
-          <body style="font-family: Arial, sans-serif; padding: 20px;">
-            <h2 style="margin:0;">${company.companyName || "Company"}</h2>
-            <p style="margin:4px 0 12px;">${company.address || ""}</p>
-            <h3>Invoice #${saleResponse?.sale?.reference || ""}</h3>
-            <table style="width:100%; border-collapse: collapse;" border="1" cellspacing="0" cellpadding="6">
-              <thead><tr><th align="left">Item</th><th align="right">Qty</th><th align="right">Rate</th><th align="right">Amount</th></tr></thead>
-              <tbody>${invoiceItems}</tbody>
-            </table>
-            <h3 style="text-align:right; margin-top:12px;">Total: ${Number(grandTotal || 0).toFixed(2)}</h3>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.focus();
-      printWindow.print();
+      const saleId = Number(saleResponse?.sale?.id || saleResponse?.id || 0);
+      if (!token || !saleId) return;
+      await printSaleInvoiceById(saleId, token);
     } catch (e) {
       console.error("Failed to print invoice", e);
     }
@@ -1394,6 +1364,7 @@ export default function ShopPOS( props ) {
     </div>
   );
 }
+
 
 
 

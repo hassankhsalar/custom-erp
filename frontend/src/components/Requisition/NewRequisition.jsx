@@ -51,6 +51,7 @@ const NewRequisition = () => {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState("");
   const [items, setItems] = useState([]);
+  const [allLookupItems, setAllLookupItems] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const requesterOptions = useMemo(() => {
@@ -76,6 +77,46 @@ const NewRequisition = () => {
       }
     };
     fetchPlaces();
+  }, [token]);
+  useEffect(() => {
+    const fetchAllItems = async () => {
+      try {
+        const headers = { Authorization: `Bearer ${token}` };
+        const [productsRes, materialsRes] = await Promise.all([
+          axios.get(API_ROUTES.PRODUCTS_ALL, { headers }),
+          axios.get(API_ROUTES.MATERIALS_ALL, { headers }),
+        ]);
+
+        const products = activeOnly(productsRes?.data?.products || productsRes?.data || []).map((p) => ({
+          itemType: "product",
+          itemId: p.id,
+          name: p.name || "",
+          barcode: p.barcode || "",
+          category: p.category || "",
+          brand: p.brand || "",
+          description: p.description || "",
+          stock: Number(p.stock || 0),
+        }));
+
+        const materials = activeOnly(materialsRes?.data?.materials || materialsRes?.data || []).map((m) => ({
+          itemType: "material",
+          itemId: m.id,
+          name: m.name || "",
+          barcode: m.barcode || "",
+          category: m.category || "",
+          brand: m.brand || "",
+          description: m.description || "",
+          stock: Number(m.current_stock || 0),
+        }));
+
+        setAllLookupItems([...products, ...materials]);
+      } catch (error) {
+        console.error("Failed to preload requisition items", error);
+        setAllLookupItems([]);
+      }
+    };
+
+    fetchAllItems();
   }, [token]);
 
   useEffect(() => {
@@ -128,28 +169,22 @@ const NewRequisition = () => {
     fetchRequisition();
   }, [id, isEdit, token]);
 
-  const handleSearch = async (value) => {
+  const handleSearch = (value) => {
     setSearch(value);
-    if (!form.requesterId || value.length < 2) {
+    if (value.length < 2) {
       setResults([]);
       return;
     }
-    try {
-      const res = await axios.get(API_ROUTES.REQUISITION_ITEM_LOOKUP, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: {
-          placeType: form.requesterType,
-          placeId: form.requesterId,
-          search: value,
-        },
-      });
-      const rows = Array.isArray(res.data) ? res.data : [];
-      const filteredRows = rows.filter((row) => includesLooseNumberInAny([row.name, row.barcode, row.product?.barcode, row.material?.barcode], value));
-      setResults(filteredRows);
-    } catch (error) {
-      console.error("Item search failed", error);
-      setResults([]);
-    }
+
+    const filteredRows = allLookupItems
+      .filter((row) =>
+        includesLooseNumberInAny(
+          [row.name, row.barcode, row.category, row.brand, row.description],
+          value
+        )
+      )
+      .slice(0, 60);
+    setResults(filteredRows);
   };
 
   useEffect(() => {
@@ -199,7 +234,7 @@ const NewRequisition = () => {
           }
         });
     };
-  }, [scannerOpen, form.requesterId, form.requesterType]);
+  }, [scannerOpen, allLookupItems]);
 
   const addItem = (row) => {
     const exists = items.find((it) => it.itemType === row.itemType && String(it.itemId) === String(row.itemId));
@@ -533,7 +568,7 @@ const NewRequisition = () => {
                           }`}>
                             {row.itemType}
                           </span>
-                          <span className="text-xs text-gray-500">Stock: {row.stock}</span>
+                          <span className="text-xs text-gray-500">Stock: {row.stock ?? "-"}</span>
                         </div>
                       </div>
                       <Plus size={18} className="text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -698,5 +733,6 @@ const NewRequisition = () => {
 };
 
 export default NewRequisition;
+
 
 

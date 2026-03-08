@@ -79,6 +79,7 @@ export const API_ROUTES = {
   SHOP_SALES_ITEMS: (shopId) => `${API_BASE_URL}/shop-sales/items/shop/${shopId}`,
   SHOP_SALES_BY_ID: (id) => `${API_BASE_URL}/shop-sales/${id}`,
   SHOP_SALES_DETAILS_BY_ID: (id) => `${API_BASE_URL}/shop-sales/details/${id}`,
+  SHOP_SALES_RETURNS_BY_SALE: (saleId) => `${API_BASE_URL}/shop-sales/returns/sale/${saleId}`,
   SHOP_SALES_EDIT_ACCESS_OPEN: (id) => `${API_BASE_URL}/shop-sales/${id}/edit-access/open`,
   SHOP_SALES_EDIT_ACCESS_REQUEST: (id) => `${API_BASE_URL}/shop-sales/${id}/edit-access/request`,
   SHOP_SALES_EDIT_ACCESS_CLOSE: (id) => `${API_BASE_URL}/shop-sales/${id}/edit-access/close`,
@@ -267,3 +268,4 @@ export const API_ROUTES = {
 // app.use('/api/dash-board', dashboardRoutes);
 // app.use('/api/users', userRoutes);
 // app.use('/api/transfers', transferRoutes);
+
