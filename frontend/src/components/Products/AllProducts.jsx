@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
@@ -70,12 +70,12 @@ const ProductOverviewCards = memo(function ProductOverviewCards({ overview }) {
 
 const AllProducts = () => {
   const [products, setProducts] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [expandedProductId, setExpandedProductId] = useState(null);
   const [loadingTable, setLoadingTable] = useState(false);
-  const [loadingOverview, setLoadingOverview] = useState(false);
   const [modal, setModal] = useState({ isOpen: false, type: null, data: null });
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
@@ -116,24 +116,13 @@ const AllProducts = () => {
   const fetchProductsTable = useCallback(async () => {
     try {
       setLoadingTable(true);
-      const response = await axios.get(API_ROUTES.PRODUCTS, {
-        params: {
-          page: currentPage,
-          limit: itemsPerPage,
-          search: appliedSearch || undefined,
-          sortBy: appliedSortBy,
-          sortDir: appliedSortDir,
-        },
+      const response = await axios.get(API_ROUTES.PRODUCTS_ALL, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': Bearer ,
           'Content-Type': 'application/json',
         },
       });
-      const rows = activeOnly(response.data.products || []);
-      const filteredRows = appliedSearch ? rows.filter((row) => includesLooseNumberInAny([row.name, row.barcode, row.category, row.description], appliedSearch)) : rows;
-      setProducts(filteredRows);
-      setTotalPages(Number(response.data.totalPages || Math.ceil((response.data.totalCount || 0) / itemsPerPage) || 1));
-      setTotalProducts(Number(response.data.totalCount || 0));
+      setAllProducts(activeOnly(response.data?.products || []));
     } catch (error) {
       console.error('Error fetching products:', error);
       if (error.response?.status === 401) {
@@ -146,33 +135,30 @@ const AllProducts = () => {
     } finally {
       setLoadingTable(false);
     }
-  }, [appliedSearch, appliedSortBy, appliedSortDir, currentPage, itemsPerPage, navigate, token]);
+  }, [navigate, token]);
 
-  const fetchProductsOverview = useCallback(async () => {
-    try {
-      setLoadingOverview(true);
-      const response = await axios.get(`${API_ROUTES.PRODUCTS}/overview`, {
-        params: {
-          search: appliedSearch || undefined,
-          sortBy: appliedSortBy,
-          sortDir: appliedSortDir,
-        },
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      setOverview({
-        totalProducts: Number(response.data.totalProducts || 0),
-        lowStockProducts: Number(response.data.lowStockProducts || 0),
-        outOfStockProducts: Number(response.data.outOfStockProducts || 0),
-      });
-    } catch (error) {
-      console.error('Error fetching products overview:', error);
-    } finally {
-      setLoadingOverview(false);
+  const filteredProducts = useMemo(() => {
+    const q = String(appliedSearch || '').trim();
+    let rows = allProducts.slice();
+
+    if (q) {
+      rows = rows.filter((row) => includesLooseNumberInAny([row.name, row.barcode, row.category, row.description], q));
     }
-  }, [appliedSearch, appliedSortBy, appliedSortDir, token]);
+
+    const compare = (a, b, field) => {
+      const av = a?.[field];
+      const bv = b?.[field];
+      if (typeof av === 'number' && typeof bv === 'number') return av - bv;
+      return String(av ?? '').localeCompare(String(bv ?? ''));
+    };
+
+    rows.sort((a, b) => {
+      const dir = appliedSortDir === 'asc' ? 1 : -1;
+      return dir * compare(a, b, appliedSortBy);
+    });
+
+    return rows;
+  }, [allProducts, appliedSearch, appliedSortBy, appliedSortDir]);
 
   useEffect(() => {
     if (!token) {
@@ -184,9 +170,25 @@ const AllProducts = () => {
   }, [fetchProductsTable, navigate, token]);
 
   useEffect(() => {
-    if (!token) return;
-    fetchProductsOverview();
-  }, [fetchProductsOverview, token]);
+    const total = filteredProducts.length;
+    const pages = Math.max(1, Math.ceil(total / itemsPerPage));
+
+    if (currentPage > pages) {
+      setCurrentPage(pages);
+      return;
+    }
+
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    setProducts(filteredProducts.slice(start, end));
+    setTotalProducts(total);
+    setTotalPages(pages);
+    setOverview({
+      totalProducts: total,
+      lowStockProducts: filteredProducts.filter((row) => Number(row.stock || 0) > 0 && Number(row.alert_quantity || 0) > 0 && Number(row.stock || 0) <= Number(row.alert_quantity || 0)).length,
+      outOfStockProducts: filteredProducts.filter((row) => Number(row.stock || 0) <= 0).length,
+    });
+  }, [filteredProducts, currentPage, itemsPerPage]);
 
   const handleDelete = async (id) => {
     if (!token) {
@@ -203,7 +205,7 @@ const AllProducts = () => {
           },
         });
         
-        await Promise.all([fetchProductsTable(), fetchProductsOverview()]);
+        await fetchProductsTable();
       } catch (error) {
         console.error('Error deleting product:', error);
         

@@ -695,6 +695,30 @@ router.get('/available-items', authenticateToken, async (req, res) => {
   }
 });
 
+
+router.get('/destinations/:type', authenticateToken, async (req, res) => {
+  try {
+    const type = String(req.params.type || '').toLowerCase();
+    if (!['store', 'shop', 'factory'].includes(type)) {
+      return res.status(400).json({ error: 'Invalid destination type' });
+    }
+
+    const modelMap = {
+      store: prisma.store,
+      shop: prisma.shop,
+      factory: prisma.factory,
+    };
+    const rows = await modelMap[type].findMany({
+      where: { deleted_at: false },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Failed to fetch transfer destinations' });
+  }
+});
+
 router.post('/', authenticateToken, upload.single('document'), async (req, res) => {
   const { from, to, fromId, toId, items, shipping_cost, note, status, requisitionId, requisitionSectionId } = req.body;
   const document = req.file;
@@ -702,7 +726,6 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
   try {
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, from, parseInt(fromId));
-    ensureIdScope(scope, to, parseInt(toId));
     await assertActivePlace(prisma, from, parseInt(fromId));
     await assertActivePlace(prisma, to, parseInt(toId));
 
@@ -1649,5 +1672,7 @@ router.post('/:id/return-unreceived', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
+
+
 
 

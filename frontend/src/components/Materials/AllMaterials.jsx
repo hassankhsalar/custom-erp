@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
@@ -85,11 +85,11 @@ const MaterialOverviewCards = memo(function MaterialOverviewCards({ overview }) 
 
 const AllMaterials = () => {
   const [materials, setMaterials] = useState([]);
+  const [allMaterials, setAllMaterials] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [loadingTable, setLoadingTable] = useState(false);
-  const [loadingOverview, setLoadingOverview] = useState(false);
   const [modal, setModal] = useState({ isOpen: false, type: null, data: null });
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
@@ -131,23 +131,13 @@ const AllMaterials = () => {
   const fetchMaterialsTable = useCallback(async () => {
     try {
       setLoadingTable(true);
-      const response = await axios.get(API_ROUTES.MATERIALS, {
-        params: {
-          page: currentPage,
-          limit: itemsPerPage,
-          search: appliedSearch || undefined,
-          sortBy: appliedSortBy,
-          sortDir: appliedSortDir,
-        },
+      const response = await axios.get(API_ROUTES.MATERIALS_ALL, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': Bearer ,
           'Content-Type': 'application/json',
         },
       });
-      const rows = activeOnly(response.data.materials || []);
-      setMaterials(rows);
-      setTotalPages(Number(response.data.totalPages || Math.ceil((response.data.totalCount || 0) / itemsPerPage) || 1));
-      setTotalMaterials(Number(response.data.totalCount || 0));
+      setAllMaterials(activeOnly(response.data?.materials || []));
     } catch (error) {
       console.error('Error fetching materials:', error);
       if (error.response?.status === 401) {
@@ -160,30 +150,30 @@ const AllMaterials = () => {
     } finally {
       setLoadingTable(false);
     }
-  }, [appliedSearch, appliedSortBy, appliedSortDir, currentPage, itemsPerPage, navigate, token]);
+  }, [navigate, token]);
 
-  const fetchMaterialsOverview = useCallback(async () => {
-    try {
-      setLoadingOverview(true);
-      const response = await axios.get(`${API_ROUTES.MATERIALS}/overview`, {
-        params: { search: appliedSearch || undefined },
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      setOverview({
-        totalMaterials: Number(response.data.totalMaterials || 0),
-        inStockMaterials: Number(response.data.inStockMaterials || 0),
-        lowStockMaterials: Number(response.data.lowStockMaterials || 0),
-        outOfStockMaterials: Number(response.data.outOfStockMaterials || 0),
-      });
-    } catch (error) {
-      console.error('Error fetching materials overview:', error);
-    } finally {
-      setLoadingOverview(false);
+  const filteredMaterials = useMemo(() => {
+    const q = String(appliedSearch || '').trim();
+    let rows = allMaterials.slice();
+
+    if (q) {
+      rows = rows.filter((row) => [row.name, row.brand, row.category, row.barcode].some((v) => String(v || '').toLowerCase().includes(q.toLowerCase())));
     }
-  }, [appliedSearch, appliedSortBy, appliedSortDir, token]);
+
+    const compare = (a, b, field) => {
+      const av = a?.[field];
+      const bv = b?.[field];
+      if (typeof av === 'number' && typeof bv === 'number') return av - bv;
+      return String(av ?? '').localeCompare(String(bv ?? ''));
+    };
+
+    rows.sort((a, b) => {
+      const dir = appliedSortDir === 'asc' ? 1 : -1;
+      return dir * compare(a, b, appliedSortBy);
+    });
+
+    return rows;
+  }, [allMaterials, appliedSearch, appliedSortBy, appliedSortDir]);
 
   useEffect(() => {
     if (!token) {
@@ -195,9 +185,26 @@ const AllMaterials = () => {
   }, [fetchMaterialsTable, navigate, token]);
 
   useEffect(() => {
-    if (!token) return;
-    fetchMaterialsOverview();
-  }, [fetchMaterialsOverview, token]);
+    const total = filteredMaterials.length;
+    const pages = Math.max(1, Math.ceil(total / itemsPerPage));
+
+    if (currentPage > pages) {
+      setCurrentPage(pages);
+      return;
+    }
+
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    setMaterials(filteredMaterials.slice(start, end));
+    setTotalMaterials(total);
+    setTotalPages(pages);
+    setOverview({
+      totalMaterials: total,
+      inStockMaterials: filteredMaterials.filter((row) => Number(row.current_stock || 0) > 0).length,
+      lowStockMaterials: filteredMaterials.filter((row) => Number(row.current_stock || 0) > 0 && Number(row.alert_quantity || 0) > 0 && Number(row.current_stock || 0) <= Number(row.alert_quantity || 0)).length,
+      outOfStockMaterials: filteredMaterials.filter((row) => Number(row.current_stock || 0) <= 0).length,
+    });
+  }, [filteredMaterials, currentPage, itemsPerPage]);
 
   const handleDelete = async (id) => {
     if (!token) {
@@ -214,7 +221,7 @@ const AllMaterials = () => {
           },
         });
         
-        await Promise.all([fetchMaterialsTable(), fetchMaterialsOverview()]);
+        await fetchMaterialsTable();
       } catch (error) {
         console.error('Error deleting material:', error);
         

@@ -168,6 +168,7 @@ export const API_ROUTES = {
   //transfer routes
   TRANSFERS: `${API_BASE_URL}/transfers`,
   TRANSFERS_OVERVIEW: `${API_BASE_URL}/transfers/overview`,
+  TRANSFER_DESTINATIONS: (type) => `${API_BASE_URL}/transfers/destinations/${encodeURIComponent(type)}`,
   TRANSFER_BY_ID: (id) => `${API_BASE_URL}/transfers/${id}`,
   TRANSFER_STATUS: (id) => `${API_BASE_URL}/transfers/${id}/status`,
   TRANSFER_RECEIVE: (id) => `${API_BASE_URL}/transfers/${id}/receive`,
@@ -268,4 +269,9 @@ export const API_ROUTES = {
 // app.use('/api/dash-board', dashboardRoutes);
 // app.use('/api/users', userRoutes);
 // app.use('/api/transfers', transferRoutes);
+
+
+
+
+
 

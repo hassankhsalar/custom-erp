@@ -225,6 +225,83 @@ export default function ShopPOS( props ) {
       .catch(() => setBankAccounts([]));
   }, []);
 
+  const loadMergedShopItems = async (activeShopId) => {
+    const token = localStorage.getItem("token");
+    if (!token || !activeShopId) {
+      setShopItems([]);
+      return;
+    }
+    const [shopRes, productsRes, materialsRes] = await Promise.all([
+      fetch(API_ROUTES.SHOP_SALES_ITEMS(activeShopId), { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(API_ROUTES.PRODUCTS_ALL, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(API_ROUTES.MATERIALS_ALL, { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
+    if (!shopRes.ok) throw new Error("Failed to fetch shop items");
+    if (!productsRes.ok) throw new Error("Failed to fetch products");
+    if (!materialsRes.ok) throw new Error("Failed to fetch materials");
+    const [shopData, productsData, materialsData] = await Promise.all([
+      shopRes.json(),
+      productsRes.json(),
+      materialsRes.json(),
+    ]);
+    const scopedRows = activeOnly(Array.isArray(shopData) ? shopData : []);
+    const scopedMap = new Map(scopedRows.map((row) => [`${row.type}-${row.id}`, row]));
+    const allProducts = activeOnly(Array.isArray(productsData?.products) ? productsData.products : []);
+    const allMaterials = activeOnly(Array.isArray(materialsData?.materials) ? materialsData.materials : []);
+    const mergedProducts = allProducts.map((row) => {
+      const scoped = scopedMap.get(`product-${row.id}`);
+      return {
+        id: row.id,
+        name: row.name,
+        type: "product",
+        sale_price: row.sale_price,
+        wholesale_price: row.wholesale_price,
+        cost_price: null,
+        barcode: row.barcode,
+        category: row.category,
+        brand: null,
+        unit: row.unit || "unit",
+        alternative_names: toArray(row.alternative_names),
+        alternative_units: toArray(row.alternative_units),
+        stock: Number(scoped?.shop_stock || 0),
+        shop_stock: Number(scoped?.shop_stock || 0),
+        global_stock: Number(row.stock || 0),
+        alert_quantity: Number(row.alert_quantity || 0),
+        image: row.image || null,
+        batches: toArray(scoped?.batches),
+        isAssignedToShop: Boolean(scoped),
+        minStock: 0,
+      };
+    });
+    const mergedMaterials = allMaterials.map((row) => {
+      const scoped = scopedMap.get(`material-${row.id}`);
+      return {
+        id: row.id,
+        name: row.name,
+        type: "material",
+        sale_price: row.sale_price,
+        wholesale_price: null,
+        cost_price: row.unit_cost,
+        barcode: row.barcode,
+        category: row.category,
+        brand: row.brand,
+        unit: row.unit || "unit",
+        alternative_names: toArray(row.alternative_names),
+        alternative_units: toArray(row.alternative_units),
+        stock: Number(scoped?.shop_stock || 0),
+        shop_stock: Number(scoped?.shop_stock || 0),
+        global_stock: Number(row.current_stock || 0),
+        alert_quantity: Number(row.alert_quantity || 0),
+        image: row.image || null,
+        batches: toArray(scoped?.batches),
+        isAssignedToShop: Boolean(scoped),
+        minStock: 0,
+      };
+    });
+    setShopItems(
+      [...mergedProducts, ...mergedMaterials].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
+    );
+  };
   // Fetch items for selected shop
   useEffect(() => {
     if (!shopId) {
@@ -233,19 +310,8 @@ export default function ShopPOS( props ) {
       setCashRegisterId("");
       return;
     }
-
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    fetch(API_ROUTES.SHOP_SALES_ITEMS(shopId), {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch shop items");
-        return res.json();
-      })
-      .then((data) => {
-        setShopItems(activeOnly(Array.isArray(data) ? data : []));
+    loadMergedShopItems(shopId)
+      .then(() => {
         setSearchResults([]);
         setSearchQuery("");
       })
@@ -324,6 +390,10 @@ export default function ShopPOS( props ) {
 
   // Add item to cart and update local stock
   const handleAddToCart = (item) => {
+    if (Number(item?.shop_stock || 0) <= 0) {
+      alert(item?.isAssignedToShop === false ? `${item.name} is not available in this shop.` : `${item.name} is out of stock in this shop.`);
+      return;
+    }
     const selectedBatch = Array.isArray(item.batches) && item.batches.length > 0 ? item.batches[0] : null;
     // Check if item already exists in cart
     const existingIndex = cartItems.findIndex(cartItem => 
@@ -669,13 +739,9 @@ export default function ShopPOS( props ) {
         setPaidAmount(0);
         setPaidAmountTouched(false);
         
-        // Refresh shop items to get updated stock from server
+        // Refresh merged items to get updated stock from server
         if (shopId) {
-          fetch(API_ROUTES.SHOP_SALES_ITEMS(shopId), {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-            .then((res) => res.json())
-            .then((data) => setShopItems(Array.isArray(data) ? data : []));
+          await loadMergedShopItems(shopId);
         }
       } else {
         alert("❌ Error: " + (data.error || "Something went wrong"));
@@ -1361,6 +1427,11 @@ export default function ShopPOS( props ) {
     </div>
   );
 }
+
+
+
+
+
 
 
 

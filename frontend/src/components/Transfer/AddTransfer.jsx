@@ -40,11 +40,15 @@ const AddTransfer = () => {
   const [document, setDocument] = useState(null);
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [availableItems, setAvailableItems] = useState([]);
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState("");
   const [stores, setStores] = useState([]);
   const [shops, setShops] = useState([]);
   const [factories, setFactories] = useState([]);
+  const [toStores, setToStores] = useState([]);
+  const [toShops, setToShops] = useState([]);
+  const [toFactories, setToFactories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [requisitionLink, setRequisitionLink] = useState({
     requisitionId: null,
@@ -59,23 +63,32 @@ const AddTransfer = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [storesRes, shopsRes, factoriesRes] = await Promise.all([
+        const [storesRes, shopsRes, factoriesRes, toStoresRes, toShopsRes, toFactoriesRes] = await Promise.all([
           axios.get(API_ROUTES.STORES, {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${token}`},
           }),
           axios.get(API_ROUTES.SHOPS, {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${token}`}
           }),
           axios.get(API_ROUTES.FACTORIES, {
-            headers: { Authorization: `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${token}`}
           }),
-          axios.get(API_ROUTES.FACTORIES, {
-            headers: { Authorization: `Bearer ${token}` }
+          axios.get(API_ROUTES.TRANSFER_DESTINATIONS('store'), {
+            headers: { Authorization: `Bearer ${token}`}
+          }),
+          axios.get(API_ROUTES.TRANSFER_DESTINATIONS('shop'), {
+            headers: { Authorization: `Bearer ${token}`}
+          }),
+          axios.get(API_ROUTES.TRANSFER_DESTINATIONS('factory'), {
+            headers: { Authorization: `Bearer ${token}`}
           }),
         ]);
         setStores(activeOnly(storesRes.data.stores || storesRes.data || []));
         setShops(activeOnly(shopsRes.data.shops || shopsRes.data || []));
         setFactories(activeOnly(factoriesRes.data.factories || factoriesRes.data || []));
+        setToStores(activeOnly(toStoresRes.data.stores || toStoresRes.data || []));
+        setToShops(activeOnly(toShopsRes.data.shops || toShopsRes.data || []));
+        setToFactories(activeOnly(toFactoriesRes.data.factories || toFactoriesRes.data || []));
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -192,9 +205,9 @@ const AddTransfer = () => {
 
   useEffect(() => {
     const dataMap = {
-      store: stores,
-      shop: shops,
-      factory: factories,
+      store: toStores,
+      shop: toShops,
+      factory: toFactories,
     };
     const data = dataMap[toType];
     if (data && data.length > 0 && !data.some((row) => String(row.id) === String(toId))) {
@@ -202,16 +215,18 @@ const AddTransfer = () => {
     } else if (!data || data.length === 0) {
       setToId('');
     }
-  }, [toType, stores, shops, factories, toId]);
+  }, [toType, toStores, toShops, toFactories, toId]);
 
-  const searchItems = async (value) => {
-    setSearch(value);
-    if (value.length > 1 && fromId) {
+  useEffect(() => {
+    const loadAvailableItems = async () => {
+      if (!fromId) {
+        setAvailableItems([]);
+        setSearchResults([]);
+        return;
+      }
       try {
-        const token = localStorage.getItem('token');
-
         if (!token) {
-          console.error('No authentication token found');
+          setAvailableItems([]);
           setSearchResults([]);
           return;
         }
@@ -220,24 +235,35 @@ const AddTransfer = () => {
           params: {
             from: fromType,
             fromId,
-            search: value
           },
         });
-        const rows = Array.isArray(res.data) ? res.data : [];
-        const filteredRows = rows.filter((row) => includesLooseNumberInAny([row.name, row.barcode, ...(Array.isArray(row.alternativeNames) ? row.alternativeNames : [])], value));
-        setSearchResults(filteredRows);
-      
-    } catch (error) {
-      console.error('Error searching items:', error);
-      setSearchResults([]);
-    }
-  } else {
-    setSearchResults([]);
-  }
-};
+        setAvailableItems(Array.isArray(res.data) ? res.data : []);
+      } catch (error) {
+        console.error('Error loading available items:', error);
+        setAvailableItems([]);
+        setSearchResults([]);
+      }
+    };
+    loadAvailableItems();
+  }, [fromType, fromId, token]);
 
-  const handleSearch = async (e) => {
-    await searchItems(e.target.value);
+  useEffect(() => {
+    const q = String(search || '').trim();
+    if (q.length <= 1) {
+      setSearchResults([]);
+      return;
+    }
+    const filteredRows = availableItems.filter((row) =>
+      includesLooseNumberInAny(
+        [row.name, row.barcode, ...(Array.isArray(row.alternativeNames) ? row.alternativeNames : [])],
+        q
+      )
+    );
+    setSearchResults(filteredRows);
+  }, [search, availableItems]);
+
+  const handleSearch = (e) => {
+    setSearch(e.target.value);
   };
 
   useEffect(() => {
@@ -258,7 +284,7 @@ const AddTransfer = () => {
           async (decodedText) => {
             if (hasScanned || !isActive) return;
             hasScanned = true;
-            await searchItems(String(decodedText || "").trim());
+            setSearch(String(decodedText || "").trim());
             setScannerOpen(false);
           },
           () => {}
@@ -449,29 +475,16 @@ const AddTransfer = () => {
     }
   };
 
-  const renderLocationOptions = (type) => {
-    if (type === 'store') {
-      return stores.map((store) => (
-        <option key={store.id} value={store.id}>
-          {store.name}
-        </option>
-      ));
-    }
-    if (type === 'shop') {
-      return shops.map((shop) => (
-        <option key={shop.id} value={shop.id}>
-          {shop.name}
-        </option>
-      ));
-    }
-    if (type === 'factory') {
-      return factories.map((factory) => (
-        <option key={factory.id} value={factory.id}>
-          {factory.name}
-        </option>
-      ));
-    }
-    return null;
+  const renderLocationOptions = (type, source = 'from') => {
+    const dataMap = source === 'to'
+      ? { store: toStores, shop: toShops, factory: toFactories }
+      : { store: stores, shop: shops, factory: factories };
+    const rows = dataMap[type] || [];
+    return rows.map((row) => (
+      <option key={row.id} value={row.id}>
+        {row.name}
+      </option>
+    ));
   };
 
   const getTypeIcon = (type) => {
@@ -551,7 +564,7 @@ const AddTransfer = () => {
                     onChange={(e) => setFromId(e.target.value)}
                     className="w-full glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
                   >
-                    {renderLocationOptions(fromType)}
+                    {renderLocationOptions(fromType, 'from')}
                   </select>
                 </div>
               </div>
@@ -577,7 +590,7 @@ const AddTransfer = () => {
                     onChange={(e) => setToId(e.target.value)}
                     className="w-full glass-input p-2 rounded-lg border border-gray-300 outline-0 bg-white/30 backdrop-blur-sm"
                   >
-                    {renderLocationOptions(toType)}
+                    {renderLocationOptions(toType, 'to')}
                   </select>
                 </div>
               </div>
@@ -880,5 +893,11 @@ const AddTransfer = () => {
 };
 
 export default AddTransfer;
+
+
+
+
+
+
 
 
