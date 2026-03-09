@@ -56,6 +56,7 @@ import DailyStockReport from "./components/Report/DailyStockReport";
 import AllUser from "./components/Users/AllUser";
 import CreateUser from "./components/Users/CreateUser";
 import Settings from "./components/Settings/Settings";
+import FeatureActivation from "./components/Settings/FeatureActivation";
 import ActivityLog from "./components/Settings/ActivityLog";
 import Units from "./components/Settings/Units";
 import Brands from "./components/Settings/Brands";
@@ -662,6 +663,9 @@ function App() {
             <Route element={<PermissionRoute requiredPermission="general_settings" />}>
               <Route path="/settings" element={<Settings />} />
             </Route>
+            <Route element={<PermissionRoute requiredPermission="feature_activation" />}>
+              <Route path="/settings/feature-activation" element={<FeatureActivation />} />
+            </Route>
             <Route element={<PermissionRoute requiredPermission="unit_manage" />}>
               <Route path="/settings/units" element={<Units />} />
             </Route>
@@ -718,3 +722,7 @@ function App() {
 }
 
 export default App;
+
+
+
+

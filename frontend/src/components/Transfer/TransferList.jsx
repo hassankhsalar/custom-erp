@@ -29,6 +29,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { printTransferChallan } from './transferChallanPrint';
 
 const TransferList = ({ fromType, toType, title }) => {
   const { hasPermission } = usePermission();
@@ -76,6 +77,7 @@ const TransferList = ({ fromType, toType, title }) => {
 
   // Details Modal State
   const [detailsModal, setDetailsModal] = useState({ isOpen: false, data: null });
+  const [printingTransferId, setPrintingTransferId] = useState(null);
 
   useEffect(() => {
     const fetchLocations = async () => {
@@ -235,6 +237,18 @@ const TransferList = ({ fromType, toType, title }) => {
       fetchTransfers('table', currentPage, itemsPerPage, filterParams);
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to delete transfer');
+    }
+  };
+
+  const handlePrintChallan = async (transfer) => {
+    try {
+      const token = localStorage.getItem('token');
+      setPrintingTransferId(transfer.id);
+      await printTransferChallan(transfer, token);
+    } catch (error) {
+      alert(error?.message || 'Failed to print challan');
+    } finally {
+      setPrintingTransferId(null);
     }
   };
 
@@ -876,6 +890,14 @@ const TransferList = ({ fromType, toType, title }) => {
                                   title="View Details"
                                 >
                                   <Eye className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handlePrintChallan(transfer)}
+                                  disabled={printingTransferId === transfer.id}
+                                  className="p-2 rounded-lg bg-violet-50 text-violet-600 hover:bg-violet-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Print Challan"
+                                >
+                                  <FileText className="w-4 h-4" />
                                 </button>
                                 {( (canReceiveTransferPermission && canReceiveTransfer(transfer)) || canChangeTransferStatus ) && (
                                   <Link

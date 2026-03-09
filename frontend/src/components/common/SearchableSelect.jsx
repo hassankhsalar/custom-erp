@@ -95,7 +95,7 @@ const SearchableSelect = ({
             }}
             className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 border-b"
           >
-            Clear selection
+            Clear
           </button>
 
           {filteredOptions.length === 0 ? (

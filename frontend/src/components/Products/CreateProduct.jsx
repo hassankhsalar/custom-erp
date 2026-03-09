@@ -6,6 +6,7 @@ import { Upload, X, Eye, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import SearchableSelect from "../common/SearchableSelect";
 
+
 const emptyAltUnit = { unitname: "", multiplier: "" };
 
 const CreateProduct = () => {

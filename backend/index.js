@@ -215,7 +215,8 @@ app.post('/api/login', async (req, res) => {
       ipAddress: req.ip || null,
       userAgent: req.headers['user-agent'] || null,
     });
-    res.json({ accessToken, username: user.username, name: user.name, email: user.email });
+    const activeFeatures = await getActiveFeatures(prisma);
+    res.json({ accessToken, username: user.username, name: user.name, email: user.email, activeFeatures });
   } else {
     res.status(401).json({ error: 'Not Allowed' });
   }
@@ -223,6 +224,7 @@ app.post('/api/login', async (req, res) => {
 
 // Get user profile
 app.get('/api/profile', authenticateToken, async (req, res) => {
+  const activeFeatures = await getActiveFeatures(prisma);
   const user = await prisma.user.findUnique({
     where: { id: req.user.userId },
     select: {
@@ -235,11 +237,12 @@ app.get('/api/profile', authenticateToken, async (req, res) => {
       updatedAt: true,
     },
   });
-  res.json(user);
+  res.json({ ...user, activeFeatures });
 });
 
 // Update user profile
 app.put('/api/profile', authenticateToken, async (req, res) => {
+  const activeFeatures = await getActiveFeatures(prisma);
   const { bio, image, name } = req.body;
   const user = await prisma.user.update({
     where: { id: req.user.userId },
@@ -262,7 +265,7 @@ app.put('/api/profile', authenticateToken, async (req, res) => {
       updatedAt: true,
     },
   });
-  res.json(user);
+  res.json({ ...user, activeFeatures });
 });
 
 app.get('/api/admin', authenticateToken, hasPermission('admin'), (req, res) => {
@@ -321,6 +324,7 @@ const requisitionRoutes = require('./routes/requisitionRoutes');
 const masterDataRoutes = require('./routes/masterDataRoutes');
 const businessSettingsRoutes = require('./routes/businessSettingsRoutes');
 const inventoryAdjustmentRoutes = require('./routes/inventoryAdjustmentRoutes');
+const { getActiveFeatures } = require('./utils/activeFeatures');
 
 const uploadRoutes = require('./routes/uploadRoutes');
 
@@ -407,3 +411,5 @@ module.exports = {
   hasPermission,
   JWT_SECRET
 };
+
+

@@ -1174,7 +1174,7 @@ router.get("/details/:id", async (req, res) => {
       where: { id: saleId },
       include: {
         shop: {
-          select: { id: true, name: true, shop_keeper: true },
+          select: { id: true, name: true, shop_keeper: true, mobile: true, address: true },
         },
         transactions: {
           orderBy: { createdAt: "desc" },

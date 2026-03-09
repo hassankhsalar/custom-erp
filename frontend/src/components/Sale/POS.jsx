@@ -7,6 +7,8 @@ import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAler
 import { TbCurrencyTaka } from "react-icons/tb";
 import { activeOnly } from "../../utils/softDelete";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
+import { useFeature } from "../../hooks/useFeature";
+import SearchableSelect from "../common/SearchableSelect";
 
 export default function ShopPOS( props ) {
   const [shops, setShops] = useState([]);
@@ -40,6 +42,8 @@ export default function ShopPOS( props ) {
   const scannerRef = useRef(null);
   const navigate = useNavigate();
   const SCANNER_ELEMENT_ID = "pos-camera-scanner";
+
+  const { isFeatureActive } = useFeature();
 
   // Function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -769,10 +773,6 @@ export default function ShopPOS( props ) {
     }
   }, [grandTotal, paidAmountTouched]);
 
-  // Get low stock items (below 20)
-  const lowStockItems = shopItems.filter(item => item.shop_stock < 20 && item.shop_stock > 0);
-  const outOfStockItems = shopItems.filter(item => item.shop_stock <= 0);
-
   return (
     <div className="min-h-screen rounded-t-2xl w-full bg-gray-50 p-2">
 
@@ -789,7 +789,6 @@ export default function ShopPOS( props ) {
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-800">Select Shop</h3>
-                  <p className="text-sm text-gray-500">Choose shop to sell from</p>
                 </div>
               </div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Select a Shop</label>
@@ -818,8 +817,7 @@ export default function ShopPOS( props ) {
                   <span className="text-purple-600"><UserRound size={42} /></span>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-800">Customer</h3>
-                  <p className="text-sm text-gray-500">Optional customer details</p>
+                  <h3 className="font-semibold text-gray-800">Select Customer</h3>
                 </div>
               </div>
               
@@ -897,7 +895,6 @@ export default function ShopPOS( props ) {
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-800">Payment</h3>
-                  <p className="text-sm text-gray-500">Payment details</p>
                 </div>
               </div>
               
@@ -953,19 +950,15 @@ export default function ShopPOS( props ) {
 
           </div>
 
-          {/* Middle Column: Cart Items */}
-          <div className="">
-            <div className="bg-white rounded-xl shadow-md overflow-hidden">
+          {/* Cart Items */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 bg-white rounded-xl shadow-md overflow-hidden">
               {/* Cart Header */}
               <div className="p-6 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
                 <div className="flex justify-between items-center flex-col sm:flex-col md:flex-row">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg">
                       <span className="text-white text-xl"><ShoppingCart /></span>
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-800 text-lg">Shopping Cart</h3>
-                      <p className="text-sm text-gray-500">{cartItems.length} item(s) in cart</p>
                     </div>
                   </div>
 
@@ -1086,7 +1079,7 @@ export default function ShopPOS( props ) {
                     className="px-4 py-2 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-800 font-medium rounded-lg hover:from-gray-300 hover:to-gray-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={cartItems.length === 0 || loading}
                   >
-                    Clear All
+                    Clear
                   </button>
                 </div>
               </div>
@@ -1104,10 +1097,12 @@ export default function ShopPOS( props ) {
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Item</th>
-                        <th className="p-4 text-left text-sm font-semibold text-gray-700">Batch</th>
+                        { isFeatureActive("stock_management.enable_batch_tracking") && (
+                          <th className="p-4 text-left text-sm font-semibold text-gray-700">Batch</th>
+                        )}
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Price</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Quantity</th>
-                        <th className="p-4 text-left text-sm font-semibold text-gray-700">Total</th>
+                        <th className="p-4 text-left text-sm font-semibold text-gray-700">Sub Total</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Actions</th>
                       </tr>
                     </thead>
@@ -1167,9 +1162,8 @@ export default function ShopPOS( props ) {
                                   )}
                                   <div className="text-sm text-gray-600 mt-1">
                                     {item.barcode && <span>{item.barcode}</span>}
-                                    {item.unit && <span className="ml-2">| Base Unit: {item.unit}</span>}
                                   </div>
-                                  {(item.type === "product" || item.type === "material") && (
+                                  {(item.type === "product" || item.type === "material") && isFeatureActive("sale.enable_warranty") && (
                                     <div className="mt-2 flex flex-wrap gap-2 items-center">
                                       <label className="inline-flex items-center gap-2 text-xs text-gray-700">
                                         <input
@@ -1180,33 +1174,35 @@ export default function ShopPOS( props ) {
                                         Warranty
                                       </label>
                                       {item.warrantyEnabled && (
-                                        <input
-                                          type="date"
-                                          value={item.warrantyExpiryDate || ""}
-                                          onChange={(e) => handleWarrantyExpiryChange(index, e.target.value)}
-                                          className="w-40 border border-gray-300 rounded px-2 py-1 text-xs"
-                                          title="Warranty expiry date"
-                                        />
+                                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                                          End:
+                                          <input
+                                            type="date"
+                                            value={item.warrantyExpiryDate || ""}
+                                            onChange={(e) => handleWarrantyExpiryChange(index, e.target.value)}
+                                            className="w-32 border border-gray-300 rounded px-2 py-1 text-gray-700"
+                                            title="Warranty expiry date"
+                                          />
+                                        </div>
                                       )}
                                     </div>
                                   )}
                                 </div>
                               </div>
                             </td>
-                            <td className="p-4">
-                              <select
-                                value={`${item.batchNumber || ''}||${item.expiryDate || ''}`}
-                                onChange={(e) => handleBatchChange(index, e.target.value)}
-                                className="min-w-48 border border-gray-300 rounded-lg p-2"
-                              >
-                                <option value="||">No batch</option>
-                                {(item.batches || []).map((batch) => (
-                                  <option key={`${batch.batchNumber}-${batch.expiryDate || 'none'}`} value={`${batch.batchNumber}||${batch.expiryDate || ''}`}>
-                                    {`${batch.batchNumber} | Exp: ${batch.expiryDate || 'N/A'}`}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
+                            { isFeatureActive("stock_management.enable_batch_tracking") && (
+                              <td className="p-4">
+                                <SearchableSelect
+                                  options={(item.batches || []).map((batch) => (
+                                    { value: batch.batchNumber + "||" + batch.expiryDate || '', label: batch.batchNumber + " | Exp: " + batch.expiryDate || 'N/A' }
+                                  ))}
+                                  value={`${item.batchNumber || ''}||${item.expiryDate || ''}`}
+                                  onChange={(e) => handleBatchChange(index, e.target.value)}
+                                  placeholder="Select batch"
+                                  className="min-w-32"
+                                />
+                              </td>
+                            )}
                             <td className="p-4">
                               <div className="flex items-center gap-2">
                                 <div>
@@ -1247,14 +1243,14 @@ export default function ShopPOS( props ) {
                                   <span className="text-gray-700">+</span>
                                 </button>
                               </div>
-                              <div className="text-xs text-gray-500 mt-2">
-                                Available in batch (base): {item.batchAvailable || 0}
-                              </div>
-                              <div className="mt-1">
+                              <div className="text-xs text-gray-500 mt-2 space-x-1">
+                                <span>
+                                  Stock: {item.batchAvailable || 0} 
+                                </span>
                                 <select
                                   value={item.selectedUnit || item.unit || "unit"}
                                   onChange={(e) => handleSelectedUnitChange(index, e.target.value)}
-                                  className="text-xs border border-gray-300 rounded px-2 py-1"
+                                  className="text-xs border border-gray-100 rounded p-0"
                                   title="Selected unit"
                                 >
                                   <option value={item.unit || "unit"}>{item.unit || "unit"}</option>
@@ -1264,6 +1260,9 @@ export default function ShopPOS( props ) {
                                     </option>
                                   ))}
                                 </select>
+                              </div>
+                              <div className="mt-1">
+
                                 {item.selectedUnit !== item.unit && (
                                   <div className="text-[11px] text-gray-500 mt-1">
                                     Actual qty: {Number(item.quantity || 0).toFixed(4)} {item.unit}
@@ -1391,6 +1390,16 @@ export default function ShopPOS( props ) {
                   </div>
                 </div>
               )}
+            </div>
+            <div>
+              <div className="grid grid-cols-1 md:grid-cols-3">
+                <div>
+                  {/* Category List here. One category per row */}
+                </div>
+                <div>
+                  {/* Product List here. 3 products per row */}
+                </div>
+              </div>
             </div>
           </div>
         </div>

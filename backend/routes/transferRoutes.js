@@ -389,12 +389,12 @@ router.get('/', authenticateToken, async (req, res) => {
         skip: (pageNum - 1) * pageSize,
         take: pageSize,
         include: {
-          fromStore: { select: { id: true, name: true } },
-          fromShop: { select: { id: true, name: true } },
-          fromFactory: { select: { id: true, name: true } },
-          toStore: { select: { id: true, name: true } },
-          toShop: { select: { id: true, name: true } },
-          toFactory: { select: { id: true, name: true } },
+          fromStore: { select: { id: true, name: true, address: true, mobile: true, store_keeper: true } },
+          fromShop: { select: { id: true, name: true, address: true, mobile: true, shop_keeper: true } },
+          fromFactory: { select: { id: true, name: true, address: true, phone: true, manager: true } },
+          toStore: { select: { id: true, name: true, address: true, mobile: true, store_keeper: true } },
+          toShop: { select: { id: true, name: true, address: true, mobile: true, shop_keeper: true } },
+          toFactory: { select: { id: true, name: true, address: true, phone: true, manager: true } },
           transferItems: {
             select: {
               id: true,
@@ -402,8 +402,8 @@ router.get('/', authenticateToken, async (req, res) => {
               itemId: true,
               productId: true,
               materialId: true,
-              product: { select: { id: true, name: true } },
-              material: { select: { id: true, name: true } },
+              product: { select: { id: true, name: true, barcode: true } },
+              material: { select: { id: true, name: true, barcode: true } },
               quantity: true,
               receivedQuantity: true,
               avg_cost: true,
@@ -446,17 +446,23 @@ router.get('/', authenticateToken, async (req, res) => {
   );
 
   const transfersWithNamesAndTotalProducts = transfers.map(transfer => {
+    const fromPlace = transfer.fromStore || transfer.fromShop || transfer.fromFactory || null;
+    const toPlace = transfer.toStore || transfer.toShop || transfer.toFactory || null;
+
     const fromName =
-      transfer.fromStore?.name ||
-      transfer.fromShop?.name ||
-      transfer.fromFactory?.name ||
+      fromPlace?.name ||
       `${transfer.from} #${transfer.fromId}`;
 
     const toName =
-      transfer.toStore?.name ||
-      transfer.toShop?.name ||
-      transfer.toFactory?.name ||
+      toPlace?.name ||
       `${transfer.to} #${transfer.toId}`;
+
+    const fromAddress = fromPlace?.address || null;
+    const toAddress = toPlace?.address || null;
+    const fromPhone = fromPlace?.mobile || fromPlace?.phone || null;
+    const toPhone = toPlace?.mobile || toPlace?.phone || null;
+    const fromPerson = fromPlace?.store_keeper || fromPlace?.shop_keeper || fromPlace?.manager || null;
+    const toPerson = toPlace?.store_keeper || toPlace?.shop_keeper || toPlace?.manager || null;
 
     const totalProducts = transfer.transferItems.reduce((sum, item) => sum + item.quantity, 0);
     const totalItems = transfer.transferItems.length;
@@ -468,6 +474,7 @@ router.get('/', authenticateToken, async (req, res) => {
         item.product?.name ||
         item.material?.name ||
         (item.item === 'product' ? 'Unknown Product' : 'Unknown Material'),
+      barcode: item.product?.barcode || item.material?.barcode || null,
     }));
 
     const summary = computeTransferSummary(transfer.transferItems);
@@ -489,6 +496,12 @@ router.get('/', authenticateToken, async (req, res) => {
       status: normalizeTransferStatus(transfer.status),
       fromName,
       toName,
+      fromAddress,
+      toAddress,
+      fromPhone,
+      toPhone,
+      fromPerson,
+      toPerson,
       transferBy,
       receivedBy,
       totalProducts,

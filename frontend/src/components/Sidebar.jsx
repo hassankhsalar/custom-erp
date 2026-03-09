@@ -363,6 +363,7 @@ const Sidebar = () => {
       subItems: [
         { name: 'Settings', path: '/settings', icon: <Settings size={16} />, permissionKey: 'general_settings' },
         { name: 'Printer Settings', path: '/settings/printer', icon: <Settings size={16} />, permissionKey: 'printer_settings' },
+        { name: 'Feature Activation', path: '/settings/feature-activation', icon: <Settings size={16} />, permissionKey: 'general_settings' },
         { name: 'Print Barcode', path: '/settings/print-label', icon: <TableProperties size={16} />, permissionKey: 'print_label' },
         { name: 'Units', path: '/settings/units', icon: <TableProperties size={16} />, permissionKey: 'unit_manage' },
         { name: 'Category', path: '/settings/categories', icon: <TableProperties size={16} />, permissionKey: 'category_manage' },
@@ -548,3 +549,5 @@ const Sidebar = () => {
 };
 
 export default Sidebar;
+
+

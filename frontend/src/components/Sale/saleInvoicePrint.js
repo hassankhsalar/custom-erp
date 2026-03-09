@@ -87,7 +87,8 @@ const baseHeaderHtml = ({ company, saleDetails, saleDate, saleTime, customerName
     <div class="meta-box">
       <div class="meta-title">Shop Details</div>
       <div class="muted">${escapeHtml(saleDetails?.shop?.name || "-")}</div>
-      <div class="muted">${escapeHtml(saleDetails?.shop?.shop_keeper || "-")}</div>
+      <div class="muted">${escapeHtml(saleDetails?.shop?.address || "-")}</div>
+      <div class="muted">${escapeHtml(saleDetails?.shop?.mobile || "-")}</div>
     </div>
   </div>
   <hr style="margin:14px 0;" />

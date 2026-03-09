@@ -178,7 +178,8 @@ export default function PermissionsManagement() {
     // System Management
     'general_settings', 'company_settings', 
     'data_import', 'data_export',
-    'printer_settings', 'print_label', 'unit_manage', 'category_manage', 'brand_manage', 'activity_log'
+    'printer_settings', 'print_label', 'unit_manage', 'category_manage', 'brand_manage', 'activity_log',
+    'feature_activation'
   ];
 
   // Group permissions by category for better organization in UI - SEPARATE CATEGORIES
@@ -423,7 +424,7 @@ export default function PermissionsManagement() {
       key: 'system',
       name: 'System Management',
       icon: <Settings size={18} className="text-gray-600" />,
-      permissions: ['general_settings', 'company_settings', 'data_import', 'data_export', 'printer_settings', 'print_label', 'unit_manage', 'category_manage', 'brand_manage', 'activity_log']
+      permissions: ['general_settings', 'company_settings', 'data_import', 'data_export', 'printer_settings', 'print_label', 'unit_manage', 'category_manage', 'brand_manage', 'activity_log', 'feature_activation']
     },
     // Dashboard
     {
