@@ -535,7 +535,7 @@ const fetchBankAccounts = async () => {
   };
 
   const handleItemSelect = (selectedItem) => {
-    const { type, id, name, selectedName, unit, defaultUnit, alternativeNames, alternativeUnits, standardPrice, image } = selectedItem;
+    const { type, id, name, barcode, selectedName, unit, defaultUnit, alternativeNames, alternativeUnits, standardPrice, image } = selectedItem;
     const normalizedStandardPrice = Number(standardPrice) || 0;
 
     // Create a new purchase item
@@ -545,6 +545,7 @@ const fetchBankAccounts = async () => {
       materialId: type === "material" ? id.toString() : "",
       productId: type === "product" ? id.toString() : "",
       name: name,
+      barcode: barcode,
       selectedName: selectedName || name,
       image: image,
       unit: unit,
@@ -1095,6 +1096,7 @@ const fetchBankAccounts = async () => {
                               </div>
                               <div>
                                 <p className="font-medium text-sm text-gray-800">{item.name}</p>
+                                <p className="text-xs text-gray-500">Code: {item.barcode}</p>
                                 <p className="text-sm text-gray-500">Unit: {item.defaultUnit || item.unit}</p>
                                 <div className="mt-2 flex flex-wrap gap-2">
                                   {item.alternativeNames?.length > 0 && (

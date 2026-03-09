@@ -47,7 +47,7 @@ router.get('/', async (req, res) => {
     const searchText = String(search || '').trim();
 
     if (searchText) {
-      where.OR = buildContainsOr(["name", "brand", "barcode", "category"], searchText, { mode: "insensitive" });
+      where.OR = buildContainsOr(["name", "brand", "barcode", "category"], searchText);
     }
 
     const allowedSortBy = new Set([
@@ -98,7 +98,7 @@ router.get('/overview', async (req, res) => {
     const where = { deleted_at: false };
 
     if (searchText) {
-      where.OR = buildContainsOr(["name", "brand", "barcode", "category"], searchText, { mode: "insensitive" });
+      where.OR = buildContainsOr(["name", "brand", "barcode", "category"], searchText);
     }
 
     const [totalMaterials, outOfStockMaterials, stockRows] = await prisma.$transaction([

@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
 import { activeOnly } from '../../utils/softDelete';
-import { includesLooseNumberInAny } from '../../utils/numberLooseSearch';
 import {
   Pen,
   Trash2,
@@ -146,8 +145,7 @@ const AllMaterials = () => {
         },
       });
       const rows = activeOnly(response.data.materials || []);
-      const filteredRows = appliedSearch ? rows.filter((row) => includesLooseNumberInAny([row.name, row.barcode, row.brand, row.category, row.description], appliedSearch)) : rows;
-      setMaterials(filteredRows);
+      setMaterials(rows);
       setTotalPages(Number(response.data.totalPages || Math.ceil((response.data.totalCount || 0) / itemsPerPage) || 1));
       setTotalMaterials(Number(response.data.totalCount || 0));
     } catch (error) {
@@ -408,6 +406,8 @@ const AllMaterials = () => {
                   <thead className="bg-gray-100/80">
                     <tr>
                       <th className="p-4 text-left font-medium text-gray-700">Material</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Brand</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Category</th>
                       <th className="p-4 text-left font-medium text-gray-700">Pricing</th>
                       <th className="p-4 text-left font-medium text-gray-700">Stock</th>
                       <th className="p-4 text-left font-medium text-gray-700">Actions</th>
@@ -448,21 +448,21 @@ const AllMaterials = () => {
                                 </div>
                                 <div>
                                   <p className="font-semibold text-gray-800">{material.name}</p>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    {material.brand && (
-                                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
-                                        {material.brand}
-                                      </span>
-                                    )}
-                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                                      {material.unit}
-                                    </span>
-                                  </div>
                                   {material.sku && (
                                     <p className="text-xs text-gray-500 mt-1">SKU: {material.sku}</p>
                                   )}
                                 </div>
                               </div>
+                            </td>
+                            <td className="p-4">
+                              <span className="inline-flex px-2 py-1 rounded-full text-xs bg-amber-100 text-amber-800">
+                                {material.brand || '-'}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className="inline-flex px-2 py-1 rounded-full text-xs bg-indigo-100 text-indigo-800">
+                                {material.category || '-'}
+                              </span>
                             </td>
                             <td className="p-4">
                               <div className="space-y-2">

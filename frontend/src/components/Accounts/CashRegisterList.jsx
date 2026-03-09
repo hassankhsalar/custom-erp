@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES } from "../../config";
-import { Banknote, PlusCircle, MinusCircle, Power, Lock } from "lucide-react";
+import { Banknote, PlusCircle, MinusCircle, Power, Lock, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { usePermission } from "../../hooks/usePermission";
 
@@ -262,56 +262,78 @@ export default function CashRegisterList() {
       </div>
 
       {showModal && selectedRegister && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="glass-card w-full max-w-md p-6 border border-white/20">
-            <h3 className="text-lg font-semibold mb-4">
-              {modalType === "deposit" ? "Cash Register Deposit" : "Cash Register Withdraw"}
-            </h3>
-            <div className="space-y-3">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.amount}
-                onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
-                placeholder="Amount"
-                className="glass-input w-full px-3 py-2 rounded border border-gray-300"
-              />
-              <select
-                value={form.accountId}
-                onChange={(e) => setForm((prev) => ({ ...prev, accountId: e.target.value }))}
-                className="glass-input w-full px-3 py-2 rounded border border-gray-300"
-              >
-                <option value="">Select account (required)</option>
-                {accounts
-                  .filter((a) => String(a.status).toLowerCase() === "active")
-                  .map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} ({Number(a.balance || 0).toFixed(2)})
-                    </option>
-                  ))}
-              </select>
-              <textarea
-                rows="3"
-                value={form.notes}
-                onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-                placeholder="Note"
-                className="glass-input w-full px-3 py-2 rounded border border-gray-300"
-              />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowModal(false)}></div>
+          <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-hidden">
+            <div className="sticky top-0 z-10 p-6 border-b border-white/50 bg-gradient-to-r from-blue-500/10 to-indigo-500/10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-800">
+                    {modalType === "deposit" ? "Cash Register Deposit" : "Cash Register Withdraw"}
+                  </h3>
+                  <p className="text-gray-600">
+                    Register: <span className="font-medium">{selectedRegister.name}</span>
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="p-2 bg-white/60 rounded-lg hover:bg-white/80 transition-colors duration-300"
+                >
+                  <X size={20} className="text-gray-600" />
+                </button>
+              </div>
             </div>
-            <div className="flex justify-end gap-2 mt-5">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 rounded border border-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitMoneyAction}
-                className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-              >
-                Submit
-              </button>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+              <div className="space-y-4">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.amount}
+                  onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
+                  placeholder="Amount"
+                  className="w-full px-4 py-2.5 bg-white/60 backdrop-blur-sm border border-gray-200/60 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+                <select
+                  value={form.accountId}
+                  onChange={(e) => setForm((prev) => ({ ...prev, accountId: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-white/60 backdrop-blur-sm border border-gray-200/60 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                >
+                  <option value="">Select account (required)</option>
+                  {accounts
+                    .filter((a) => String(a.status).toLowerCase() === "active")
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({Number(a.balance || 0).toFixed(2)})
+                      </option>
+                    ))}
+                </select>
+                <textarea
+                  rows="3"
+                  value={form.notes}
+                  onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Note"
+                  className="w-full px-4 py-2.5 bg-white/60 backdrop-blur-sm border border-gray-200/60 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 p-6 border-t border-white/50 bg-white/70">
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-6 py-2.5 bg-gray-200/70 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={submitMoneyAction}
+                  className="px-6 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-blue-600 hover:to-indigo-600 transition-all duration-300"
+                >
+                  Submit
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -628,9 +628,24 @@ export default function ShopPOS( props ) {
       });
 
       const data = await res.json();
+      if( selectedCustomer ) {
+        fetch(API_ROUTES.CUSTOMERS_ALL, {
+        headers: { Authorization: `Bearer ${token}` },
+        })
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch customers");
+          return res.json();
+        })
+        .then((data) => {
+          setCustomers(Array.isArray(data.customers) ? data.customers : []);
+        })
+        .catch((err) => {
+          console.error("Error fetching customers:", err);
+          setCustomers([]);
+        });
+      }
 
       if (res.ok) {
-        alert("✅ Sale completed successfully!");
         await printInvoice(data);
         // Clear cart but don't restore stock since it's already sold
         setCartItems([]);
@@ -713,7 +728,7 @@ export default function ShopPOS( props ) {
       <div className="max-w-7xl  xl:max-w-full p-4">
         <div className="grid grid-cols-1 gap-6">
           {/* Left Column: Shop Selection & Search */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 space-y-4 lg:space-y-0">
             {/* Shop Selection Card */}
             <div className="col-span-1 bg-white rounded-xl shadow-md p-5">
               <div className="flex items-center gap-2 mb-4">
@@ -823,6 +838,15 @@ export default function ShopPOS( props ) {
                     </button>
                 )}
               </div>
+
+              {selectedCustomer && (
+                <div>
+                  <p className="font-normal text-sm text-gray-600">Mobile: <b>{selectedCustomer.mobile || "--"}</b></p>
+                  <p className="font-normal text-sm text-gray-600">Address: {selectedCustomer.address || "--"}</p>
+                  <p className="font-normal text-sm text-gray-600">Total Due: {selectedCustomer.total_due || 0}</p>
+                </div>
+              )}
+              
             </div>
 
 
