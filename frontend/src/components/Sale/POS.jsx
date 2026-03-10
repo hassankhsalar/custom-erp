@@ -13,6 +13,7 @@ import SearchableSelect from "../common/SearchableSelect";
 export default function ShopPOS( props ) {
   const [shops, setShops] = useState([]);
   const [shopItems, setShopItems] = useState([]);
+  const [catalogItems, setCatalogItems] = useState([]);
   const [shopId, setShopId] = useState("");
   const [cartItems, setCartItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,6 +38,8 @@ export default function ShopPOS( props ) {
   const [priceModalData, setPriceModalData] = useState({ index: null, currentPrice: 0 });
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState("");
+  const [extraSearchQuery, setExtraSearchQuery] = useState("");
+  const [extraSelectedCategory, setExtraSelectedCategory] = useState("all");
 
   const searchInputRef = useRef(null);
   const scannerRef = useRef(null);
@@ -229,6 +232,78 @@ export default function ShopPOS( props ) {
       .catch(() => setBankAccounts([]));
   }, []);
 
+  // Fetch full catalog items for extra section
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    Promise.all([
+      fetch(API_ROUTES.PRODUCTS_ALL, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(API_ROUTES.MATERIALS_ALL, { headers: { Authorization: `Bearer ${token}` } }),
+    ])
+      .then(async ([productsRes, materialsRes]) => {
+        if (!productsRes.ok) throw new Error("Failed to fetch products");
+        if (!materialsRes.ok) throw new Error("Failed to fetch materials");
+        const [productsData, materialsData] = await Promise.all([productsRes.json(), materialsRes.json()]);
+        const allProducts = activeOnly(Array.isArray(productsData?.products) ? productsData.products : []);
+        const allMaterials = activeOnly(Array.isArray(materialsData?.materials) ? materialsData.materials : []);
+
+        const mappedProducts = allProducts.map((row) => ({
+          id: row.id,
+          name: row.name,
+          type: "product",
+          sale_price: row.sale_price,
+          wholesale_price: row.wholesale_price,
+          cost_price: null,
+          barcode: row.barcode,
+          category: row.category,
+          brand: row.brand || null,
+          unit: row.unit || "unit",
+          alternative_names: toArray(row.alternative_names),
+          alternative_units: toArray(row.alternative_units),
+          stock: Number(row.stock || 0),
+          shop_stock: Number(row.stock || 0),
+          global_stock: Number(row.stock || 0),
+          alert_quantity: Number(row.alert_quantity || 0),
+          image: row.image || null,
+          batches: [],
+          isAssignedToShop: true,
+          minStock: 0,
+        }));
+
+        const mappedMaterials = allMaterials.map((row) => ({
+          id: row.id,
+          name: row.name,
+          type: "material",
+          sale_price: row.sale_price,
+          wholesale_price: null,
+          cost_price: row.unit_cost,
+          barcode: row.barcode,
+          category: row.category,
+          brand: row.brand,
+          unit: row.unit || "unit",
+          alternative_names: toArray(row.alternative_names),
+          alternative_units: toArray(row.alternative_units),
+          stock: Number(row.current_stock || 0),
+          shop_stock: Number(row.current_stock || 0),
+          global_stock: Number(row.current_stock || 0),
+          alert_quantity: Number(row.alert_quantity || 0),
+          image: row.image || null,
+          batches: [],
+          isAssignedToShop: true,
+          minStock: 0,
+        }));
+
+        setCatalogItems(
+          [...mappedProducts, ...mappedMaterials].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
+        );
+      })
+      .catch((err) => {
+        console.error("Error fetching catalog items:", err);
+        setCatalogItems([]);
+      });
+  }, []);
+
   const loadMergedShopItems = async (activeShopId) => {
     const token = localStorage.getItem("token");
     if (!token || !activeShopId) {
@@ -318,6 +393,8 @@ export default function ShopPOS( props ) {
       .then(() => {
         setSearchResults([]);
         setSearchQuery("");
+        setExtraSearchQuery("");
+        setExtraSelectedCategory("all");
       })
       .catch((err) => {
         console.error("Error fetching shop items:", err);
@@ -377,7 +454,7 @@ export default function ShopPOS( props ) {
       (item.category && includesLooseNumber(item.category, query))
     );
 
-    setSearchResults(filtered.slice(0, 10));
+    setSearchResults(filtered.slice(0, 50));
     setShowSearchResults(true);
   };
 
@@ -419,6 +496,7 @@ export default function ShopPOS( props ) {
       }
       
       updatedCart[existingIndex].quantity = newQuantity;
+      updatedCart[existingIndex].selectedQuantity = newQuantity;
       updatedCart[existingIndex].totalPrice = newQuantity * updatedCart[existingIndex].unitPrice;
       setCartItems(updatedCart);
     } else {
@@ -767,6 +845,27 @@ export default function ShopPOS( props ) {
   );
   const grandTotal = Math.max(0, subtotal - discountAmount);
 
+  const normalizeExtraCategory = (value) => String(value || "").trim() || "Uncategorized";
+  const extraSectionItems = shopId ? shopItems : catalogItems;
+  const categoryOptions = [
+    "all",
+    ...Array.from(new Set(extraSectionItems.map((item) => normalizeExtraCategory(item.category)))).sort((a, b) => a.localeCompare(b)),
+  ];
+
+  const extraFilteredItems = extraSectionItems.filter((item) => {
+    const categoryName = normalizeExtraCategory(item.category);
+    const categoryMatches = extraSelectedCategory === "all" || categoryName === extraSelectedCategory;
+    const query = extraSearchQuery.trim();
+    if (!query) return categoryMatches;
+    const queryMatches =
+      includesLooseNumber(item.name, query) ||
+      (item.barcode && includesLooseNumber(item.barcode, query)) ||
+      (item.brand && includesLooseNumber(item.brand, query)) ||
+      includesLooseNumber(categoryName, query) ||
+      toArray(item.alternative_names).some((n) => includesLooseNumber(n, query));
+    return categoryMatches && queryMatches;
+  });
+
   useEffect(() => {
     if (!paidAmountTouched) {
       setPaidAmount(grandTotal.toFixed(2));
@@ -951,8 +1050,8 @@ export default function ShopPOS( props ) {
           </div>
 
           {/* Cart Items */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 bg-white rounded-xl shadow-md overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-2 text-xs">
+            <div className="md:col-span-3 bg-white rounded-xl shadow-md overflow-hidden">
               {/* Cart Header */}
               <div className="p-6 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
                 <div className="flex justify-between items-center flex-col sm:flex-col md:flex-row">
@@ -968,7 +1067,7 @@ export default function ShopPOS( props ) {
                       <input
                         ref={searchInputRef}
                         type="text"
-                        className="w-full border border-gray-300 rounded-lg p-3 focus:ring-1 outline-none focus:ring-green-500 focus:border-green-500 transition"
+                        className="w-full border border-gray-300 rounded-lg p-3 focus:ring-1 outline-none focus:ring-green-500 focus:border-green-500 transition text-sm"
                         placeholder="Search products & materials..."
                         value={searchQuery}
                         onChange={(e) => handleSearch(e.target.value)}
@@ -1103,7 +1202,7 @@ export default function ShopPOS( props ) {
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Price</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Quantity</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Sub Total</th>
-                        <th className="p-4 text-left text-sm font-semibold text-gray-700">Actions</th>
+                        <th className="p-4 text-left text-sm font-semibold text-gray-700">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1112,7 +1211,7 @@ export default function ShopPOS( props ) {
                         
                         return (
                           <tr key={index} className="border-b border-gray-200 hover:bg-gray-50 transition">
-                            <td className="p-4">
+                            <td className="p-1">
                               <div className="flex items-start space-x-3">
                                 {/* Cart Item Image */}
                                 <div className="flex-shrink-0">
@@ -1160,9 +1259,7 @@ export default function ShopPOS( props ) {
                                       </select>
                                     </div>
                                   )}
-                                  <div className="text-sm text-gray-600 mt-1">
-                                    {item.barcode && <span>{item.barcode}</span>}
-                                  </div>
+                                  <span className="block text-gray-500">{item.barcode && <span>{item.barcode}</span>}</span>
                                   {(item.type === "product" || item.type === "material") && isFeatureActive("sale.enable_warranty") && (
                                     <div className="mt-2 flex flex-wrap gap-2 items-center">
                                       <label className="inline-flex items-center gap-2 text-xs text-gray-700">
@@ -1203,7 +1300,7 @@ export default function ShopPOS( props ) {
                                 />
                               </td>
                             )}
-                            <td className="p-4">
+                            <td className="p-1">
                               <div className="flex items-center gap-2">
                                 <div>
                                   <input
@@ -1212,18 +1309,18 @@ export default function ShopPOS( props ) {
                                     step="0.01"
                                     value={item.unitPrice}
                                     onChange={(e) => handlePriceChange(index, e.target.value)}
-                                    className="w-full min-w-24 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition"
+                                    className="w-full max-w-24 border border-gray-300 rounded-lg p-1 focus:ring-1 focus:ring-yellow-500 focus:border-yellow-500 outline-0 transition"
                                     placeholder="Enter new price"
                                     autoFocus
                                   />
                                 </div>
                               </div>
                             </td>
-                            <td className="p-4">
-                              <div className="flex items-center space-x-2">
+                            <td className="p-1">
+                              <div className="flex items-center space-x-1">
                                 <button
                                   onClick={() => handleUpdateQuantity(index, (item.selectedQuantity || 1) - 1)}
-                                  className="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-lg hover:bg-gray-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded-lg hover:bg-gray-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                   disabled={(item.selectedQuantity || 1) <= 1}
                                 >
                                   <span className="text-gray-700">-</span>
@@ -1233,17 +1330,17 @@ export default function ShopPOS( props ) {
                                   min="1"
                                   value={item.selectedQuantity || 1}
                                   onChange={(e) => handleUpdateQuantity(index, parseInt(e.target.value) || 1)}
-                                  className="w-16 border border-gray-300 p-2 text-center rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  className="w-16 border border-gray-300 p-1 text-center rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-0 transition"
                                 />
                                 <button
                                   onClick={() => handleUpdateQuantity(index, (item.selectedQuantity || 1) + 1)}
-                                  className="w-8 h-8 flex items-center justify-center bg-gray-200 rounded-lg hover:bg-gray-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                  className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded-lg hover:bg-gray-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                   disabled={item.quantity >= (item.batchAvailable || 1)}
                                 >
                                   <span className="text-gray-700">+</span>
                                 </button>
                               </div>
-                              <div className="text-xs text-gray-500 mt-2 space-x-1">
+                              <div className="text-xs text-gray-500 mt-1 space-x-1">
                                 <span>
                                   Stock: {item.batchAvailable || 0} 
                                 </span>
@@ -1270,10 +1367,10 @@ export default function ShopPOS( props ) {
                                 )}
                               </div>
                             </td>
-                            <td className="p-4">
+                            <td className="p-1">
                               <div className="font-semibold text-gray-900">${item.totalPrice.toFixed(2)}</div>
                             </td>
-                            <td className="p-4">
+                            <td className="p-1">
                               <button
                                 onClick={() => handleRemoveFromCart(index)}
                                 className="bg-red-100 text-red-600 hover:text-red-800 font-medium text-sm p-2 rounded-md"
@@ -1391,13 +1488,99 @@ export default function ShopPOS( props ) {
                 </div>
               )}
             </div>
-            <div>
-              <div className="grid grid-cols-1 md:grid-cols-3">
-                <div>
-                  {/* Category List here. One category per row */}
+            <div className="md:col-span-2 bg-white rounded-xl">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <div className="md:col-span-1 rounded-lg p-1 overflow-y-auto">
+                  <h3 className="font-semibold text-sm text-gray-800 mb-3">Categories</h3>
+                  <div className="space-y-2">
+                    {categoryOptions.map((category) => {
+                      const active = extraSelectedCategory === category;
+                      const label = category === "all" ? "All" : category;
+                      return (
+                        <button
+                          key={category}
+                          type="button"
+                          onClick={() => setExtraSelectedCategory(category)}
+                          className={active
+                            ? "w-full text-left p-1 border-b bg-blue-50 border-blue-300 text-blue-700"
+                            : "w-full text-left p-1 border-b bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                          }
+                        >
+                          <div className="w-full wrap-break-word text-xs font-medium">
+                            {label}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div>
-                  {/* Product List here. 3 products per row */}
+
+                <div className="md:col-span-3">
+                  <div className="relative mb-3">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={extraSearchQuery}
+                      onChange={(e) => setExtraSearchQuery(e.target.value)}
+                      placeholder="Search in this list (products/materials)"
+                      className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+
+                  {!shopId && (
+                    <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      Select a shop to add items to cart. Items are shown from full catalog.
+                    </div>
+                  )}
+
+                  {extraFilteredItems.length === 0 ? (
+                    <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center text-gray-500 text-sm">
+                      No items found for this category/search.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-3 max-h-[520px] overflow-y-auto pr-1">
+                      {extraFilteredItems.map((item) => {
+                        const imageUrl = getImageUrl(item.image);
+                        const stock = Number(shopId ? (item.shop_stock || 0) : (item.global_stock ?? item.stock ?? 0));
+                        const disabled = !shopId || stock <= 0;
+                        return (
+                          <button
+                            key={item.type + "-" + item.id}
+                            type="button"
+                            onClick={() => handleAddToCart(item)}
+                            disabled={disabled}
+                            className={disabled
+                              ? "text-left border rounded-lg p-3 transition bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed"
+                              : "text-left border rounded-lg p-3 transition bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm"
+                            }
+                          >
+                            <div className="flex flex-col items-start gap-3">
+                              <div className="w-12 h-12 rounded-md border border-gray-200 bg-gray-50">
+                                {imageUrl ? (
+                                  <img src={imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <ImageIcon className="w-5 h-5 text-gray-400" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-gray-900">{item.name}</p>
+                                <p className="text-xs text-gray-500">{item.barcode || "-"}</p>
+                                <p className="text-xs text-gray-500">{normalizeExtraCategory(item.category)}</p>
+                              </div>
+                            </div>
+                            <div className="mt-2 flex flex-col items-start justify-between text-sm">
+                              <span className="font-semibold text-gray-900">${Number(item.sale_price || 0).toFixed(2)}</span>
+                              <span className={stock <= 0 ? "text-xs font-medium text-red-600" : "text-xs font-medium text-green-700"}>
+                                Stock: {stock}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
