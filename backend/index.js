@@ -15,7 +15,7 @@ const app = express();
 const server = http.createServer(app);
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
-  : ['http://localhost:5173'];
+  : ['http://localhost:5173', 'http://localhost:3000'];
   
 
 const corsOptions = {
@@ -324,13 +324,17 @@ const businessSettingsRoutes = require('./routes/businessSettingsRoutes');
 const homeBannerRoutes = require('./routes/HomePage/homeBannerRoutes');
 const valuedCustomer = require('./routes/HomePage/valuedCustomerRoutes');
 const productCollectionRoutes = require('./routes/HomePage/productCollectionRoutes');
+const foodCategoryRoutes = require('./routes/HomePage/foodCategoryRoutes');
+const outletsRoutes = require('./routes/HomePage/outletsRoutes');
+const orderRoutes = require('./routes/HomePage/orderRoutes');
+
 
 const uploadRoutes = require('./routes/uploadRoutes');
 
 
 
 app.use('/api/materials', authenticateToken, materialRoutes);
-app.use('/api/products', authenticateToken, productRoutes);
+app.use('/api/products', productRoutes);
 app.use('/api/factories', authenticateToken, factoryRoutes);
 app.use('/api/productions', authenticateToken, productionRoutes);
 app.use('/api/stores', authenticateToken, storeRoutes);
@@ -375,10 +379,12 @@ app.use('/api/requisitions', authenticateToken, requisitionRoutes);
 app.use('/api/master-data', authenticateToken, masterDataRoutes);
 app.use('/api/business-settings', authenticateToken, businessSettingsRoutes);
 ///////Home page
-app.use('/api/valued-customers', authenticateToken, valuedCustomer);
+app.use('/api/valued-customers', valuedCustomer);
 app.use('/api/product-collections', productCollectionRoutes);
 app.use('/api/home-banners', homeBannerRoutes);
-
+app.use('/api/food-categories', foodCategoryRoutes);
+app.use('/api/outlets', outletsRoutes);
+app.use('/api/orders', orderRoutes);
 
 // serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));

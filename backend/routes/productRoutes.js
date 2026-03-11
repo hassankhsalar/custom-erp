@@ -8,6 +8,127 @@ const { buildScope, ensureIdScope } = require("../utils/associateScope");
 const { withActiveWhere } = require("../utils/softDelete");
 const { seedProductIntoAllPlaces } = require("../utils/inventoryBootstrap");
 
+// Get products by category name (for frontend display)
+router.get('/by-category/:categoryName', async (req, res) => {
+  try {
+    const { categoryName } = req.params;
+    const { 
+      page = 1, 
+      limit = 20,
+      sortBy = 'created_at',
+      sortDir = 'desc'
+    } = req.query;
+
+    console.log('🔵 Fetching products for category:', categoryName);
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const take = Math.max(1, parseInt(limit, 10) || 20);
+    const skip = (pageNum - 1) * take;
+
+    // For Prisma 6.19.2, use contains with OR for case-insensitive matching
+    // This is a reliable workaround
+    const where = { 
+      deleted_at: false,
+      OR: [
+        { category: { equals: categoryName } },
+        { category: { equals: categoryName.toLowerCase() } },
+        { category: { equals: categoryName.toUpperCase() } },
+        { category: { equals: categoryName.charAt(0).toUpperCase() + categoryName.slice(1).toLowerCase() } }
+      ]
+    };
+
+    console.log('🔵 Where clause:', JSON.stringify(where, null, 2));
+
+    // Allowed sort fields
+    const allowedSortBy = new Set(['created_at', 'name', 'sale_price', 'wholesale_price', 'stock']);
+    const orderField = allowedSortBy.has(sortBy) ? sortBy : 'created_at';
+    const orderDirection = String(sortDir).toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+    const [products, totalCount] = await prisma.$transaction([
+      prisma.product.findMany({
+        skip,
+        take,
+        where,
+        orderBy: { [orderField]: orderDirection },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          image: true,
+          unit: true,
+          sale_price: true,
+          wholesale_price: true,
+          barcode: true,
+          category: true,
+          stock: true,
+          created_at: true
+        }
+      }),
+      prisma.product.count({ where })
+    ]);
+
+    console.log(`🔵 Found ${products.length} products`);
+
+    res.json({
+      products,
+      totalCount,
+      totalPages: Math.ceil(totalCount / take),
+      currentPage: pageNum
+    });
+  } catch (error) {
+    console.error('🔴 Error fetching products by category:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Also add an endpoint to get products for multiple categories at once (useful for homepage)
+router.get('/by-categories', async (req, res) => {
+  try {
+    const { categories, limit = 8 } = req.query;
+    
+    if (!categories) {
+      return res.status(400).json({ error: 'Categories parameter is required' });
+    }
+
+    const categoryList = categories.split(',');
+    
+    const productsByCategory = {};
+    
+    for (const category of categoryList) {
+      const products = await prisma.product.findMany({
+        where: {
+          deleted_at: false,
+          category: {
+            equals: category,
+            mode: 'insensitive'
+          }
+        },
+        take: parseInt(limit),
+        orderBy: { created_at: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          image: true,
+          unit: true,
+          sale_price: true,
+          wholesale_price: true,
+          barcode: true,
+          category: true,
+          stock: true
+        }
+      });
+      
+      productsByCategory[category] = products;
+    }
+    
+    res.json(productsByCategory);
+  } catch (error) {
+    console.error('Error fetching products by categories:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Create a new product with materials
 router.post('/', async (req, res) => {
   const { materials, ...productData } = req.body;

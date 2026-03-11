@@ -126,6 +126,11 @@ import CreateValuedCustomer from "./components/HomePage/CreateValuedCustomer";
 import ProductCollectionManager from "./components/HomePage/ProductCollectionManager";
 import HomeBannerList from "./components/HomePage/HomeBannerList";
 import CreateEditHomeBanner from "./components/HomePage/CreateEditHomeBanner";
+import FoodCategoryList from "./components/HomePage/FoodCategoryList";
+import CreateEditFoodCategory from "./components/HomePage/CreateEditFoodCategory";
+import OutletsList from "./components/HomePage/OutletsList";
+import CreateEditOutlet from "./components/HomePage/CreateEditOutlet";
+import OrderManagement from "./components/HomePage/OrderManagement";
 
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("token"));
@@ -705,6 +710,18 @@ function App() {
 
 
             <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/homepage/foodcategorycreate-edit" element={<CreateEditFoodCategory />} />
+            </Route>
+
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/food-categories/edit/:id" element={<CreateEditFoodCategory />} />
+            </Route>
+
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/homepage/foodcategorylist" element={<FoodCategoryList />} />
+            </Route>
+
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
               <Route path="/homepage/productcollectionmanage" element={<ProductCollectionManager />} />
             </Route>
 
@@ -715,6 +732,22 @@ function App() {
               <Route path="/homepage/createvaluedcustomer" element={<CreateValuedCustomer />} />
             </Route>
 
+            
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+            <Route path="/homepage/outletslist" element={<OutletsList />} />
+            </Route>
+            
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+            <Route path="/homepage/outlet-create-edit" element={<CreateEditOutlet />} />
+            </Route>
+            
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+            <Route path="/homepage/outlet-edit/:id" element={<CreateEditOutlet />} />
+            </Route>
+
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+            <Route path="/homepage/ordermanagement" element={<OrderManagement />} />
+            </Route>
 
 
 

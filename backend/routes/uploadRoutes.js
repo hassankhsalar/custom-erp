@@ -9,9 +9,10 @@ const productUploadDir = 'uploads/products';
 const materialUploadDir = 'uploads/materials';
 const profileUploadDir = 'uploads/profiles';
 const valuedCustomerUploadDir = 'uploads/valued-customers';
+const outletUploadDir = 'uploads/outlets';
 
 // Create all directories
-[productUploadDir, materialUploadDir, profileUploadDir, valuedCustomerUploadDir].forEach(dir => {
+[productUploadDir, materialUploadDir, profileUploadDir, valuedCustomerUploadDir, outletUploadDir].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -61,6 +62,18 @@ const valuedCustomerStorage = multer.diskStorage({
   }
 });
 
+
+// Configure storage for outlet images
+const outletStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, outletUploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'outlet-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
 // File filter
 const fileFilter = (req, file, cb) => {
   const allowedTypes = /jpeg|jpg|png|gif|webp/;
@@ -98,6 +111,13 @@ const uploadProfile = multer({
 // Configure upload for valued customer images
 const uploadValuedCustomer = multer({
   storage: valuedCustomerStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: fileFilter
+});
+
+// Configure upload for outlet images
+const uploadOutlet = multer({
+  storage: outletStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: fileFilter
 });
@@ -289,6 +309,96 @@ router.get('/banners/:filename', (req, res) => {
     res.status(404).json({ error: 'Image not found' });
   }
 });
+
+const foodCategoryUploadDir = 'uploads/food-categories';
+
+// Ensure directory exists
+if (!fs.existsSync(foodCategoryUploadDir)) {
+  fs.mkdirSync(foodCategoryUploadDir, { recursive: true });
+}
+
+// Configure storage for food category images
+const foodCategoryStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, foodCategoryUploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'food-category-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+// Configure upload for food category images
+const uploadFoodCategory = multer({
+  storage: foodCategoryStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: fileFilter
+});
+
+// Upload food category image
+router.post('/food-category', uploadFoodCategory.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+    
+    const imageUrl = `/uploads/food-categories/${req.file.filename}`;
+    
+    res.json({
+      success: true,
+      imageUrl: imageUrl,
+      filename: req.file.filename
+    });
+  } catch (error) {
+    console.error('Error uploading food category image:', error);
+    res.status(500).json({ error: 'Failed to upload image' });
+  }
+});
+
+// Get uploaded food category image
+router.get('/food-categories/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(foodCategoryUploadDir, filename);
+
+  if (fs.existsSync(filePath)) {
+    res.sendFile(path.resolve(filePath));
+  } else {
+    res.status(404).json({ error: 'Image not found' });
+  }
+});
+
+// Upload outlet image
+router.post('/outlet', uploadOutlet.single('image'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+    
+    const imageUrl = `/uploads/outlets/${req.file.filename}`;
+    
+    res.json({
+      success: true,
+      imageUrl: imageUrl,
+      filename: req.file.filename
+    });
+  } catch (error) {
+    console.error('Error uploading outlet image:', error);
+    res.status(500).json({ error: 'Failed to upload image' });
+  }
+});
+
+// Get uploaded outlet image
+router.get('/outlets/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(outletUploadDir, filename);
+
+  if (fs.existsSync(filePath)) {
+    res.sendFile(path.resolve(filePath));
+  } else {
+    res.status(404).json({ error: 'Image not found' });
+  }
+});
+
 
 // REMOVE this line as it's causing duplication:
 // router.use('/uploads', express.static('uploads'));

@@ -305,9 +305,12 @@ const Sidebar = () => {
       textColor: 'text-orange-700',
       permissionKey: ['factory_read', 'factory_create'],
       subItems: [
+        { name: 'Manage Order', path: '/homepage/ordermanagement', icon: <Building size={16} />, permissionKey: 'factory_read' },
         { name: 'Home Banners', path: '/home-banners', icon: <Factory size={16} />, permissionKey: 'factory_read' },
+        { name: 'Food Categories', path: '/homepage/foodcategorylist', icon: <Building size={16} />, permissionKey: 'factory_create' },
         { name: 'Products Collection', path: '/homepage/productcollectionmanage', icon: <Building size={16} />, permissionKey: 'factory_create' },
-        { name: 'Valued Customer', path: '/homepage/valuedcustomer', icon: <Building size={16} />, permissionKey: 'factory_read' }
+        { name: 'Valued Customer', path: '/homepage/valuedcustomer', icon: <Building size={16} />, permissionKey: 'factory_read' },
+        { name: 'Manage Outlets', path: '/homepage/outletslist', icon: <Building size={16} />, permissionKey: 'factory_read' }
       ]
     },
     {

@@ -16,7 +16,8 @@ import {
   Pen, 
   Trash2,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Archive
 } from 'lucide-react';
 
 const EditProduct = () => {
@@ -38,6 +39,9 @@ const EditProduct = () => {
   const [units, setUnits] = useState([]);
   const [brands, setBrands] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [stockHistory, setStockHistory] = useState([]);
+  const [showStockHistory, setShowStockHistory] = useState(false);
+  const [loadingStockHistory, setLoadingStockHistory] = useState(false);
 
   // Function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -50,6 +54,23 @@ const EditProduct = () => {
     } 
     
     return `${MEDIA_BASE_URL}/uploads/${imagePath}`;
+  };
+
+  // Fetch stock history
+  const fetchStockHistory = async () => {
+    if (!token || !id) return;
+    
+    setLoadingStockHistory(true);
+    try {
+      const response = await axios.get(`${API_ROUTES.PRODUCTS}/${id}/stock-history`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setStockHistory(response.data || []);
+    } catch (error) {
+      console.error('Error fetching stock history:', error);
+    } finally {
+      setLoadingStockHistory(false);
+    }
   };
 
   useEffect(() => {
@@ -75,6 +96,7 @@ const EditProduct = () => {
           sale_price: response.data.sale_price || '',
           wholesale_price: response.data.wholesale_price || '',
           cost: response.data.cost || '',
+          stock: response.data.stock || 0, // Added stock field
           alert_quantity: response.data.alert_quantity || '0',
           category: response.data.category || '',
           brand: response.data.brand || '',
@@ -293,6 +315,7 @@ const EditProduct = () => {
         sale_price: parseFloat(product.sale_price),
         wholesale_price: parseFloat(product.wholesale_price),
         cost: parseFloat(product.cost),
+        stock: parseInt(product.stock) || 0, // Include stock field
         alert_quantity: product.alert_quantity ? parseInt(product.alert_quantity) : 0,
         category: product.category || null,
         brand: product.brand || null,
@@ -335,6 +358,13 @@ const EditProduct = () => {
     }
   };
 
+  const handleViewStockHistory = () => {
+    if (!showStockHistory) {
+      fetchStockHistory();
+    }
+    setShowStockHistory(!showStockHistory);
+  };
+
   const selectedMaterial = allMaterials.find(
     (m) => m.id === parseInt(newMaterial.material_id)
   );
@@ -343,6 +373,7 @@ const EditProduct = () => {
   const totalMaterialsCost = materials.reduce((sum, mat) => 
     sum + (parseFloat(mat.price) * parseFloat(mat.material_quantity)), 0
   );
+  
   const categoryOptions = categories.map((category) => ({ value: category.name, label: category.name }));
   const brandOptions = brands.map((brand) => ({ value: brand.name, label: brand.name }));
   const unitOptions = units.map((unit) => ({ value: unit.name, label: unit.name }));
@@ -390,7 +421,7 @@ const EditProduct = () => {
                 <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
                   Edit Product
                 </h1>
-                <p className="text-gray-600 mt-2">Update product details and materials</p>
+                <p className="text-gray-600 mt-2">Update product details, stock, and materials</p>
               </div>
             </div>
             
@@ -498,7 +529,7 @@ const EditProduct = () => {
                   />
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Sale Price *</label>
                     <div className="relative">
@@ -552,9 +583,28 @@ const EditProduct = () => {
                       />
                     </div>
                   </div>
+
+                  {/* Stock Field - New */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Stock *</label>
+                    <div className="relative">
+                      <Archive className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                      <input 
+                        type="number" 
+                        name="stock" 
+                        value={product.stock} 
+                        onChange={handleProductChange} 
+                        placeholder="0" 
+                        className="w-full pl-10 p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all duration-200" 
+                        required 
+                        min="0"
+                        step="1"
+                      />
+                    </div>
+                  </div>
                 </div>
                 
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Alert Quantity</label>
                     <input 
@@ -568,7 +618,53 @@ const EditProduct = () => {
                       step="1"
                     />
                   </div>
+                  
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={handleViewStockHistory}
+                      className="w-full p-3 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors duration-200 font-medium flex items-center justify-center gap-2"
+                    >
+                      <Archive size={18} />
+                      {showStockHistory ? 'Hide Stock History' : 'View Stock History'}
+                    </button>
+                  </div>
                 </div>
+
+                {/* Stock History Section */}
+                {showStockHistory && (
+                  <div className="mt-4 p-4 bg-blue-50/50 rounded-lg border border-blue-200">
+                    <h4 className="text-sm font-semibold text-blue-800 mb-3 flex items-center gap-2">
+                      <Archive size={16} />
+                      Stock Adjustment History
+                    </h4>
+                    {loadingStockHistory ? (
+                      <div className="flex justify-center py-4">
+                        <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-500"></div>
+                      </div>
+                    ) : stockHistory.length === 0 ? (
+                      <p className="text-sm text-gray-500 text-center py-4">No stock history available</p>
+                    ) : (
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {stockHistory.map((history, index) => (
+                          <div key={index} className="text-sm bg-white/50 p-3 rounded-lg border border-blue-100">
+                            <div className="flex justify-between items-center">
+                              <span className="font-medium text-gray-700">
+                                {history.type}
+                              </span>
+                              <span className={`font-semibold ${history.quantity > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {history.quantity > 0 ? '+' : ''}{history.quantity}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {new Date(history.createdAt).toLocaleString()} - {history.reason || history.notes || 'No notes'}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
