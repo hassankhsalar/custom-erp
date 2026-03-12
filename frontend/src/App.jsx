@@ -120,6 +120,16 @@ import ShopInventory from "./components/Shop/ShopInventory";
 import EditShop from "./components/Shop/EditShop";
 import InventoryAdjustmentHistory from "./components/Inventory/InventoryAdjustmentHistory";
 import { AuthContext, useAuth } from "./context/AuthContext";
+import ValuedCustomerList from "./components/HomePage/ValuedCustomerList";
+import CreateValuedCustomer from "./components/HomePage/CreateValuedCustomer";
+import ProductCollectionManager from "./components/HomePage/ProductCollectionManager";
+import HomeBannerList from "./components/HomePage/HomeBannerList";
+import CreateEditHomeBanner from "./components/HomePage/CreateEditHomeBanner";
+import FoodCategoryList from "./components/HomePage/FoodCategoryList";
+import CreateEditFoodCategory from "./components/HomePage/CreateEditFoodCategory";
+import OutletsList from "./components/HomePage/OutletsList";
+import CreateEditOutlet from "./components/HomePage/CreateEditOutlet";
+import OrderManagement from "./components/HomePage/OrderManagement";
 
 
 export const AuthProvider = ({ children }) => {
@@ -709,6 +719,96 @@ function App() {
               <Route path="/addrepairmaterial" element={<AddRepairMaterial />} />
             </Route>
 
+            <Route element={<PermissionRoute requiredPermission="transfers_read" />}>
+              <Route path="/transfers" element={<TransferList title="All Transfers" />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="transfers_create" />}>
+              <Route path="/transfer/add" element={<AddTransfer />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="transfers_edit" />}>
+              <Route path="/transfer/edit/:id" element={<AddTransfer />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="transfers_receive" />}>
+              <Route path="/transfers/:id/receive" element={<TransferReceive />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="transfers_read" />}>
+              <Route path="/transfers/:id/receipts" element={<TransferReceiveHistory />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="requisition_create" />}>
+              <Route path="/requisition/create" element={<NewRequisition />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="requisition_update" />}>
+              <Route path="/requisition/edit/:id" element={<NewRequisition />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="requisition_read" />}>
+              <Route path="/requisition/list" element={<RequisitionList />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="requisition_read" />}>
+              <Route path="/requisition/view/:id" element={<RequisitionView />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="notification_read" />}>
+              <Route path="/notifications" element={<Notifications />} />
+            </Route>
+
+
+
+            {/* Home page  Permission edit required*/} 
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/home-banners" element={<HomeBannerList />} />
+            </Route>
+          
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/home-banners/create" element={<CreateEditHomeBanner />} />
+            </Route>
+          
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/home-banners/edit/:id" element={<CreateEditHomeBanner />} />
+            </Route>
+
+
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/homepage/foodcategorycreate-edit" element={<CreateEditFoodCategory />} />
+            </Route>
+
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/food-categories/edit/:id" element={<CreateEditFoodCategory />} />
+            </Route>
+
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/homepage/foodcategorylist" element={<FoodCategoryList />} />
+            </Route>
+
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/homepage/productcollectionmanage" element={<ProductCollectionManager />} />
+            </Route>
+
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/homepage/valuedcustomer" element={<ValuedCustomerList />} />
+            </Route>
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+              <Route path="/homepage/createvaluedcustomer" element={<CreateValuedCustomer />} />
+            </Route>
+
+            
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+            <Route path="/homepage/outletslist" element={<OutletsList />} />
+            </Route>
+            
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+            <Route path="/homepage/outlet-create-edit" element={<CreateEditOutlet />} />
+            </Route>
+            
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+            <Route path="/homepage/outlet-edit/:id" element={<CreateEditOutlet />} />
+            </Route>
+
+            <Route element={<PermissionRoute requiredPermission="payroll_manage" />}>
+            <Route path="/homepage/ordermanagement" element={<OrderManagement />} />
+            </Route>
+
+
+            <Route path="/profile" element={<UserProfile />} />
+            <Route path="/userprofile" element={<Navigate to="/profile" replace />} />
             {/* Default route for authenticated users */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Route>

@@ -314,6 +314,22 @@ const Sidebar = () => {
       ]
     },
     {
+      name: 'HomePage',
+      icon: <Factory color='white' size={18} />,
+      color: 'from-orange-500 to-red-500',
+      bgColor: 'bg-gradient-to-r from-orange-50 to-red-100/50',
+      textColor: 'text-orange-700',
+      permissionKey: ['factory_read', 'factory_create'],
+      subItems: [
+        { name: 'Manage Order', path: '/homepage/ordermanagement', icon: <Building size={16} />, permissionKey: 'factory_read' },
+        { name: 'Home Banners', path: '/home-banners', icon: <Factory size={16} />, permissionKey: 'factory_read' },
+        { name: 'Food Categories', path: '/homepage/foodcategorylist', icon: <Building size={16} />, permissionKey: 'factory_create' },
+        { name: 'Products Collection', path: '/homepage/productcollectionmanage', icon: <Building size={16} />, permissionKey: 'factory_create' },
+        { name: 'Valued Customer', path: '/homepage/valuedcustomer', icon: <Building size={16} />, permissionKey: 'factory_read' },
+        { name: 'Manage Outlets', path: '/homepage/outletslist', icon: <Building size={16} />, permissionKey: 'factory_read' }
+      ]
+    },
+    {
       name: 'Report',
       icon: <BarChart3 color='white' size={18} />,
       color: 'from-lime-500 to-green-500',
