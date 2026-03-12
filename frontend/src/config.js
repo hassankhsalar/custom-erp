@@ -226,6 +226,36 @@ export const API_ROUTES = {
   //Image file uploads
   UPLOADS: `${API_BASE_URL}/uploads`,
 
+  //home Page
+
+// Home Banner routes
+  HOME_BANNERS: `${API_BASE_URL}/home-banners`,
+  HOME_BANNER: (id) => `${API_BASE_URL}/home-banners/${id}`,
+  HOME_BANNERS_ALL: `${API_BASE_URL}/home-banners/all`,
+
+  
+  FOOD_CATEGORIES: `${API_BASE_URL}/food-categories`,
+  FOOD_CATEGORY: (id) => `${API_BASE_URL}/food-categories/${id}`,
+  FOOD_CATEGORIES_ALL: `${API_BASE_URL}/food-categories/all`,
+
+  PRODUCT_COLLECTIONS: `${API_BASE_URL}/product-collections`,
+  PRODUCT_COLLECTION: (id) => `${API_BASE_URL}/product-collections/${id}`,
+  PRODUCT_COLLECTION_BY_TYPE: (type) => `${API_BASE_URL}/product-collections/by-type/${type}`,
+  PRODUCT_COLLECTION_REMOVE: (productId, type) => `${API_BASE_URL}/product-collections/product/${productId}/type/${type}`,
+
+
+  VALUED_CUSTOMERS: `${API_BASE_URL}/valued-customers`,
+  VALUED_CUSTOMER: (id) => `${API_BASE_URL}/valued-customers/${id}`,
+  VALUED_CUSTOMERS_ALL: `${API_BASE_URL}/valued-customers/all`,
+
+  
+  ORDERS: `${API_BASE_URL}/orders`,
+  ORDER_STATUS: (id) => `${API_BASE_URL}/orders/${id}/status`,
+  ORDER_PAYMENT_STATUS: (id) => `${API_BASE_URL}/orders/${id}/payment`,
+
+
+  OUTLETS: `${API_BASE_URL}/outlets`,
+  OUTLET: (id) => `${API_BASE_URL}/outlets/${id}`,
 
   //user routes
   USERS: `${API_BASE_URL}/users`,

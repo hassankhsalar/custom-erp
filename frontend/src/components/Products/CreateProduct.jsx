@@ -41,13 +41,19 @@ const CreateProduct = () => {
 
   const [units, setUnits] = useState([]);
   const [brands, setBrands] = useState([]);
-  const [categories, setCategories] = useState([]);
+  const [foodCategories, setFoodCategories] = useState([]); // Renamed from categories to foodCategories
 
   const [image, setImage] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
-  const categoryOptions = categories.map((category) => ({ value: category.name, label: category.name }));
+  
+  // Create options for category dropdown from food categories
+  const categoryOptions = foodCategories.map((category) => ({ 
+    value: category.name, 
+    label: category.name 
+  }));
+  
   const brandOptions = brands.map((brand) => ({ value: brand.name, label: brand.name }));
   const unitOptions = units.map((unit) => ({ value: unit.name, label: unit.name }));
 
@@ -68,12 +74,22 @@ const CreateProduct = () => {
           axios.get(API_ROUTES.MATERIALS_ALL, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_ROUTES.MASTER_DATA_UNITS}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_ROUTES.MASTER_DATA_BRANDS}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
-          axios.get(`${API_ROUTES.MASTER_DATA_PRODUCT_CATEGORIES}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
+          // Fetch from food categories endpoint instead of product categories
+          axios.get(API_ROUTES.FOOD_CATEGORIES_ALL, { 
+            headers: { Authorization: `Bearer ${token}` },
+            params: { isActive: true } // Only fetch active categories
+          }),
         ]);
+        
         setAllMaterials(materialsRes.data.materials || []);
         setUnits(unitsRes.data.items || []);
         setBrands(brandsRes.data.items || []);
-        setCategories(categoriesRes.data.items || []);
+        
+        // Handle the response from food categories
+        // The API returns { categories: [...] } or array directly
+        const foodCategoriesData = foodCategoriesRes.data.categories || foodCategoriesRes.data || [];
+        setFoodCategories(foodCategoriesData);
+        
       } catch (error) {
         console.error("Error fetching base data:", error);
       }
@@ -127,17 +143,19 @@ const CreateProduct = () => {
   };
 
   const handleAddAltUnit = (incoming = null) => {
-    const payload = incoming || altUnitDraft;
-    const unitname = String(payload.unitname || "").trim();
-    const multiplier = parseFloat(payload.multiplier);
-    if (!unitname || !Number.isFinite(multiplier) || multiplier <= 0) return;
-    if (unitname.toLowerCase() === product.unit.toLowerCase()) return;
-    if (alternativeUnits.some((u) => u.unitname.toLowerCase() === unitname.toLowerCase())) return;
-    setAlternativeUnits((prev) => [...prev, { unitname, multiplier }]);
-    if (!incoming) {
-      setAltUnitDraft(emptyAltUnit);
-    }
-  };
+  const payload = incoming || altUnitDraft;
+  const unitname = String(payload.unitname || "").trim();
+  const multiplier = parseFloat(payload.multiplier);
+  
+  if (!unitname || !Number.isFinite(multiplier) || multiplier <= 0) return;
+  if (unitname.toLowerCase() === product.unit.toLowerCase()) return;
+  if (alternativeUnits.some((u) => u.unitname.toLowerCase() === unitname.toLowerCase())) return;
+  
+  setAlternativeUnits((prev) => [...prev, { unitname, multiplier }]);
+  
+  // Always reset the draft after adding
+  setAltUnitDraft(emptyAltUnit);
+};
 
   const handleRemoveAltUnit = (index) => {
     setAlternativeUnits((prev) => prev.filter((_, i) => i !== index));
@@ -324,7 +342,7 @@ const CreateProduct = () => {
                       value={product.category}
                       onChange={handleProductChange}
                       options={categoryOptions}
-                      placeholder="Select a category"
+                      placeholder="Select a food category"
                     />
                   </div>
                   <div>
@@ -369,53 +387,66 @@ const CreateProduct = () => {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Alternative Units</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <SearchableSelect
-                      name="alternative_unit"
-                      onChange={(e) => setAltUnitDraft((prev) => ({ ...prev, unitname: e.target.value }))}
-                      options={unitOptions}
-                      placeholder="Select a unit"
-                      required
-                    />
-                    <input
-                      type="number"
-                      min="0.000001"
-                      step="0.000001"
-                      placeholder="Multiplier"
-                      value={altUnitDraft.multiplier}
-                      onChange={(e) => setAltUnitDraft((prev) => ({ ...prev, multiplier: e.target.value }))}
-                      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0"
-                    />
-                  </div>
-                  <button type="button" onClick={() => handleAddAltUnit()} className="mt-2 px-3 py-2 rounded-lg bg-indigo-600 text-white">
-                    Add Alternative Unit
-                  </button>
-                  {unitSuggestions.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {unitSuggestions.map((suggestion) => (
-                        <button
-                          key={suggestion.id}
-                          type="button"
-                          onClick={() => handleAddAltUnit({ unitname: suggestion.relatedUnit, multiplier: suggestion.multiplier })}
-                          className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700 hover:bg-slate-200"
-                        >
-                          {suggestion.relatedUnit} ({suggestion.multiplier})
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {alternativeUnits.length > 0 && (
-                    <div className="mt-2 space-y-2">
-                      {alternativeUnits.map((unit, idx) => (
-                        <div key={`${unit.unitname}-${idx}`} className="flex items-center justify-between px-3 py-2 rounded bg-indigo-50 text-sm">
-                          <span>1 {unit.unitname} = {unit.multiplier} {product.unit || "base unit"}</span>
-                          <button type="button" onClick={() => handleRemoveAltUnit(idx)}><X size={14} /></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+  <label className="block text-sm font-medium text-gray-700 mb-1">Alternative Units</label>
+  <div className="grid grid-cols-2 gap-2">
+    <SearchableSelect
+      name="alternative_unit"
+      value={altUnitDraft.unitname}
+      onChange={(e) => {
+        setAltUnitDraft((prev) => ({ ...prev, unitname: e.target.value }));
+      }}
+      options={unitOptions}
+      placeholder="Select a unit"
+    />
+    <input
+      type="number"
+      min="0.000001"
+      step="0.000001"
+      placeholder="Multiplier"
+      value={altUnitDraft.multiplier}
+      onChange={(e) => setAltUnitDraft((prev) => ({ ...prev, multiplier: e.target.value }))}
+      className="w-full p-3 border border-gray-300/50 rounded-lg bg-white/80 focus:ring-2 focus:ring-blue-500/30 focus:border-violet-500 transition-all duration-200 outline-0"
+    />
+  </div>
+  <button type="button" onClick={() => handleAddAltUnit()} className="mt-2 px-3 py-2 rounded-lg bg-indigo-600 text-white">
+    Add Alternative Unit
+  </button>
+  {unitSuggestions.length > 0 && (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {unitSuggestions.map((suggestion) => (
+        <button
+          key={suggestion.id}
+          type="button"
+          onClick={() => {
+            // Update the draft first
+            setAltUnitDraft({ 
+              unitname: suggestion.relatedUnit, 
+              multiplier: suggestion.multiplier.toString() 
+            });
+            // Then add to the list
+            handleAddAltUnit({ 
+              unitname: suggestion.relatedUnit, 
+              multiplier: suggestion.multiplier 
+            });
+          }}
+          className="text-xs px-2 py-1 rounded bg-slate-100 text-slate-700 hover:bg-slate-200"
+        >
+          {suggestion.relatedUnit} ({suggestion.multiplier})
+        </button>
+      ))}
+    </div>
+  )}
+  {alternativeUnits.length > 0 && (
+    <div className="mt-2 space-y-2">
+      {alternativeUnits.map((unit, idx) => (
+        <div key={`${unit.unitname}-${idx}`} className="flex items-center justify-between px-3 py-2 rounded bg-indigo-50 text-sm">
+          <span>1 {unit.unitname} = {unit.multiplier} {product.unit || "base unit"}</span>
+          <button type="button" onClick={() => handleRemoveAltUnit(idx)}><X size={14} /></button>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Barcode</label>

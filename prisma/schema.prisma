@@ -619,6 +619,8 @@ model Product {
   inventoryAdjustments    InventoryAdjustment[]
   repairOrderItems        RepairOrderItem[]
   damageRecordItems       DamageRecordItem[]
+  productCollection       ProductCollection[]
+  orderItem               OrderItem[]
 }
 
 model ProductMaterial {
@@ -1802,6 +1804,128 @@ model RepairOrderItem {
   @@index([materialId])
 }
 
+model ValuedCustomer {
+  id        Int      @id @default(autoincrement())
+  image     String?  
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt Boolean  @default(false) @map("deleted_at")
 
+  @@map("valued_customers")
+}
 
+enum CollectionType {
+  TOP_RATED
+  FEATURED
+  PREMIUM
+}
 
+model ProductCollection {
+  id         Int            @id @default(autoincrement())
+  productId  Int
+  type       CollectionType
+  createdAt  DateTime       @default(now()) @map("created_at")
+  updatedAt  DateTime       @updatedAt @map("updated_at")
+  deletedAt  Boolean        @default(false) @map("deleted_at")
+
+  product    Product        @relation(fields: [productId], references: [id])
+
+  @@unique([productId, type, deletedAt])
+  @@map("product_collections")
+}
+
+model HomeBanner {
+  id          Int      @id @default(autoincrement())
+  image       String?  
+  heading     String   
+  title       String   
+  description String?  
+  button      String? 
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   Boolean  @default(false) @map("deleted_at")
+
+  @@map("home_banners")
+}
+
+model FoodCategory {
+  id        Int      @id @default(autoincrement())
+  name      String
+  image     String?  
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt Boolean  @default(false) @map("deleted_at")
+
+  @@map("food_category")
+}
+
+model Outlets {
+  id        Int      @id @default(autoincrement())
+  name      String
+  address   String
+  mobile    String
+  googleMapLink   String?  
+  image     String?  
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt Boolean  @default(false) @map("deleted_at")
+
+  order    Order[]
+
+  @@map("outlets")
+}
+
+model Order {
+  id               Int           @id @default(autoincrement())
+  orderNumber      String?       @unique // Human-readable order number (e.g., ORD-20240315-001)
+  total            Float
+  orderType        String        // 'pickup' or 'delivery'
+  
+  // Customer Information
+  customerName     String
+  customerEmail    String?
+  customerMobile   String
+  deliveryAddress  String?
+  notes            String?       // Special instructions
+  
+  // Status
+  status           String        @default("pending") // pending, confirmed, processing, ready, completed, cancelled
+  paymentStatus    String        @default("unpaid") // unpaid, paid, refunded
+  paymentMethod    String?       // cash, card, mobile banking
+  
+  // Relations
+  outletId         Int?
+  outlet           Outlets?      @relation(fields: [outletId], references: [id])
+  
+  // Timestamps
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  deletedAt        Boolean       @default(false) @map("deleted_at")
+
+  // Order Items
+  items            OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id               Int           @id @default(autoincrement())
+  orderId          Int
+  order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  productId        Int
+  productName      String        // Snapshot of product name at time of order
+  quantity         Int
+  price            Float         // Price at time of order
+  total            Float         // (price * quantity)
+  
+  // Optional: Link back to original product
+  product          Product?      @relation(fields: [productId], references: [id])
+  
+  createdAt        DateTime      @default(now()) @map("created_at")
+  
+  @@map("order_items")
+}
