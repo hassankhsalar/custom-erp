@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 
 const prisma = new PrismaClient();
 const router = express.Router();
-const JWT_SECRET = 'your-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // Helper function to get product data based on branch type and ID
 const getBranchProducts = async (branchType, branchId) => {

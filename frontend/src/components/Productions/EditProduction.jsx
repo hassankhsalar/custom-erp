@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate, useParams } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
+import { includesLooseNumberInAny } from '../../utils/numberLooseSearch';
 import { 
   Factory, 
   Calendar, 
@@ -148,7 +149,9 @@ const EditProduction = () => {
         const response = await axios.get(`${API_ROUTES.PRODUCTS}?search=${e.target.value}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setSearchResults(response.data.products);
+        const rows = Array.isArray(response.data?.products) ? response.data.products : [];
+        const filteredRows = rows.filter((row) => includesLooseNumberInAny([row.name, row.barcode, row.category, row.description], e.target.value));
+        setSearchResults(filteredRows);
       } catch (error) {
         console.error('Error searching products:', error);
       }
@@ -790,3 +793,4 @@ const EditProduction = () => {
 };
 
 export default EditProduction;
+

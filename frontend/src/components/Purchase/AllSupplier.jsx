@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { ArrowUpDown, Users, Phone, MapPin, Calendar, Hash, Building2, TrendingUp, Search, X, Clock, UserCircle, Trash2 } from "lucide-react";
+import { ArrowUpDown, Users, Phone, MapPin, Calendar, Hash, Building2, TrendingUp, Search, X, Clock, UserCircle, Trash2, Pencil } from "lucide-react";
 import { TbCurrencyTaka } from "react-icons/tb";
 
 import { API_ROUTES } from '../../config';
+import { usePermission } from "../../hooks/usePermission";
 
 export default function AllSuppliers() {
   const [suppliers, setSuppliers] = useState([]);
@@ -17,6 +18,18 @@ export default function AllSuppliers() {
     amount: "",
     saving: false
   });
+  const [editModal, setEditModal] = useState({
+    isOpen: false,
+    supplierId: null,
+    form: { name: "", mobile: "", address: "" },
+    saving: false,
+    error: ""
+  });
+
+  const { hasPermission } = usePermission();
+  const canDeleteSupplier = hasPermission('supplier_delete');
+  const canClearDueSupplier = hasPermission('supplier_clear_due');
+  const canEditSupplier = hasPermission('supplier_edit');
 
   useEffect(() => {
   const fetchSuppliers = async () => {
@@ -160,6 +173,75 @@ export default function AllSuppliers() {
     });
   };
 
+  const openEditModal = (supplierId) => {
+    const supplier = suppliers.find((s) => s.id === supplierId);
+    if (!supplier) return;
+    setEditModal({
+      isOpen: true,
+      supplierId,
+      form: {
+        name: supplier.name || "",
+        mobile: supplier.mobile || "",
+        address: supplier.address || ""
+      },
+      saving: false,
+      error: ""
+    });
+  };
+
+  const closeEditModal = () => {
+    setEditModal({
+      isOpen: false,
+      supplierId: null,
+      form: { name: "", mobile: "", address: "" },
+      saving: false,
+      error: ""
+    });
+  };
+
+  const submitEditSupplier = async () => {
+    const name = editModal.form.name.trim();
+    if (!name) {
+      setEditModal((prev) => ({ ...prev, error: "Supplier name is required." }));
+      return;
+    }
+
+    try {
+      setEditModal((prev) => ({ ...prev, saving: true, error: "" }));
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_ROUTES.SUPPLIERS}/${editModal.supplierId}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          name,
+          mobile: editModal.form.mobile.trim() || null,
+          address: editModal.form.address.trim() || null
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to update supplier");
+
+      setSuppliers((prev) =>
+        prev.map((s) =>
+          s.id === editModal.supplierId
+            ? {
+                ...s,
+                name: data.name ?? name,
+                mobile: data.mobile ?? editModal.form.mobile.trim(),
+                address: data.address ?? editModal.form.address.trim()
+              }
+            : s
+        )
+      );
+      closeEditModal();
+    } catch (err) {
+      setEditModal((prev) => ({ ...prev, saving: false, error: err.message || "Failed to update supplier" }));
+    }
+  };
+
   const closeClearDueModal = () => {
     setClearDueModal({
       isOpen: false,
@@ -197,7 +279,12 @@ export default function AllSuppliers() {
           s.id === clearDueModal.supplier.id
             ? {
                 ...s,
-                total_due: Math.max(0, (parseFloat(s.total_due || 0) - (parseFloat(data.appliedAmount) || 0)))
+                total_due: data.updatedSupplierDue !== null && data.updatedSupplierDue !== undefined
+                  ? parseFloat(data.updatedSupplierDue)
+                  : (parseFloat(s.total_due || 0) - (parseFloat(data.appliedAmount) || 0)),
+                rawDue: data.updatedSupplierDue !== null && data.updatedSupplierDue !== undefined
+                  ? parseFloat(data.updatedSupplierDue)
+                  : (parseFloat(s.rawDue || s.total_due || 0) - (parseFloat(data.appliedAmount) || 0))
               }
             : s
         )
@@ -265,54 +352,6 @@ export default function AllSuppliers() {
             <span className="text-sm font-medium text-gray-700">
               {suppliers.length} {suppliers.length === 1 ? 'Supplier' : 'Suppliers'}
             </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="glass-card p-6 border border-white/20 backdrop-blur-xl">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">Total Suppliers</p>
-              <h3 className="text-2xl font-bold text-gray-900">{suppliers.length}</h3>
-            </div>
-            <div className="glass-icon p-3 rounded-xl bg-gradient-to-r from-indigo-500/10 to-indigo-600/10">
-              <Users className="text-indigo-600" size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-card p-6 border border-white/20 backdrop-blur-xl">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">Active Today</p>
-              <h3 className="text-2xl font-bold text-gray-900">
-                {suppliers.filter(s => {
-                  const today = new Date().toDateString();
-                  const supplierDate = new Date(s.createdAt).toDateString();
-                  return supplierDate === today;
-                }).length}
-              </h3>
-            </div>
-            <div className="glass-icon p-3 rounded-xl bg-gradient-to-r from-green-500/10 to-green-600/10">
-              <TrendingUp className="text-green-600" size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-card p-6 border border-white/20 backdrop-blur-xl">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600 mb-1">Contact Info</p>
-              <h3 className="text-2xl font-bold text-gray-900">
-                {suppliers.filter(s => s.mobile).length}
-              </h3>
-              <p className="text-xs text-gray-500">With phone numbers</p>
-            </div>
-            <div className="glass-icon p-3 rounded-xl bg-gradient-to-r from-blue-500/10 to-blue-600/10">
-              <Phone className="text-blue-600" size={24} />
-            </div>
           </div>
         </div>
       </div>
@@ -429,9 +468,6 @@ export default function AllSuppliers() {
                   </td>
                   <td className="p-4">
                     <div className="flex items-center">
-                      <div className="glass-icon-sm p-2 rounded-lg mr-3 bg-gradient-to-r from-blue-500/10 to-blue-600/10">
-                        <Phone size={16} className="text-blue-600" />
-                      </div>
                       <div>
                         <p className="font-medium text-gray-800">{item.mobile}</p>
                         <p className="text-xs text-gray-500">Mobile</p>
@@ -440,9 +476,6 @@ export default function AllSuppliers() {
                   </td>
                   <td className="p-4">
                     <div className="flex items-center">
-                      <div className="glass-icon-sm p-2 rounded-lg mr-3 bg-gradient-to-r from-emerald-500/10 to-emerald-600/10">
-                        <MapPin size={16} className="text-emerald-600" />
-                      </div>
                       <div>
                         <p className="font-medium text-gray-800 truncate max-w-[200px]">{item.address}</p>
                         <p className="text-xs text-gray-500">Address</p>
@@ -451,9 +484,6 @@ export default function AllSuppliers() {
                   </td>
                   <td className="p-4">
                     <div className="flex items-center">
-                      <div className="glass-icon-sm p-2 rounded-lg mr-3 bg-gradient-to-r from-purple-500/10 to-purple-600/10">
-                        <Calendar size={16} className="text-purple-600" />
-                      </div>
                       <div>
                         <p className="font-medium text-gray-800">{item["created at"]}</p>
                         <div className="glass-tag inline-flex items-center px-2 py-0.5 rounded mt-1 bg-gray-100/50 border border-gray-200/50">
@@ -466,26 +496,41 @@ export default function AllSuppliers() {
                     </div>
                   </td>
                   <td className="p-4">
-                    <button
-                      onClick={() => handleDeleteSupplier(item.id)}
-                      disabled={deletingId === item.id}
-                      className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-60"
-                      title="Delete supplier"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                    <button
-                      onClick={() => openClearDueModal(item)}
-                      disabled={parseFloat(item.rawDue || 0) <= 0}
-                      className={`ml-2 p-2 rounded-lg transition-colors disabled:opacity-60 ${
-                        parseFloat(item.rawDue || 0) > 0
-                          ? "bg-amber-50 text-amber-600 hover:bg-amber-100"
-                          : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      }`}
-                      title={parseFloat(item.rawDue || 0) > 0 ? "Clear Due" : "No due"}
-                    >
-                      <TbCurrencyTaka size={16} />
-                    </button>
+                    { canEditSupplier && (
+                      <button
+                        onClick={() => openEditModal(item.id)}
+                        className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                        title="Edit supplier"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                    )}
+                    { canDeleteSupplier && (
+                      <button
+                        onClick={() => handleDeleteSupplier(item.id)}
+                        disabled={deletingId === item.id}
+                        className="ml-2 p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-60"
+                        title="Delete supplier"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+
+                    { canClearDueSupplier && (
+                      <button
+                        onClick={() => openClearDueModal(item)}
+                        disabled={parseFloat(item.rawDue || 0) <= 0}
+                        className={`ml-2 p-2 rounded-lg transition-colors disabled:opacity-60 ${
+                          parseFloat(item.rawDue || 0) > 0
+                            ? "bg-amber-50 text-amber-600 hover:bg-amber-100"
+                            : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        }`}
+                        title={parseFloat(item.rawDue || 0) > 0 ? "Clear Due" : "No due"}
+                      >
+                        <TbCurrencyTaka size={16} />
+                      </button>
+                    )}
+
                   </td>
                 </tr>
               ))}
@@ -555,49 +600,6 @@ export default function AllSuppliers() {
         )}
       </div>
 
-      {/* Stats Summary */}
-      {filteredSuppliers.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-          <div className="glass-card p-4 border border-white/20 backdrop-blur-xl">
-            <div className="flex items-center">
-              <div className="glass-icon p-2 rounded-lg mr-3 bg-gradient-to-r from-indigo-500/10 to-indigo-600/10">
-                <Users size={18} className="text-indigo-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Total Suppliers</p>
-                <p className="text-xl font-bold text-gray-900">{filteredSuppliers.length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="glass-card p-4 border border-white/20 backdrop-blur-xl">
-            <div className="flex items-center">
-              <div className="glass-icon p-2 rounded-lg mr-3 bg-gradient-to-r from-blue-500/10 to-blue-600/10">
-                <Phone size={18} className="text-blue-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">With Contact Info</p>
-                <p className="text-xl font-bold text-gray-900">
-                  {filteredSuppliers.filter(s => s.mobile && s.mobile !== "-").length}
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="glass-card p-4 border border-white/20 backdrop-blur-xl">
-            <div className="flex items-center">
-              <div className="glass-icon p-2 rounded-lg mr-3 bg-gradient-to-r from-emerald-500/10 to-emerald-600/10">
-                <MapPin size={18} className="text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">With Address</p>
-                <p className="text-xl font-bold text-gray-900">
-                  {filteredSuppliers.filter(s => s.address && s.address !== "-").length}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {clearDueModal.isOpen && clearDueModal.supplier && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeClearDueModal}></div>
@@ -632,6 +634,68 @@ export default function AllSuppliers() {
                 }`}
               >
                 {clearDueModal.saving ? "Clearing..." : "Clear Due"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeEditModal}></div>
+          <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-lg w-full p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Edit Supplier</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                <input
+                  type="text"
+                  value={editModal.form.name}
+                  onChange={(e) =>
+                    setEditModal((prev) => ({ ...prev, form: { ...prev.form, name: e.target.value } }))
+                  }
+                  className="w-full border border-gray-300 rounded-xl p-3 bg-white/80"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
+                <input
+                  type="text"
+                  value={editModal.form.mobile}
+                  onChange={(e) =>
+                    setEditModal((prev) => ({ ...prev, form: { ...prev.form, mobile: e.target.value } }))
+                  }
+                  className="w-full border border-gray-300 rounded-xl p-3 bg-white/80"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                <textarea
+                  rows="3"
+                  value={editModal.form.address}
+                  onChange={(e) =>
+                    setEditModal((prev) => ({ ...prev, form: { ...prev.form, address: e.target.value } }))
+                  }
+                  className="w-full border border-gray-300 rounded-xl p-3 bg-white/80"
+                />
+              </div>
+              {editModal.error && <p className="text-sm text-red-600">{editModal.error}</p>}
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={closeEditModal}
+                className="px-5 py-2.5 rounded-xl bg-gray-200/70 text-gray-700 hover:bg-gray-300/80"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitEditSupplier}
+                disabled={editModal.saving}
+                className={`px-5 py-2.5 rounded-xl text-white ${
+                  editModal.saving ? "bg-gray-400" : "bg-gradient-to-r from-blue-500 to-indigo-500"
+                }`}
+              >
+                {editModal.saving ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </div>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Camera, Factory, Package, Save, Search, ShoppingBag, Store, Trash2, Truck, X } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { API_ROUTES } from "../../config";
+import { includesLooseNumber } from "../../utils/numberLooseSearch";
 import { activeOnly } from "../../utils/softDelete";
 
 export default function RepairCreate() {
@@ -89,8 +90,8 @@ export default function RepairCreate() {
     const q = value.toLowerCase();
     const results = damagedItems.filter(
       (item) =>
-        String(item.name || "").toLowerCase().includes(q) ||
-        String(item.barcode || "").toLowerCase().includes(q)
+        includesLooseNumber(item.name, q) ||
+        includesLooseNumber(item.barcode, q)
     );
     setSearchResults(results);
     setShowSearch(true);
@@ -219,27 +220,49 @@ export default function RepairCreate() {
       </div>
 
       <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <select value={sourceType} onChange={(e) => setSourceType(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-            <option value="store">Store</option>
-            <option value="shop">Shop</option>
-            <option value="factory">Factory</option>
-          </select>
-          <select value={sourceId} onChange={(e) => setSourceId(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-            <option value="">Select location</option>
-            {sourceOptions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-          </select>
-          <input value={destination} onChange={(e) => setDestination(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2" placeholder="Repair destination" />
-          <input type="file" onChange={(e) => setAttachment(e.target.files?.[0] || null)} className="rounded-lg border border-gray-200 bg-white px-3 py-2" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm text-gray-600">Get items from</label>
+            <select value={sourceType} onChange={(e) => setSourceType(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+              <option value="store">Store</option>
+              <option value="shop">Shop</option>
+              <option value="factory">Factory</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm text-gray-600">Source</label>
+            <select value={sourceId} onChange={(e) => setSourceId(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+              <option value="">Select location</option>
+              {sourceOptions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm text-gray-600">Destination</label>
+            <input value={destination} onChange={(e) => setDestination(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2" placeholder="Repair destination" />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <input type="number" min="0" step="0.01" value={shippingCost} onChange={(e) => setShippingCost(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2" placeholder="Shipping cost" />
-          <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-            <option value="">Select account for shipping</option>
-            {accounts.map((a) => <option key={a.accountId} value={a.accountId}>{a.account?.name || a.account_name || `Account ${a.accountId}`}</option>)}
-          </select>
-          <textarea rows={1} value={note} onChange={(e) => setNote(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2" placeholder="Note" />
+          <div className="flex flex-col gap-2">
+            <label className="text-sm text-gray-600">Shipping cost</label>
+            <input type="number" min="0" step="0.01" value={shippingCost} onChange={(e) => setShippingCost(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2" placeholder="Shipping cost" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm text-gray-600">Shipping account</label>
+            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+              <option value="">Select account for shipping</option>
+              {accounts.map((a) => <option key={a.accountId} value={a.accountId}>{a.account?.name || a.account_name || `Account ${a.accountId}`}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm text-gray-600">Attachment</label>
+            <input type="file" onChange={(e) => setAttachment(e.target.files?.[0] || null)} className="rounded-lg border border-gray-200 bg-white px-3 py-2" />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-gray-700">Note</label>
+          <textarea rows={1} value={note} onChange={(e) => setNote(e.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 min-h-18 py-2" placeholder="Note" />
         </div>
 
         <div ref={searchRef} className="rounded-xl border border-white/60 bg-white/60 p-3">
@@ -310,3 +333,6 @@ export default function RepairCreate() {
     </div>
   );
 }
+
+
+

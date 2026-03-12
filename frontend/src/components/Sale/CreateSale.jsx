@@ -1,20 +1,32 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
+import { includesLooseNumber } from "../../utils/numberLooseSearch";
+import { printSaleInvoiceById } from "./saleInvoicePrint";
 import { CircleDollarSign, CreditCard, Search, ShoppingCart, Store, TriangleAlert, UserRound, Image as ImageIcon, ClipboardList, X, Camera } from "lucide-react";
 import { TbCurrencyTaka } from "react-icons/tb";
 import { activeOnly } from "../../utils/softDelete";
 import { Html5Qrcode } from "html5-qrcode";
+import { usePermission } from "../../hooks/usePermission";
+import { useFeature } from "../../hooks/useFeature"
+
+const getNowDateTimeLocal = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+};
 
 export default function ShopPOS( props ) {
   const [shops, setShops] = useState([]);
   const [shopItems, setShopItems] = useState([]);
+  const [catalogItems, setCatalogItems] = useState([]);
   const [shopId, setShopId] = useState("");
   const [cartItems, setCartItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [discount, setDiscount] = useState(0);
+  const [discountType, setDiscountType] = useState("flat");
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
@@ -32,6 +44,14 @@ export default function ShopPOS( props ) {
   const [priceModalData, setPriceModalData] = useState({ index: null, currentPrice: 0 });
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerError, setScannerError] = useState("");
+  const [extraSearchQuery, setExtraSearchQuery] = useState("");
+  const [extraSelectedCategory, setExtraSelectedCategory] = useState("all");
+  const [saleDateTime, setSaleDateTime] = useState(getNowDateTimeLocal());
+
+  const { hasPermission } = usePermission();
+  const canCreateSaleInPreviousDate = hasPermission("previous_date_sales_create");
+
+  const { isFeatureActive } = useFeature();
 
   const searchInputRef = useRef(null);
   const scannerRef = useRef(null);
@@ -191,7 +211,94 @@ export default function ShopPOS( props ) {
       .catch(() => setBankAccounts([]));
   }, []);
 
+  // Fetch full catalog items for extra section
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    Promise.all([
+      fetch(API_ROUTES.PRODUCTS_ALL, { headers: { Authorization: "Bearer " + token } }),
+      fetch(API_ROUTES.MATERIALS_ALL, { headers: { Authorization: "Bearer " + token } }),
+    ])
+      .then(async ([productsRes, materialsRes]) => {
+        if (!productsRes.ok) throw new Error("Failed to fetch products");
+        if (!materialsRes.ok) throw new Error("Failed to fetch materials");
+        const [productsData, materialsData] = await Promise.all([productsRes.json(), materialsRes.json()]);
+        const allProducts = activeOnly(Array.isArray(productsData?.products) ? productsData.products : []);
+        const allMaterials = activeOnly(Array.isArray(materialsData?.materials) ? materialsData.materials : []);
+
+        const mappedProducts = allProducts.map((row) => ({
+          id: row.id, name: row.name, type: "product", sale_price: row.sale_price, wholesale_price: row.wholesale_price, cost_price: null,
+          barcode: row.barcode, category: row.category, brand: row.brand || null, unit: row.unit || "unit",
+          alternative_names: toArray(row.alternative_names), alternative_units: toArray(row.alternative_units),
+          stock: Number(row.stock || 0), shop_stock: Number(row.stock || 0), global_stock: Number(row.stock || 0),
+          alert_quantity: Number(row.alert_quantity || 0), image: row.image || null, batches: [], isAssignedToShop: true, minStock: 0,
+        }));
+
+        const mappedMaterials = allMaterials.map((row) => ({
+          id: row.id, name: row.name, type: "material", sale_price: row.sale_price, wholesale_price: null, cost_price: row.unit_cost,
+          barcode: row.barcode, category: row.category, brand: row.brand, unit: row.unit || "unit",
+          alternative_names: toArray(row.alternative_names), alternative_units: toArray(row.alternative_units),
+          stock: Number(row.current_stock || 0), shop_stock: Number(row.current_stock || 0), global_stock: Number(row.current_stock || 0),
+          alert_quantity: Number(row.alert_quantity || 0), image: row.image || null, batches: [], isAssignedToShop: true, minStock: 0,
+        }));
+
+        setCatalogItems([...mappedProducts, ...mappedMaterials].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""))));
+      })
+      .catch((err) => {
+        console.error("Error fetching catalog items:", err);
+        setCatalogItems([]);
+      });
+  }, []);
+
   // Fetch items for selected shop
+  const loadMergedShopItems = async (activeShopId) => {
+    const token = localStorage.getItem("token");
+    if (!token || !activeShopId) {
+      setShopItems([]);
+      return;
+    }
+    const [shopRes, productsRes, materialsRes] = await Promise.all([
+      fetch(API_ROUTES.SHOP_SALES_ITEMS(activeShopId), { headers: { Authorization: "Bearer " + token } }),
+      fetch(API_ROUTES.PRODUCTS_ALL, { headers: { Authorization: "Bearer " + token } }),
+      fetch(API_ROUTES.MATERIALS_ALL, { headers: { Authorization: "Bearer " + token } }),
+    ]);
+    if (!shopRes.ok) throw new Error("Failed to fetch shop items");
+    if (!productsRes.ok) throw new Error("Failed to fetch products");
+    if (!materialsRes.ok) throw new Error("Failed to fetch materials");
+    const [shopData, productsData, materialsData] = await Promise.all([shopRes.json(), productsRes.json(), materialsRes.json()]);
+    const scopedRows = activeOnly(Array.isArray(shopData) ? shopData : []);
+    const scopedMap = new Map(scopedRows.map((row) => [String(row.type) + "-" + String(row.id), row]));
+    const allProducts = activeOnly(Array.isArray(productsData?.products) ? productsData.products : []);
+    const allMaterials = activeOnly(Array.isArray(materialsData?.materials) ? materialsData.materials : []);
+
+    const mergedProducts = allProducts.map((row) => {
+      const scoped = scopedMap.get("product-" + String(row.id));
+      return {
+        id: row.id, name: row.name, type: "product", sale_price: row.sale_price, wholesale_price: row.wholesale_price, cost_price: null,
+        barcode: row.barcode, category: row.category, brand: null, unit: row.unit || "unit",
+        alternative_names: toArray(row.alternative_names), alternative_units: toArray(row.alternative_units),
+        stock: Number(scoped?.shop_stock || 0), shop_stock: Number(scoped?.shop_stock || 0), global_stock: Number(row.stock || 0),
+        alert_quantity: Number(row.alert_quantity || 0), image: row.image || null, batches: toArray(scoped?.batches),
+        isAssignedToShop: Boolean(scoped), minStock: 0,
+      };
+    });
+
+    const mergedMaterials = allMaterials.map((row) => {
+      const scoped = scopedMap.get("material-" + String(row.id));
+      return {
+        id: row.id, name: row.name, type: "material", sale_price: row.sale_price, wholesale_price: null, cost_price: row.unit_cost,
+        barcode: row.barcode, category: row.category, brand: row.brand, unit: row.unit || "unit",
+        alternative_names: toArray(row.alternative_names), alternative_units: toArray(row.alternative_units),
+        stock: Number(scoped?.shop_stock || 0), shop_stock: Number(scoped?.shop_stock || 0), global_stock: Number(row.current_stock || 0),
+        alert_quantity: Number(row.alert_quantity || 0), image: row.image || null, batches: toArray(scoped?.batches),
+        isAssignedToShop: Boolean(scoped), minStock: 0,
+      };
+    });
+
+    setShopItems([...mergedProducts, ...mergedMaterials].sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""))));
+  };
+
   useEffect(() => {
     if (!shopId) {
       setShopItems([]);
@@ -199,21 +306,12 @@ export default function ShopPOS( props ) {
       setCashRegisterId("");
       return;
     }
-
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    fetch(API_ROUTES.SHOP_SALES_ITEMS(shopId), {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch shop items");
-        return res.json();
-      })
-      .then((data) => {
-        setShopItems(activeOnly(Array.isArray(data) ? data : []));
+    loadMergedShopItems(shopId)
+      .then(() => {
         setSearchResults([]);
         setSearchQuery("");
+        setExtraSearchQuery("");
+        setExtraSelectedCategory("all");
       })
       .catch((err) => {
         console.error("Error fetching shop items:", err);
@@ -266,11 +364,11 @@ export default function ShopPOS( props ) {
     }
 
     const filtered = shopItems.filter(item =>
-      item.name.toLowerCase().includes(query.toLowerCase()) ||
-      toArray(item.alternative_names).some((n) => String(n || "").toLowerCase().includes(query.toLowerCase())) ||
-      (item.barcode && item.barcode.toLowerCase().includes(query.toLowerCase())) ||
-      (item.brand && item.brand.toLowerCase().includes(query.toLowerCase())) ||
-      (item.category && item.category.toLowerCase().includes(query.toLowerCase()))
+      includesLooseNumber(item.name, query) ||
+      toArray(item.alternative_names).some((n) => includesLooseNumber(n, query)) ||
+      (item.barcode && includesLooseNumber(item.barcode, query)) ||
+      (item.brand && includesLooseNumber(item.brand, query)) ||
+      (item.category && includesLooseNumber(item.category, query))
     );
 
     setSearchResults(filtered.slice(0, 10));
@@ -522,6 +620,14 @@ export default function ShopPOS( props ) {
       return false;
     }
 
+    if (saleDateTime) {
+      const parsedSaleDateTime = new Date(saleDateTime);
+      if (Number.isNaN(parsedSaleDateTime.getTime())) {
+        alert("Please select a valid sale date and time.");
+        return false;
+      }
+    }
+
     if ( ( parseFloat(paidAmount).toFixed(2) - grandTotal.toFixed(2) ) > 0.01 ) {
       alert("⚠️ Paid amount cannot exceed grand total.");
       return false;
@@ -545,40 +651,9 @@ export default function ShopPOS( props ) {
   const printInvoice = async (saleResponse) => {
     try {
       const token = localStorage.getItem("token");
-      const companyRes = await fetch(API_ROUTES.BUSINESS_SETTINGS_BY_KEY("company_profile"), {
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => null);
-      const company = companyRes && companyRes.ok ? (await companyRes.json())?.value || {} : {};
-
-      const invoiceItems = cartItems.map((item) => `
-        <tr>
-          <td style="padding:4px 0;">${item.selectedName || item.name}</td>
-          <td style="text-align:right;">${item.selectedQuantity || item.quantity} ${item.selectedUnit || item.unit || ""}</td>
-          <td style="text-align:right;">${Number(item.unitPrice || 0).toFixed(2)}</td>
-          <td style="text-align:right;">${Number(item.totalPrice || 0).toFixed(2)}</td>
-        </tr>
-      `).join("");
-
-      const printWindow = window.open("", "_blank", "width=900,height=700");
-      if (!printWindow) return;
-      printWindow.document.write(`
-        <html>
-          <head><title>Invoice</title></head>
-          <body style="font-family: Arial, sans-serif; padding: 20px;">
-            <h2 style="margin:0;">${company.companyName || "Company"}</h2>
-            <p style="margin:4px 0 12px;">${company.address || ""}</p>
-            <h3>Invoice #${saleResponse?.sale?.reference || ""}</h3>
-            <table style="width:100%; border-collapse: collapse;" border="1" cellspacing="0" cellpadding="6">
-              <thead><tr><th align="left">Item</th><th align="right">Qty</th><th align="right">Rate</th><th align="right">Amount</th></tr></thead>
-              <tbody>${invoiceItems}</tbody>
-            </table>
-            <h3 style="text-align:right; margin-top:12px;">Total: ${Number(grandTotal || 0).toFixed(2)}</h3>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.focus();
-      printWindow.print();
+      const saleId = Number(saleResponse?.sale?.id || saleResponse?.id || 0);
+      if (!token || !saleId) return;
+      await printSaleInvoiceById(saleId, token);
     } catch (e) {
       console.error("Failed to print invoice", e);
     }
@@ -598,7 +673,8 @@ export default function ShopPOS( props ) {
       paymentType,
       bankAccountId: paymentType === "card" ? parseInt(bankAccountId) : null,
       cashRegisterId: paymentType === "cash" ? parseInt(cashRegisterId) : null,
-      discount: Math.max(0, parseFloat(discount) || 0),
+      createdAt: saleDateTime ? new Date(saleDateTime).toISOString() : null,
+      discount: Number(discountAmount.toFixed(2)),
       paidAmount: parseFloat(paidAmount) || 0,
       items: cartItems.map(item => ({
         itemId: item.itemId,
@@ -636,27 +712,40 @@ export default function ShopPOS( props ) {
       });
 
       const data = await res.json();
+      if( selectedCustomer ) {
+        fetch(API_ROUTES.CUSTOMERS_ALL, {
+        headers: { Authorization: `Bearer ${token}` },
+        })
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch customers");
+          return res.json();
+        })
+        .then((data) => {
+          setCustomers(Array.isArray(data.customers) ? data.customers : []);
+        })
+        .catch((err) => {
+          console.error("Error fetching customers:", err);
+          setCustomers([]);
+        });
+      }
 
       if (res.ok) {
-        alert("✅ Sale completed successfully!");
         await printInvoice(data);
         // Clear cart but don't restore stock since it's already sold
         setCartItems([]);
         setDiscount(0);
+        setDiscountType("flat");
         setSelectedCustomer(null);
         setCustomerSearchQuery("");
         setSearchQuery("");
         setShowSearchResults(false);
         setPaidAmount(0);
         setPaidAmountTouched(false);
+        setSaleDateTime(getNowDateTimeLocal());
         
-        // Refresh shop items to get updated stock from server
+        // Refresh merged items to get updated stock from server
         if (shopId) {
-          fetch(API_ROUTES.SHOP_SALES_ITEMS(shopId), {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-            .then((res) => res.json())
-            .then((data) => setShopItems(Array.isArray(data) ? data : []));
+          await loadMergedShopItems(shopId);
         }
       } else {
         alert("❌ Error: " + (data.error || "Something went wrong"));
@@ -671,7 +760,33 @@ export default function ShopPOS( props ) {
 
   // Calculate totals
   const subtotal = cartItems.reduce((sum, item) => sum + item.totalPrice, 0);
-  const grandTotal = Math.max(0, subtotal - (parseFloat(discount) || 0));
+  const discountInputValue = Math.max(0, parseFloat(discount) || 0);
+  const discountAmount = Math.min(
+    subtotal,
+    discountType === "percent" ? (subtotal * discountInputValue) / 100 : discountInputValue
+  );
+  const grandTotal = Math.max(0, subtotal - discountAmount);
+
+  const normalizeExtraCategory = (value) => String(value || "").trim() || "Uncategorized";
+  const extraSectionItems = shopId ? shopItems : catalogItems;
+  const categoryOptions = [
+    "all",
+    ...Array.from(new Set(extraSectionItems.map((item) => normalizeExtraCategory(item.category)))).sort((a, b) => a.localeCompare(b)),
+  ];
+
+  const extraFilteredItems = extraSectionItems.filter((item) => {
+    const categoryName = normalizeExtraCategory(item.category);
+    const categoryMatches = extraSelectedCategory === "all" || categoryName === extraSelectedCategory;
+    const query = extraSearchQuery.trim();
+    if (!query) return categoryMatches;
+    const queryMatches =
+      includesLooseNumber(item.name, query) ||
+      (item.barcode && includesLooseNumber(item.barcode, query)) ||
+      (item.brand && includesLooseNumber(item.brand, query)) ||
+      includesLooseNumber(categoryName, query) ||
+      toArray(item.alternative_names).some((n) => includesLooseNumber(n, query));
+    return categoryMatches && queryMatches;
+  });
 
   useEffect(() => {
     if (!paidAmountTouched) {
@@ -679,9 +794,6 @@ export default function ShopPOS( props ) {
     }
   }, [grandTotal, paidAmountTouched]);
 
-  // Get low stock items (below 20)
-  const lowStockItems = shopItems.filter(item => item.shop_stock < 20 && item.shop_stock > 0);
-  const outOfStockItems = shopItems.filter(item => item.shop_stock <= 0);
 
   return (
     <div className="min-h-screen rounded-t-2xl w-full bg-gray-50 p-2">
@@ -714,7 +826,7 @@ export default function ShopPOS( props ) {
       <div className="max-w-7xl  xl:max-w-full p-4">
         <div className="grid grid-cols-1 gap-6">
           {/* Left Column: Shop Selection & Search */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 space-y-4 lg:space-y-0">
             {/* Shop Selection Card */}
             <div className="col-span-1 bg-white rounded-xl shadow-md p-5">
               <div className="flex items-center gap-2 mb-4">
@@ -722,7 +834,7 @@ export default function ShopPOS( props ) {
                   <span className="text-blue-600"><Store size={42} /></span>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-800">Select Shop</h3>
+                  <h3 className="font-semibold text-gray-800">Select Shop and time</h3>
                   <p className="text-sm text-gray-500">Choose shop to sell from</p>
                 </div>
               </div>
@@ -743,6 +855,19 @@ export default function ShopPOS( props ) {
                   </option>
                 ))}
               </select>
+
+              { canCreateSaleInPreviousDate && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Sale Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                    value={saleDateTime}
+                    onChange={(e) => setSaleDateTime(e.target.value)}
+                  />
+                </div>
+              )}
+
             </div>
 
             {/* Customer Card */}
@@ -811,6 +936,15 @@ export default function ShopPOS( props ) {
                     </button>
                 )}
               </div>
+
+              {selectedCustomer && (
+                <div>
+                  <p className="font-normal text-sm text-gray-600">Mobile: <b>{selectedCustomer.mobile || "--"}</b></p>
+                  <p className="font-normal text-sm text-gray-600">Address: {selectedCustomer.address || "--"}</p>
+                  <p className="font-normal text-sm text-gray-600">Total Due: {selectedCustomer.total_due || 0}</p>
+                </div>
+              )}
+              
             </div>
 
 
@@ -878,19 +1012,15 @@ export default function ShopPOS( props ) {
 
           </div>
 
-          {/* Middle Column: Cart Items */}
-          <div className="">
-            <div className="bg-white rounded-xl shadow-md overflow-hidden">
+          {/* Cart Items */}
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-2 text-xs">
+            <div className="md:col-span-3 bg-white rounded-xl shadow-md overflow-hidden">
               {/* Cart Header */}
               <div className="p-6 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
                 <div className="flex justify-between items-center flex-col sm:flex-col md:flex-row">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg">
                       <span className="text-white text-xl"><ShoppingCart /></span>
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-800 text-lg">Shopping Cart</h3>
-                      <p className="text-sm text-gray-500">{cartItems.length} item(s) in cart</p>
                     </div>
                   </div>
 
@@ -1011,7 +1141,7 @@ export default function ShopPOS( props ) {
                     className="px-4 py-2 bg-gradient-to-r from-gray-200 to-gray-300 text-gray-800 font-medium rounded-lg hover:from-gray-300 hover:to-gray-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={cartItems.length === 0 || loading}
                   >
-                    Clear All
+                    Clear
                   </button>
                 </div>
               </div>
@@ -1029,7 +1159,9 @@ export default function ShopPOS( props ) {
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Item</th>
-                        <th className="p-4 text-left text-sm font-semibold text-gray-700">Batch</th>
+                        { isFeatureActive("stock_management.enable_batch_tracking") && (
+                          <th className="p-4 text-left text-sm font-semibold text-gray-700">Batch</th>
+                        )}
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Price</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Quantity</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Total</th>
@@ -1080,7 +1212,7 @@ export default function ShopPOS( props ) {
                                       <select
                                         value={item.selectedName || item.name}
                                         onChange={(e) => handleSelectedNameChange(index, e.target.value)}
-                                        className="text-xs border border-gray-300 rounded px-2 py-1"
+                                        className="border border-gray-300 rounded px-2 py-1"
                                         title="Selected name"
                                       >
                                         <option value={item.name}>{item.name}</option>
@@ -1090,11 +1222,10 @@ export default function ShopPOS( props ) {
                                       </select>
                                     </div>
                                   )}
-                                  <div className="text-sm text-gray-600 mt-1">
+                                  <div className="text-gray-600 mt-1">
                                     {item.barcode && <span>{item.barcode}</span>}
-                                    {item.unit && <span className="ml-2">| Base Unit: {item.unit}</span>}
                                   </div>
-                                  {(item.type === "product" || item.type === "material") && (
+                                  {(item.type === "product" || item.type === "material") && isFeatureActive("sale.enable_warranty") && (
                                     <div className="mt-2 flex flex-wrap gap-2 items-center">
                                       <label className="inline-flex items-center gap-2 text-xs text-gray-700">
                                         <input
@@ -1105,33 +1236,38 @@ export default function ShopPOS( props ) {
                                         Warranty
                                       </label>
                                       {item.warrantyEnabled && (
-                                        <input
-                                          type="date"
-                                          value={item.warrantyExpiryDate || ""}
-                                          onChange={(e) => handleWarrantyExpiryChange(index, e.target.value)}
-                                          className="w-40 border border-gray-300 rounded px-2 py-1 text-xs"
-                                          title="Warranty expiry date"
-                                        />
+                                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                                          End: 
+                                          <input
+                                            type="date"
+                                            value={item.warrantyExpiryDate || ""}
+                                            onChange={(e) => handleWarrantyExpiryChange(index, e.target.value)}
+                                            className="w-40 border border-gray-300 rounded px-2 py-1 text-xs"
+                                            title="Warranty expiry date"
+                                          />
+                                        </div>
                                       )}
                                     </div>
                                   )}
                                 </div>
                               </div>
                             </td>
-                            <td className="p-4">
-                              <select
-                                value={`${item.batchNumber || ''}||${item.expiryDate || ''}`}
-                                onChange={(e) => handleBatchChange(index, e.target.value)}
-                                className="min-w-48 border border-gray-300 rounded-lg p-2"
-                              >
-                                <option value="||">No batch</option>
-                                {(item.batches || []).map((batch) => (
-                                  <option key={`${batch.batchNumber}-${batch.expiryDate || 'none'}`} value={`${batch.batchNumber}||${batch.expiryDate || ''}`}>
-                                    {`${batch.batchNumber} | Exp: ${batch.expiryDate || 'N/A'}`}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
+                            { isFeatureActive("stock_management.enable_batch_tracking") && (
+                              <td className="p-4">
+                                <select
+                                  value={`${item.batchNumber || ''}||${item.expiryDate || ''}`}
+                                  onChange={(e) => handleBatchChange(index, e.target.value)}
+                                  className="min-w-48 border border-gray-300 rounded-lg p-2"
+                                >
+                                  <option value="||">No batch</option>
+                                  {(item.batches || []).map((batch) => (
+                                    <option key={`${batch.batchNumber}-${batch.expiryDate || 'none'}`} value={`${batch.batchNumber}||${batch.expiryDate || ''}`}>
+                                      {`${batch.batchNumber} | Exp: ${batch.expiryDate || 'N/A'}`}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                            )}
                             <td className="p-4">
                               <div className="flex items-center gap-2">
                                 <div>
@@ -1141,7 +1277,7 @@ export default function ShopPOS( props ) {
                                     step="0.01"
                                     value={item.unitPrice}
                                     onChange={(e) => handlePriceChange(index, e.target.value)}
-                                    className="w-full min-w-24 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition"
+                                    className="w-full max-w-32 border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition"
                                     placeholder="Enter new price"
                                     autoFocus
                                   />
@@ -1172,14 +1308,12 @@ export default function ShopPOS( props ) {
                                   <span className="text-gray-700">+</span>
                                 </button>
                               </div>
-                              <div className="text-xs text-gray-500 mt-2">
-                                Available in batch (base): {item.batchAvailable || 0}
-                              </div>
-                              <div className="mt-1">
+                              <div className="text-xs text-gray-500 mt-1 space-x-1">
+                                <span>Stock: {item.batchAvailable || 0}</span>
                                 <select
                                   value={item.selectedUnit || item.unit || "unit"}
                                   onChange={(e) => handleSelectedUnitChange(index, e.target.value)}
-                                  className="text-xs border border-gray-300 rounded px-2 py-1"
+                                  className="text-xs border border-gray-100 rounded p-0"
                                   title="Selected unit"
                                 >
                                   <option value={item.unit || "unit"}>{item.unit || "unit"}</option>
@@ -1189,11 +1323,13 @@ export default function ShopPOS( props ) {
                                     </option>
                                   ))}
                                 </select>
+                              <div className="mt-1">
                                 {item.selectedUnit !== item.unit && (
                                   <div className="text-[11px] text-gray-500 mt-1">
                                     Actual qty: {Number(item.quantity || 0).toFixed(4)} {item.unit}
                                   </div>
                                 )}
+                              </div>
                               </div>
                             </td>
                             <td className="p-4">
@@ -1227,15 +1363,33 @@ export default function ShopPOS( props ) {
                     <div className="flex justify-between items-center">
                       <span>Discount:</span>
                       <div className="flex items-center space-x-3">
+                        <select
+                          value={discountType}
+                          onChange={(e) => {
+                            const nextType = e.target.value;
+                            setDiscountType(nextType);
+                            if (nextType === "percent") {
+                              setDiscount((prev) => Math.min(100, Math.max(0, parseFloat(prev) || 0)));
+                            }
+                          }}
+                          className="border border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+                        >
+                          <option value="flat">Flat</option>
+                          <option value="percent">Percent</option>
+                        </select>
                         <input
                           type="number"
                           min="0"
+                          max={discountType === "percent" ? 100 : undefined}
                           step="0.01"
                           value={discount}
-                          onChange={(e) => setDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
+                          onChange={(e) => {
+                            const value = Math.max(0, parseFloat(e.target.value) || 0);
+                            setDiscount(discountType === "percent" ? Math.min(100, value) : value);
+                          }}
                           className="w-32 border border-gray-300 p-2 rounded-lg text-right focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
                         />
-                        <span className="font-medium text-red-600">-${parseFloat(discount || 0).toFixed(2)}</span>
+                        <span className="font-medium text-red-600">-${discountAmount.toFixed(2)}</span>
                       </div>
                     </div>
                     
@@ -1299,6 +1453,102 @@ export default function ShopPOS( props ) {
                 </div>
               )}
             </div>
+            <div className="md:col-span-2 bg-white rounded-xl">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <div className="md:col-span-1 rounded-lg p-1 overflow-y-auto">
+                  <h3 className="font-semibold text-sm text-gray-800 mb-3">Categories</h3>
+                  <div className="space-y-2">
+                    {categoryOptions.map((category) => {
+                      const active = extraSelectedCategory === category;
+                      const label = category === "all" ? "All" : category;
+                      return (
+                        <button
+                          key={category}
+                          type="button"
+                          onClick={() => setExtraSelectedCategory(category)}
+                          className={active
+                            ? "w-full text-left p-1 border-b bg-blue-50 border-blue-300 text-blue-700"
+                            : "w-full text-left p-1 border-b bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                          }
+                        >
+                          <div className="w-full wrap-break-word text-xs font-medium">
+                            {label}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="md:col-span-3">
+                  <div className="relative mb-3">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={extraSearchQuery}
+                      onChange={(e) => setExtraSearchQuery(e.target.value)}
+                      placeholder="Search in this list (products/materials)"
+                      className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+
+                  {!shopId && (
+                    <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      Select a shop to add items to cart. Items are shown from full catalog.
+                    </div>
+                  )}
+
+                  {extraFilteredItems.length === 0 ? (
+                    <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center text-gray-500 text-sm">
+                      No items found for this category/search.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 gap-3 max-h-[520px] overflow-y-auto pr-1">
+                      {extraFilteredItems.map((item) => {
+                        const imageUrl = getImageUrl(item.image);
+                        const stock = Number(shopId ? (item.shop_stock || 0) : (item.global_stock ?? item.stock ?? 0));
+                        const disabled = !shopId || stock <= 0;
+                        return (
+                          <button
+                            key={item.type + "-" + item.id}
+                            type="button"
+                            onClick={() => handleAddToCart(item)}
+                            disabled={disabled}
+                            className={disabled
+                              ? "text-left border rounded-lg p-3 transition bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed"
+                              : "text-left border rounded-lg p-3 transition bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm"
+                            }
+                          >
+                            <div className="flex flex-col items-start gap-3">
+                              <div className="w-12 h-12 rounded-md border border-gray-200 bg-gray-50">
+                                {imageUrl ? (
+                                  <img src={imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <ImageIcon className="w-5 h-5 text-gray-400" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-gray-900">{item.name}</p>
+                                <p className="text-xs text-gray-500">{item.barcode || "-"}</p>
+                                <p className="text-xs text-gray-500">{normalizeExtraCategory(item.category)}</p>
+                              </div>
+                            </div>
+                            <div className="mt-2 flex flex-col items-start justify-between text-sm">
+                              <span className="font-semibold text-gray-900">${Number(item.sale_price || 0).toFixed(2)}</span>
+                              <span className={stock <= 0 ? "text-xs font-medium text-red-600" : "text-xs font-medium text-green-700"}>
+                                Stock: {stock}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1334,3 +1584,8 @@ export default function ShopPOS( props ) {
     </div>
   );
 }
+
+
+
+
+

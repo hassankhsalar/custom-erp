@@ -34,32 +34,9 @@ router.get('/', async (req, res) => {
     const suppliers = await prisma.supplier.findMany({
       where: { deleted_at: false },
       orderBy: { id: 'desc' },
-      include: {
-        purchases: {
-          select: { grandTotal: true, paidAmount: true }
-        }
-      }
     });
 
-    const payload = suppliers.map((supplier) => {
-      const purchaseTotal = (supplier.purchases || []).reduce(
-        (sum, p) => sum + (parseFloat(p.grandTotal) || 0),
-        0
-      );
-      const paidTotal = (supplier.purchases || []).reduce(
-        (sum, p) => sum + (parseFloat(p.paidAmount) || 0),
-        0
-      );
-      const total_due = Math.max(0, purchaseTotal - paidTotal);
-      return {
-        ...supplier,
-        purchases: undefined,
-        total_purchase: purchaseTotal,
-        total_due
-      };
-    });
-
-    res.json(payload);
+    res.json(suppliers);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -244,13 +221,25 @@ router.post('/:id/clear-due', async (req, res) => {
     });
 
     const appliedAmount = allocations.reduce((sum, row) => sum + row.amount, 0);
+
+    let updatedSupplierDue = null;
+    if (appliedAmount > EPSILON) {
+      const updatedSupplier = await prisma.supplier.update({
+        where: { id: supplierId },
+        data: { total_due: { decrement: appliedAmount } },
+        select: { total_due: true }
+      });
+      updatedSupplierDue = parseFloat(updatedSupplier.total_due) || 0;
+    }
+
     res.json({
       success: true,
       requestedAmount: clearAmount,
       appliedAmount,
       unappliedAmount: Math.max(0, clearAmount - appliedAmount),
       appliedCount: allocations.length,
-      allocations
+      allocations,
+      updatedSupplierDue
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

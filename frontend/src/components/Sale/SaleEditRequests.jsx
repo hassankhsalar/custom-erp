@@ -65,9 +65,11 @@ export default function SaleEditRequests() {
   };
 
   useEffect(() => {
-    fetchRows(1, "pending", "");
+    setAppliedStatus(statusFilter);
+    setAppliedSearch(searchTerm);
+    fetchRows(1, statusFilter, searchTerm);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [statusFilter, searchTerm]);
 
   const handleApprove = async (requestId) => {
     setActionLoadingId(requestId);
@@ -460,3 +462,6 @@ export default function SaleEditRequests() {
     </div>
   );
 }
+
+
+

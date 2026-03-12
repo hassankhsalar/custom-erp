@@ -4,10 +4,11 @@ const { PrismaClient } = require("@prisma/client");
 const { buildScope, ensureIdScope } = require("../utils/associateScope");
 const { createNotification } = require("../utils/notificationHelper");
 const { assertActivePlace, assertActiveItem } = require("../utils/softDelete");
+const { buildContainsOr } = require("../utils/numberLooseSearch");
 
 const prisma = new PrismaClient();
 const router = express.Router();
-const JWT_SECRET = "your-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
@@ -200,7 +201,7 @@ router.get("/lookup/items", authenticateToken, async (req, res) => {
           ...productWhere,
           deleted_at: false,
           product: search
-            ? { deleted_at: false, name: { contains: search } }
+            ? { deleted_at: false, OR: buildContainsOr(["name", "barcode", "category"], search) }
             : { deleted_at: false },
         },
         include: { product: true },
@@ -210,7 +211,7 @@ router.get("/lookup/items", authenticateToken, async (req, res) => {
           ...materialWhere,
           deleted_at: false,
           material: search
-            ? { deleted_at: false, name: { contains: search } }
+            ? { deleted_at: false, OR: buildContainsOr(["name", "barcode", "brand", "category"], search) }
             : { deleted_at: false },
         },
         include: { material: true },
@@ -328,7 +329,7 @@ router.put("/:id", authenticateToken, async (req, res) => {
     if (existing.isSegmented) {
       return res.status(400).json({ error: "Segmented requisition cannot be edited" });
     }
-    if (existing.requesterUserId && existing.requesterUserId !== (req.user?.userId || 0)) {
+    if ((existing.requesterUserId && existing.requesterUserId !== (req.user?.userId || 0)) || !req.user?.isAdmin ) {
       return res.status(403).json({ error: "Only creator can edit this requisition" });
     }
 
@@ -603,7 +604,18 @@ router.get("/orders/transfer", authenticateToken, async (req, res) => {
         store: { select: { id: true, name: true } },
         shop: { select: { id: true, name: true } },
         factory: { select: { id: true, name: true } },
-        items: { include: { product: { include: { materials: { include: { material: true } } } }, material: true } },
+        items: {
+          include: {
+            product: { include: { materials: { include: { material: true } } } },
+            material: true,
+            requisitionItem: {
+              include: {
+                product: { include: { materials: { include: { material: true } } } },
+                material: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -644,7 +656,18 @@ router.get("/orders/production", authenticateToken, async (req, res) => {
         store: { select: { id: true, name: true } },
         shop: { select: { id: true, name: true } },
         factory: { select: { id: true, name: true } },
-        items: { include: { product: { include: { materials: { include: { material: true } } } }, material: true } },
+        items: {
+          include: {
+            product: { include: { materials: { include: { material: true } } } },
+            material: true,
+            requisitionItem: {
+              include: {
+                product: { include: { materials: { include: { material: true } } } },
+                material: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -683,7 +706,18 @@ router.get("/orders/purchase", authenticateToken, async (req, res) => {
         store: { select: { id: true, name: true } },
         shop: { select: { id: true, name: true } },
         factory: { select: { id: true, name: true } },
-        items: { include: { product: { include: { materials: { include: { material: true } } } }, material: true } },
+        items: {
+          include: {
+            product: { include: { materials: { include: { material: true } } } },
+            material: true,
+            requisitionItem: {
+              include: {
+                product: { include: { materials: { include: { material: true } } } },
+                material: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -708,6 +742,59 @@ router.get("/orders/purchase", authenticateToken, async (req, res) => {
     }));
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to fetch purchase orders" });
+  }
+});
+
+router.get("/sections/:sectionId", authenticateToken, async (req, res) => {
+  try {
+    const sectionId = parseInt(req.params.sectionId, 10);
+    if (!Number.isFinite(sectionId) || sectionId <= 0) {
+      return res.status(400).json({ error: "Invalid section ID" });
+    }
+
+    const section = await prisma.requisitionSection.findUnique({
+      where: { id: sectionId },
+      include: {
+        requisition: true,
+        store: { select: { id: true, name: true } },
+        shop: { select: { id: true, name: true } },
+        factory: { select: { id: true, name: true } },
+        items: {
+          include: {
+            product: { include: { materials: { include: { material: true } } } },
+            material: true,
+            requisitionItem: {
+              include: {
+                product: { include: { materials: { include: { material: true } } } },
+                material: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!section) return res.status(404).json({ error: "Section not found" });
+
+    const scope = await buildScope(prisma, req.user?.userId || 0);
+    if (!scope.isAdmin) {
+      const dest = getSectionDestination(section);
+      if (!dest.type || !dest.id) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      ensureIdScope(scope, dest.type, dest.id);
+    }
+
+    const dest = getSectionDestination(section);
+    return res.json({
+      ...section,
+      destinationType: dest.type || section.destinationType || null,
+      destinationId: dest.id || section.destinationId || null,
+      destinationName: dest.name || null,
+    });
+  } catch (error) {
+    if (error.status === 403) return res.status(403).json({ error: "Forbidden" });
+    res.status(500).json({ error: error.message || "Failed to fetch requisition section" });
   }
 });
 
@@ -1057,3 +1144,8 @@ router.post("/:id/child", authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
+
+
+
+
+

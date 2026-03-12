@@ -1,9 +1,11 @@
-import { ArrowUpDown, ClipboardList, TrendingUp, DollarSign, Calendar, Store, User, Tag, CreditCard, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreVertical, Eye, Edit, Trash2, XCircle, Loader2, Search } from "lucide-react";
+import { ArrowUpDown, ClipboardList, TrendingUp, DollarSign, Calendar, Store, User, Tag, CreditCard, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreVertical, Eye, Edit, Trash2, XCircle, Loader2, Search, FileText } from "lucide-react";
 import { useState, useEffect } from "react";
 import { API_ROUTES } from '../../config';
 import { Link, useNavigate } from "react-router-dom";
 import { usePermission } from "../../hooks/usePermission";
 import { useAuth } from "../../context/AuthContext";
+import SearchableSelect from "../common/SearchableSelect";
+import { printSaleInvoiceById, printSaleChallanById } from "./saleInvoicePrint";
 
 export default function AllSales() {
   const navigate = useNavigate();
@@ -11,7 +13,7 @@ export default function AllSales() {
   const { currentUser } = useAuth();
   const canViewEditRequests = hasPermission("sales_open_close");
   const canManageTransaction = hasPermission("sales_open_close");
-  const canEditSales = hasPermission(["sales_edit", "sales_edit_today", "sales_edit_any_day", "sales_update"]);
+  const canEditSales = hasPermission(["sales_edit"]);
   const canDeleteSales = hasPermission(["sales_delete", "sales_open_close"]);
   const canGrantEditAccess = hasPermission("sales_open_close");
   const [sales, setSales] = useState([]);
@@ -34,6 +36,7 @@ export default function AllSales() {
   const [lockActionLoading, setLockActionLoading] = useState(false);
   const [grantLoading, setGrantLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [printingSaleId, setPrintingSaleId] = useState(null);
   const [activeViewTab, setActiveViewTab] = useState("items");
   const [allUsers, setAllUsers] = useState([]);
   const [userSearchTerm, setUserSearchTerm] = useState("");
@@ -41,6 +44,7 @@ export default function AllSales() {
   const [selectedSaleForEditAccess, setSelectedSaleForEditAccess] = useState(null);
   const [editGrantMaxCount, setEditGrantMaxCount] = useState("");
   const [editGrantDurationMinutes, setEditGrantDurationMinutes] = useState("");
+  const [customers, setCustomers] = useState([]);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -52,14 +56,22 @@ export default function AllSales() {
     dateFrom: "",
     dateTo: "",
     customer: "",
+    customerId: "",
     shopId: "",
   });
   const [appliedFilters, setAppliedFilters] = useState({
     dateFrom: "",
     dateTo: "",
     customer: "",
+    customerId: "",
     shopId: "",
   });
+
+  useEffect(() => {
+    setAppliedFilters({ ...filters });
+    setCurrentPage(1);
+  }, [filters]);
+
   const [overview, setOverview] = useState({
     totalRevenue: 0,
     totalDiscount: 0,
@@ -71,6 +83,7 @@ export default function AllSales() {
     fetchBankAccounts();
     fetchUsers();
     fetchShops();
+    fetchCustomer();
   }, []);
 
   useEffect(() => {
@@ -89,7 +102,8 @@ export default function AllSales() {
     params.set("sortDir", sortConfig.direction === "ascending" ? "asc" : "desc");
     if (appliedFilters.dateFrom) params.set("dateFrom", appliedFilters.dateFrom);
     if (appliedFilters.dateTo) params.set("dateTo", appliedFilters.dateTo);
-    if (appliedFilters.customer.trim()) params.set("customer", appliedFilters.customer.trim());
+    if (appliedFilters.customerId) params.set("customerId", appliedFilters.customerId);
+    else if (appliedFilters.customer.trim()) params.set("customer", appliedFilters.customer.trim());
     if (appliedFilters.shopId) params.set("shopId", appliedFilters.shopId);
     return params.toString();
   };
@@ -98,10 +112,27 @@ export default function AllSales() {
     const params = new URLSearchParams();
     if (appliedFilters.dateFrom) params.set("dateFrom", appliedFilters.dateFrom);
     if (appliedFilters.dateTo) params.set("dateTo", appliedFilters.dateTo);
-    if (appliedFilters.customer.trim()) params.set("customer", appliedFilters.customer.trim());
+    if (appliedFilters.customerId) params.set("customerId", appliedFilters.customerId);
+    else if (appliedFilters.customer.trim()) params.set("customer", appliedFilters.customer.trim());
     if (appliedFilters.shopId) params.set("shopId", appliedFilters.shopId);
     return params.toString();
   };
+
+  const fetchCustomer = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const response = await fetch(API_ROUTES.CUSTOMERS_ALL, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Failed to fetch customers");
+      const data = await response.json();
+      setCustomers(Array.isArray(data?.customers) ? data.customers : Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching customers:", error);
+      setCustomers([]);
+    }
+  }
 
   const fetchOverview = async () => {
     const token = localStorage.getItem("token");
@@ -308,6 +339,31 @@ export default function AllSales() {
     const paidAmount = parseFloat(sale.paidAmount) || 0;
     return Math.max(0, grandTotal - paidAmount);
   };
+  const handlePrintInvoice = async (sale) => {
+    const token = localStorage.getItem("token");
+    if (!token || !sale?.id) return;
+    setPrintingSaleId(sale.id);
+    try {
+      await printSaleInvoiceById(sale.id, token);
+    } catch (err) {
+      alert(err.message || "Failed to print invoice");
+    } finally {
+      setPrintingSaleId(null);
+    }
+  };
+
+  const handlePrintChallan = async (sale) => {
+    const token = localStorage.getItem("token");
+    if (!token || !sale?.id) return;
+    setPrintingSaleId(sale.id);
+    try {
+      await printSaleChallanById(sale.id, token);
+    } catch (err) {
+      alert(err.message || "Failed to print challan");
+    } finally {
+      setPrintingSaleId(null);
+    }
+  };
 
   const handleView = async (sale) => {
     const token = localStorage.getItem("token");
@@ -376,7 +432,7 @@ export default function AllSales() {
   };
 
   const handleClearFilters = () => {
-    const empty = { dateFrom: "", dateTo: "", customer: "", shopId: "" };
+    const empty = { dateFrom: "", dateTo: "", customer: "", customerId: "", shopId: "" };
     setFilters(empty);
     setAppliedFilters(empty);
     setCurrentPage(1);
@@ -627,7 +683,7 @@ export default function AllSales() {
         </div>
       </div>
 
-      <div className="glass-card p-5 mb-6 border border-white/20 backdrop-blur-xl">
+      <div className="glass-card relative z-40 p-5 mb-6 border border-white/20 backdrop-blur-xl">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
             <label className="block text-xs text-gray-600 mb-1">From</label>
@@ -649,19 +705,26 @@ export default function AllSales() {
           </div>
           <div>
             <label className="block text-xs text-gray-600 mb-1">Customer</label>
-            <input
-              type="text"
-              value={filters.customer}
-              onChange={(e) => setFilters((prev) => ({ ...prev, customer: e.target.value }))}
-              placeholder="Name or mobile"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
+            <SearchableSelect
+              name="customerId"
+              value={String(filters.customerId || "")}
+              onChange={(e) => setFilters((prev) => ({ ...prev, customerId: e.target.value, customer: "" }))}
+              options={customers.map((customer) => ({
+                value: String(customer.id),
+                label: `${customer.name || "Unknown"} (${customer.mobile || "No mobile"})`,
+              }))}
+              placeholder="Search by name or mobile"
+              className="w-full"
+              inputClassName="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
             />
           </div>
           <div>
             <label className="block text-xs text-gray-600 mb-1">Shop</label>
             <select
               value={filters.shopId}
-              onChange={(e) => setFilters((prev) => ({ ...prev, shopId: e.target.value }))}
+              onChange={(e) => {
+                setFilters((prev) => ({ ...prev, shopId: e.target.value }))
+              }}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
             >
               <option value="">All Shops</option>
@@ -712,7 +775,7 @@ export default function AllSales() {
 
       {/* Pagination Controls */}
       {totalCount > 0 && (
-        <div className=" p-4 mt-4 border border-white/20 backdrop-blur-xl">
+        <div className="relative z-0 p-4 mt-4 border border-white/20 backdrop-blur-xl">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               {/* Items per page selector */}
@@ -838,7 +901,7 @@ export default function AllSales() {
       )}
 
       {/* Sales Table */}
-      <div className=" overflow-hidden border border-white/20 backdrop-blur-xl">
+      <div className="relative z-0 overflow-hidden border border-white/20 backdrop-blur-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -883,9 +946,12 @@ export default function AllSales() {
                 const isEditGrantedToCurrentUser = Number(sale?.editGrantedToUserId || 0) === currentUserId;
                 const openedDate = sale?.editOpenedAt ? Date.parse(sale?.editOpenedAt) : null;
                 const availableMinuts = sale?.editAccessDurationMinutes;
+                const canEditOnlyToday = hasPermission("sales_edit_today");
+                const saleCreationDate = sale?.createdAt ? Date.parse(sale?.createdAt) : null;
+                const canEditSalesToday = canEditOnlyToday && saleCreationDate && saleCreationDate > Date.now() - 24 * 60 * 60 * 1000;
                 let isTimeValid = openedDate && availableMinuts && Date.now() - openedDate < availableMinuts * 60 * 1000;
                 if( !availableMinuts ) isTimeValid = true;
-                const canEditThisSale = canEditSales || (isEditGrantedToCurrentUser && isTimeValid);
+                const canEditThisSale = canEditSales || (isEditGrantedToCurrentUser && isTimeValid) || canEditSalesToday;
                 return (
                   <tr
                     key={item.id}
@@ -897,12 +963,39 @@ export default function AllSales() {
                       <td key={key} className="p-4">
                         {key === 'actions' ? (
                           <div className="relative dropdown-container">
-                            <button
-                              onClick={() => setActiveDropdown(activeDropdown === item.id ? null : item.id)}
-                              className="p-2 hover:bg-gray-100 rounded-lg transition"
-                            >
-                              <MoreVertical size={18} className="text-gray-600" />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => setActiveDropdown(activeDropdown === item.id ? null : item.id)}
+                                className="p-2 hover:bg-gray-100 rounded-lg transition"
+                                title="More Actions"
+                              >
+                                <MoreVertical size={18} className="text-gray-600" />
+                              </button>
+                              <button
+                                onClick={() => handlePrintInvoice(sale)}
+                                disabled={printingSaleId === sale.id}
+                                className="p-2 hover:bg-emerald-50 rounded-lg transition disabled:opacity-50"
+                                title="Print Invoice"
+                              >
+                                {printingSaleId === sale.id ? (
+                                  <Loader2 size={18} className="text-emerald-600 animate-spin" />
+                                ) : (
+                                  <FileText size={18} className="text-emerald-600" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => handlePrintChallan(sale)}
+                                disabled={printingSaleId === sale.id}
+                                className="p-2 hover:bg-sky-50 rounded-lg transition disabled:opacity-50"
+                                title="Print Challan"
+                              >
+                                {printingSaleId === sale.id ? (
+                                  <Loader2 size={18} className="text-sky-600 animate-spin" />
+                                ) : (
+                                  <ClipboardList size={18} className="text-sky-600" />
+                                )}
+                              </button>
+                            </div>
 
                             {activeDropdown === item.id && (
                               <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-10">
@@ -1050,7 +1143,7 @@ export default function AllSales() {
 
       {/* Pagination Controls */}
       {totalCount > 0 && (
-        <div className=" p-4 mt-4 border border-white/20 backdrop-blur-xl">
+        <div className="relative z-0 p-4 mt-4 border border-white/20 backdrop-blur-xl">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               {/* Items per page selector */}
@@ -1559,3 +1652,5 @@ export default function AllSales() {
     </div>
   );
 }
+
+

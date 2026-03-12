@@ -1,17 +1,31 @@
 {
   "name": "bsp-engineering",
   "version": "1.0.0",
+  "private": true,
   "main": "index.js",
   "scripts": {
     "start": "nodemon backend/index.js",
     "install-frontend": "npm install --prefix frontend",
-    "dev": "npm run dev --prefix frontend",
+    "install-ecom": "npm install --prefix ecom",
+    "install:all": "npm install --workspaces",
+    "dev": "npm run dev:all",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:ecom": "npm run dev --prefix ecom",
+    "dev:all": "concurrently -n frontend,ecom \"npm run dev:frontend\" \"npm run dev:ecom\"",
+    "build": "npm run build:all",
+    "build:frontend": "npm run build --prefix frontend",
+    "build:ecom": "npm run build --prefix ecom",
+    "build:all": "npm run build:frontend && npm run build:ecom",
     "tailwind-init": "npm exec --prefix frontend -- tailwindcss init -p",
     "test": "echo \"Error: no test specified\" && exit 1",
     "seed": "prisma db seed"
   },
+  "workspaces": [
+    "frontend",
+    "ecom"
+  ],
   "prisma": {
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed_dummy.js"
   },
   "keywords": [],
   "author": "",
@@ -41,6 +55,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.1.4",
+    "concurrently": "^9.2.0",
     "nodemon": "^3.1.10"
   }
 }

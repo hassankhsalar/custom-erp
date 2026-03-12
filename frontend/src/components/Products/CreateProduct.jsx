@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { API_ROUTES } from "../../config";
+import { includesLooseNumber } from "../../utils/numberLooseSearch";
 import { Upload, X, Eye, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import SearchableSelect from "../common/SearchableSelect";
+
 
 const emptyAltUnit = { unitname: "", multiplier: "" };
 
@@ -63,7 +65,7 @@ const CreateProduct = () => {
       if (!token) return;
       try {
         const [materialsRes, unitsRes, brandsRes, categoriesRes] = await Promise.all([
-          axios.get(API_ROUTES.MATERIALS, { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(API_ROUTES.MATERIALS_ALL, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_ROUTES.MASTER_DATA_UNITS}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_ROUTES.MASTER_DATA_BRANDS}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
           axios.get(`${API_ROUTES.MASTER_DATA_PRODUCT_CATEGORIES}?page=1&limit=200&status=active`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -82,7 +84,7 @@ const CreateProduct = () => {
   useEffect(() => {
     if (searchTerm) {
       setFilteredMaterials(
-        allMaterials.filter((material) => material.name.toLowerCase().includes(searchTerm.toLowerCase()))
+        allMaterials.filter((material) => includesLooseNumber(material.name, searchTerm))
       );
     } else {
       setFilteredMaterials([]);
@@ -530,3 +532,6 @@ const CreateProduct = () => {
 };
 
 export default CreateProduct;
+
+
+

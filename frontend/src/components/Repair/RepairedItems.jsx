@@ -15,6 +15,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { API_ROUTES } from "../../config";
+import { usePermission } from "../../hooks/usePermission";
 
 const defaultPageSize = 10;
 
@@ -33,6 +34,10 @@ export default function RepairedItems() {
   const [totalPages, setTotalPages] = useState(1);
   const [overview, setOverview] = useState({ totalCount: 0, totalShippingCost: 0, byStatus: {} });
   const [locationOptions, setLocationOptions] = useState({ store: [], shop: [], factory: [] });
+
+  const { hasPermission } = usePermission();
+  const canDelete = hasPermission("repairs_delete");
+  const canReceive = hasPermission("repairs_receive");
 
   const [filters, setFilters] = useState({
     search: "",
@@ -484,8 +489,13 @@ export default function RepairedItems() {
                         {activeDropdown === row.id && (
                           <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-200 shadow-xl rounded-xl z-20 py-1">
                             <button onClick={() => { setViewModal({ open: true, row }); setActiveDropdown(null); }} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2"><Eye size={14} /> View</button>
-                            <button onClick={() => openStatusModal(row)} className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 flex items-center gap-2"><RefreshCw size={14} /> Update Status</button>
-                            <button onClick={() => deleteRepair(row)} className="w-full text-left px-3 py-2 text-sm hover:bg-rose-50 text-rose-600 flex items-center gap-2"><Trash2 size={14} /> Delete</button>
+                            { row.status != "completed" && canReceive && (
+                              <button onClick={() => openStatusModal(row)} className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 flex items-center gap-2"><RefreshCw size={14} /> Receive</button>
+                            )}
+                            { canDelete && (
+                              <button onClick={() => deleteRepair(row)} className="w-full text-left px-3 py-2 text-sm hover:bg-rose-50 text-rose-600 flex items-center gap-2"><Trash2 size={14} /> Delete</button>
+                            )}
+
                           </div>
                         )}
                       </div>
@@ -533,15 +543,42 @@ export default function RepairedItems() {
               <h3 className="font-semibold text-lg">Update Repair Status - {statusModal.row.reference}</h3>
             </div>
             <div className="p-5 space-y-2">
-              {statusModal.lines.map((line, idx) => (
-                <div key={line.repairItemId} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center text-sm">
-                  <div className="md:col-span-5">{line.name} <span className="text-xs text-gray-500">({line.itemType})</span></div>
-                  <div className="md:col-span-2">Sent: {line.quantity}</div>
-                  <input type="number" min="0" step="0.01" value={line.successQuantity} onChange={(e) => setStatusModal((prev) => ({ ...prev, lines: prev.lines.map((x, i) => i === idx ? { ...x, successQuantity: e.target.value } : x) }))} className="md:col-span-2 rounded-lg border border-gray-200 px-2 py-2" placeholder="Success" />
-                  <input type="number" min="0" step="0.01" value={line.failQuantity} onChange={(e) => setStatusModal((prev) => ({ ...prev, lines: prev.lines.map((x, i) => i === idx ? { ...x, failQuantity: e.target.value } : x) }))} className="md:col-span-2 rounded-lg border border-gray-200 px-2 py-2" placeholder="Fail" />
-                  <div className="md:col-span-1 text-green-600"><CheckCircle size={14} /></div>
-                </div>
-              ))}
+              <table className="w-full text-sm">
+                <thead>
+                  <tr>
+                    <th>Name (Type)</th>
+                    <th>Sent</th>
+                    <th>Success</th>
+                    <th>Fail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {statusModal.lines.map((line, idx) => (
+                    <tr key={line.repairItemId}>
+                      <td className="p-2">{line.name} <span className="text-xs text-gray-500">({line.itemType})</span></td>
+                      <td className="p-2">{line.quantity}</td>
+                      <td className="p-2"><input type="number" min="0" step="0.01" value={line.successQuantity} onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        if (value > line.quantity) {
+                          alert(`Cannot set success quantity to ${value} as it exceeds the sent quantity of ${line.quantity}`);
+                          e.target.value = "0";
+                        } else {
+                          setStatusModal((prev) => ({ ...prev, lines: prev.lines.map((x, i) => i === idx ? { ...x, successQuantity: value, failQuantity: (x.quantity - value).toFixed(2) } : x) }));
+                        }
+                      }} className="rounded-lg border border-gray-200 px-2 py-2" placeholder="Success" /></td>
+                      <td className="p-2"><input type="number" min="0" step="0.01" value={line.failQuantity} onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        if (value > line.quantity) {
+                          alert(`Cannot set fail quantity to ${value} as it exceeds the sent quantity of ${line.quantity}`);
+                          e.target.value = "0";
+                        } else {
+                          setStatusModal((prev) => ({ ...prev, lines: prev.lines.map((x, i) => i === idx ? { ...x, failQuantity: value, successQuantity: (x.quantity - value).toFixed(2) } : x) }));
+                        }
+                      }} className="rounded-lg border border-gray-200 px-2 py-2" placeholder="Fail" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
               {statusModal.error && <div className="text-rose-600 text-sm">{statusModal.error}</div>}
               <div className="flex justify-end gap-2">
                 <button onClick={() => setStatusModal({ open: false, row: null, lines: [], saving: false, error: "" })} className="px-4 py-2 rounded-lg border border-gray-300">Cancel</button>

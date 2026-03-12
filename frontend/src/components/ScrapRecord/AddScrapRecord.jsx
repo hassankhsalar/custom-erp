@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
+import { includesLooseNumber } from '../../utils/numberLooseSearch';
 import { activeOnly } from '../../utils/softDelete';
 import {
   ArrowLeft,
@@ -196,9 +197,9 @@ const AddScrapRecord = () => {
     const searchTerm = query.toLowerCase();
     
     const results = availableProducts.filter(product => 
-      product.name?.toLowerCase().includes(searchTerm) ||
-      product.barcode?.toLowerCase().includes(searchTerm) ||
-      product.description?.toLowerCase().includes(searchTerm)
+      includesLooseNumber(product.name, searchTerm) ||
+      includesLooseNumber(product.barcode, searchTerm) ||
+      includesLooseNumber(product.description, searchTerm)
     ).slice(0, 10);
     
     setSearchResults(results);
@@ -353,7 +354,7 @@ const AddScrapRecord = () => {
       });
 
       alert('Scrap record created successfully!');
-      navigate('/scraprecord');
+      navigate('/damage-record');
     } catch (error) {
       console.error('Error creating scrap record:', error);
       if (error.response?.status === 401) {
@@ -371,10 +372,10 @@ const AddScrapRecord = () => {
   const handleCancel = () => {
     if (scrapProducts.length > 0 || formData.fromBranchId || formData.reason || formData.note) {
       if (window.confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
-        navigate('/scraprecord');
+        navigate('/damage-record');
       }
     } else {
-      navigate('/scraprecord');
+      navigate('/damage-record');
     }
   };
 
@@ -973,3 +974,6 @@ const AddScrapRecord = () => {
 };
 
 export default AddScrapRecord;
+
+
+

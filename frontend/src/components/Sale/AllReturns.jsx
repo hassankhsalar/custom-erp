@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
 import { 
@@ -36,9 +36,10 @@ import {
   Percent
 } from "lucide-react";
 
+import { usePermission } from "../../hooks/usePermission";
+
 export default function AllReturns() {
   const [returns, setReturns] = useState([]);
-  const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -61,29 +62,15 @@ export default function AllReturns() {
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
+  const { hasPermission } = usePermission();
+  const canDeleteReturn = hasPermission(["sales_return_delete"]);
+
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchReturns();
     fetchShops();
   }, []);
-
-  // Calculate statistics from returns data
-  useEffect(() => {
-    if (returns.length > 0) {
-      const totalReturns = returns.length;
-      const totalReturnAmount = returns.reduce((sum, r) => sum + (r.totalAmount || 0), 0);
-      const totalItems = returns.reduce((sum, r) => sum + (r.returnItems?.length || 0), 0);
-      const uniqueShops = [...new Set(returns.map(r => r.shopId))].length;
-      
-      setStats({
-        totalReturns,
-        totalReturnAmount,
-        totalItems,
-        uniqueShops
-      });
-    }
-  }, [returns]);
 
   const fetchReturns = async () => {
     try {
@@ -245,6 +232,18 @@ export default function AllReturns() {
     return matchesSearch && matchesSingleDate && matchesDateRange() && matchesShop;
   });
 
+  const stats = useMemo(() => {
+    const totalReturns = filteredReturns.length;
+    const totalReturnAmount = filteredReturns.reduce((sum, r) => sum + (r.totalAmount || 0), 0);
+    const totalItems = filteredReturns.reduce((sum, r) => sum + (r.returnItems?.length || 0), 0);
+    const uniqueShops = [...new Set(filteredReturns.map(r => r.shopId))].length;
+    return {
+      totalReturns,
+      totalReturnAmount,
+      totalItems,
+      uniqueShops,
+    };
+  }, [filteredReturns]);
   // Pagination calculations
   const totalPages = Math.ceil(filteredReturns.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -308,13 +307,6 @@ export default function AllReturns() {
     if (page >= 1 && page <= totalPages) {
       setCurrentPage(page);
     }
-  };
-
-  // Get status color based on amount
-  const getReturnStatus = (amount) => {
-    if (amount > 1000) return { color: 'from-red-500 to-rose-500', text: 'High Value' };
-    if (amount > 500) return { color: 'from-amber-500 to-orange-500', text: 'Medium Value' };
-    return { color: 'from-emerald-500 to-green-500', text: 'Low Value' };
   };
 
   // Modal Component
@@ -841,7 +833,7 @@ export default function AllReturns() {
         ) : (
           <div className="backdrop-blur-xl bg-white/30 border border-white/40 rounded-2xl shadow-xl overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="min-w-full text-sm">
                 <thead className="bg-gradient-to-r from-red-500/10 to-rose-500/10">
                   <tr>
                     <th className="p-4 text-left font-semibold text-gray-700">Return Details</th>
@@ -855,7 +847,6 @@ export default function AllReturns() {
                 </thead>
                 <tbody>
                   {currentReturns.map((returnItem, index) => {
-                    const status = getReturnStatus(returnItem.totalAmount);
                     
                     return (
                       <tr key={returnItem.id} className={`border-t border-white/30 hover:bg-white/40 transition-colors duration-200 ${
@@ -891,7 +882,7 @@ export default function AllReturns() {
                         <td className="p-4">
                           <div className="space-y-2 max-w-xs">
                             {returnItem.returnItems?.slice(0, 2).map((item, idx) => (
-                              <div key={idx} className="flex items-center justify-between text-xs bg-white/50 p-2 rounded-lg">
+                              <div key={idx} className="flex items-center justify-between flex-col gap-2 text-xs bg-white/50 p-2 rounded-lg">
                                 <div className="flex items-center gap-2">
                                   <span className={`w-1.5 h-1.5 rounded-full ${
                                     item.product?.name ? 'bg-blue-500' : 'bg-purple-500'
@@ -900,9 +891,9 @@ export default function AllReturns() {
                                     {item.product?.name || item.material?.name}
                                   </span>
                                 </div>
-                                <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-medium">
-                                  {item.quantity} × ${(item.unitPrice || 0).toFixed(2)}
-                                </span>
+                                <div className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                                  {item.quantity} x ${(item.unitPrice || 0).toFixed(2)}
+                                </div>
                               </div>
                             ))}
                             {returnItem.returnItems?.length > 2 && (
@@ -917,10 +908,6 @@ export default function AllReturns() {
                             <p className="text-lg font-bold text-red-600">
                               -${(returnItem.totalAmount || 0).toFixed(2)}
                             </p>
-                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-gradient-to-r ${status.color} text-white mt-1`}>
-                              <Percent size={10} />
-                              {status.text}
-                            </span>
                           </div>
                         </td>
                         <td className="p-4">
@@ -936,19 +923,21 @@ export default function AllReturns() {
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => openReturnModal(returnItem)}
-                              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-sm font-medium rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all duration-300 shadow-md hover:shadow-lg"
+                              className="flex items-center gap-2 p-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-sm font-medium rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all duration-300 shadow-md hover:shadow-lg"
                             >
                               <Eye size={16} />
-                              View
                             </button>
-                            <button
-                              onClick={() => handleDeleteReturn(returnItem)}
-                              disabled={deletingId === returnItem.id}
-                              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-rose-500 text-white text-sm font-medium rounded-xl hover:from-red-600 hover:to-rose-600 transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-60"
-                            >
-                              <Trash2 size={16} />
-                              {deletingId === returnItem.id ? "Deleting..." : "Delete"}
-                            </button>
+                            { canDeleteReturn && (
+                              <button
+                                onClick={() => handleDeleteReturn(returnItem)}
+                                disabled={deletingId === returnItem.id}
+                                className="flex items-center gap-2 p-3 bg-gradient-to-r from-red-500 to-rose-500 text-white text-sm font-medium rounded-xl hover:from-red-600 hover:to-rose-600 transition-all duration-300 shadow-md hover:shadow-lg disabled:opacity-60"
+                              >
+                                <Trash2 size={16} />
+                                {deletingId === returnItem.id ? "Deleting..." : "Delete"}
+                              </button>
+                            )}
+
                           </div>
                         </td>
                       </tr>
@@ -1125,3 +1114,8 @@ export default function AllReturns() {
     </div>
   );
 }
+
+
+
+
+

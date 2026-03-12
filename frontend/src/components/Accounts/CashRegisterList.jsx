@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { API_ROUTES } from "../../config";
-import { Banknote, PlusCircle, MinusCircle, Power, Lock } from "lucide-react";
+import { Banknote, PlusCircle, MinusCircle, Power, Lock, X } from "lucide-react";
 import { Link } from "react-router-dom";
+import { usePermission } from "../../hooks/usePermission";
 
 export default function CashRegisterList() {
   const [rows, setRows] = useState([]);
@@ -18,6 +19,16 @@ export default function CashRegisterList() {
     payment_method: "cash",
     notes: "",
   });
+
+  // 'cash_register_read', 'cash_register_deactivate', 'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit'
+  const { hasPermission } = usePermission();
+  const canRead = hasPermission("cash_register_read");
+  const canDeactivate = hasPermission("cash_register_deactivate");
+  const canOpen = hasPermission("cash_register_open");
+  const canClose = hasPermission("cash_register_close");
+  const canWithdraw = hasPermission("cash_register_withdraw");
+  const canDeposit = hasPermission("cash_register_deposit");
+
 
   const token = localStorage.getItem("token");
 
@@ -128,12 +139,14 @@ export default function CashRegisterList() {
             </h1>
             <p className="text-gray-600 mt-1">Manage status, deposit and withdraw for all cash registers</p>
           </div>
-          <Link
-            to="/cash-register-records"
-            className="px-6 py-2 rounded-lg text-sm inline-flex items-center gap-2 text-white bg-gradient-to-br from-teal-500 to-green-500 transition-all hover:drop-shadow hover:drop-shadow-teal-200 drop-shadow drop-shadow-gray-100"
-          >
-            View Records
-          </Link>
+          { canRead || canOpen || canClose || canWithdraw || canDeposit && (
+            <Link
+              to="/cash-register-records"
+              className="px-6 py-2 rounded-lg text-sm inline-flex items-center gap-2 text-white bg-gradient-to-br from-teal-500 to-green-500 transition-all hover:drop-shadow hover:drop-shadow-teal-200 drop-shadow drop-shadow-gray-100"
+            >
+              View Records
+            </Link>
+          )}
         </div>
       </div>
 
@@ -178,46 +191,61 @@ export default function CashRegisterList() {
                 </td>
                 <td className="p-4">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      onClick={() => updateStatus(row.id, "active")}
-                      disabled={actionLoadingId === row.id || (row.status !== "closed" && row.status !== "inactive")}
-                      className={`flex items-center text-white bg-gradient-to-r from-teal-700 to-green-600 gap-2 px-3 py-1 rounded-md disabled:opacity-40 ${(actionLoadingId === row.id || (row.status !== "closed" && row.status !== "inactive")) ? "hidden" : "flex"}`}
-                      title="Set Active"
-                    >
-                      <Power size={16} className="text-white" /> Open Cash
-                    </button>
-                    <button
-                      onClick={() => updateStatus(row.id, "closed")}
-                      disabled={actionLoadingId === row.id || (row.status !== "active" && row.status !== "inactive")}
-                      className={`flex gap-2 items-center bg-gradient-to-r from-orange-600 to-amber-600 text-white px-3 py-1 rounded-md disabled:opacity-40 ${(actionLoadingId === row.id || (row.status !== "active" && row.status !== "inactive")) ? "hidden" : "flex"}`}
-                      title="Set Closed"
-                    >
-                      <Lock size={16} className="text-white" /> Close Cash
-                    </button>
-                    <button
-                      onClick={() => updateStatus(row.id, "inactive")}
-                      disabled={actionLoadingId === row.id || row.status !== "closed"}
-                      className="glass-icon-button p-1.5 rounded disabled:opacity-40"
-                      title="Deactivate (Closed to Inactive)"
-                    >
-                      <Power size={16} className="text-red-600" />
-                    </button>
-                    <button
-                      onClick={() => openMoneyModal("deposit", row)}
-                      disabled={row.status === "inactive"}
-                      className="glass-icon-button p-1.5 rounded disabled:opacity-40"
-                      title="Deposit"
-                    >
-                      <PlusCircle size={16} className="text-emerald-600" />
-                    </button>
-                    <button
-                      onClick={() => openMoneyModal("withdraw", row)}
-                      disabled={row.status === "inactive"}
-                      className="glass-icon-button p-1.5 rounded disabled:opacity-40"
-                      title="Withdraw"
-                    >
-                      <MinusCircle size={16} className="text-red-600" />
-                    </button>
+                    { canOpen && (
+                      <button
+                        onClick={() => updateStatus(row.id, "active")}
+                        disabled={actionLoadingId === row.id || (row.status !== "closed" && row.status !== "inactive")}
+                        className={`flex items-center text-white bg-gradient-to-r from-teal-700 to-green-600 gap-2 px-3 py-1 rounded-md disabled:opacity-40 ${(actionLoadingId === row.id || (row.status !== "closed" && row.status !== "inactive")) ? "hidden" : "flex"}`}
+                        title="Set Active"
+                      >
+                        <Power size={16} className="text-white" /> Open Cash
+                      </button>
+                    )}
+
+                    { canClose && (
+                      <button
+                        onClick={() => updateStatus(row.id, "closed")}
+                        disabled={actionLoadingId === row.id || (row.status !== "active" && row.status !== "inactive")}
+                        className={`flex gap-2 items-center bg-gradient-to-r from-orange-600 to-amber-600 text-white px-3 py-1 rounded-md disabled:opacity-40 ${(actionLoadingId === row.id || (row.status !== "active" && row.status !== "inactive")) ? "hidden" : "flex"}`}
+                        title="Set Closed"
+                      >
+                        <Lock size={16} className="text-white" /> Close Cash
+                      </button>
+                    )}
+
+                    { canDeactivate && (
+                      <button
+                        onClick={() => updateStatus(row.id, "inactive")}
+                        disabled={actionLoadingId === row.id || row.status !== "closed"}
+                        className="glass-icon-button p-1.5 rounded disabled:opacity-40"
+                        title="Deactivate (Closed to Inactive)"
+                      >
+                        <Power size={16} className="text-red-600" />
+                      </button>
+                    )}
+
+                    { canDeposit && (
+                      <button
+                        onClick={() => openMoneyModal("deposit", row)}
+                        disabled={row.status === "inactive"}
+                        className="glass-icon-button p-1.5 rounded disabled:opacity-40"
+                        title="Deposit"
+                      >
+                        <PlusCircle size={16} className="text-emerald-600" />
+                      </button>
+                    )}
+
+                    { canWithdraw && (
+                      <button
+                        onClick={() => openMoneyModal("withdraw", row)}
+                        disabled={row.status === "inactive"}
+                        className="glass-icon-button p-1.5 rounded disabled:opacity-40"
+                        title="Withdraw"
+                      >
+                        <MinusCircle size={16} className="text-red-600" />
+                      </button>
+                    )}
+
                   </div>
                 </td>
               </tr>
@@ -234,56 +262,78 @@ export default function CashRegisterList() {
       </div>
 
       {showModal && selectedRegister && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="glass-card w-full max-w-md p-6 border border-white/20">
-            <h3 className="text-lg font-semibold mb-4">
-              {modalType === "deposit" ? "Cash Register Deposit" : "Cash Register Withdraw"}
-            </h3>
-            <div className="space-y-3">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={form.amount}
-                onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
-                placeholder="Amount"
-                className="glass-input w-full px-3 py-2 rounded border border-gray-300"
-              />
-              <select
-                value={form.accountId}
-                onChange={(e) => setForm((prev) => ({ ...prev, accountId: e.target.value }))}
-                className="glass-input w-full px-3 py-2 rounded border border-gray-300"
-              >
-                <option value="">Select account (required)</option>
-                {accounts
-                  .filter((a) => String(a.status).toLowerCase() === "active")
-                  .map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} ({Number(a.balance || 0).toFixed(2)})
-                    </option>
-                  ))}
-              </select>
-              <textarea
-                rows="3"
-                value={form.notes}
-                onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-                placeholder="Note"
-                className="glass-input w-full px-3 py-2 rounded border border-gray-300"
-              />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowModal(false)}></div>
+          <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-hidden">
+            <div className="sticky top-0 z-10 p-6 border-b border-white/50 bg-gradient-to-r from-blue-500/10 to-indigo-500/10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-800">
+                    {modalType === "deposit" ? "Cash Register Deposit" : "Cash Register Withdraw"}
+                  </h3>
+                  <p className="text-gray-600">
+                    Register: <span className="font-medium">{selectedRegister.name}</span>
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="p-2 bg-white/60 rounded-lg hover:bg-white/80 transition-colors duration-300"
+                >
+                  <X size={20} className="text-gray-600" />
+                </button>
+              </div>
             </div>
-            <div className="flex justify-end gap-2 mt-5">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-4 py-2 rounded border border-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitMoneyAction}
-                className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-              >
-                Submit
-              </button>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+              <div className="space-y-4">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.amount}
+                  onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
+                  placeholder="Amount"
+                  className="w-full px-4 py-2.5 bg-white/60 backdrop-blur-sm border border-gray-200/60 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+                <select
+                  value={form.accountId}
+                  onChange={(e) => setForm((prev) => ({ ...prev, accountId: e.target.value }))}
+                  className="w-full px-4 py-2.5 bg-white/60 backdrop-blur-sm border border-gray-200/60 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                >
+                  <option value="">Select account (required)</option>
+                  {accounts
+                    .filter((a) => String(a.status).toLowerCase() === "active")
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({Number(a.balance || 0).toFixed(2)})
+                      </option>
+                    ))}
+                </select>
+                <textarea
+                  rows="3"
+                  value={form.notes}
+                  onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Note"
+                  className="w-full px-4 py-2.5 bg-white/60 backdrop-blur-sm border border-gray-200/60 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 p-6 border-t border-white/50 bg-white/70">
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-6 py-2.5 bg-gray-200/70 text-gray-700 font-medium rounded-xl hover:bg-gray-300/80 transition-all duration-300 border border-white/60"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={submitMoneyAction}
+                  className="px-6 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:from-blue-600 hover:to-indigo-600 transition-all duration-300"
+                >
+                  Submit
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Building2, Loader2, Save, Search, Trash2, Truck } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { API_ROUTES } from "../../config";
+import { includesLooseNumber } from "../../utils/numberLooseSearch";
 
 export default function EditPurchase() {
   const { id } = useParams();
@@ -120,10 +121,10 @@ export default function EditPurchase() {
     const filteredMaterials = materials
       .filter(
         (m) =>
-          String(m.name || "").toLowerCase().includes(lower) ||
+          includesLooseNumber(m.name, lower) ||
           (Array.isArray(m.alternative_names) &&
-            m.alternative_names.some((n) => String(n || "").toLowerCase().includes(lower))) ||
-          String(m.barcode || "").toLowerCase().includes(lower)
+            m.alternative_names.some((n) => includesLooseNumber(n, lower))) ||
+          includesLooseNumber(m.barcode, lower)
       )
       .map((m) => ({
         type: "material",
@@ -135,10 +136,10 @@ export default function EditPurchase() {
     const filteredProducts = products
       .filter(
         (p) =>
-          String(p.name || "").toLowerCase().includes(lower) ||
+          includesLooseNumber(p.name, lower) ||
           (Array.isArray(p.alternative_names) &&
-            p.alternative_names.some((n) => String(n || "").toLowerCase().includes(lower))) ||
-          String(p.barcode || "").toLowerCase().includes(lower)
+            p.alternative_names.some((n) => includesLooseNumber(n, lower))) ||
+          includesLooseNumber(p.barcode, lower)
       )
       .map((p) => ({
         type: "product",
@@ -455,3 +456,7 @@ export default function EditPurchase() {
     </div>
   );
 }
+
+
+
+

@@ -7,6 +7,7 @@ const { createNotification } = require('../utils/notificationHelper');
 const { rollbackAndDeleteTransactionsByWhere } = require('../utils/transactionRollback');
 const { buildScope, ensureTypeScope, ensureIdScope } = require("../utils/associateScope");
 const { getAvailableBatches, decrementBatch } = require("../utils/batchDetails");
+const { buildContainsOr } = require("../utils/numberLooseSearch");
 const { assertActivePlace, assertActiveItem } = require("../utils/softDelete");
 const { registerSaleEditAccessRoutes } = require("./shop-sales/editAccessRoutes");
 const { registerShopSaleWarrantyRoutes } = require("./shop-sales/warrantyRoutes");
@@ -42,7 +43,7 @@ const getRequesterAccessContext = async (userId) => {
   const permissionList = Array.isArray(user?.permission?.permissions) ? user.permission.permissions : [];
   const isAdmin = isAdminPermission(permissionName);
   const canSalesOpenClose = isAdmin || permissionList.includes("sales_open_close");
-  const canEditAnyDay = isAdmin || permissionList.includes("sales_edit_any_day");
+  const canEditAnyDay = isAdmin || permissionList.includes("sales_edit");
   const canEditToday = isAdmin || permissionList.includes("sales_edit_today") || permissionList.includes("sales_edit");
   const canGrantSaleEdit = canSalesOpenClose || isAdmin;
 
@@ -61,13 +62,15 @@ const getRequesterAccessContext = async (userId) => {
 const canEditSaleForUser = (sale, requesterId, access) => {
   if (!sale || !access) return false;
 
+  const isTodaySale = isSameCalendarDay(new Date(sale.createdAt), new Date());
+
+  if (isTodaySale && access.canEditToday) return true;
+
   const transactionClosed = (sale.transactionStatus || "open") === "closed";
   if (transactionClosed && !access.isAdmin && !access.canSalesOpenClose) {
     return false;
   }
 
-  const isTodaySale = isSameCalendarDay(new Date(sale.createdAt), new Date());
-  const isCreator = Number(sale.createdById || 0) === Number(requesterId || 0);
   const grantState = getEditGrantStateForUser(sale, requesterId);
   const hasSaleGrant = grantState.allowed;
   const isEditOpen = String(sale.editStatus || "closed").toLowerCase() === "open";
@@ -90,12 +93,16 @@ const canEditSaleForUser = (sale, requesterId, access) => {
 
   if (access.isAdmin || access.canSalesOpenClose || access.canEditAnyDay) return true;
   if (hasSaleGrant) return true;
-  if (isTodaySale && (access.canEditToday || isCreator)) return true;
+  if (isTodaySale && (access.canEditToday)) return true;
 
   return false;
 };
 
 const mapSaleWithPermissions = (sale, requesterId, access) => {
+
+
+
+
   const canEdit = canEditSaleForUser(sale, requesterId, access);
   const canDelete = canEdit;
   const canCloseTransaction = access?.isAdmin || access?.canSalesOpenClose;
@@ -219,11 +226,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
         product: search
           ? {
               deleted_at: false,
-              OR: [
-                { name: { contains: search, mode: 'insensitive' } },
-                { barcode: { contains: search, mode: 'insensitive' } },
-                { category: { contains: search, mode: 'insensitive' } }
-              ]
+              OR: buildContainsOr(["name", "barcode", "category"], search, { mode: "insensitive" })
             }
           : { deleted_at: false }
       },
@@ -255,12 +258,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
         material: search
           ? {
               deleted_at: false,
-              OR: [
-                { name: { contains: search, mode: 'insensitive' } },
-                { barcode: { contains: search, mode: 'insensitive' } },
-                { brand: { contains: search, mode: 'insensitive' } },
-                { description: { contains: search, mode: 'insensitive' } }
-              ]
+              OR: buildContainsOr(["name", "barcode", "brand", "description"], search, { mode: "insensitive" })
             }
           : { deleted_at: false }
       },
@@ -347,7 +345,7 @@ router.get("/items/shop/:shopId", async (req, res) => {
 // Create a new sale for shop (updated for products & materials)
 router.post("/", async (req, res) => {
   try {
-    const { shopId, customerId, paymentType, discount, items, bankAccountId, paidAmount, cashRegisterId } = req.body;
+    const { shopId, customerId, paymentType, discount, items, bankAccountId, paidAmount, cashRegisterId, createdAt } = req.body;
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, "shop", parseInt(shopId));
     await assertActivePlace(prisma, "shop", parseInt(shopId));
@@ -395,6 +393,14 @@ router.post("/", async (req, res) => {
     }
     if (normalizedPaymentType === "cash" && paid > 0 && !cashRegisterId) {
       return res.status(400).json({ error: "Cash register is required for cash payments" });
+    }
+
+    let parsedCreatedAt = null;
+    if (createdAt) {
+      parsedCreatedAt = new Date(createdAt);
+      if (Number.isNaN(parsedCreatedAt.getTime())) {
+        return res.status(400).json({ error: "Invalid createdAt date-time value" });
+      }
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -472,6 +478,7 @@ router.post("/", async (req, res) => {
           editOpenedAt: new Date(),
           bankAccountId: bankRecord ? bankRecord.id : null,
           bankName: bankRecord ? bankRecord.name : null,
+          createdAt: parsedCreatedAt || undefined,
         },
       });
 
@@ -1167,7 +1174,7 @@ router.get("/details/:id", async (req, res) => {
       where: { id: saleId },
       include: {
         shop: {
-          select: { id: true, name: true, shop_keeper: true },
+          select: { id: true, name: true, shop_keeper: true, mobile: true, address: true },
         },
         transactions: {
           orderBy: { createdAt: "desc" },
@@ -1232,7 +1239,10 @@ router.put("/:id", async (req, res) => {
       return res.status(403).json({ error: "You do not have permission to edit this sale" });
     }
 
-    if ((sale.transactionStatus || "open") === "closed" && !access.isAdmin && !access.canSalesOpenClose) {
+    const isTodaySale = isSameCalendarDay(new Date(sale.createdAt), new Date());
+    const hasTodayEditAccess = access.canEditToday && isTodaySale;
+
+    if ((sale.transactionStatus || "open") === "closed" && !access.isAdmin && !access.canSalesOpenClose && !hasTodayEditAccess) {
       return res.status(403).json({ error: "This sale transaction is closed and cannot be edited" });
     }
 
@@ -1701,3 +1711,4 @@ router.delete("/:id", async (req, res) => {
 
 registerShopSaleReturnRoutes({ router, prisma, buildScope, ensureIdScope });
 module.exports = router;
+

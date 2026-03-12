@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
@@ -27,6 +27,7 @@ import {
   Box,
   Gauge
 } from 'lucide-react';
+import { usePermission } from '../../hooks/usePermission';
 
 const MaterialOverviewCards = memo(function MaterialOverviewCards({ overview }) {
   return (
@@ -84,11 +85,11 @@ const MaterialOverviewCards = memo(function MaterialOverviewCards({ overview }) 
 
 const AllMaterials = () => {
   const [materials, setMaterials] = useState([]);
+  const [allMaterials, setAllMaterials] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [loadingTable, setLoadingTable] = useState(false);
-  const [loadingOverview, setLoadingOverview] = useState(false);
   const [modal, setModal] = useState({ isOpen: false, type: null, data: null });
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
@@ -105,6 +106,12 @@ const AllMaterials = () => {
   const [sortDir, setSortDir] = useState('asc');
   const [appliedSortBy, setAppliedSortBy] = useState('name');
   const [appliedSortDir, setAppliedSortDir] = useState('asc');
+
+  const { hasPermission } = usePermission();
+  const canCreate = hasPermission('material_create');
+  const canEdit = hasPermission('material_edit');
+  const canDelete = hasPermission('material_delete');
+
 
   // Function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -124,23 +131,13 @@ const AllMaterials = () => {
   const fetchMaterialsTable = useCallback(async () => {
     try {
       setLoadingTable(true);
-      const response = await axios.get(API_ROUTES.MATERIALS, {
-        params: {
-          page: currentPage,
-          limit: itemsPerPage,
-          search: appliedSearch || undefined,
-          sortBy: appliedSortBy,
-          sortDir: appliedSortDir,
-        },
+      const response = await axios.get(API_ROUTES.MATERIALS_ALL, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': Bearer ,
           'Content-Type': 'application/json',
         },
       });
-      const rows = activeOnly(response.data.materials || []);
-      setMaterials(rows);
-      setTotalPages(Number(response.data.totalPages || Math.ceil((response.data.totalCount || 0) / itemsPerPage) || 1));
-      setTotalMaterials(Number(response.data.totalCount || 0));
+      setAllMaterials(activeOnly(response.data?.materials || []));
     } catch (error) {
       console.error('Error fetching materials:', error);
       if (error.response?.status === 401) {
@@ -153,30 +150,30 @@ const AllMaterials = () => {
     } finally {
       setLoadingTable(false);
     }
-  }, [appliedSearch, appliedSortBy, appliedSortDir, currentPage, itemsPerPage, navigate, token]);
+  }, [navigate, token]);
 
-  const fetchMaterialsOverview = useCallback(async () => {
-    try {
-      setLoadingOverview(true);
-      const response = await axios.get(`${API_ROUTES.MATERIALS}/overview`, {
-        params: { search: appliedSearch || undefined },
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      setOverview({
-        totalMaterials: Number(response.data.totalMaterials || 0),
-        inStockMaterials: Number(response.data.inStockMaterials || 0),
-        lowStockMaterials: Number(response.data.lowStockMaterials || 0),
-        outOfStockMaterials: Number(response.data.outOfStockMaterials || 0),
-      });
-    } catch (error) {
-      console.error('Error fetching materials overview:', error);
-    } finally {
-      setLoadingOverview(false);
+  const filteredMaterials = useMemo(() => {
+    const q = String(appliedSearch || '').trim();
+    let rows = allMaterials.slice();
+
+    if (q) {
+      rows = rows.filter((row) => [row.name, row.brand, row.category, row.barcode].some((v) => String(v || '').toLowerCase().includes(q.toLowerCase())));
     }
-  }, [appliedSearch, appliedSortBy, appliedSortDir, token]);
+
+    const compare = (a, b, field) => {
+      const av = a?.[field];
+      const bv = b?.[field];
+      if (typeof av === 'number' && typeof bv === 'number') return av - bv;
+      return String(av ?? '').localeCompare(String(bv ?? ''));
+    };
+
+    rows.sort((a, b) => {
+      const dir = appliedSortDir === 'asc' ? 1 : -1;
+      return dir * compare(a, b, appliedSortBy);
+    });
+
+    return rows;
+  }, [allMaterials, appliedSearch, appliedSortBy, appliedSortDir]);
 
   useEffect(() => {
     if (!token) {
@@ -188,9 +185,26 @@ const AllMaterials = () => {
   }, [fetchMaterialsTable, navigate, token]);
 
   useEffect(() => {
-    if (!token) return;
-    fetchMaterialsOverview();
-  }, [fetchMaterialsOverview, token]);
+    const total = filteredMaterials.length;
+    const pages = Math.max(1, Math.ceil(total / itemsPerPage));
+
+    if (currentPage > pages) {
+      setCurrentPage(pages);
+      return;
+    }
+
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    setMaterials(filteredMaterials.slice(start, end));
+    setTotalMaterials(total);
+    setTotalPages(pages);
+    setOverview({
+      totalMaterials: total,
+      inStockMaterials: filteredMaterials.filter((row) => Number(row.current_stock || 0) > 0).length,
+      lowStockMaterials: filteredMaterials.filter((row) => Number(row.current_stock || 0) > 0 && Number(row.alert_quantity || 0) > 0 && Number(row.current_stock || 0) <= Number(row.alert_quantity || 0)).length,
+      outOfStockMaterials: filteredMaterials.filter((row) => Number(row.current_stock || 0) <= 0).length,
+    });
+  }, [filteredMaterials, currentPage, itemsPerPage]);
 
   const handleDelete = async (id) => {
     if (!token) {
@@ -207,7 +221,7 @@ const AllMaterials = () => {
           },
         });
         
-        await Promise.all([fetchMaterialsTable(), fetchMaterialsOverview()]);
+        await fetchMaterialsTable();
       } catch (error) {
         console.error('Error deleting material:', error);
         
@@ -293,13 +307,15 @@ const AllMaterials = () => {
             </div>
             
             <div className="flex items-center gap-4">
-              <Link 
-                to="/materials/add" 
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                <Settings size={20} />
-                New Material
-              </Link>
+              { canCreate && (
+                <Link 
+                  to="/materials/add" 
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <Settings size={20} />
+                  New Material
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -397,6 +413,8 @@ const AllMaterials = () => {
                   <thead className="bg-gray-100/80">
                     <tr>
                       <th className="p-4 text-left font-medium text-gray-700">Material</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Brand</th>
+                      <th className="p-4 text-left font-medium text-gray-700">Category</th>
                       <th className="p-4 text-left font-medium text-gray-700">Pricing</th>
                       <th className="p-4 text-left font-medium text-gray-700">Stock</th>
                       <th className="p-4 text-left font-medium text-gray-700">Actions</th>
@@ -437,21 +455,21 @@ const AllMaterials = () => {
                                 </div>
                                 <div>
                                   <p className="font-semibold text-gray-800">{material.name}</p>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    {material.brand && (
-                                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
-                                        {material.brand}
-                                      </span>
-                                    )}
-                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                                      {material.unit}
-                                    </span>
-                                  </div>
                                   {material.sku && (
                                     <p className="text-xs text-gray-500 mt-1">SKU: {material.sku}</p>
                                   )}
                                 </div>
                               </div>
+                            </td>
+                            <td className="p-4">
+                              <span className="inline-flex px-2 py-1 rounded-full text-xs bg-amber-100 text-amber-800">
+                                {material.brand || '-'}
+                              </span>
+                            </td>
+                            <td className="p-4">
+                              <span className="inline-flex px-2 py-1 rounded-full text-xs bg-indigo-100 text-indigo-800">
+                                {material.category || '-'}
+                              </span>
                             </td>
                             <td className="p-4">
                               <div className="space-y-2">
@@ -499,22 +517,25 @@ const AllMaterials = () => {
                                   <Eye size={16} />
                                 </button>
                                 
-                                <Link
-                                  to={`/materials/edit/${material.id}`}
-                                  className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
-                                  title="Edit"
-                                >
-                                  <Pen size={16} />
-                                </Link>
+                                {canEdit && (
+                                  <Link
+                                    to={`/materials/edit/${material.id}`}
+                                    className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
+                                    title="Edit"
+                                  >
+                                    <Pen size={16} />
+                                  </Link>
+                                )}
                                 
-                                <button
-                                  onClick={() => handleDelete(material.id)}
-                                  className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
-                                  title="Delete"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                                
+                                {canDelete && (
+                                  <button
+                                    onClick={() => handleDelete(material.id)}
+                                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                )}
                                 
                               </div>
                             </td>
@@ -833,3 +854,5 @@ const AllMaterials = () => {
 };
 
 export default AllMaterials;
+
+

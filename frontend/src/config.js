@@ -1,8 +1,8 @@
 export const API_BASE_URL = 'http://localhost:3001/api';
 export const MEDIA_BASE_URL = 'http://localhost:3001';
+// export const API_BASE_URL = 'https://inventoryback.taftiq.com/api';
+// export const MEDIA_BASE_URL = 'https://inventoryback.taftiq.com';
 
-// export const API_BASE_URL = 'https://bspbackend.codesbreak.com/api';
-// export const MEDIA_BASE_URL = 'https://bspbackend.codesbreak.com';
 export const SOCKET_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
 export const API_ROUTES = {
@@ -63,6 +63,9 @@ export const API_ROUTES = {
   SHOP_INVENTORY_SUMMARY: (id) => `${API_BASE_URL}/shops/${id}/inventory/summary`,
   SHOP_STOCK: (id) => `${API_BASE_URL}/shops/${id}/stock`,
   SHOP_INVENTORY_ITEM_UPDATE: (shopId) => `${API_BASE_URL}/shops/inventory/${shopId}/item`,
+  INVENTORY_ADJUSTMENTS: `${API_BASE_URL}/inventory-adjustments`,
+  INVENTORY_ADJUSTMENTS_ITEM: `${API_BASE_URL}/inventory-adjustments/item`,
+  INVENTORY_ADJUSTMENTS_PLACE_SUMMARY: `${API_BASE_URL}/inventory-adjustments/place-summary`,
 
   // Shop POS routes
   SHOP_SALES: `${API_BASE_URL}/shop-sales`,
@@ -76,6 +79,7 @@ export const API_ROUTES = {
   SHOP_SALES_ITEMS: (shopId) => `${API_BASE_URL}/shop-sales/items/shop/${shopId}`,
   SHOP_SALES_BY_ID: (id) => `${API_BASE_URL}/shop-sales/${id}`,
   SHOP_SALES_DETAILS_BY_ID: (id) => `${API_BASE_URL}/shop-sales/details/${id}`,
+  SHOP_SALES_RETURNS_BY_SALE: (saleId) => `${API_BASE_URL}/shop-sales/returns/sale/${saleId}`,
   SHOP_SALES_EDIT_ACCESS_OPEN: (id) => `${API_BASE_URL}/shop-sales/${id}/edit-access/open`,
   SHOP_SALES_EDIT_ACCESS_REQUEST: (id) => `${API_BASE_URL}/shop-sales/${id}/edit-access/request`,
   SHOP_SALES_EDIT_ACCESS_CLOSE: (id) => `${API_BASE_URL}/shop-sales/${id}/edit-access/close`,
@@ -164,6 +168,7 @@ export const API_ROUTES = {
   //transfer routes
   TRANSFERS: `${API_BASE_URL}/transfers`,
   TRANSFERS_OVERVIEW: `${API_BASE_URL}/transfers/overview`,
+  TRANSFER_DESTINATIONS: (type) => `${API_BASE_URL}/transfers/destinations/${encodeURIComponent(type)}`,
   TRANSFER_BY_ID: (id) => `${API_BASE_URL}/transfers/${id}`,
   TRANSFER_STATUS: (id) => `${API_BASE_URL}/transfers/${id}/status`,
   TRANSFER_RECEIVE: (id) => `${API_BASE_URL}/transfers/${id}/receive`,
@@ -182,6 +187,7 @@ export const API_ROUTES = {
   REQUISITION_APPROVE: (id) => `${API_BASE_URL}/requisitions/${id}/approve`,
   REQUISITION_REJECT: (id) => `${API_BASE_URL}/requisitions/${id}/reject`,
   REQUISITION_SECTION_ACTION: (sectionId) => `${API_BASE_URL}/requisitions/sections/${sectionId}/action`,
+  REQUISITION_SECTION_BY_ID: (sectionId) => `${API_BASE_URL}/requisitions/sections/${sectionId}`,
   REQUISITION_SECTION_COMPLETE: (sectionId) => `${API_BASE_URL}/requisitions/sections/${sectionId}/complete`,
   REQUISITION_CHILD: (id) => `${API_BASE_URL}/requisitions/${id}/child`,
   
@@ -263,3 +269,9 @@ export const API_ROUTES = {
 // app.use('/api/dash-board', dashboardRoutes);
 // app.use('/api/users', userRoutes);
 // app.use('/api/transfers', transferRoutes);
+
+
+
+
+
+

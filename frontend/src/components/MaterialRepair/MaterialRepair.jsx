@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { API_ROUTES } from '../../config';
+import { includesLooseNumber } from '../../utils/numberLooseSearch';
 import {
   ArrowLeft,
   Eye,
@@ -139,7 +140,7 @@ const MaterialRepair = () => {
       repair.note?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       `#${repair.id}`.includes(searchTerm) ||
       repair.materialRepairItem?.some(item => 
-        item.material?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        includesLooseNumber(item.material?.name, searchTerm) ||
         item.material?.brand?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     

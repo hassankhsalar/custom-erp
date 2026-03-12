@@ -657,10 +657,11 @@ router.get("/leave-requests", async (req, res) => {
     const requesterId = req.user.userId;
     const canApproveAll = await userHasPermission(requesterId, "leave_approve_all");
     const canApprove = await userHasPermission(requesterId, "leave_approve");
+    const canRead = await userHasPermission(requesterId, "leave_read");
 
     let where = {};
     if (!canApproveAll) {
-      if (canApprove) {
+      if (canApprove || canRead) {
         const managedUsers = await prisma.userManager.findMany({
           where: { managerId: requesterId },
           select: { userId: true }
@@ -688,6 +689,7 @@ router.put("/leave-requests/:id/approve", async (req, res) => {
     const id = parseInt(req.params.id);
     const approverId = req.user.userId;
     const canApproveAll = await userHasPermission(approverId, "leave_approve_all");
+    const canApprove = await userHasPermission(approverId, "leave_approve");
     const leave = await prisma.leaveRequest.findUnique({
       where: { id },
       include: { user: true }
@@ -696,7 +698,7 @@ router.put("/leave-requests/:id/approve", async (req, res) => {
 
     if (!canApproveAll) {
       const isManager = await isManagerOf(approverId, leave.userId);
-      if (!isManager) return res.status(403).json({ error: "Not authorized to approve this leave" });
+      if (!isManager || !canApprove) return res.status(403).json({ error: "Not authorized to approve this leave" });
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -726,6 +728,7 @@ router.put("/leave-requests/:id/reject", async (req, res) => {
     const id = parseInt(req.params.id);
     const approverId = req.user.userId;
     const canApproveAll = await userHasPermission(approverId, "leave_approve_all");
+    const canApprove = await userHasPermission(approverId, "leave_approve");
     const leave = await prisma.leaveRequest.findUnique({
       where: { id },
       include: { user: true }
@@ -734,7 +737,7 @@ router.put("/leave-requests/:id/reject", async (req, res) => {
 
     if (!canApproveAll) {
       const isManager = await isManagerOf(approverId, leave.userId);
-      if (!isManager) return res.status(403).json({ error: "Not authorized to reject this leave" });
+      if (!isManager || !canApprove) return res.status(403).json({ error: "Not authorized to reject this leave" });
     }
 
     const updated = await prisma.$transaction(async (tx) => {

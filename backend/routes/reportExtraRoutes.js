@@ -428,12 +428,12 @@ router.get("/customer/details", async (req, res) => {
     const sortColumn = sortBy === "name"
       ? "c.name"
       : sortBy === "most_paid"
-        ? "COALESCE(agg.totalPaid, 0)"
+        ? "COALESCE(saleAgg.totalPaid, 0)"
         : sortBy === "most_items"
-          ? "COALESCE(agg.totalItemQty, 0)"
+          ? "COALESCE(itemAgg.totalItemQty, 0)"
           : sortBy === "most_item_types"
-            ? "COALESCE(agg.itemTypeCount, 0)"
-            : "COALESCE(agg.totalDue, 0)";
+            ? "COALESCE(itemAgg.itemTypeCount, 0)"
+            : "COALESCE(saleAgg.totalDue, 0)";
     const paginationSql = exportAll ? Prisma.sql`` : Prisma.sql`LIMIT ${limit} OFFSET ${offset}`;
 
     const totalRows = await prisma.$queryRaw`
@@ -446,17 +446,26 @@ router.get("/customer/details", async (req, res) => {
 
     const rows = await prisma.$queryRaw`
       SELECT c.id, c.name, c.mobile, c.email,
-             COALESCE(agg.totalAmount, 0) as totalAmount,
-             COALESCE(agg.totalPaid, 0) as totalPaid,
-             COALESCE(agg.totalDue, 0) as totalDue,
-             COALESCE(agg.totalItemQty, 0) as totalItemQty,
-             COALESCE(agg.itemTypeCount, 0) as itemTypeCount
+             COALESCE(saleAgg.totalAmount, 0) as totalAmount,
+             COALESCE(saleAgg.totalPaid, 0) as totalPaid,
+             COALESCE(saleAgg.totalDue, 0) as totalDue,
+             COALESCE(itemAgg.totalItemQty, 0) as totalItemQty,
+             COALESCE(itemAgg.itemTypeCount, 0) as itemTypeCount
       FROM \`Customer\` c
       LEFT JOIN (
-        SELECT s.customerId,
+        SELECT
+               s.customerId,
                SUM(s.grandTotal) as totalAmount,
                SUM(s.paidAmount) as totalPaid,
-               SUM(s.grandTotal - s.paidAmount) as totalDue,
+               SUM(s.grandTotal - s.paidAmount) as totalDue
+        FROM \`Sale\` s
+        WHERE s.customerId IS NOT NULL
+        ${saleDateClause}
+        GROUP BY s.customerId
+      ) saleAgg ON saleAgg.customerId = c.id
+      LEFT JOIN (
+        SELECT
+               s.customerId,
                SUM(si.quantity) as totalItemQty,
                COUNT(DISTINCT COALESCE(si.productId, si.materialId)) as itemTypeCount
         FROM \`Sale\` s
@@ -464,7 +473,7 @@ router.get("/customer/details", async (req, res) => {
         WHERE s.customerId IS NOT NULL
         ${saleDateClause}
         GROUP BY s.customerId
-      ) agg ON agg.customerId = c.id
+      ) itemAgg ON itemAgg.customerId = c.id
       WHERE c.deleted_at = 0
       ${searchClause}
       ORDER BY ${Prisma.raw(sortColumn)} ${Prisma.raw(sortOrder)}, c.id DESC
@@ -511,12 +520,12 @@ router.get("/supplier/details", async (req, res) => {
     const sortColumn = sortBy === "name"
       ? "s.name"
       : sortBy === "most_paid"
-        ? "COALESCE(agg.totalPaid, 0)"
+        ? "COALESCE(purchaseAgg.totalPaid, 0)"
         : sortBy === "most_items"
-          ? "COALESCE(agg.totalItemQty, 0)"
+          ? "COALESCE(itemAgg.totalItemQty, 0)"
           : sortBy === "most_item_types"
-            ? "COALESCE(agg.itemTypeCount, 0)"
-            : "COALESCE(agg.totalDue, 0)";
+            ? "COALESCE(itemAgg.itemTypeCount, 0)"
+            : "COALESCE(purchaseAgg.totalDue, 0)";
     const paginationSql = exportAll ? Prisma.sql`` : Prisma.sql`LIMIT ${limit} OFFSET ${offset}`;
 
     const totalRows = await prisma.$queryRaw`
@@ -529,17 +538,26 @@ router.get("/supplier/details", async (req, res) => {
 
     const rows = await prisma.$queryRaw`
       SELECT s.id, s.name, s.mobile, NULL as email,
-             COALESCE(agg.totalAmount, 0) as totalAmount,
-             COALESCE(agg.totalPaid, 0) as totalPaid,
-             COALESCE(agg.totalDue, 0) as totalDue,
-             COALESCE(agg.totalItemQty, 0) as totalItemQty,
-             COALESCE(agg.itemTypeCount, 0) as itemTypeCount
+             COALESCE(purchaseAgg.totalAmount, 0) as totalAmount,
+             COALESCE(purchaseAgg.totalPaid, 0) as totalPaid,
+             COALESCE(purchaseAgg.totalDue, 0) as totalDue,
+             COALESCE(itemAgg.totalItemQty, 0) as totalItemQty,
+             COALESCE(itemAgg.itemTypeCount, 0) as itemTypeCount
       FROM \`Supplier\` s
       LEFT JOIN (
-        SELECT p.supplierId,
+        SELECT
+               p.supplierId,
                SUM(p.grandTotal) as totalAmount,
                SUM(p.paidAmount) as totalPaid,
-               SUM(p.grandTotal - p.paidAmount) as totalDue,
+               SUM(p.grandTotal - p.paidAmount) as totalDue
+        FROM \`Purchase\` p
+        WHERE p.supplierId IS NOT NULL
+        ${purchaseDateClause}
+        GROUP BY p.supplierId
+      ) purchaseAgg ON purchaseAgg.supplierId = s.id
+      LEFT JOIN (
+        SELECT
+               p.supplierId,
                SUM(pi.quantity) as totalItemQty,
                COUNT(DISTINCT COALESCE(pi.productId, pi.materialId)) as itemTypeCount
         FROM \`Purchase\` p
@@ -547,7 +565,7 @@ router.get("/supplier/details", async (req, res) => {
         WHERE p.supplierId IS NOT NULL
         ${purchaseDateClause}
         GROUP BY p.supplierId
-      ) agg ON agg.supplierId = s.id
+      ) itemAgg ON itemAgg.supplierId = s.id
       WHERE s.deleted_at = 0
       ${searchClause}
       ORDER BY ${Prisma.raw(sortColumn)} ${Prisma.raw(sortOrder)}, s.id DESC
@@ -588,22 +606,31 @@ router.get("/customer/overview", async (req, res) => {
     const rows = await prisma.$queryRaw`
       SELECT
         COUNT(*) as totalCustomers,
-        SUM(COALESCE(agg.totalItemQty, 0)) as totalItemQty,
-        SUM(COALESCE(agg.totalPaid, 0)) as totalPaid,
-        SUM(COALESCE(agg.totalDue, 0)) as totalDue,
-        SUM(CASE WHEN COALESCE(agg.totalItemQty, 0) > 0 THEN 1 ELSE 0 END) as activeCustomers
+        SUM(COALESCE(itemAgg.totalItemQty, 0)) as totalItemQty,
+        SUM(COALESCE(saleAgg.totalPaid, 0)) as totalPaid,
+        SUM(COALESCE(saleAgg.totalDue, 0)) as totalDue,
+        SUM(CASE WHEN COALESCE(itemAgg.totalItemQty, 0) > 0 THEN 1 ELSE 0 END) as activeCustomers
       FROM \`Customer\` c
       LEFT JOIN (
-        SELECT s.customerId,
+        SELECT
+               s.customerId,
                SUM(s.paidAmount) as totalPaid,
-               SUM(s.grandTotal - s.paidAmount) as totalDue,
+               SUM(s.grandTotal - s.paidAmount) as totalDue
+        FROM \`Sale\` s
+        WHERE s.customerId IS NOT NULL
+        ${saleDateClause}
+        GROUP BY s.customerId
+      ) saleAgg ON saleAgg.customerId = c.id
+      LEFT JOIN (
+        SELECT
+               s.customerId,
                SUM(si.quantity) as totalItemQty
         FROM \`Sale\` s
         LEFT JOIN \`SaleItem\` si ON si.saleId = s.id
         WHERE s.customerId IS NOT NULL
         ${saleDateClause}
         GROUP BY s.customerId
-      ) agg ON agg.customerId = c.id
+      ) itemAgg ON itemAgg.customerId = c.id
       WHERE c.deleted_at = 0
       ${searchClause}
     `;
@@ -635,22 +662,31 @@ router.get("/supplier/overview", async (req, res) => {
     const rows = await prisma.$queryRaw`
       SELECT
         COUNT(*) as totalSuppliers,
-        SUM(COALESCE(agg.totalItemQty, 0)) as totalItemQty,
-        SUM(COALESCE(agg.totalPaid, 0)) as totalPaid,
-        SUM(COALESCE(agg.totalDue, 0)) as totalDue,
-        SUM(CASE WHEN COALESCE(agg.totalItemQty, 0) > 0 THEN 1 ELSE 0 END) as activeSuppliers
+        SUM(COALESCE(itemAgg.totalItemQty, 0)) as totalItemQty,
+        SUM(COALESCE(purchaseAgg.totalPaid, 0)) as totalPaid,
+        SUM(COALESCE(purchaseAgg.totalDue, 0)) as totalDue,
+        SUM(CASE WHEN COALESCE(itemAgg.totalItemQty, 0) > 0 THEN 1 ELSE 0 END) as activeSuppliers
       FROM \`Supplier\` s
       LEFT JOIN (
-        SELECT p.supplierId,
+        SELECT
+               p.supplierId,
                SUM(p.paidAmount) as totalPaid,
-               SUM(p.grandTotal - p.paidAmount) as totalDue,
+               SUM(p.grandTotal - p.paidAmount) as totalDue
+        FROM \`Purchase\` p
+        WHERE p.supplierId IS NOT NULL
+        ${purchaseDateClause}
+        GROUP BY p.supplierId
+      ) purchaseAgg ON purchaseAgg.supplierId = s.id
+      LEFT JOIN (
+        SELECT
+               p.supplierId,
                SUM(pi.quantity) as totalItemQty
         FROM \`Purchase\` p
         LEFT JOIN \`PurchaseItem\` pi ON pi.purchaseId = p.id
         WHERE p.supplierId IS NOT NULL
         ${purchaseDateClause}
         GROUP BY p.supplierId
-      ) agg ON agg.supplierId = s.id
+      ) itemAgg ON itemAgg.supplierId = s.id
       WHERE s.deleted_at = 0
       ${searchClause}
     `;

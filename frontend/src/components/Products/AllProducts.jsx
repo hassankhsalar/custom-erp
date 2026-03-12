@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
 import { activeOnly } from '../../utils/softDelete';
+import { includesLooseNumberInAny } from '../../utils/numberLooseSearch';
 import { 
   Pen, 
   Trash2, 
@@ -23,6 +24,7 @@ import {
   Settings,
   Factory
 } from 'lucide-react';
+import { usePermission } from '../../hooks/usePermission';
 
 const ProductOverviewCards = memo(function ProductOverviewCards({ overview }) {
   return (
@@ -68,12 +70,12 @@ const ProductOverviewCards = memo(function ProductOverviewCards({ overview }) {
 
 const AllProducts = () => {
   const [products, setProducts] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [expandedProductId, setExpandedProductId] = useState(null);
   const [loadingTable, setLoadingTable] = useState(false);
-  const [loadingOverview, setLoadingOverview] = useState(false);
   const [modal, setModal] = useState({ isOpen: false, type: null, data: null });
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
@@ -89,6 +91,12 @@ const AllProducts = () => {
   const [sortDir, setSortDir] = useState('desc');
   const [appliedSortBy, setAppliedSortBy] = useState('created_at');
   const [appliedSortDir, setAppliedSortDir] = useState('desc');
+
+  const { hasPermission } = usePermission();
+  const canRead = hasPermission('product_read');
+  const canCreate = hasPermission('product_create');
+  const canEdit = hasPermission('product_edit');
+  const canDelete = hasPermission('product_delete');
 
   // Function to get full image URL
   const getImageUrl = (imagePath) => {
@@ -108,23 +116,13 @@ const AllProducts = () => {
   const fetchProductsTable = useCallback(async () => {
     try {
       setLoadingTable(true);
-      const response = await axios.get(API_ROUTES.PRODUCTS, {
-        params: {
-          page: currentPage,
-          limit: itemsPerPage,
-          search: appliedSearch || undefined,
-          sortBy: appliedSortBy,
-          sortDir: appliedSortDir,
-        },
+      const response = await axios.get(API_ROUTES.PRODUCTS_ALL, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': Bearer ,
           'Content-Type': 'application/json',
         },
       });
-      const rows = activeOnly(response.data.products || []);
-      setProducts(rows);
-      setTotalPages(Number(response.data.totalPages || Math.ceil((response.data.totalCount || 0) / itemsPerPage) || 1));
-      setTotalProducts(Number(response.data.totalCount || 0));
+      setAllProducts(activeOnly(response.data?.products || []));
     } catch (error) {
       console.error('Error fetching products:', error);
       if (error.response?.status === 401) {
@@ -137,33 +135,30 @@ const AllProducts = () => {
     } finally {
       setLoadingTable(false);
     }
-  }, [appliedSearch, appliedSortBy, appliedSortDir, currentPage, itemsPerPage, navigate, token]);
+  }, [navigate, token]);
 
-  const fetchProductsOverview = useCallback(async () => {
-    try {
-      setLoadingOverview(true);
-      const response = await axios.get(`${API_ROUTES.PRODUCTS}/overview`, {
-        params: {
-          search: appliedSearch || undefined,
-          sortBy: appliedSortBy,
-          sortDir: appliedSortDir,
-        },
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      setOverview({
-        totalProducts: Number(response.data.totalProducts || 0),
-        lowStockProducts: Number(response.data.lowStockProducts || 0),
-        outOfStockProducts: Number(response.data.outOfStockProducts || 0),
-      });
-    } catch (error) {
-      console.error('Error fetching products overview:', error);
-    } finally {
-      setLoadingOverview(false);
+  const filteredProducts = useMemo(() => {
+    const q = String(appliedSearch || '').trim();
+    let rows = allProducts.slice();
+
+    if (q) {
+      rows = rows.filter((row) => includesLooseNumberInAny([row.name, row.barcode, row.category, row.description], q));
     }
-  }, [appliedSearch, appliedSortBy, appliedSortDir, token]);
+
+    const compare = (a, b, field) => {
+      const av = a?.[field];
+      const bv = b?.[field];
+      if (typeof av === 'number' && typeof bv === 'number') return av - bv;
+      return String(av ?? '').localeCompare(String(bv ?? ''));
+    };
+
+    rows.sort((a, b) => {
+      const dir = appliedSortDir === 'asc' ? 1 : -1;
+      return dir * compare(a, b, appliedSortBy);
+    });
+
+    return rows;
+  }, [allProducts, appliedSearch, appliedSortBy, appliedSortDir]);
 
   useEffect(() => {
     if (!token) {
@@ -175,9 +170,25 @@ const AllProducts = () => {
   }, [fetchProductsTable, navigate, token]);
 
   useEffect(() => {
-    if (!token) return;
-    fetchProductsOverview();
-  }, [fetchProductsOverview, token]);
+    const total = filteredProducts.length;
+    const pages = Math.max(1, Math.ceil(total / itemsPerPage));
+
+    if (currentPage > pages) {
+      setCurrentPage(pages);
+      return;
+    }
+
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
+    setProducts(filteredProducts.slice(start, end));
+    setTotalProducts(total);
+    setTotalPages(pages);
+    setOverview({
+      totalProducts: total,
+      lowStockProducts: filteredProducts.filter((row) => Number(row.stock || 0) > 0 && Number(row.alert_quantity || 0) > 0 && Number(row.stock || 0) <= Number(row.alert_quantity || 0)).length,
+      outOfStockProducts: filteredProducts.filter((row) => Number(row.stock || 0) <= 0).length,
+    });
+  }, [filteredProducts, currentPage, itemsPerPage]);
 
   const handleDelete = async (id) => {
     if (!token) {
@@ -194,7 +205,7 @@ const AllProducts = () => {
           },
         });
         
-        await Promise.all([fetchProductsTable(), fetchProductsOverview()]);
+        await fetchProductsTable();
       } catch (error) {
         console.error('Error deleting product:', error);
         
@@ -284,13 +295,15 @@ const AllProducts = () => {
             </div>
             
             <div className="flex items-center gap-4">
-              <Link 
-                to="/products/create" 
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                <Settings size={20} />
-                New Product
-              </Link>
+              { canCreate && (
+                <Link 
+                  to="/products/create" 
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <Settings size={20} />
+                  New Product
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -618,21 +631,25 @@ const AllProducts = () => {
                                   <Eye size={16} />
                                 </button>
                                 
-                                <Link
-                                  to={`/products/edit/${product.id}`}
-                                  className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
-                                  title="Edit"
-                                >
-                                  <Pen size={16} />
-                                </Link>
+                                { canEdit && (
+                                  <Link
+                                    to={`/products/edit/${product.id}`}
+                                    className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
+                                    title="Edit"
+                                  >
+                                    <Pen size={16} />
+                                  </Link>
+                                )}
                                 
-                                <button
-                                  onClick={() => handleDelete(product.id)}
-                                  className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
-                                  title="Delete"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
+                                { canDelete && (
+                                  <button
+                                    onClick={() => handleDelete(product.id)}
+                                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                )}
                                 
                                 <button
                                   onClick={() => toggleMaterials(product.id)}
@@ -660,8 +677,6 @@ const AllProducts = () => {
                                         <tr>
                                           <th className="p-3 text-left font-medium text-gray-700">Material Name</th>
                                           <th className="p-3 text-left font-medium text-gray-700">Quantity</th>
-                                          <th className="p-3 text-left font-medium text-gray-700">Price</th>
-                                          <th className="p-3 text-left font-medium text-gray-700">Total</th>
                                         </tr>
                                       </thead>
                                       <tbody>
@@ -677,12 +692,6 @@ const AllProducts = () => {
                                               <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-1 rounded-full">
                                                 {mat.material_quantity}
                                               </span>
-                                            </td>
-                                            <td className="p-3 font-medium text-gray-900">
-                                              ${parseFloat(mat.price).toFixed(2)}
-                                            </td>
-                                            <td className="p-3 font-semibold text-gray-900">
-                                              ${(parseFloat(mat.price) * parseFloat(mat.material_quantity)).toFixed(2)}
                                             </td>
                                           </tr>
                                         ))}
@@ -1027,3 +1036,5 @@ const AllProducts = () => {
 };
 
 export default AllProducts;
+
+

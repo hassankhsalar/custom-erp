@@ -3,6 +3,7 @@ import { AlertTriangle, Camera, Save, Search, Trash2, X } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
+import { includesLooseNumber } from "../../utils/numberLooseSearch";
 import { useAuth } from "../../context/AuthContext";
 
 export default function AddDamageRecord() {
@@ -74,8 +75,8 @@ export default function AddDamageRecord() {
     return branchItems
       .filter(
         (item) =>
-          String(item.name || "").toLowerCase().includes(q) ||
-          String(item.barcode || "").toLowerCase().includes(q)
+          includesLooseNumber(item.name, q) ||
+          includesLooseNumber(item.barcode, q)
       )
       .slice(0, 20);
   }, [search, branchItems]);
@@ -383,3 +384,6 @@ export default function AddDamageRecord() {
     </div>
   );
 }
+
+
+

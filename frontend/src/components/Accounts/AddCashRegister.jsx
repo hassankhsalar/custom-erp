@@ -248,30 +248,6 @@ export default function AddCashRegister() {
                       </div>
                     </div>
                   </label>
-
-                  <label className={`p-4 rounded-lg border cursor-pointer transition-all duration-200 ${
-                    formData.status === 'maintenance'
-                      ? 'bg-amber-50 border-amber-300'
-                      : 'bg-white/50 border-gray-200 hover:bg-gray-50/50'
-                  }`}>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="radio"
-                        name="status"
-                        value="maintenance"
-                        checked={formData.status === 'maintenance'}
-                        onChange={handleChange}
-                        className="text-amber-600 focus:ring-amber-500"
-                      />
-                      <div className="flex items-center gap-2">
-                        <Calculator size={20} className="text-amber-600" />
-                        <div>
-                          <p className="font-medium text-gray-800">Maintenance</p>
-                          <p className="text-sm text-gray-600">Under repair</p>
-                        </div>
-                      </div>
-                    </div>
-                  </label>
                 </div>
               </div>
 

@@ -11,6 +11,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
 import SearchableSelect from '../common/SearchableSelect';
+import { usePermission } from "../../hooks/usePermission";
 
 export default function AllPurchase() {
   const navigate = useNavigate();
@@ -45,8 +46,21 @@ export default function AllPurchase() {
     dateFrom: "",
     dateTo: "",
   });
+
+  useEffect(() => {
+    setAppliedFilters({ ...filters });
+    setCurrentPage(1);
+  }, [filters]);
+
   const initializedRef = useRef(false);
   const skipNextPageFetchRef = useRef(false);
+
+  // Permissions
+  const { hasPermission } = usePermission();
+  const canEditPurchase = hasPermission(['purchases_edit']);
+  const canDeletePurchase = hasPermission(['purchases_delete']);
+  const canAddPurchasePayment = hasPermission(['purchase_add_payment']);
+  const canAddPurchaseShipment = hasPermission(['purchase_add_shipment']);
   
   // Modal states
   const [viewModalOpen, setViewModalOpen] = useState(false);
@@ -1122,15 +1136,17 @@ export default function AllPurchase() {
                                       View Details
                                     </button>
 
-                                    <button
-                                      onClick={() => handleEditPurchase(purchase)}
-                                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition"
-                                    >
-                                      <Edit size={16} />
-                                      Edit Purchase
-                                    </button>
+                                    { canEditPurchase && (
+                                      <button
+                                        onClick={() => handleEditPurchase(purchase)}
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition"
+                                      >
+                                        <Edit size={16} />
+                                        Edit Purchase
+                                      </button>
+                                    )}
                                     
-                                    {!isPaid && (
+                                    {!isPaid && canAddPurchasePayment && (
                                       <button
                                         onClick={() => handleAddPayment(purchase)}
                                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 hover:text-green-600 transition"
@@ -1140,7 +1156,7 @@ export default function AllPurchase() {
                                       </button>
                                     )}
 
-                                    {purchase.shippingStatus !== 'received' && (
+                                    {purchase.shippingStatus !== 'received' && canAddPurchaseShipment && (
                                       <button
                                         onClick={() => handleAddShipment(purchase)}
                                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition"
@@ -1152,13 +1168,15 @@ export default function AllPurchase() {
 
                                     <div className="border-t my-1"></div>
                                     
-                                    <button
-                                      onClick={() => handleDelete(purchase)}
-                                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
-                                    >
-                                      <Trash2 size={16} />
-                                      Delete Purchase
-                                    </button>
+                                    { canDeletePurchase && (
+                                      <button
+                                        onClick={() => handleDelete(purchase)}
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition"
+                                      >
+                                        <Trash2 size={16} />
+                                        Delete Purchase
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               )}
@@ -1544,7 +1562,7 @@ export default function AllPurchase() {
       
 
       {/* Add Payment Modal */}
-      {addPaymentModalOpen && selectedPurchase && (
+      {addPaymentModalOpen && selectedPurchase && canAddPurchasePayment && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b">
@@ -1682,7 +1700,7 @@ export default function AllPurchase() {
       )}
 
       {/* Add Shipment Modal */}
-      {addShipmentModalOpen && selectedPurchase && (
+      {addShipmentModalOpen && selectedPurchase && canAddPurchaseShipment && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b">
@@ -2076,3 +2094,4 @@ export default function AllPurchase() {
     </div>
   );
 }
+

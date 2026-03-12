@@ -1,13 +1,17 @@
 const NodeCache = require('node-cache');
 
 // stdTTL: time to live in seconds for every new entry. 0 = unlimited
-const cache = new NodeCache({ stdTTL: 60 * 60 }); // Cache for 60 minutes or 1 hour
+const cache = new NodeCache({ stdTTL: 60 * 60 }); // Default cache for 60 minutes
 
 function get(key) {
   return cache.get(key);
 }
 
-function set(key, value) {
+function set(key, value, ttlSeconds) {
+  if (typeof ttlSeconds === 'number') {
+    cache.set(key, value, ttlSeconds);
+    return;
+  }
   cache.set(key, value);
 }
 
@@ -23,5 +27,5 @@ module.exports = {
   get,
   set,
   del,
-  flush
+  flush,
 };

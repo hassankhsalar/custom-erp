@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES, MEDIA_BASE_URL } from "../../config";
+import { includesLooseNumber } from "../../utils/numberLooseSearch";
 import { activeOnly } from "../../utils/softDelete";
 import {
   ArrowLeft,
@@ -234,10 +235,10 @@ const AddMaterialScrapRecord = () => {
         .filter((branchMaterial) => {
           const material = branchMaterial.material || {};
           return (
-            material.name?.toLowerCase().includes(searchTerm) ||
-            material.barcode?.toLowerCase().includes(searchTerm) ||
-            material.description?.toLowerCase().includes(searchTerm) ||
-            material.brand?.toLowerCase().includes(searchTerm)
+            includesLooseNumber(material.name, searchTerm) ||
+            includesLooseNumber(material.barcode, searchTerm) ||
+            includesLooseNumber(material.description, searchTerm) ||
+            includesLooseNumber(material.brand, searchTerm)
           );
         })
         .slice(0, 10);
@@ -430,7 +431,7 @@ const AddMaterialScrapRecord = () => {
       );
 
       alert("Material scrap record created successfully!");
-      navigate("/materialscraprecord");
+      navigate("/damage-record");
     } catch (error) {
       console.error("Error creating material scrap record:", error);
       alert(
@@ -453,10 +454,10 @@ const AddMaterialScrapRecord = () => {
           "Are you sure you want to cancel? All unsaved changes will be lost.",
         )
       ) {
-        navigate("/materialscraprecord");
+        navigate("/damage-record");
       }
     } else {
-      navigate("/materialscraprecord");
+      navigate("/damage-record");
     }
   };
 
@@ -1237,3 +1238,7 @@ const AddMaterialScrapRecord = () => {
 };
 
 export default AddMaterialScrapRecord;
+
+
+
+

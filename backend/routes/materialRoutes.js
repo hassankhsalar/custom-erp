@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 const router = express.Router();
 const { withActiveWhere } = require("../utils/softDelete");
 const { seedMaterialIntoAllPlaces } = require("../utils/inventoryBootstrap");
+const { buildContainsOr } = require("../utils/numberLooseSearch");
 
 // Create a new material
 router.post('/', async (req, res) => {
@@ -46,32 +47,7 @@ router.get('/', async (req, res) => {
     const searchText = String(search || '').trim();
 
     if (searchText) {
-      where.OR = [
-        {
-          name: {
-            contains: searchText,
-            mode: 'insensitive',
-          },
-        },
-        {
-          brand: {
-            contains: searchText,
-            mode: 'insensitive',
-          },
-        },
-        {
-          barcode: {
-            contains: searchText,
-            mode: 'insensitive',
-          },
-        },
-        {
-          category: {
-            contains: searchText,
-            mode: 'insensitive',
-          },
-        },
-      ];
+      where.OR = buildContainsOr(["name", "brand", "barcode", "category"], searchText);
     }
 
     const allowedSortBy = new Set([
@@ -122,12 +98,7 @@ router.get('/overview', async (req, res) => {
     const where = { deleted_at: false };
 
     if (searchText) {
-      where.OR = [
-        { name: { contains: searchText, mode: 'insensitive' } },
-        { brand: { contains: searchText, mode: 'insensitive' } },
-        { barcode: { contains: searchText, mode: 'insensitive' } },
-        { category: { contains: searchText, mode: 'insensitive' } },
-      ];
+      where.OR = buildContainsOr(["name", "brand", "barcode", "category"], searchText);
     }
 
     const [totalMaterials, outOfStockMaterials, stockRows] = await prisma.$transaction([
@@ -255,3 +226,5 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
+
+

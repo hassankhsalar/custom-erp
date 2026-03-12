@@ -284,11 +284,14 @@ model Expense {
   createdBy   User?   @relation(fields: [createdById], references: [id])
   salaryId    Int?
   salary      Salary? @relation(fields: [salaryId], references: [id])
+  transactionId Int?  @unique
+  transaction   Transactions? @relation(fields: [transactionId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([categoryId])
   @@index([date])
+  @@index([transactionId])
 }
 
 
@@ -436,6 +439,7 @@ model Transactions {
 
   purchaseId               Int?
   purchase                 Purchase? @relation(fields: [purchaseId], references: [id])
+  expense                  Expense?
 
   purpose                  String?
   added_to_account         Boolean?
@@ -485,6 +489,7 @@ model Material {
   alternative_units   Json?
   unit_cost           Float
   sale_price          Float?  
+  wholesale_price     Float?
   current_stock       Float                @default(0)
   created_at          DateTime             @default(now())
   updated_at          DateTime             @updatedAt
@@ -510,6 +515,7 @@ model Material {
   requisitionItems      RequisitionItem[]
   requisitionSectionItems RequisitionSectionItem[]
   stockAdjustments      StockAdjustment[]
+  inventoryAdjustments  InventoryAdjustment[]
   repairOrderItems      RepairOrderItem[]
   damageRecordItems     DamageRecordItem[]
 }
@@ -610,6 +616,7 @@ model Product {
   requisitionItems        RequisitionItem[]
   requisitionSectionItems RequisitionSectionItem[]
   stockAdjustments        StockAdjustment[]
+  inventoryAdjustments    InventoryAdjustment[]
   repairOrderItems        RepairOrderItem[]
   damageRecordItems       DamageRecordItem[]
 }
@@ -638,6 +645,7 @@ model Factory {
   factoryProducts FactoryProduct[]
   factoryMaterials FactoryMaterial[]
   stockAdjustments StockAdjustment[]
+  inventoryAdjustments InventoryAdjustment[]
   requisitionSections RequisitionSection[]
   damageRecords DamageRecord[]
   transfersFromFactory Transfer[] @relation("TransferFromFactory")
@@ -676,6 +684,7 @@ model Store {
   storeMaterials          StoreMaterial[]
   storeProducts           StoreProduct[]
   stockAdjustments        StockAdjustment[]
+  inventoryAdjustments    InventoryAdjustment[]
   requisitionSections     RequisitionSection[]
   damageRecords           DamageRecord[]
   transfersFromStore      Transfer[] @relation("TransferFromStore")
@@ -753,11 +762,13 @@ model ProductionMaterial {
 
 
 model Supplier {
-  id        Int        @id @default(autoincrement())
-  name      String
-  mobile    String?
-  address   String?
-  deleted_at Boolean @default(false)
+  id            Int        @id @default(autoincrement())
+  name          String
+  mobile        String?
+  address       String?
+  total_purchase Float      @default(0)
+  total_due      Float      @default(0)
+  deleted_at    Boolean    @default(false)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   purchases Purchase[] @relation("SupplierPurchases")
@@ -1076,6 +1087,7 @@ model Shop {
   shopProducts  ShopProduct[]
   shopMaterials ShopMaterial[]
   stockAdjustments StockAdjustment[]
+  inventoryAdjustments InventoryAdjustment[]
   sales         Sale[]
   saleReturns   SaleReturn[]
   requisitionSections RequisitionSection[]
@@ -1398,6 +1410,36 @@ model StockAdjustment {
   @@index([productId])
   @@index([materialId])
   @@index([createdAt])
+}
+
+model InventoryAdjustment {
+  id                Int       @id @default(autoincrement())
+  itemType          String
+  productId         Int?
+  product           Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  materialId        Int?
+  material          Material? @relation(fields: [materialId], references: [id], onDelete: SetNull)
+  quantity          Float
+  unitPrice         Float
+  placeType         String
+  shopId            Int?
+  shop              Shop?     @relation(fields: [shopId], references: [id], onDelete: SetNull)
+  factoryId         Int?
+  factory           Factory?  @relation(fields: [factoryId], references: [id], onDelete: SetNull)
+  storeId           Int?
+  store             Store?    @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  reason            String?
+  date              DateTime
+  isAccountAdjusted Boolean   @default(false)
+  transactionId     Int?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  @@index([itemType, productId])
+  @@index([itemType, materialId])
+  @@index([placeType, storeId, shopId, factoryId])
+  @@index([date])
+  @@index([transactionId])
 }
 
 model Notification {
@@ -1759,5 +1801,7 @@ model RepairOrderItem {
   @@index([productId])
   @@index([materialId])
 }
+
+
 
 

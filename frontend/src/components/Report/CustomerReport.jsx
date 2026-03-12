@@ -333,7 +333,7 @@ const CustomerReport = () => {
           <div className="backdrop-blur-lg bg-gradient-to-br from-blue-50/60 to-cyan-50/60 border border-white/40 rounded-2xl shadow-xl p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Revenue</p>
+                <p className="text-sm text-gray-600">Total Payment Received</p>
                 <p className="text-2xl font-bold text-blue-600">
                   ${totalPaid.toFixed(2)}
                 </p>

@@ -14,6 +14,7 @@ import {
   FileDigit
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { API_ROUTES } from "../../config";
 
 export default function AddAccount() {
   const navigate = useNavigate();

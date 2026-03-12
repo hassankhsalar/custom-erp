@@ -5,6 +5,7 @@ const prisma = new PrismaClient();
 const router = express.Router();
 const cache = require('../cachingService');
 const LOCATION_ASSOCIATES = new Set(['store', 'shop', 'factory']);
+const { getActiveFeatures } = require('../utils/activeFeatures');
 
 const TIME_24H_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -576,7 +577,8 @@ router.get("/username/:username", async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    res.json(user);
+    const activeFeatures = await getActiveFeatures(prisma);
+    res.json({ ...user, activeFeatures });
   } catch (err) {
     console.error("Get user by email error:", err);
     res.status(500).json({ error: err.message });
@@ -794,3 +796,4 @@ router.get("/:userId/has-permission/:permission", async (req, res) => {
 });
 
 module.exports = router;
+

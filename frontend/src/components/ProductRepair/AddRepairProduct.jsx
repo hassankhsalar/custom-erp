@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
+import { includesLooseNumber } from "../../utils/numberLooseSearch";
 import { activeOnly } from "../../utils/softDelete";
 import {
   ArrowLeft,
@@ -254,8 +255,8 @@ const AddRepairProduct = () => {
       const results = availableScrapProducts
         .filter(
           (scrapProduct) =>
-            scrapProduct.product?.name?.toLowerCase().includes(searchTerm) ||
-            scrapProduct.product?.barcode?.toLowerCase().includes(searchTerm) ||
+            includesLooseNumber(scrapProduct.product?.name, searchTerm) ||
+            includesLooseNumber(scrapProduct.product?.barcode, searchTerm) ||
             scrapProduct.product?.description
               ?.toLowerCase()
               .includes(searchTerm),
@@ -1316,3 +1317,6 @@ const AddRepairProduct = () => {
 };
 
 export default AddRepairProduct;
+
+
+

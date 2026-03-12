@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import { API_ROUTES, MEDIA_BASE_URL } from '../../config';
+import { includesLooseNumber } from '../../utils/numberLooseSearch';
 import SearchableSelect from '../common/SearchableSelect';
 import { 
   Image as ImageIcon, 
@@ -110,7 +111,7 @@ const EditProduct = () => {
       if (!token) return;
       
       try {
-        const response = await axios.get(API_ROUTES.MATERIALS, {
+        const response = await axios.get(API_ROUTES.MATERIALS_ALL, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -157,7 +158,7 @@ const EditProduct = () => {
     if (searchTerm) {
       setFilteredMaterials(
         allMaterials.filter(material =>
-          material.name.toLowerCase().includes(searchTerm.toLowerCase())
+          includesLooseNumber(material.name, searchTerm)
         )
       );
     } else {
@@ -872,3 +873,6 @@ const EditProduct = () => {
 };
 
 export default EditProduct;
+
+
+

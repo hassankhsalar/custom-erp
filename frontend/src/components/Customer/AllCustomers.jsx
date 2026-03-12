@@ -24,6 +24,7 @@ import {
   AlertCircle,
   CheckCircle
 } from "lucide-react";
+import { usePermission } from "../../hooks/usePermission";
 
 export default function AllCustomers() {
   const [customers, setCustomers] = useState([]);
@@ -43,9 +44,15 @@ export default function AllCustomers() {
   });
   const navigate = useNavigate();
 
+  const { hasPermission } = usePermission();
+  const canCreateCustomer = hasPermission(["customer_create"]);
+  const canEditCustomer = hasPermission(["customer_edit"]);
+  const canDeleteCustomer = hasPermission(["customer_delete"]);
+  const canClearDue = hasPermission(["customer_clear_due"]);
+
   useEffect(() => {
     fetchCustomers();
-  }, [currentPage, itemsPerPage]);
+  }, [currentPage, itemsPerPage, searchTerm]);
 
   const fetchCustomers = async () => {
     const token = localStorage.getItem("token");
@@ -117,8 +124,6 @@ export default function AllCustomers() {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    setCurrentPage(1); // Reset to first page on new search
-    fetchCustomers();
   };
 
   const openDetailsModal = (customer) => {
@@ -260,14 +265,15 @@ export default function AllCustomers() {
                 <p className="text-gray-600 mt-2">Manage your customer relationships and details</p>
               </div>
             </div>
-            
-            <Link
-              to="/customers/add"
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-            >
-              <UserPlus size={20} />
-              Add Customer
-            </Link>
+            { canCreateCustomer && (
+              <Link
+                to="/customers/add"
+                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+              >
+                <UserPlus size={20} />
+                Add Customer
+              </Link>
+            )}
           </div>
         </div>
 
@@ -319,7 +325,7 @@ export default function AllCustomers() {
                 type="text"
                 placeholder="Search by name, mobile, or email"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                 className="w-full pl-10 pr-4 py-3 bg-white/50 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-transparent placeholder-gray-400"
               />
             </div>
@@ -437,35 +443,40 @@ export default function AllCustomers() {
                             >
                               <Eye size={16} />
                             </button>
+                            { canEditCustomer && (
+                              <Link
+                                to={`/customers/edit/${customer.id}`}
+                                className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
+                                title="Edit"
+                              >
+                                <Edit size={16} />
+                              </Link>
+                            )}
                             
-                            <Link
-                              to={`/customers/edit/${customer.id}`}
-                              className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
-                              title="Edit"
-                            >
-                              <Edit size={16} />
-                            </Link>
-                            
-                            <button
-                              onClick={() => handleDelete(customer.id)}
-                              className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
-                              title="Delete"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                            { canDeleteCustomer && (
+                              <button
+                                onClick={() => handleDelete(customer.id)}
+                                className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                title="Delete"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
 
-                            <button
-                              onClick={() => openClearDueModal(customer)}
-                              disabled={parseFloat(customer.total_due || 0) <= 0}
-                              className={`p-2 rounded-lg transition-colors duration-300 ${
-                                parseFloat(customer.total_due || 0) > 0
-                                  ? "bg-amber-50 text-amber-600 hover:bg-amber-100"
-                                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                              }`}
-                              title={parseFloat(customer.total_due || 0) > 0 ? "Clear Due" : "No due"}
-                            >
-                              <TbCurrencyTaka size={16} />
-                            </button>
+                            { canClearDue && (
+                              <button
+                                onClick={() => openClearDueModal(customer)}
+                                disabled={parseFloat(customer.total_due || 0) <= 0}
+                                className={`p-2 rounded-lg transition-colors duration-300 ${
+                                  parseFloat(customer.total_due || 0) > 0
+                                    ? "bg-amber-50 text-amber-600 hover:bg-amber-100"
+                                    : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                }`}
+                                title={parseFloat(customer.total_due || 0) > 0 ? "Clear Due" : "No due"}
+                              >
+                                <TbCurrencyTaka size={16} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -727,7 +738,7 @@ export default function AllCustomers() {
         </div>
       )}
 
-      {clearDueModal.isOpen && clearDueModal.customer && (
+      {clearDueModal.isOpen && clearDueModal.customer && canClearDue && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeClearDueModal}></div>
           <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-md w-full p-6">
@@ -769,3 +780,4 @@ export default function AllCustomers() {
     </div>
   );
 }
+

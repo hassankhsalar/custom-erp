@@ -24,6 +24,7 @@ import {
   Save,
   Image as ImageIcon
 } from 'lucide-react';
+import { usePermission } from '../../hooks/usePermission';
 
 const AllProductions = () => {
   const [productions, setProductions] = useState([]);
@@ -52,8 +53,20 @@ const AllProductions = () => {
     sortBy: 'createdAt',
     sortDir: 'desc',
   });
+
+  useEffect(() => {
+    setAppliedFilters({ ...filters });
+    setCurrentPage(1);
+  }, [filters]);
+
   const initializedRef = useRef(false);
   const skipNextPageFetchRef = useRef(false);
+
+  const { hasPermission } = usePermission();
+  const canCreateProduction = hasPermission('production_create');
+  const canEditProduction = hasPermission('production_edit');
+  const canDeleteProduction = hasPermission('production_delete');
+  const canChangeStatus = hasPermission('production_change_status');
 
   // Modal states
   const [modal, setModal] = useState({ isOpen: false, type: null, data: null });
@@ -440,13 +453,15 @@ const AllProductions = () => {
                 <p className="text-2xl font-bold text-emerald-600">{overview.totalCount}</p>
               </div>
               
-              <Link 
-                to="/productions/new" 
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                <Settings size={20} />
-                New Production
-              </Link>
+              { canCreateProduction && (
+                <Link 
+                  to="/productions/new" 
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-500 hover:from-emerald-600 hover:to-green-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <Settings size={20} />
+                  New Production
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -499,48 +514,69 @@ const AllProductions = () => {
 
         {/* Main Content */}
         <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-7 gap-3 mb-4">
-            <input
-              type="text"
-              value={filters.search}
-              onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-              placeholder="Search by reference..."
-              className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl"
-            />
-            <select
-              value={filters.factoryId}
-              onChange={(e) => setFilters((prev) => ({ ...prev, factoryId: e.target.value }))}
-              className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl"
-            >
-              <option value="">All Factories</option>
-              {factoryOptions.map((f) => (
-                <option key={f.id} value={f.id}>{f.name}</option>
-              ))}
-            </select>
-            <select
-              value={filters.status}
-              onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
-              className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl"
-            >
-              <option value="">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="running">Running</option>
-              <option value="production_done">Completed</option>
-            </select>
-            <input type="datetime-local" value={filters.dateFrom} onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl" />
-            <input type="datetime-local" value={filters.dateTo} onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl" />
-            <select value={filters.sortBy} onChange={(e) => setFilters((prev) => ({ ...prev, sortBy: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl">
-              <option value="createdAt">Sort by Created</option>
-              <option value="reference">Sort by Reference</option>
-              <option value="status">Sort by Status</option>
-              <option value="start_date">Sort by Start Date</option>
-              <option value="estimated_end_date">Sort by End Date</option>
-            </select>
-            <select value={filters.sortDir} onChange={(e) => setFilters((prev) => ({ ...prev, sortDir: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl">
-              <option value="desc">Desc</option>
-              <option value="asc">Asc</option>
-            </select>
-            <div className="md:col-span-7 flex justify-end gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+            <div>
+              <label className='text-sm text-gray-600'>Reference</label>
+              <input
+                type="text"
+                value={filters.search}
+                onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+                placeholder="Search by reference..."
+                className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl"
+              />
+            </div>
+            <div>
+              <label className='text-sm text-gray-600'>Factory</label>
+              <select
+                value={filters.factoryId}
+                onChange={(e) => setFilters((prev) => ({ ...prev, factoryId: e.target.value }))}
+                className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl"
+              >
+                <option value="">All Factories</option>
+                {factoryOptions.map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className='text-sm text-gray-600'>Status</label>
+              <select
+                value={filters.status}
+                onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
+                className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl"
+              >
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="running">Running</option>
+                <option value="production_done">Completed</option>
+              </select>
+            </div>
+            <div>
+              <label className='text-sm text-gray-600'>Start Date</label>
+              <input type="datetime-local" value={filters.dateFrom} onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl" />
+            </div>
+            <div>
+              <label className='text-sm text-gray-600'>End Date</label>
+              <input type="datetime-local" value={filters.dateTo} onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl" />
+            </div>
+            <div>
+              <label className='text-sm text-gray-600'>Sort By</label>
+              <select value={filters.sortBy} onChange={(e) => setFilters((prev) => ({ ...prev, sortBy: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl">
+                <option value="createdAt">Sort by Created</option>
+                <option value="reference">Sort by Reference</option>
+                <option value="status">Sort by Status</option>
+                <option value="start_date">Sort by Start Date</option>
+                <option value="estimated_end_date">Sort by End Date</option>
+              </select>
+            </div>
+            <div>
+              <label className='text-sm text-gray-600'>Sort Direction</label>
+              <select value={filters.sortDir} onChange={(e) => setFilters((prev) => ({ ...prev, sortDir: e.target.value }))} className="w-full px-3 py-3 bg-white/80 border border-white/60 rounded-xl">
+                <option value="desc">Desc</option>
+                <option value="asc">Asc</option>
+              </select>
+            </div>
+            <div className="md:col-span-4 flex justify-end gap-2">
               <button onClick={handleApplyFilters} className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 text-white">Apply</button>
               <button onClick={handleClearFilters} className="px-4 py-2 rounded-xl bg-white/80 border border-white/60 text-gray-700">Clear</button>
             </div>
@@ -630,7 +666,7 @@ const AllProductions = () => {
                                 <Eye size={16} />
                               </button>
                               
-                              {['running', 'pending'].includes(production.status) && (
+                              {['running', 'pending'].includes(production.status) && canEditProduction && (
                                 <Link
                                   to={`/productions/edit/${production.id}`}
                                   className="p-2 bg-teal-50 text-teal-600 rounded-lg hover:bg-teal-100 transition-colors duration-300"
@@ -640,15 +676,17 @@ const AllProductions = () => {
                                 </Link>
                               )}
                               
-                              <button
-                                onClick={() => handleDelete(production.id)}
-                                className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
-                                title="Delete"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              { canDeleteProduction && (
+                                <button
+                                  onClick={() => handleDelete(production.id)}
+                                  className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
                               
-                              {['running', 'pending'].includes(production.status) && (
+                              {['running', 'pending'].includes(production.status) && canChangeStatus && (
                                 <button
                                   onClick={() => openModal('updateStatus', production)}
                                   className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-colors duration-300"
@@ -889,7 +927,7 @@ const AllProductions = () => {
       )}
 
       {/* Update Status Modal */}
-      {modal.isOpen && modal.type === 'updateStatus' && (
+      {modal.isOpen && modal.type === 'updateStatus' && canChangeStatus && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeModal}></div>
           <div className="relative backdrop-blur-xl bg-white/95 border border-white/60 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
@@ -1114,3 +1152,4 @@ const AllProductions = () => {
 };
 
 export default AllProductions;
+

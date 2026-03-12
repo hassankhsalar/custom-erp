@@ -30,6 +30,7 @@ import {
   School,
   X
 } from "lucide-react";
+import { usePermission } from "../../hooks/usePermission";
 
 // Debounce function for search
 const debounce = (func, delay) => {
@@ -60,6 +61,10 @@ export default function LeaveRequests() {
   const [formErrors, setFormErrors] = useState({});
   const categoryRef = useRef(null);
   const token = localStorage.getItem("token");
+
+  const { hasPermission } = usePermission();
+  const canDelete = hasPermission('leave_request_delete');
+  const canApprove = hasPermission('leave_approve');
 
   const fetchRequests = async () => {
     setLoading(true);
@@ -421,7 +426,7 @@ export default function LeaveRequests() {
         </div>
 
         {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <div className="flex flex-col gap-6 mb-6">
           {/* New Request Form */}
           <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
             <div className="flex items-center gap-3 mb-6">
@@ -725,7 +730,7 @@ export default function LeaveRequests() {
                 <p className="text-gray-600 mb-6">
                   {searchQuery || statusFilter !== "all" ? 
                     "No matching requests found. Try adjusting your filters." : 
-                    "Submit your first leave request using the form on the left."}
+                    "Submit your first leave request using the form."}
                 </p>
               </div>
             ) : (
@@ -805,7 +810,7 @@ export default function LeaveRequests() {
                                     {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                                   </button>
                                   
-                                  {request.status?.toLowerCase() === "pending" && (
+                                  {request.status?.toLowerCase() === "pending" && canApprove && (
                                     <>
                                       <button
                                         onClick={() => handleApprove(request.id, "approve")}
@@ -824,13 +829,17 @@ export default function LeaveRequests() {
                                       </button>
                                     </>
                                   )}
-                                  <button
-                                    onClick={() => handleDeleteRequest(request.id)}
-                                    className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
-                                    title="Delete"
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
+
+                                  { canDelete && (
+                                    <button
+                                      onClick={() => handleDeleteRequest(request.id)}
+                                      className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors duration-300"
+                                      title="Delete"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  )}
+                                  
                                 </div>
                               </td>
                             </tr>

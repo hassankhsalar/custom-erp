@@ -69,6 +69,7 @@ import {
   Bell
 } from "lucide-react";
 import { API_ROUTES } from '../../config';
+import { usePermission } from "../../hooks/usePermission";
 
 
 export default function PermissionsManagement() {
@@ -89,89 +90,96 @@ export default function PermissionsManagement() {
   const [selectedPermissionId, setSelectedPermissionId] = useState("");
   const [searchUser, setSearchUser] = useState("");
   const [searchPermission, setSearchPermission] = useState("");
+
+  // 'role_read', 'role_create', 'role_edit', 'role_delete', 'role_assign'
+  const { hasPermission } = usePermission();
+  const canCreateRole = hasPermission('role_create');
+  const canEditRole = hasPermission('role_edit');
+  const canDeleteRole = hasPermission('role_delete');
+  const canAssignRole = hasPermission('role_assign');
   
   // All permissions list (exact names as they should be sent to backend)
   const allPermissions = [
     // Product and material management permissions
     'material_create', 'material_read', 'material_edit', 'material_delete',
-    'product_read', 'product_create', 'product_edit', 'product_update', 'product_delete',
+    'product_read', 'product_create', 'product_edit', 'product_delete',
     'unit_read', 'unit_create', 'unit_edit', 'unit_delete',
     'brand_read', 'brand_create', 'brand_edit', 'brand_delete',
     'product_category_read', 'product_category_create', 'product_category_edit', 'product_category_delete',
 
     // Store factory, shop management permissions
-    'factory_create', 'factory_edit', 'factory_delete', 'factory_read',
-    'store_create', 'store_edit', 'store_delete', 'store_read',
-    'shop_create', 'shop_edit', 'shop_delete', 'shop_read',
-    'inventory_adjustment_create', 'inventory_adjustment_read',
+    'factory_create', 'factory_edit', 'factory_delete', 'factory_read', 'factory_inventory_manage', 'factory_inventory_adjustment_create', 'factory_inventory_adjustment_read',
+    'store_create', 'store_edit', 'store_delete', 'store_read', 'store_inventory_manage', 'store_inventory_adjustment_create', 'store_inventory_adjustment_read',
+    'shop_create', 'shop_edit', 'shop_delete', 'shop_read', 'shop_inventory_manage', 'shop_inventory_adjustment_create', 'shop_inventory_adjustment_read',
+    
 
     // Add cash register and bank account permissions
-    'cash_register_read', 'cash_register_create', 'cash_register_edit', 'cash_register_delete',
-    'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit',
+    'cash_register_read', 'cash_register_create', 'cash_register_deactivate',
+    'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit', 'cash_register_daily_record',
     'bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete',
-    'bank_account_deposit', 'bank_account_withdraw',
 
     // Add account permissions
-    'account_read', 'account_create', 'account_edit', 'account_delete',
-    'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement', 'account_balance',
+    'account_read', 'account_create', 'account_edit',
+    'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement',
+    'general_ledger_report', 'balance_sheet_report',
 
     // Add purchase permissions
-    'purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment',
-    'purchases_return_create', 'purchases_return_edit', 'purchases_return_delete', 'purchases_return_read',
+    'purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchase_add_payment', 'purchase_add_shipment',
+    'purchases_return_create', 'purchases_return_add_payment', 'purchases_return_add_shipment', 'purchases_return_delete', 'purchases_return_read',
 
     // Add production permissions
     'production_create', 'production_edit', 'production_delete', 'production_read', 'production_change_status', 
 
     // Add sales permissions
-    'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_edit_any_day', 'sales_open_close', 'sales_add_payment',
+    'sales_create', 'previous_date_sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today',  'sales_open_close', 'sales_add_payment',
     'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read',
+    'sales_warranty',
 
     // Add transfer permissions
     'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive', 'transfer_return',
 
     // Add Wastage/Damage permissions
-    'damage_create', 'damage_edit', 'damage_delete', 'damage_read',
+    'damage_create', 'damage_read', 'damage_edit', 'damage_delete', 'damage_return_create', 'damage_return_read', 'damage_return_add_payment', 'damage_return_add_shipment', 'damage_return_delete',
 
     // Add Repair permissions
-    'repairs_create', 'repairs_edit', 'repairs_delete', 'repairs_read',
+    'repairs_create', 'repairs_read', 'repairs_receive', 'repairs_delete', 
 
     // Add Expense permissions
-    'expenses_create', 'expenses_edit', 'expenses_delete', 'expenses_read',
+    'expenses_create', 'expenses_edit', 'expenses_delete', 'expenses_read', 'expense_category_manage',
 
     // Add Salary and HRM permissions
     'salary_create', 'salary_edit', 'salary_delete', 'salary_read',
-    'leave_approve', 'leave_approve_all', 'leave_read', 'leave_request_create', 'leave_request_edit', 'leave_request_delete',
-    'holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read', 'holiday_manage',
-    'leave_category_manage', 'payroll_manage', 'approve_salary', 'approve_clock_in_out', 'add_salary', 'edit_salary',
-    'hrm_read', 'hrm_employee_manage', 'clock_in_out_manage',
+    'leave_approve', 'leave_read', 'leave_request_create', 'leave_request_edit', 'leave_request_delete',
+    'holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read',
+    'leave_category_manage', 'payroll_manage', 'approve_salary', 'approve_clock_in_out',
+    'hrm_employee_manage', 'clock_in_out_manage',
     
     // Add Report permissions
-    'general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report',
-    'sales_report', 'purchases_report', 'stock_report', 'transfer_report',
-    'profit_loss_report', 'purchase_sales_report', 'customer_report', 'supplier_report',
-    'best_selling_product_report', 'worst_selling_product_report', 'profit_calender_report', 'production_report', 'wastage_report',
+    'sales_report', 'purchases_report', 'production_report', 'wastage_report', 'trial_balance_report', 'cash_and_bank_report', 'stock_report', 'daily_stock_report', 'transfer_report', 'purchase_sales_report', 'customer_report', 'supplier_report', 'best_selling_report',
 
     // Add user management permissions
-    'user_create', 'user_edit', 'user_delete', 'user_read', 'user_activate_deactivate', 'user_logout', 'user_associate_create', 'user_activity_log_read',
+    'user_create', 'user_edit', 'user_delete', 'user_read', 'user_activate_deactivate', 'user_logout', 'user_associate_create',
 
     // Add role and permission management permissions
-    'role_create', 'role_edit', 'role_delete', 'role_read',
+    'role_create', 'role_edit', 'role_delete', 'role_read', 'role_assign',
 
     // Add customer permissions
-    'customer_read', 'customer_create', 'customer_edit', 'customer_update', 'customer_delete',
+    'customer_read', 'customer_create', 'customer_edit', 'customer_delete', 'customer_clear_due',
 
     // Add supplier permissions
-    'supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete',
+    'supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete', 'supplier_clear_due',
 
     // Requisition permissions
-    'requisition_create', 'requisition_read', 'requisition_update',
+    'requisition_create', 'requisition_read', 'requisition_update', 'requisition_delete', 'requisition_approve', 'production_order_read', 'transfer_order_read', 'purchase_order_read',
 
     // Notification permissions
     'notification_read',
 
     // System Management
-    'general_settings_edit', 'company_settings_edit', 
+    'general_settings', 'company_settings', 
     'data_import', 'data_export',
+    'printer_settings', 'print_label', 'unit_manage', 'category_manage', 'brand_manage', 'activity_log',
+    'feature_activation'
   ];
 
   // Group permissions by category for better organization in UI - SEPARATE CATEGORIES
@@ -188,7 +196,7 @@ export default function PermissionsManagement() {
       key: 'product',
       name: 'Product',
       icon: <Tag size={18} className="text-purple-500" />,
-      permissions: ['product_read', 'product_create', 'product_edit', 'product_update', 'product_delete']
+      permissions: ['product_read', 'product_create', 'product_edit', 'product_delete']
     },
     // Unit Management
     {
@@ -216,28 +224,21 @@ export default function PermissionsManagement() {
       key: 'factory',
       name: 'Factory',
       icon: <Factory size={18} className="text-cyan-500" />,
-      permissions: ['factory_create', 'factory_edit', 'factory_delete', 'factory_read']
+      permissions: ['factory_create', 'factory_edit', 'factory_delete', 'factory_read', 'factory_inventory_manage', 'factory_inventory_adjustment_create', 'factory_inventory_adjustment_read']
     },
     // Store Management
     {
       key: 'store',
       name: 'Store',
       icon: <Store size={18} className="text-indigo-500" />,
-      permissions: ['store_create', 'store_edit', 'store_delete', 'store_read']
+      permissions: ['store_create', 'store_edit', 'store_delete', 'store_read', 'store_inventory_manage', 'store_inventory_adjustment_create', 'store_inventory_adjustment_read']
     },
     // Shop Management
     {
       key: 'shop',
       name: 'Shop',
       icon: <ShoppingBag size={18} className="text-pink-500" />,
-      permissions: ['shop_create', 'shop_edit', 'shop_delete', 'shop_read']
-    },
-    // Inventory Adjustment
-    {
-      key: 'inventory_adjustment',
-      name: 'Inventory Adjustment',
-      icon: <PackageCheck size={18} className="text-teal-500" />,
-      permissions: ['inventory_adjustment_create', 'inventory_adjustment_read']
+      permissions: ['shop_create', 'shop_edit', 'shop_delete', 'shop_read', 'shop_inventory_manage', 'shop_inventory_adjustment_create', 'shop_inventory_adjustment_read']
     },
     // Cash Register Management
     {
@@ -245,8 +246,8 @@ export default function PermissionsManagement() {
       name: 'Cash Register',
       icon: <Coins size={18} className="text-yellow-600" />,
       permissions: [
-        'cash_register_read', 'cash_register_create', 'cash_register_edit', 'cash_register_delete',
-        'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit'
+        'cash_register_read', 'cash_register_create', 'cash_register_deactivate', 'cash_register_assign',
+        'cash_register_open', 'cash_register_close', 'cash_register_withdraw', 'cash_register_deposit', 'cash_register_daily_record'
       ]
     },
     // Bank Account Management
@@ -256,7 +257,6 @@ export default function PermissionsManagement() {
       icon: <BanknoteIcon size={18} className="text-blue-600" />,
       permissions: [
         'bank_account_read', 'bank_account_create', 'bank_account_edit', 'bank_account_delete',
-        'bank_account_deposit', 'bank_account_withdraw'
       ]
     },
     // Account Management
@@ -265,8 +265,9 @@ export default function PermissionsManagement() {
       name: 'Accounts',
       icon: <CreditCard size={18} className="text-yellow-500" />,
       permissions: [
-        'account_read', 'account_create', 'account_edit', 'account_delete',
-        'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement', 'account_balance'
+        'account_read', 'account_create', 'account_edit', 'account_assign',
+        'account_deposit', 'account_withdraw', 'account_transfer', 'account_statement',
+        'general_ledger_report', 'balance_sheet_report'
       ]
     },
     // Purchase Management
@@ -275,7 +276,7 @@ export default function PermissionsManagement() {
       name: 'Purchase',
       icon: <ShoppingCart size={18} className="text-teal-500" />,
       permissions: [
-        'purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchases_change_status', 'purchase_add_payment'
+        'purchases_create', 'purchases_edit', 'purchases_delete', 'purchases_read', 'purchase_add_payment', 'purchase_add_shipment',
       ]
     },
     // Purchase Return Management
@@ -283,7 +284,7 @@ export default function PermissionsManagement() {
       key: 'purchases_return',
       name: 'Purchase Return',
       icon: <PackageX size={18} className="text-rose-500" />,
-      permissions: ['purchases_return_create', 'purchases_return_edit', 'purchases_return_delete', 'purchases_return_read']
+      permissions: ['purchases_return_create', 'purchases_return_add_payment', 'purchases_return_add_shipment', 'purchases_return_delete', 'purchases_return_read']
     },
     // Production Management
     {
@@ -298,7 +299,7 @@ export default function PermissionsManagement() {
       name: 'Sales',
       icon: <Receipt size={18} className="text-emerald-500" />,
       permissions: [
-        'sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_edit_any_day', 'sales_open_close', 'sales_add_payment'
+        'sales_create', 'previous_date_sales_create', 'sales_edit', 'sales_delete', 'sales_read', 'sales_change_status', 'sales_edit_today', 'sales_open_close', 'sales_add_payment', 'sales_warranty'
       ]
     },
     // Sales Return Management
@@ -320,63 +321,63 @@ export default function PermissionsManagement() {
       key: 'damage',
       name: 'Wastage/Damage',
       icon: <AlertTriangle size={18} className="text-red-500" />,
-      permissions: ['damage_create', 'damage_edit', 'damage_delete', 'damage_read']
+      permissions: ['damage_create', 'damage_edit', 'damage_delete', 'damage_read', 'damage_return_create', 'damage_return_add_payment', 'damage_return_add_shipment', 'damage_return_delete', 'damage_return_read']
     },
     // Repair Management
     {
       key: 'repairs',
       name: 'Repairs',
       icon: <Wrench size={18} className="text-orange-600" />,
-      permissions: ['repairs_create', 'repairs_edit', 'repairs_delete', 'repairs_read']
+      permissions: ['repairs_create', 'repairs_receive', 'repairs_delete', 'repairs_read']
     },
     // Expense Management
     {
       key: 'expenses',
       name: 'Expenses',
       icon: <Wallet size={18} className="text-rose-600" />,
-      permissions: ['expenses_create', 'expenses_edit', 'expenses_delete', 'expenses_read']
+      permissions: ['expenses_create', 'expenses_read', 'expenses_edit', 'expenses_delete', 'expense_category_manage']
     },
     // Salary Management
     {
       key: 'salary',
       name: 'Salary',
       icon: <Briefcase size={18} className="text-green-600" />,
-      permissions: ['salary_create', 'salary_edit', 'salary_delete', 'salary_read', 'add_salary', 'edit_salary', 'approve_salary', 'payroll_manage']
+      permissions: ['salary_create', 'salary_edit', 'salary_delete', 'salary_read', 'approve_salary', 'payroll_manage']
     },
     // Leave Management
     {
       key: 'leave',
       name: 'Leave',
       icon: <Calendar size={18} className="text-sky-500" />,
-      permissions: ['leave_request_create', 'leave_request_edit', 'leave_request_delete', 'leave_read', 'leave_approve', 'leave_approve_all']
+      permissions: ['leave_request_create', 'leave_request_edit', 'leave_request_delete', 'leave_read', 'leave_approve' ]
     },
     // Holiday Management
     {
       key: 'holiday',
       name: 'Holiday',
       icon: <Calendar size={18} className="text-purple-500" />,
-      permissions: ['holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read', 'holiday_manage']
+      permissions: ['holiday_create', 'holiday_edit', 'holiday_delete', 'holiday_read']
     },
     // HRM Management
     {
       key: 'hrm',
       name: 'HRM',
       icon: <UsersIcon size={18} className="text-teal-500" />,
-      permissions: ['hrm_read', 'hrm_employee_manage', 'clock_in_out_manage', 'approve_clock_in_out', 'leave_category_manage', 'payroll_manage']
+      permissions: ['hrm_employee_manage', 'clock_in_out_manage', 'approve_clock_in_out', 'leave_category_manage', 'payroll_manage']
     },
     // Customer Management
     {
       key: 'customer',
       name: 'Customer',
       icon: <UserCircle size={18} className="text-blue-500" />,
-      permissions: ['customer_read', 'customer_create', 'customer_edit', 'customer_update', 'customer_delete']
+      permissions: ['customer_read', 'customer_create', 'customer_edit', 'customer_delete', 'customer_clear_due']
     },
     // Supplier Management
     {
       key: 'supplier',
       name: 'Supplier',
       icon: <Building size={18} className="text-orange-500" />,
-      permissions: ['supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete']
+      permissions: ['supplier_read', 'supplier_create', 'supplier_edit', 'supplier_delete', 'supplier_clear_due']
     },
     // User Management
     {
@@ -385,7 +386,7 @@ export default function PermissionsManagement() {
       icon: <UserCog size={18} className="text-rose-500" />,
       permissions: [
         'user_create', 'user_edit', 'user_delete', 'user_read', 
-        'user_activate_deactivate', 'user_logout', 'user_associate_create', 'user_activity_log_read'
+        'user_activate_deactivate', 'user_logout', 'user_associate_create',
       ]
     },
     // Role & Permission Management
@@ -393,7 +394,7 @@ export default function PermissionsManagement() {
       key: 'role',
       name: 'Role & Permissions',
       icon: <KeyRound size={18} className="text-purple-600" />,
-      permissions: ['role_create', 'role_edit', 'role_delete', 'role_read']
+      permissions: ['role_create', 'role_edit', 'role_delete', 'role_read', 'role_assign']
     },
     // Reports
     {
@@ -401,10 +402,7 @@ export default function PermissionsManagement() {
       name: 'Reports',
       icon: <BarChart3 size={18} className="text-violet-500" />,
       permissions: [
-        'general_ledger_report', 'trial_balance_report', 'balance_sheet_report', 'cash_and_bank_report',
-        'sales_report', 'purchases_report', 'stock_report', 'transfer_report',
-        'profit_loss_report', 'purchase_sales_report', 'customer_report', 'supplier_report',
-        'best_selling_product_report', 'worst_selling_product_report', 'profit_calender_report', 'production_report', 'wastage_report'
+        'sales_report', 'purchases_report', 'production_report', 'wastage_report', 'trial_balance_report', 'cash_and_bank_report', 'stock_report', 'daily_stock_report', 'transfer_report', 'purchase_sales_report', 'customer_report', 'supplier_report', 'best_selling_report'
       ]
     },
     // Requisition Management
@@ -412,7 +410,7 @@ export default function PermissionsManagement() {
       key: 'requisition',
       name: 'Requisition',
       icon: <ClipboardList size={18} className="text-violet-500" />,
-      permissions: ['requisition_create', 'requisition_read', 'requisition_update']
+      permissions: ['requisition_create', 'requisition_read', 'requisition_update', 'requisition_delete', 'requisition_approve', 'production_order_read', 'transfer_order_read', 'purchase_order_read']
     },
     // Notifications
     {
@@ -426,14 +424,14 @@ export default function PermissionsManagement() {
       key: 'system',
       name: 'System Management',
       icon: <Settings size={18} className="text-gray-600" />,
-      permissions: ['general_settings_edit', 'company_settings_edit', 'data_import', 'data_export']
+      permissions: ['general_settings', 'company_settings', 'data_import', 'data_export', 'printer_settings', 'print_label', 'unit_manage', 'category_manage', 'brand_manage', 'activity_log', 'feature_activation']
     },
     // Dashboard
     {
       key: 'dashboard',
       name: 'Dashboard',
       icon: <LayoutDashboard size={18} className="text-blue-500" />,
-      permissions: ['view']
+      permissions: ['dashboard_read']
     }
   ];
 
@@ -877,22 +875,24 @@ export default function PermissionsManagement() {
               <Key size={20} />
               Manage Permissions
             </button>
-            <button
-              onClick={() => setActiveTab("assignments")}
-              className={`flex-1 py-3 px-4 flex items-center justify-center gap-2 font-medium transition-all duration-300 ${
-                activeTab === "assignments"
-                  ? "text-purple-600 border-b-2 border-purple-500"
-                  : "text-gray-600 hover:text-gray-900 hover:bg-white/20"
-              }`}
-            >
-              <UserCheck size={20} />
-              Assign Role to Users
-            </button>
+            { canAssignRole && (
+              <button
+                onClick={() => setActiveTab("assignments")}
+                className={`flex-1 py-3 px-4 flex items-center justify-center gap-2 font-medium transition-all duration-300 ${
+                  activeTab === "assignments"
+                    ? "text-purple-600 border-b-2 border-purple-500"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-white/20"
+                }`}
+              >
+                <UserCheck size={20} />
+                Assign Role to Users
+              </button>
+            )}
           </div>
         </div>
 
         {/* Permissions Tab */}
-        {activeTab === "permissions" && (
+        {activeTab === "permissions" && (canCreateRole || canEditRole) && (
           <div className="space-y-6">
             {/* Create/Edit Permission Form */}
             <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
@@ -991,10 +991,10 @@ export default function PermissionsManagement() {
                                 </div>
                               </div>
                               <div className="min-w-0 flex-1">
-                                <span className="text-sm font-medium text-gray-700 truncate">
+                                {/* <span className="text-sm font-medium text-gray-700 truncate">
                                   {getShortPermissionLabel(permission)}
-                                </span>
-                                <div className="text-xs text-gray-500 truncate" title={formatPermissionDisplay(permission)}>
+                                </span> */}
+                                <div className="text-sm font-medium text-gray-700" title={formatPermissionDisplay(permission)}>
                                   {formatPermissionDisplay(permission)}
                                 </div>
                               </div>
@@ -1046,13 +1046,25 @@ export default function PermissionsManagement() {
 
                 {/* Form Actions */}
                 <div className="flex gap-3 pt-4">
-                  <button
-                    type="submit"
-                    className="px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg font-medium hover:from-purple-600 hover:to-indigo-600 transition-all duration-300 flex items-center gap-2 shadow-lg"
-                  >
-                    <Save size={20} />
-                    {editingPermission ? "Update Permission" : "Create Permission"}
-                  </button>
+                  { canCreateRole && !editingPermission && (
+                    <button
+                      type="submit"
+                      className="px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg font-medium hover:from-purple-600 hover:to-indigo-600 transition-all duration-300 flex items-center gap-2 shadow-lg"
+                    >
+                      <Save size={20} />
+                      Create Permission
+                    </button>
+                  )}
+                  { canEditRole && editingPermission && (
+                    <button
+                      type="submit"
+                      className="px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg font-medium hover:from-purple-600 hover:to-indigo-600 transition-all duration-300 flex items-center gap-2 shadow-lg"
+                    >
+                      <Save size={20} />
+                      Update Permission
+                    </button>
+                  )}
+
                   {editingPermission && (
                     <button
                       type="button"
@@ -1151,20 +1163,26 @@ export default function PermissionsManagement() {
                           </td>
                           <td className="p-4">
                             <div className="flex gap-2">
-                              <button
-                                onClick={() => handleEditPermission(permission)}
-                                className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
-                                title="Edit"
-                              >
-                                <Edit size={16} />
-                              </button>
-                              <button
-                                onClick={() => handleDeletePermission(permission.id)}
-                                className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                                title="Delete"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              {canEditRole && (
+                                <button
+                                  onClick={() => handleEditPermission(permission)}
+                                  className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                                  title="Edit"
+                                >
+                                  <Edit size={16} />
+                                </button>
+                              )}
+
+                              {canDeleteRole && (
+                                <button
+                                  onClick={() => handleDeletePermission(permission.id)}
+                                  className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                  title="Delete"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                              
                             </div>
                           </td>
                         </tr>
@@ -1178,7 +1196,7 @@ export default function PermissionsManagement() {
         )}
 
         {/* Assignments Tab */}
-        {activeTab === "assignments" && (
+        {activeTab === "assignments" && canAssignRole && (
           <div className="space-y-6">
             {/* Assignment Form */}
             <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
@@ -1329,7 +1347,6 @@ export default function PermissionsManagement() {
                         <th className="p-4 text-left font-medium text-gray-700">User</th>
                         <th className="p-4 text-left font-medium text-gray-700">Email</th>
                         <th className="p-4 text-left font-medium text-gray-700">Role</th>
-                        <th className="p-4 text-left font-medium text-gray-700">Assigned Permission</th>
                         <th className="p-4 text-left font-medium text-gray-700">Sample Permissions</th>
                         <th className="p-4 text-left font-medium text-gray-700">Actions</th>
                       </tr>
@@ -1342,17 +1359,8 @@ export default function PermissionsManagement() {
                           </td>
                           <td className="p-4 text-gray-600">{user.email}</td>
                           <td className="p-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              user.role === 'ADMIN' 
-                                ? 'bg-gradient-to-r from-red-100 to-red-50 text-red-700' 
-                                : 'bg-gradient-to-r from-green-100 to-green-50 text-green-700'
-                            }`}>
-                              {user.role}
-                            </span>
-                          </td>
-                          <td className="p-4">
-                            <div className="font-medium text-purple-700">
-                              {user.permission?.name || 'No Permission'}
+                            <div className="font-medium text-purple-700 capitalize">
+                              { (user.permission?.name || 'No Permission').replaceAll('_', ' ').replaceAll('-', ' ') }
                             </div>
                           </td>
                           <td className="p-4">

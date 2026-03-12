@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
@@ -11,6 +11,7 @@ const { rollbackAndDeleteTransactionsByWhere } = require('../utils/transactionRo
 const { buildScope, ensureIdScope, buildTransferOrFilter } = require('../utils/associateScope');
 const { getAvailableBatches, mergeIncomingBatch, decrementBatch, parseDateOnly } = require('../utils/batchDetails');
 const { assertActivePlace, assertActiveItem } = require('../utils/softDelete');
+const { buildContainsOr } = require('../utils/numberLooseSearch');
 
 const userHasPermission = async (userId, permission) => {
   const user = await prisma.user.findFirst({
@@ -34,7 +35,7 @@ const hasTransferAccess = (scope, transfer) => {
   return false;
 };
 
-const JWT_SECRET = 'your-secret-key'; // Replace with a strong secret key
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const MANUAL_STATUSES = ['processing', 'pending', 'on_the_way', 'complete', 'not_received'];
 const FINAL_STATUSES = ['complete', 'not_received'];
 const buildTransferPlaceForeignKeys = (fromType, fromId, toType, toId) => ({
@@ -73,6 +74,9 @@ const canReturnForSource = (scope, transfer) => {
 
 // Middleware to protect routes
 const authenticateToken = (req, res, next) => {
+  // If upstream middleware already authenticated the request, reuse it.
+  if (req.user?.userId) return next();
+
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -385,12 +389,12 @@ router.get('/', authenticateToken, async (req, res) => {
         skip: (pageNum - 1) * pageSize,
         take: pageSize,
         include: {
-          fromStore: { select: { id: true, name: true } },
-          fromShop: { select: { id: true, name: true } },
-          fromFactory: { select: { id: true, name: true } },
-          toStore: { select: { id: true, name: true } },
-          toShop: { select: { id: true, name: true } },
-          toFactory: { select: { id: true, name: true } },
+          fromStore: { select: { id: true, name: true, address: true, mobile: true, store_keeper: true } },
+          fromShop: { select: { id: true, name: true, address: true, mobile: true, shop_keeper: true } },
+          fromFactory: { select: { id: true, name: true, address: true, phone: true, manager: true } },
+          toStore: { select: { id: true, name: true, address: true, mobile: true, store_keeper: true } },
+          toShop: { select: { id: true, name: true, address: true, mobile: true, shop_keeper: true } },
+          toFactory: { select: { id: true, name: true, address: true, phone: true, manager: true } },
           transferItems: {
             select: {
               id: true,
@@ -398,8 +402,8 @@ router.get('/', authenticateToken, async (req, res) => {
               itemId: true,
               productId: true,
               materialId: true,
-              product: { select: { id: true, name: true } },
-              material: { select: { id: true, name: true } },
+              product: { select: { id: true, name: true, barcode: true } },
+              material: { select: { id: true, name: true, barcode: true } },
               quantity: true,
               receivedQuantity: true,
               avg_cost: true,
@@ -410,6 +414,14 @@ router.get('/', authenticateToken, async (req, res) => {
               selectedQuantity: true,
             },
           },
+          receipts: {
+            select: {
+              receiptType: true,
+              createdById: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'asc' },
+          },
         },
         orderBy: { [finalSortBy]: finalSortDir },
       }),
@@ -418,18 +430,39 @@ router.get('/', authenticateToken, async (req, res) => {
 
   const totalPages = Math.ceil(totalItems / pageSize);
 
+  const receiptCreatorIds = Array.from(new Set(
+    transfers
+      .flatMap((transfer) => (transfer.receipts || []).map((receipt) => receipt.createdById))
+      .filter((id) => Number.isFinite(id))
+  ));
+  const receiptCreators = receiptCreatorIds.length > 0
+    ? await prisma.user.findMany({
+      where: { id: { in: receiptCreatorIds }, deleted_at: false },
+      select: { id: true, name: true, username: true, email: true },
+    })
+    : [];
+  const receiptCreatorNameMap = new Map(
+    receiptCreators.map((user) => [user.id, user.name || user.username || user.email || `User #${user.id}`])
+  );
+
   const transfersWithNamesAndTotalProducts = transfers.map(transfer => {
+    const fromPlace = transfer.fromStore || transfer.fromShop || transfer.fromFactory || null;
+    const toPlace = transfer.toStore || transfer.toShop || transfer.toFactory || null;
+
     const fromName =
-      transfer.fromStore?.name ||
-      transfer.fromShop?.name ||
-      transfer.fromFactory?.name ||
+      fromPlace?.name ||
       `${transfer.from} #${transfer.fromId}`;
 
     const toName =
-      transfer.toStore?.name ||
-      transfer.toShop?.name ||
-      transfer.toFactory?.name ||
+      toPlace?.name ||
       `${transfer.to} #${transfer.toId}`;
+
+    const fromAddress = fromPlace?.address || null;
+    const toAddress = toPlace?.address || null;
+    const fromPhone = fromPlace?.mobile || fromPlace?.phone || null;
+    const toPhone = toPlace?.mobile || toPlace?.phone || null;
+    const fromPerson = fromPlace?.store_keeper || fromPlace?.shop_keeper || fromPlace?.manager || null;
+    const toPerson = toPlace?.store_keeper || toPlace?.shop_keeper || toPlace?.manager || null;
 
     const totalProducts = transfer.transferItems.reduce((sum, item) => sum + item.quantity, 0);
     const totalItems = transfer.transferItems.length;
@@ -441,15 +474,36 @@ router.get('/', authenticateToken, async (req, res) => {
         item.product?.name ||
         item.material?.name ||
         (item.item === 'product' ? 'Unknown Product' : 'Unknown Material'),
+      barcode: item.product?.barcode || item.material?.barcode || null,
     }));
 
     const summary = computeTransferSummary(transfer.transferItems);
+    const createdReceipt =
+      (transfer.receipts || []).find((receipt) => receipt.receiptType === 'created' && receipt.createdById) ||
+      (transfer.receipts || []).find((receipt) => receipt.createdById);
+    const firstReceivedReceipt = (transfer.receipts || []).find(
+      (receipt) => receipt.receiptType === 'receive' && receipt.createdById
+    );
+    const transferBy = createdReceipt?.createdById
+      ? (receiptCreatorNameMap.get(createdReceipt.createdById) || `User #${createdReceipt.createdById}`)
+      : null;
+    const receivedBy = firstReceivedReceipt?.createdById
+      ? (receiptCreatorNameMap.get(firstReceivedReceipt.createdById) || `User #${firstReceivedReceipt.createdById}`)
+      : null;
 
     return {
       ...transfer,
       status: normalizeTransferStatus(transfer.status),
       fromName,
       toName,
+      fromAddress,
+      toAddress,
+      fromPhone,
+      toPhone,
+      fromPerson,
+      toPerson,
+      transferBy,
+      receivedBy,
       totalProducts,
       totalItems,
       transferItems,
@@ -546,6 +600,13 @@ router.get('/overview', authenticateToken, async (req, res) => {
       byStatus,
     });
   } catch (error) {
+    if (error.status === 403) {
+      return res.json({
+        totalCount: 0,
+        totalShippingCost: 0,
+        byStatus: {},
+      });
+    }
     console.error('Error fetching transfer overview:', error);
     res.status(500).json({ error: 'Failed to fetch transfer overview' });
   }
@@ -595,7 +656,10 @@ router.get('/available-items', authenticateToken, async (req, res) => {
           ...productWhere,
           deleted_at: false,
           product: search
-            ? { deleted_at: false, name: { contains: search } }
+            ? {
+              deleted_at: false,
+              OR: buildContainsOr(["name", "barcode", "category"], search),
+            }
             : { deleted_at: false },
         },
         include: productInclude,
@@ -605,7 +669,7 @@ router.get('/available-items', authenticateToken, async (req, res) => {
           ...materialWhere,
           deleted_at: false,
           material: search
-            ? { deleted_at: false, name: { contains: search } }
+            ? { deleted_at: false, OR: buildContainsOr(["name", "barcode", "brand", "category"], search) }
             : { deleted_at: false },
         },
         include: materialInclude,
@@ -644,6 +708,30 @@ router.get('/available-items', authenticateToken, async (req, res) => {
   }
 });
 
+
+router.get('/destinations/:type', authenticateToken, async (req, res) => {
+  try {
+    const type = String(req.params.type || '').toLowerCase();
+    if (!['store', 'shop', 'factory'].includes(type)) {
+      return res.status(400).json({ error: 'Invalid destination type' });
+    }
+
+    const modelMap = {
+      store: prisma.store,
+      shop: prisma.shop,
+      factory: prisma.factory,
+    };
+    const rows = await modelMap[type].findMany({
+      where: { deleted_at: false },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Failed to fetch transfer destinations' });
+  }
+});
+
 router.post('/', authenticateToken, upload.single('document'), async (req, res) => {
   const { from, to, fromId, toId, items, shipping_cost, note, status, requisitionId, requisitionSectionId } = req.body;
   const document = req.file;
@@ -651,7 +739,6 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
   try {
     const scope = await buildScope(prisma, req.user?.userId || 0);
     ensureIdScope(scope, from, parseInt(fromId));
-    ensureIdScope(scope, to, parseInt(toId));
     await assertActivePlace(prisma, from, parseInt(fromId));
     await assertActivePlace(prisma, to, parseInt(toId));
 
@@ -669,6 +756,17 @@ router.post('/', authenticateToken, upload.single('document'), async (req, res) 
         status: normalizeTransferStatus(status || 'processing'),
         requisitionId: requisitionId ? parseInt(requisitionId) : null,
         requisitionSectionId: requisitionSectionId ? parseInt(requisitionSectionId) : null,
+      },
+    });
+
+    await prisma.transferReceipt.create({
+      data: {
+        transferId: transfer.id,
+        reference: `TR-CRT-${Date.now()}-${transfer.id}`,
+        receiptType: 'created',
+        status: normalizeTransferStatus(status || 'processing'),
+        note: 'Transfer created',
+        createdById: req.user?.userId || null,
       },
     });
 
@@ -1231,7 +1329,10 @@ router.get('/:id/receipts', authenticateToken, async (req, res) => {
     }
 
     const receipts = await prisma.transferReceipt.findMany({
-      where: { transferId },
+      where: {
+        transferId,
+        receiptType: { not: 'created' },
+      },
       include: {
         items: {
           include: {
@@ -1584,3 +1685,7 @@ router.post('/:id/return-unreceived', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
+
+
+
+

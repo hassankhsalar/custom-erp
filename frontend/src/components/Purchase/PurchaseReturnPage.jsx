@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Camera, Factory, Package, ShoppingBag, Store, Trash2, Truck, Undo2, X } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { API_ROUTES } from "../../config";
+import { includesLooseNumber } from "../../utils/numberLooseSearch";
+import SearchableSelect from "../common/SearchableSelect";
 
 const lineKey = (itemType, id, batchNumber = "", expiryDate = "") =>
   `${itemType}:${id}:${batchNumber || ""}:${expiryDate || ""}`;
@@ -46,8 +48,6 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const [returns, setReturns] = useState([]);
-  const [loadingReturns, setLoadingReturns] = useState(false);
 
   const [shipModal, setShipModal] = useState({
     open: false,
@@ -77,23 +77,10 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
     return Array.isArray(data) ? data : [];
   };
 
-  const fetchReturns = async () => {
-    setLoadingReturns(true);
-    try {
-      const res = await fetch(`${API_ROUTES.PURCHASE_RETURNS_ALL}?returnType=${isDamage ? "damage_return" : "purchase_return"}`, { headers });
-      const data = await res.json();
-      setReturns(data?.returns || []);
-    } catch (_) {
-      setReturns([]);
-    } finally {
-      setLoadingReturns(false);
-    }
-  };
 
   useEffect(() => {
     Promise.all([
       fetch(API_ROUTES.SUPPLIERS, { headers }).then((r) => r.json()),
-      fetchReturns(),
     ])
       .then(([suppliersData]) => {
         setSuppliers(Array.isArray(suppliersData) ? suppliersData : []);
@@ -182,8 +169,8 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
       const availableRows = isDamage ? damageItems : sourceItems;
       results = availableRows
           .filter((item) =>
-            String(item.name || "").toLowerCase().includes(lower) ||
-            (item.barcode && String(item.barcode).toLowerCase().includes(lower))
+            includesLooseNumber(item.name, lower) ||
+            (item.barcode && includesLooseNumber(item.barcode, lower))
           )
           .map((item) => ({
             type: item.itemType,
@@ -368,7 +355,6 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
       setCompAmount("");
       setInitCompLines([]);
       setNote("");
-      fetchReturns();
     } catch (error) {
       setMessage(error.message || "Failed to create return");
     } finally {
@@ -433,7 +419,6 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
       if (!res.ok) throw new Error(data?.error || "Failed to add shipment");
       setShipModal((prev) => ({ ...prev, open: false, saving: false }));
       setMessage("Shipment added.");
-      fetchReturns();
     } catch (error) {
       setShipModal((prev) => ({ ...prev, saving: false, error: error.message || "Failed to add shipment" }));
     }
@@ -455,19 +440,32 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
 
         <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2">
-              <option value="">Supplier</option>
-              {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-            <select value={sourceType} onChange={(e) => setSourceType(e.target.value)} className="rounded-xl border border-gray-200 bg-white/70 px-3 py-2">
-              <option value="store">Store</option>
-              <option value="shop">Shop</option>
-              <option value="factory">Factory</option>
-            </select>
-            <select value={sourceId} onChange={(e) => setSourceId(e.target.value)} className="md:col-span-2 rounded-xl border border-gray-200 bg-white/70 px-3 py-2">
-              <option value="">Source location</option>
-              {sourceOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+            <div className="flex flex-col">
+              <label className="block mb-2 text-sm font-medium text-gray-900">Supplier</label>
+              <SearchableSelect 
+                options={suppliers.map((s) => ({ label: s.name, value: s.id }))} 
+                value={supplierId}
+                onChange={(e) => setSupplierId(e.target.value)}
+                inputClassName="px-3 py-2"
+              />
+            </div>
+
+            <div className="flex flex-col">
+              <label className="block mb-2 text-sm font-medium text-gray-900">Source Type</label>
+              <select value={sourceType} onChange={(e) => setSourceType(e.target.value)} className="rounded-lg border border-gray-200 bg-white/70 px-3 py-2">
+                <option value="store">Store</option>
+                <option value="shop">Shop</option>
+                <option value="factory">Factory</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col">
+              <label className="block mb-2 text-sm font-medium text-gray-900">Source Location</label>
+              <select value={sourceId} onChange={(e) => setSourceId(e.target.value)} className="md:col-span-2 rounded-xl border border-gray-200 bg-white/70 px-3 py-2">
+                <option value="">Source location</option>
+                {sourceOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-white/60 bg-white/50 p-4" ref={searchInputRef}>
@@ -608,48 +606,6 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
           </div>
         </div>
 
-        <div className="backdrop-blur-lg bg-white/30 border border-white/40 rounded-2xl shadow-xl p-6">
-          <div className="font-semibold text-gray-800 mb-3">Return List</div>
-          {loadingReturns ? (
-            <div className="text-gray-600">Loading...</div>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-white/60">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-100/80">
-                  <tr>
-                    <th className="p-3 text-left">Reference</th>
-                    <th className="p-3 text-left">Source</th>
-                    <th className="p-3 text-left">Supplier</th>
-                    <th className="p-3 text-left">Value</th>
-                    <th className="p-3 text-left">Compensation</th>
-                    <th className="p-3 text-left">Date</th>
-                    <th className="p-3 text-left">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {returns.map((row) => (
-                    <tr key={row.id} className="border-t border-white/50">
-                      <td className="p-3 font-semibold">{row.reference}</td>
-                      <td className="p-3"><span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs">{locationIcon(row.sourceType)}{row.sourceType} #{row.sourceId}</span></td>
-                      <td className="p-3">{row.supplier?.name || "-"}</td>
-                      <td className="p-3">${Number(row.totalReturnValue || 0).toFixed(2)}</td>
-                      <td className="p-3"><span className="text-xs rounded-full bg-emerald-100 text-emerald-700 px-2 py-1">{row.compensationType} / {row.compensationStatus}</span></td>
-                      <td className="p-3">{new Date(row.createdAt).toLocaleString()}</td>
-                      <td className="p-3">
-                        {row.compensationType === "items" ? (
-                          <button onClick={() => openAddShipmentModal(row)} className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 text-indigo-700 px-2 py-1 text-xs hover:bg-indigo-50"><Truck size={12} />Add Shipment</button>
-                        ) : "-"}
-                      </td>
-                    </tr>
-                  ))}
-                  {!returns.length && (
-                    <tr><td className="p-6 text-center text-gray-500" colSpan={7}>No returns found.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
       </div>
 
       {scannerOpen && (
@@ -730,3 +686,6 @@ export default function PurchaseReturnPage({ mode = "purchase_return" }) {
     </div>
   );
 }
+
+
+

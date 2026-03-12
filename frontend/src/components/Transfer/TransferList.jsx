@@ -29,6 +29,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { printTransferChallan } from './transferChallanPrint';
 
 const TransferList = ({ fromType, toType, title }) => {
   const { hasPermission } = usePermission();
@@ -64,8 +65,19 @@ const TransferList = ({ fromType, toType, title }) => {
   const initializedRef = useRef(false);
   const skipNextPageFetchRef = useRef(false);
 
+  // 'transfers_create', 'transfers_edit', 'transfers_delete', 'transfers_read', 'transfers_change_status', 'transfers_receive', 'transfer_return'
+  const canCreateTransfer = hasPermission('transfers_create');
+  const canEditTransfer = hasPermission('transfers_edit');
+  const canDeleteTransfer = hasPermission('transfers_delete');
+  const canViewTransfer = hasPermission('transfers_read');
+  const canChangeTransferStatus = hasPermission('transfers_change_status');
+  const canReceiveTransferPermission = hasPermission('transfers_receive');
+  const canReturnTransfer = hasPermission('transfer_return');
+
+
   // Details Modal State
   const [detailsModal, setDetailsModal] = useState({ isOpen: false, data: null });
+  const [printingTransferId, setPrintingTransferId] = useState(null);
 
   useEffect(() => {
     const fetchLocations = async () => {
@@ -225,6 +237,18 @@ const TransferList = ({ fromType, toType, title }) => {
       fetchTransfers('table', currentPage, itemsPerPage, filterParams);
     } catch (err) {
       alert(err.response?.data?.error || 'Failed to delete transfer');
+    }
+  };
+
+  const handlePrintChallan = async (transfer) => {
+    try {
+      const token = localStorage.getItem('token');
+      setPrintingTransferId(transfer.id);
+      await printTransferChallan(transfer, token);
+    } catch (error) {
+      alert(error?.message || 'Failed to print challan');
+    } finally {
+      setPrintingTransferId(null);
     }
   };
 
@@ -498,10 +522,12 @@ const TransferList = ({ fromType, toType, title }) => {
             </div>
             
             <div className="flex items-center gap-4">
-              <Link to="/transfer/add" className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300">
-                <Settings size={20} />
-                New Transfer
-              </Link>
+              { canCreateTransfer && (
+                <Link to="/transfer/add" className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300">
+                  <Settings size={20} />
+                  New Transfer
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -739,6 +765,8 @@ const TransferList = ({ fromType, toType, title }) => {
                       <tr>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Reference</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">From ? To</th>
+                        <th className="p-4 text-left text-sm font-semibold text-gray-700">Transfer By</th>
+                        <th className="p-4 text-left text-sm font-semibold text-gray-700">Received By</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Shipping Cost</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Items</th>
                         <th className="p-4 text-left text-sm font-semibold text-gray-700">Status</th>
@@ -785,6 +813,9 @@ const TransferList = ({ fromType, toType, title }) => {
                                     <div className="min-w-0">
                                       <div className="text-sm font-medium text-gray-900 truncate">{transfer.fromName}</div>
                                       <div className="text-xs text-gray-500 truncate">({transfer.from})</div>
+                                      <div className="text-[11px] text-gray-500 truncate">
+                                        By: {transfer.transferBy || 'N/A'}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
@@ -807,10 +838,19 @@ const TransferList = ({ fromType, toType, title }) => {
                                     <div className="min-w-0">
                                       <div className="text-sm font-medium text-gray-900 truncate">{transfer.toName}</div>
                                       <div className="text-xs text-gray-500 truncate">({transfer.to})</div>
+                                      <div className="text-[11px] text-gray-500 truncate">
+                                        Received: {transfer.receivedBy || 'N/A'}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
                               </div>
+                            </td>
+                            <td className="p-4">
+                              <span className="text-sm text-gray-700">{transfer.transferBy || 'N/A'}</span>
+                            </td>
+                            <td className="p-4">
+                              <span className="text-sm text-gray-700">{transfer.receivedBy || 'N/A'}</span>
                             </td>
                             <td className="p-4">
                               <div className="flex items-center gap-2">
@@ -851,7 +891,15 @@ const TransferList = ({ fromType, toType, title }) => {
                                 >
                                   <Eye className="w-4 h-4" />
                                 </button>
-                                {hasPermission('transfers_receive') && (
+                                <button
+                                  onClick={() => handlePrintChallan(transfer)}
+                                  disabled={printingTransferId === transfer.id}
+                                  className="p-2 rounded-lg bg-violet-50 text-violet-600 hover:bg-violet-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Print Challan"
+                                >
+                                  <FileText className="w-4 h-4" />
+                                </button>
+                                {( (canReceiveTransferPermission && canReceiveTransfer(transfer)) || canChangeTransferStatus ) && (
                                   <Link
                                     to={`/transfers/${transfer.id}/receive`}
                                     className="p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100"
@@ -860,14 +908,16 @@ const TransferList = ({ fromType, toType, title }) => {
                                     <CheckCircle className="w-4 h-4" />
                                   </Link>
                                 )}
-                                <Link
-                                  to={`/transfers/${transfer.id}/receipts`}
-                                  className="p-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
-                                  title="Receive History"
-                                >
-                                  <Layers className="w-4 h-4" />
-                                </Link>
-                                {hasPermission('transfers_edit') && (
+                                { ( (canReceiveTransferPermission && canReceiveTransfer(transfer)) || canChangeTransferStatus ) && (
+                                  <Link
+                                    to={`/transfers/${transfer.id}/receipts`}
+                                    className="p-2 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                                    title="Receive History"
+                                  >
+                                    <Layers className="w-4 h-4" />
+                                  </Link>
+                                )}
+                                { canEditTransfer && (
                                   <Link
                                     to={`/transfer/edit/${transfer.id}`}
                                     className="p-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
@@ -876,7 +926,7 @@ const TransferList = ({ fromType, toType, title }) => {
                                     <Edit2 className="w-4 h-4" />
                                   </Link>
                                 )}
-                                {hasPermission('transfers_delete') && (
+                                { canDeleteTransfer && (
                                   <button
                                     onClick={() => handleDeleteTransfer(transfer.id)}
                                     className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100"
