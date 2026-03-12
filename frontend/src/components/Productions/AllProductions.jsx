@@ -53,6 +53,12 @@ const AllProductions = () => {
     sortBy: 'createdAt',
     sortDir: 'desc',
   });
+
+  useEffect(() => {
+    setAppliedFilters({ ...filters });
+    setCurrentPage(1);
+  }, [filters]);
+
   const initializedRef = useRef(false);
   const skipNextPageFetchRef = useRef(false);
 
@@ -1146,3 +1152,4 @@ const AllProductions = () => {
 };
 
 export default AllProductions;
+

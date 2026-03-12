@@ -66,6 +66,12 @@ export default function AllSales() {
     customerId: "",
     shopId: "",
   });
+
+  useEffect(() => {
+    setAppliedFilters({ ...filters });
+    setCurrentPage(1);
+  }, [filters]);
+
   const [overview, setOverview] = useState({
     totalRevenue: 0,
     totalDiscount: 0,
@@ -716,7 +722,9 @@ export default function AllSales() {
             <label className="block text-xs text-gray-600 mb-1">Shop</label>
             <select
               value={filters.shopId}
-              onChange={(e) => setFilters((prev) => ({ ...prev, shopId: e.target.value }))}
+              onChange={(e) => {
+                setFilters((prev) => ({ ...prev, shopId: e.target.value }))
+              }}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white"
             >
               <option value="">All Shops</option>
@@ -1644,4 +1652,5 @@ export default function AllSales() {
     </div>
   );
 }
+
 

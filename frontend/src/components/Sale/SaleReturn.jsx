@@ -47,6 +47,14 @@ export default function SaleReturn() {
     customer: "",
     shopId: "",
   });
+
+  useEffect(() => {
+    setAppliedFilters({ ...filters });
+    setCurrentPage(1);
+    setSelectedSale(null);
+    setItems([]);
+  }, [filters]);
+
   const [sortConfig, setSortConfig] = useState({
     key: "date",
     direction: "descending",
@@ -1415,3 +1423,4 @@ const handleSelectSale = async (sale) => {
     </div>
   );
 }
+

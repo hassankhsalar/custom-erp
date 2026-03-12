@@ -77,14 +77,16 @@ export const useFeature = () => {
   const loading = auth?.loading ?? true;
   const token = auth?.token || localStorage.getItem('token');
   const [features, setFeatures] = useState(() => readCachedFeatures());
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    if (hydrated) return;
     const fromUser = auth?.currentUser?.activeFeatures;
     if (!fromUser || typeof fromUser !== 'object') return;
     const normalized = normalizeFeatures(fromUser);
     setFeatures(normalized);
     writeCachedFeatures(normalized);
-  }, [auth?.currentUser?.activeFeatures]);
+  }, [auth?.currentUser?.activeFeatures, hydrated]);
 
   useEffect(() => {
     if (!token) return;
@@ -101,6 +103,7 @@ export const useFeature = () => {
         if (!isMounted) return;
         setFeatures(normalized);
         writeCachedFeatures(normalized);
+        setHydrated(true);
       } catch (_) {
         // keep fallback values
       }
@@ -117,6 +120,7 @@ export const useFeature = () => {
       const normalized = normalizeFeatures(event?.detail);
       setFeatures(normalized);
       writeCachedFeatures(normalized);
+      setHydrated(true);
     };
     window.addEventListener('active-features-updated', onUpdated);
     return () => window.removeEventListener('active-features-updated', onUpdated);

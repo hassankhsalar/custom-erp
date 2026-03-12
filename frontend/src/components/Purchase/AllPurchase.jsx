@@ -46,6 +46,12 @@ export default function AllPurchase() {
     dateFrom: "",
     dateTo: "",
   });
+
+  useEffect(() => {
+    setAppliedFilters({ ...filters });
+    setCurrentPage(1);
+  }, [filters]);
+
   const initializedRef = useRef(false);
   const skipNextPageFetchRef = useRef(false);
 
@@ -2088,3 +2094,4 @@ export default function AllPurchase() {
     </div>
   );
 }
+

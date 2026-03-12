@@ -107,7 +107,7 @@ export default function FeatureActivation() {
           return;
         }
         const row = await res.json();
-        setFeatures(normalizeFeatures(row?.value));
+        setFeatures(normalizeFeatures(row));
       } catch (_) {
         setFeatures(DEFAULT_FEATURES);
       } finally {

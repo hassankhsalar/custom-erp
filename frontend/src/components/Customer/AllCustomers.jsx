@@ -52,7 +52,7 @@ export default function AllCustomers() {
 
   useEffect(() => {
     fetchCustomers();
-  }, [currentPage, itemsPerPage]);
+  }, [currentPage, itemsPerPage, searchTerm]);
 
   const fetchCustomers = async () => {
     const token = localStorage.getItem("token");
@@ -124,8 +124,6 @@ export default function AllCustomers() {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    setCurrentPage(1); // Reset to first page on new search
-    fetchCustomers();
   };
 
   const openDetailsModal = (customer) => {
@@ -327,7 +325,7 @@ export default function AllCustomers() {
                 type="text"
                 placeholder="Search by name, mobile, or email"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                 className="w-full pl-10 pr-4 py-3 bg-white/50 border border-white/60 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-transparent placeholder-gray-400"
               />
             </div>
@@ -782,3 +780,4 @@ export default function AllCustomers() {
     </div>
   );
 }
+

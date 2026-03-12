@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_ROUTES } from "../../config";
 import { 
@@ -40,7 +40,6 @@ import { usePermission } from "../../hooks/usePermission";
 
 export default function AllReturns() {
   const [returns, setReturns] = useState([]);
-  const [stats, setStats] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -72,23 +71,6 @@ export default function AllReturns() {
     fetchReturns();
     fetchShops();
   }, []);
-
-  // Calculate statistics from returns data
-  useEffect(() => {
-    if (returns.length > 0) {
-      const totalReturns = returns.length;
-      const totalReturnAmount = returns.reduce((sum, r) => sum + (r.totalAmount || 0), 0);
-      const totalItems = returns.reduce((sum, r) => sum + (r.returnItems?.length || 0), 0);
-      const uniqueShops = [...new Set(returns.map(r => r.shopId))].length;
-      
-      setStats({
-        totalReturns,
-        totalReturnAmount,
-        totalItems,
-        uniqueShops
-      });
-    }
-  }, [returns]);
 
   const fetchReturns = async () => {
     try {
@@ -250,6 +232,18 @@ export default function AllReturns() {
     return matchesSearch && matchesSingleDate && matchesDateRange() && matchesShop;
   });
 
+  const stats = useMemo(() => {
+    const totalReturns = filteredReturns.length;
+    const totalReturnAmount = filteredReturns.reduce((sum, r) => sum + (r.totalAmount || 0), 0);
+    const totalItems = filteredReturns.reduce((sum, r) => sum + (r.returnItems?.length || 0), 0);
+    const uniqueShops = [...new Set(filteredReturns.map(r => r.shopId))].length;
+    return {
+      totalReturns,
+      totalReturnAmount,
+      totalItems,
+      uniqueShops,
+    };
+  }, [filteredReturns]);
   // Pagination calculations
   const totalPages = Math.ceil(filteredReturns.length / itemsPerPage);
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -1120,3 +1114,8 @@ export default function AllReturns() {
     </div>
   );
 }
+
+
+
+
+
