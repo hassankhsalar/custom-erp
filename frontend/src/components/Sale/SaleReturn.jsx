@@ -831,7 +831,7 @@ const handleSelectSale = async (sale) => {
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
                           selectedSale?.id === item.id
                             ? "bg-gradient-to-r from-blue-500 to-blue-600 shadow-lg shadow-blue-500/25 text-white"
-                            : "bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 hover:from-gray-100 hover:to-gray-200 hover:shadow-lg"
+                            : "bg-gray-300 text-gray-700 hover:bg-gray-200 hover:shadow-lg"
                         }`}
                       >
                         {selectedSale?.id === item.id
