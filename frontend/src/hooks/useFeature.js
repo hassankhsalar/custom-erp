@@ -26,6 +26,9 @@ const DEFAULT_FEATURES = {
     enable_multi_naming: false,
     enable_multi_unit: false,
   },
+  ecommerce: {
+    enable_ecommerce: false,
+  },
 };
 
 const normalizeFeatures = (incoming) => {
@@ -86,6 +89,7 @@ export const useFeature = () => {
     const normalized = normalizeFeatures(fromUser);
     setFeatures(normalized);
     writeCachedFeatures(normalized);
+    setHydrated(true);
   }, [auth?.currentUser?.activeFeatures, hydrated]);
 
   useEffect(() => {

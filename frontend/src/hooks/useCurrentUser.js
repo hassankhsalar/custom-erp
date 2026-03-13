@@ -27,7 +27,11 @@ export const useCurrentUser = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      setCurrentUser(response.data);
+      const data = response.data;
+      setCurrentUser(data);
+      if (data?.activeFeatures && typeof data.activeFeatures === 'object') {
+        localStorage.setItem('active_features_cache_v1', JSON.stringify(data.activeFeatures));
+      }
       setError(null);
     } catch (err) {
       console.error('Error fetching current user:', err);

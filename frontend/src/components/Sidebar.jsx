@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { usePermission } from '../hooks/usePermission'; // Import usePermission
+import { useFeature } from '../hooks/useFeature';
 import { API_ROUTES } from '../config';
 import { useAuth } from '../context/AuthContext';
 import { 
@@ -34,6 +35,7 @@ const Sidebar = () => {
   const [activeUsersCount, setActiveUsersCount] = useState(0);
   const { currentUser, loading, error } = useCurrentUser();
   const { hasPermission } = usePermission(); // Initialize usePermission
+  const { isFeatureActive } = useFeature();
   const { socket } = useAuth();
   const canViewActiveUsers = hasPermission('user_read');
 
@@ -82,6 +84,11 @@ const Sidebar = () => {
     return location.pathname === path;
   };
 
+  const hasFeature = (featureKey) => {
+    if (!featureKey) return true;
+    return isFeatureActive(featureKey);
+  };
+
   const menuItems = [
     {
       name: 'Dashboard',
@@ -106,7 +113,7 @@ const Sidebar = () => {
         { name: 'Create Sale', path: '/sale/create', icon: <ShoppingCart size={16} />, permissionKey: ['sales_create', 'previous_date_sales_create'] },
         { name: 'Sale Return', path: '/sale/return', icon: <ClipboardList size={16} />, permissionKey: ['sales_return_create'] },
         { name: 'All Sale Returns', path: '/sale/allreturns', icon: <FileText size={16} />, permissionKey: [ 'sales_return_create', 'sales_return_edit', 'sales_return_delete', 'sales_return_read'] },
-        { name: 'Warranty', path: '/sale/warranty', icon: <Shield size={16} />, permissionKey: ['sales_warranty' ] },
+        { name: 'Warranty', path: '/sale/warranty', icon: <Shield size={16} />, permissionKey: ['sales_warranty' ], feature: [ "sale.enable_warranty" ] },
         { name: 'Customers', path: '/customers/all', icon: <Users size={16} />, permissionKey: ['customer_read', 'customer_create', 'customer_edit', 'customer_delete', 'customer_clear_due'] }
       ]
     },
@@ -117,6 +124,7 @@ const Sidebar = () => {
       bgColor: 'bg-gradient-to-r from-amber-50 to-orange-100/50',
       textColor: 'text-amber-700',
       permissionKey: ['production_create', 'production_edit', 'production_delete', 'production_read', 'production_change_status'],
+      feature: [ "production.enable_production" ],
       subItems: [
         { name: 'All Production', path: '/productions/all', icon: <Factory size={16} />, permissionKey: ['production_create', 'production_edit', 'production_delete', 'production_read', 'production_change_status'] },
         { name: 'New Production', path: '/productions/new', icon: <Package size={16} />, permissionKey: 'production_create' }
@@ -157,6 +165,7 @@ const Sidebar = () => {
       bgColor: 'bg-gradient-to-r from-teal-50 to-emerald-100/50',
       textColor: 'text-teal-700',
       permissionKey: ['requisition_create', 'requisition_read', 'requisition_update', 'requisition_delete', 'requisition_approve', 'production_order_read', 'transfer_order_read', 'purchase_order_read'],
+      feature: [ "requisition.enable_requisition" ],
       subItems: [
         { name: 'Requisition List', path: '/requisition/list', icon: <ClipboardList size={16} />, permissionKey: ['requisition_create', 'requisition_read', 'requisition_update', 'requisition_delete', 'requisition_approve', 'production_order_read', 'transfer_order_read', 'purchase_order_read'] },
         { name: 'Create Requisition', path: '/requisition/create', icon: <NotebookPen size={16} />, permissionKey: 'requisition_create' },
@@ -220,6 +229,7 @@ const Sidebar = () => {
       bgColor: 'bg-gradient-to-r from-orange-50 to-red-100/50',
       textColor: 'text-orange-700',
       permissionKey: ['factory_create', 'factory_edit', 'factory_delete', 'factory_read', 'factory_inventory_manage',  'factory_inventory_adjustment_create', 'factory_inventory_adjustment_read'],
+      feature: [ "production.enable_production" ],
       subItems: [
         { name: 'All Factory', path: '/factories/all', icon: <Factory size={16} />, permissionKey: ['factory_create', 'factory_edit', 'factory_delete', 'factory_read'] },
         { name: 'Add Factory', path: '/factories/add', icon: <Building size={16} />, permissionKey: 'factory_create' },
@@ -314,16 +324,17 @@ const Sidebar = () => {
       ]
     },
     {
-      name: 'HomePage',
+      name: 'Ecommerce',
       icon: <Factory color='white' size={18} />,
       color: 'from-orange-500 to-red-500',
       bgColor: 'bg-gradient-to-r from-orange-50 to-red-100/50',
       textColor: 'text-orange-700',
       permissionKey: ['factory_read', 'factory_create'],
+      feature: [ "ecommerce.enable_ecommerce" ],
       subItems: [
         { name: 'Manage Order', path: '/homepage/ordermanagement', icon: <Building size={16} />, permissionKey: 'factory_read' },
         { name: 'Home Banners', path: '/home-banners', icon: <Factory size={16} />, permissionKey: 'factory_read' },
-        { name: 'Food Categories', path: '/homepage/foodcategorylist', icon: <Building size={16} />, permissionKey: 'factory_create' },
+        { name: 'Categories', path: '/homepage/foodcategorylist', icon: <Building size={16} />, permissionKey: 'factory_create' },
         { name: 'Products Collection', path: '/homepage/productcollectionmanage', icon: <Building size={16} />, permissionKey: 'factory_create' },
         { name: 'Valued Customer', path: '/homepage/valuedcustomer', icon: <Building size={16} />, permissionKey: 'factory_read' },
         { name: 'Manage Outlets', path: '/homepage/outletslist', icon: <Building size={16} />, permissionKey: 'factory_read' }
@@ -429,8 +440,8 @@ const Sidebar = () => {
         {menuItems.map((item) => {
           // Determine if the top-level item should be displayed at all
           const shouldShowTopLevelItem = item.path 
-            ? hasPermission(item.permissionKey) 
-            : (item.subItems && item.subItems.some(subItem => hasPermission(subItem.permissionKey)));
+            ? (hasPermission(item.permissionKey) && hasFeature(item.feature)) 
+            : (item.subItems && item.subItems.some(subItem => hasPermission(subItem.permissionKey) && hasFeature(subItem.feature ?? item.feature)));
 
           if (!shouldShowTopLevelItem) {
             return null;
@@ -483,7 +494,7 @@ const Sidebar = () => {
                     <div className="ml-4 mt-2 pl-6 border-l border-gray-200/50 space-y-1">
                       {item.subItems.map((subItem) => (
                         // Conditionally render sub-item
-                        hasPermission(subItem.permissionKey) ? (
+                        hasPermission(subItem.permissionKey) && hasFeature(subItem.feature ?? item.feature) ? (
                         <Link
                           key={subItem.path}
                           to={subItem.path}

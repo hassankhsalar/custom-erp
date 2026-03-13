@@ -25,6 +25,9 @@ const DEFAULT_FEATURES = {
     enable_multi_naming: false,
     enable_multi_unit: false,
   },
+  ecommerce: {
+    enable_ecommerce: false,
+  },
 };
 
 const FEATURE_GROUPS = [
@@ -63,6 +66,13 @@ const FEATURE_GROUPS = [
     options: [
       { key: 'enable_multi_naming', label: 'Enable Multi Naming' },
       { key: 'enable_multi_unit', label: 'Enable Multi Unit' },
+    ],
+  },
+  {
+    key: 'ecommerce',
+    label: 'Ecommerce Management',
+    options: [
+      { key: 'enable_ecommerce', label: 'Enable Ecommerce' },
     ],
   },
 ];
@@ -107,7 +117,7 @@ export default function FeatureActivation() {
           return;
         }
         const row = await res.json();
-        setFeatures(normalizeFeatures(row));
+        setFeatures(normalizeFeatures(row?.value));
       } catch (_) {
         setFeatures(DEFAULT_FEATURES);
       } finally {
@@ -146,9 +156,7 @@ export default function FeatureActivation() {
         throw new Error(data.error || 'Failed to save feature activation');
       }
       setMessage('Saved successfully');
-      if (typeof refetch === 'function') {
-        await refetch();
-      }
+      window.dispatchEvent(new CustomEvent('active-features-updated', { detail: features }));
     } catch (error) {
       setMessage(error.message || 'Failed to save feature activation');
     } finally {
