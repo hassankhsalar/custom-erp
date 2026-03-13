@@ -25,6 +25,9 @@ const DEFAULT_ACTIVE_FEATURES = {
     enable_multi_naming: false,
     enable_multi_unit: false,
   },
+  ecommerce: {
+    enable_ecommerce: false,
+  },
 };
 
 const normalizeGroup = (incoming, defaults) => {
@@ -45,6 +48,7 @@ const normalizeActiveFeatures = (incoming) => {
     requisition: normalizeGroup(source.requisition, DEFAULT_ACTIVE_FEATURES.requisition),
     stock_management: normalizeGroup(source.stock_management, DEFAULT_ACTIVE_FEATURES.stock_management),
     product_item: normalizeGroup(source.product_item, DEFAULT_ACTIVE_FEATURES.product_item),
+    ecommerce: normalizeGroup(source.ecommerce, DEFAULT_ACTIVE_FEATURES.ecommerce),
   };
 };
 
